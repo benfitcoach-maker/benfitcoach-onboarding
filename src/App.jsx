@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import './App.css';
 import {
   STEPS, PRESENTIEL_STEPS, MASSAGE_STEPS,
@@ -14,8 +14,10 @@ import HistoryPanel from './HistoryPanel';
 import MessageTemplates from './MessageTemplates';
 import ClientAlerts from './ClientAlerts';
 import ProgressionPanel from './ProgressionPanel';
+import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue } from './store';
+import { isCloudEnabled } from './supabaseClient';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69a6ccf52a4f1eb605779f33_logo%20benfitocah.png';
 
@@ -37,6 +39,14 @@ function getStepIcons(cat) {
 }
 
 function App() {
+  // Auth state
+  const [authenticated, setAuthenticated] = useState(() => {
+    if (!isCloudEnabled) return true; // No Supabase = no login required
+    return sessionStorage.getItem('bfc_auth') === 'true';
+  });
+  const [cloudSynced, setCloudSynced] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'synced', 'offline'
+
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('bfc_api_key') || '');
   const [page, setPage] = useState('dashboard');
   const [clientId, setClientId] = useState(null);
@@ -50,15 +60,61 @@ function App() {
   const [editTab, setEditTab] = useState('form');
   const [, setTick] = useState(0);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [convertMode, setConvertMode] = useState(null); // null | 'online' | 'presentiel'
+  const [convertMode, setConvertMode] = useState(null);
   const fileInputRef = useRef(null);
 
   const refreshClients = useCallback(() => setClients(getClients()), []);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
 
-  const updateField = useCallback((field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  // Cloud sync on login
+  useEffect(() => {
+    if (!authenticated || !isCloudEnabled || cloudSynced) return;
+    setSyncStatus('syncing');
+    pullFromCloud().then(result => {
+      setCloudSynced(true);
+      if (result.synced) {
+        setSyncStatus('synced');
+        refreshClients();
+      } else {
+        setSyncStatus('offline');
+      }
+      // Retry any queued operations
+      retrySyncQueue();
+      // Clear sync badge after 3s
+      setTimeout(() => setSyncStatus(''), 4000);
+    });
+  }, [authenticated, cloudSynced, refreshClients]);
+
+  // Retry sync queue when coming back online
+  useEffect(() => {
+    if (!isCloudEnabled) return;
+    const handleOnline = () => {
+      retrySyncQueue();
+      setSyncStatus('synced');
+      setTimeout(() => setSyncStatus(''), 3000);
+    };
+    const handleOffline = () => setSyncStatus('offline');
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  const handleLogin = useCallback(() => {
+    setAuthenticated(true);
+    refreshClients();
+  }, [refreshClients]);
+
+  // Show login screen if cloud is enabled and not authenticated
+  if (!authenticated) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  const updateField = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
 
   const handleApiKeyChange = (e) => {
     const key = e.target.value;
@@ -66,7 +122,7 @@ function App() {
     localStorage.setItem('bfc_api_key', key);
   };
 
-  const openClient = useCallback((id) => {
+  const openClient = (id) => {
     const client = getClient(id);
     if (!client) return;
     setClientId(client.id);
@@ -79,9 +135,9 @@ function App() {
     setConvertMode(null);
     setPage('edit');
     setMobileMenu(false);
-  }, []);
+  };
 
-  const newClient = useCallback((cat) => {
+  const newClient = (cat) => {
     const targetCat = cat || 'online';
     setClientId(null);
     setCategorie(targetCat);
@@ -93,9 +149,9 @@ function App() {
     setConvertMode(null);
     setPage(cat ? 'edit' : 'newCategory');
     setMobileMenu(false);
-  }, []);
+  };
 
-  const handleSave = useCallback(() => {
+  const handleSave = () => {
     const client = saveClient({
       id: clientId,
       categorie,
@@ -108,7 +164,7 @@ function App() {
     setClientId(client.id);
     refreshClients();
     return client;
-  }, [clientId, categorie, form, results, refreshClients]);
+  };
 
   const handleGenerate = async () => {
     if (!apiKey.trim()) {
@@ -130,7 +186,7 @@ function App() {
     }
   };
 
-  const handleSectionUpdate = useCallback((sectionTitle, content) => {
+  const handleSectionUpdate = (sectionTitle, content) => {
     setResults(prev => {
       const updated = { ...prev, [sectionTitle]: content };
       if (clientId) {
@@ -144,20 +200,20 @@ function App() {
       }
       return updated;
     });
-  }, [clientId]);
+  };
 
-  const openHistory = useCallback((id) => {
+  const openHistory = (id) => {
     setClientId(id);
     setPage('history');
     setMobileMenu(false);
-  }, []);
+  };
 
-  const goToDashboard = useCallback(() => {
+  const goToDashboard = () => {
     refreshClients();
     setPage('dashboard');
     setConvertMode(null);
     setMobileMenu(false);
-  }, [refreshClients]);
+  };
 
   const handleExport = () => {
     const data = exportAllData();
@@ -189,18 +245,14 @@ function App() {
     e.target.value = '';
   };
 
-  // Convert massage client to coaching
   const handleStartConvert = (targetCat) => {
     const sourceForm = form;
     const targetForm = getInitialFormForCategory(targetCat);
-
-    // Pre-fill known fields from massage anamnese
     const convertedForm = {
       ...targetForm,
       prenom: sourceForm.prenom || '',
       age: sourceForm.age || '',
       genre: sourceForm.genre || '',
-      // Map massage health data to coaching health fields
       blessures: [
         sourceForm.zonesDouloureuses?.length ? `Zones douloureuses: ${sourceForm.zonesDouloureuses.join(', ')}` : '',
         sourceForm.typeDouleur ? `Type: ${sourceForm.typeDouleur}` : '',
@@ -213,14 +265,19 @@ function App() {
       ].filter(Boolean).join('\n'),
       medicaments: sourceForm.medicaments || '',
     };
-
     setConvertMode(targetCat);
     setCategorie(targetCat);
     setForm(convertedForm);
-    setClientId(null); // New client
+    setClientId(null);
     setResults(null);
     setStep(1);
     setEditTab('form');
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('bfc_auth');
+    setAuthenticated(false);
+    setCloudSynced(false);
   };
 
   const currentClient = clientId ? getClient(clientId) : null;
@@ -249,9 +306,19 @@ function App() {
         </div>
         <div className="header-nav">{navButtons}</div>
         <div className="header-io">
+          {isCloudEnabled && syncStatus && (
+            <span className={`sync-badge sync-${syncStatus}`}>
+              {syncStatus === 'syncing' && 'Sync...'}
+              {syncStatus === 'synced' && 'Synced'}
+              {syncStatus === 'offline' && 'Offline'}
+            </span>
+          )}
           <button className="btn-nav" onClick={handleExport} title="Exporter">Export</button>
           <button className="btn-nav" onClick={() => fileInputRef.current?.click()} title="Importer">Import</button>
           <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+          {isCloudEnabled && (
+            <button className="btn-nav" onClick={handleLogout} title="Deconnexion">Logout</button>
+          )}
         </div>
         <button className="hamburger" onClick={() => setMobileMenu(!mobileMenu)}>
           <span /><span /><span />
@@ -263,6 +330,9 @@ function App() {
         {navButtons}
         <button className="btn-nav" onClick={() => { handleExport(); setMobileMenu(false); }}>Export</button>
         <button className="btn-nav" onClick={() => { fileInputRef.current?.click(); setMobileMenu(false); }}>Import</button>
+        {isCloudEnabled && (
+          <button className="btn-nav" onClick={() => { handleLogout(); setMobileMenu(false); }}>Logout</button>
+        )}
       </div>
 
       {/* API Key */}
@@ -363,7 +433,6 @@ function App() {
                 )}
               </div>
 
-              {/* Convert button for massage clients */}
               {isMassage && editTab === 'form' && !convertMode && (
                 <div className="convert-section">
                   <span className="convert-label">Convertir en client coaching :</span>
@@ -378,14 +447,12 @@ function App() {
             </>
           )}
 
-          {/* Massage session tab */}
           {editTab === 'sessions' && clientId && isMassage ? (
             <MassageSessionPanel clientId={clientId} onRefresh={forceUpdate} />
           ) : editTab === 'progression' && clientId && !isMassage ? (
             <ProgressionPanel clientId={clientId} onRefresh={forceUpdate} />
           ) : (
             <>
-              {/* Language selector (not for massage) */}
               {!isMassage && (
                 <div className="lang-selector">
                   <button
@@ -403,7 +470,6 @@ function App() {
                 </div>
               )}
 
-              {/* Progress bar steps */}
               <div className="steps-progress">
                 <div className="steps-track">
                   <div className="steps-line">
@@ -422,7 +488,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Form */}
               {isMassage ? (
                 <MassageForm step={step} form={form} updateField={updateField} />
               ) : (
@@ -438,7 +503,6 @@ function App() {
                 )}
               </div>
 
-              {/* Generate button (not for massage) */}
               {!isMassage && (
                 <button
                   className={`btn btn-generate ${loading ? 'loading-pulse' : ''}`}
@@ -449,7 +513,6 @@ function App() {
                 </button>
               )}
 
-              {/* Save button for massage (replaces generate) */}
               {isMassage && (
                 <button
                   className="btn btn-generate"
