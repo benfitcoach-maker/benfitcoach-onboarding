@@ -1770,8 +1770,10 @@ export async function exportCoverPDF(consultation, client) {
   // ══════════════════════════════════════════════════════════════
   //  HEADER — nom Anissa à gauche, localisation à droite
   //  NOTE: on force charSpace=0 systématiquement avant chaque text()
-  //  et on évite l'em-dash "—" (rendu capricieux dans certaines configs
-  //  jsPDF) — remplacé par un hyphen " - ".
+  //  pour garantir le rendu (le bug "header invisible" était lié au
+  //  charSpace non reset, pas aux accents). Les polices intégrées
+  //  helvetica/times supportent les caractères Latin-1 étendus
+  //  (é, à, è, É, —, «, », ·) via l'encodage WinAnsi.
   // ══════════════════════════════════════════════════════════════
   const headerY = 22;
   doc.setCharSpace(0);
@@ -1784,23 +1786,26 @@ export async function exportCoverPDF(consultation, client) {
   console.log('[Cover] header line 1 drawn at', { x: margin, y: headerY });
 
   // Ligne 2 : sous-titre principal
+  doc.setCharSpace(0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  doc.text('Nutritionniste - Optimisation metabolique & longevite', margin, headerY + 5);
+  doc.text('Nutritionniste — Optimisation métabolique & longévité', margin, headerY + 5);
 
   // Ligne 3 : sous-titre secondaire en gris
+  doc.setCharSpace(0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GREY);
-  doc.text('Approche basee sur donnees biologiques & physiologie appliquee', margin, headerY + 9.5);
+  doc.text('Approche basée sur données biologiques & physiologie appliquée', margin, headerY + 9.5);
 
   // Coin haut-droit : localisation
+  doc.setCharSpace(0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GREY);
   doc.text(
-    'Nutritionniste · Longevite & Biomarqueurs · Nyon',
+    'Nutritionniste · Longévité & Biomarqueurs · Nyon',
     pw - margin,
     headerY,
     { align: 'right' }
@@ -1891,14 +1896,14 @@ export async function exportCoverPDF(consultation, client) {
   doc.setLineWidth(0.3);
   doc.roundedRect(boxX, boxY, boxW, boxH, 4, 4, 'FD');
 
-  // Label "PREPARE POUR" — charSpace=0 forcé, sinon le centrage align='center'
+  // Label "PRÉPARÉ POUR" — charSpace=0 forcé, sinon le centrage align='center'
   // est faussé (jsPDF ne prend pas en compte le charSpace dans le calcul de
   // largeur du texte, même bug que sur les titres de la fiche frigo).
   doc.setCharSpace(0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GREY);
-  doc.text('PREPARE POUR', pw / 2, boxY + 10, { align: 'center' });
+  doc.text('PRÉPARÉ POUR', pw / 2, boxY + 10, { align: 'center' });
 
   // Prénom en grand serif
   doc.setFont('times', 'bold');
@@ -1964,10 +1969,11 @@ export async function exportCoverPDF(consultation, client) {
   doc.setLineWidth(0.4);
   doc.line(pw / 2 - 10, quoteBlockY - 7, pw / 2 + 10, quoteBlockY - 7);
 
+  doc.setCharSpace(0);
   doc.setFont('times', 'italic');
   doc.setFontSize(11.5);
   doc.setTextColor(...DARK_GREEN);
-  const quote = "« Votre corps suit des regles biologiques. Ce protocole s'y adapte avec precision. »";
+  const quote = "« Votre corps suit des règles biologiques. Ce protocole s'y adapte avec précision. »";
   const quoteLines = doc.splitTextToSize(quote, pw - margin * 2 - 30);
   let qy = quoteBlockY;
   quoteLines.forEach(line => {
