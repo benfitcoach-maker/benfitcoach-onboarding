@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 
-const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
+const LOGO_URL = 'https://cdn.prod.website-files.com/69c276fd79d460813b99867a/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 const GREEN = [26, 46, 31];
 const DARK_TEXT = [49, 45, 45];
 const GREY_TEXT = [136, 136, 136];
@@ -1346,10 +1346,20 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     return;
   }
 
+  // ─── Premium Anissa Deroubaix design ───
+  // Palette : crème chaud + vert très foncé + vert pâle + rose pâle
+  const CREAM = [245, 242, 236];      // #F5F2EC fond
+  const DARK_GREEN = [26, 46, 31];    // #1A2E1F titres/footer
+  const FAVOR_BG = [232, 244, 232];   // #E8F4E8 "à privilégier"
+  const LIMIT_BG = [253, 240, 240];   // #FDF0F0 "à limiter"
+  const LIMIT_TITLE = [139, 32, 32];  // #8B2020 titre "à limiter"
+  const BORDER = [212, 208, 200];     // #D4D0C8 bordures fines
+
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-  const pw = doc.internal.pageSize.getWidth();
-  const ph = doc.internal.pageSize.getHeight();
+  const pw = doc.internal.pageSize.getWidth();   // 297
+  const ph = doc.internal.pageSize.getHeight();  // 210
   const margin = 10;
+  const radius = 4; // coins arrondis
   const form = client?.form || {};
   const dateStr = formatDateFR(consultation.date);
   const meals = editedMeals || extractMeals(consultation.nutritionPlan);
@@ -1358,44 +1368,45 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const hasSupplements = Object.values(supplementsData).some(arr => arr && arr.length > 0);
   const noContent = 'Generez un plan nutrition plus detaille';
 
-  // Background & border
-  doc.setFillColor(...BG_PAGE);
+  // ─── Fond crème plein ───
+  doc.setFillColor(...CREAM);
   doc.rect(0, 0, pw, ph, 'F');
-  doc.setDrawColor(...GREEN);
-  doc.setLineWidth(0.7);
-  doc.rect(4, 4, pw - 8, ph - 8, 'S');
 
-  // Header
+  // ─── Header : logo gauche + titre centré espacé + date droite ───
   let logoData = null;
-  try { logoData = await loadImageAsBase64(LOGO_URL); } catch {}
-  if (logoData) doc.addImage(logoData, 'PNG', margin + 2, 7, 20, 20);
+  try { logoData = await loadImageAsBase64(LOGO_URL); } catch { /* logo optionnel */ }
+  if (logoData) doc.addImage(logoData, 'PNG', margin, 8, 22, 22);
 
-  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...GREEN);
-  doc.setCharSpace(2);
-  doc.text(`FICHE NUTRITION — ${(form.prenom || 'CLIENT').toUpperCase()}`, pw / 2, 18, { align: 'center' });
+  doc.setFontSize(16);
+  doc.setTextColor(...DARK_GREEN);
+  doc.setCharSpace(3);
+  doc.text(`FICHE NUTRITION  —  ${(form.prenom || 'CLIENT').toUpperCase()}`, pw / 2, 20, { align: 'center' });
   doc.setCharSpace(0);
 
-  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GREY_TEXT);
-  doc.text(dateStr, pw - margin - 4, 14, { align: 'right' });
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK_GREEN);
+  doc.text(dateStr, pw - margin, 20, { align: 'right' });
 
-  doc.setDrawColor(...SEPARATOR);
+  // Fine séparation sous le header
+  doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
-  doc.line(margin + 2, 28, pw - margin - 2, 28);
+  doc.line(margin, 32, pw - margin, 32);
 
-  // ─── Vertical layout (A4 landscape: 297 x 210) ───
-  // Header: 0-28 | Meals: 30-115 | Privilegier/Limiter: 120-158
-  // Complements: 162-186 | Footer: 198
-  const gap = 5;
-  const innerPad = 10;
+  // ─── Layout vertical (A4 paysage 297x210, marges 10) ───
+  // Header      : 0-32
+  // Repas       : 36-124   (88mm)
+  // Privilegier : 128-166  (38mm)
+  // Complements : 170-188  (18mm, si présents)
+  // Footer bar  : 192-205  (13mm, vert foncé)
 
-  // 3 meal columns (50% of vertical space)
-  const colTop = 30;
-  const colWidth = (pw - margin * 2 - 12) / 3;
-  const colHeight = 85;
+  // ─── 3 colonnes repas ───
+  const colTop = 36;
+  const colGap = 6;
+  const colWidth = (pw - margin * 2 - colGap * 2) / 3;
+  const colHeight = 88;
+
   const cols = [
     { title: 'PETIT-DEJEUNER', items: meals.breakfast },
     { title: 'DEJEUNER', items: meals.lunch },
@@ -1403,212 +1414,237 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   ];
 
   cols.forEach((col, idx) => {
-    const cx = margin + 2 + idx * (colWidth + 6);
+    const cx = margin + idx * (colWidth + colGap);
 
-    doc.setDrawColor(...SEPARATOR);
+    // Carte blanche avec bordure fine et coins arrondis 4px
+    doc.setDrawColor(...BORDER);
     doc.setLineWidth(0.3);
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(cx, colTop, colWidth, colHeight, 2, 2, 'FD');
+    doc.roundedRect(cx, colTop, colWidth, colHeight, radius, radius, 'FD');
 
-    // Title bar
-    doc.setFillColor(...GREEN);
-    doc.roundedRect(cx, colTop, colWidth, 8, 2, 2, 'F');
-    doc.rect(cx, colTop + 4, colWidth, 4, 'F');
-    doc.setFontSize(10);
+    // Bandeau de titre : vert foncé plein, coins haut arrondis
+    const headerH = 10;
+    doc.setFillColor(...DARK_GREEN);
+    doc.roundedRect(cx, colTop, colWidth, headerH, radius, radius, 'F');
+    // masque pour carrer les coins bas du bandeau
+    doc.rect(cx, colTop + headerH - radius, colWidth, radius, 'F');
+
+    // Titre bandeau : bold blanc, espacé
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
-    doc.text(col.title, cx + colWidth / 2, colTop + 5.5, { align: 'center' });
+    doc.setCharSpace(2);
+    doc.text(col.title, cx + colWidth / 2, colTop + 6.8, { align: 'center' });
+    doc.setCharSpace(0);
 
-    // Inner padding area for content
-    const contentX = cx + innerPad / 2;
-    const contentW = colWidth - innerPad;
-    const contentTop = colTop + 12;
+    // Zone contenu
+    const contentPad = 5;
+    const contentX = cx + contentPad;
+    const contentW = colWidth - contentPad * 2;
+    const contentTop = colTop + headerH + 4;
     const contentBottom = colTop + colHeight - 4;
     let cy = contentTop + 2;
 
-    // Max 4 options, max ~4 lines each, 8pt
-    const maxOptions = Math.min(col.items.length, 4);
-    const linesPerOption = Math.max(2, Math.floor((contentBottom - contentTop - maxOptions * 5) / Math.max(maxOptions, 1) / 3.4));
+    const maxOptions = Math.min(col.items.length, 3);
+    const blockBudget = maxOptions > 0 ? (contentBottom - contentTop) / maxOptions : 0;
+    const linesPerOption = Math.max(2, Math.floor((blockBudget - 5) / 3.5));
 
     if (col.items.length > 0) {
       for (let i = 0; i < maxOptions; i++) {
         if (cy > contentBottom - 6) break;
+
+        // Séparateur fin entre options
         if (i > 0) {
-          // Thin separator between options
-          doc.setDrawColor(220, 228, 220);
+          doc.setDrawColor(...BORDER);
           doc.setLineWidth(0.2);
           doc.line(contentX, cy - 1, contentX + contentW, cy - 1);
           cy += 2.5;
         }
-        doc.setFont('helvetica', 'bolditalic');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...GREEN);
-        doc.text(`Option ${i + 1}`, contentX, cy);
-        cy += 3.8;
 
+        // "Option N" en italic bold vert foncé
+        doc.setFont('helvetica', 'bolditalic');
+        doc.setFontSize(8);
+        doc.setTextColor(...DARK_GREEN);
+        doc.text(`Option ${i + 1}`, contentX, cy);
+        cy += 4;
+
+        // Description en regular gris foncé
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(...DARK_TEXT);
         const itemLines = doc.splitTextToSize(col.items[i], contentW);
-        const take = Math.min(itemLines.length, linesPerOption + 1);
+        const take = Math.min(itemLines.length, linesPerOption);
         for (let j = 0; j < take; j++) {
           if (cy > contentBottom - 2) break;
           doc.text(itemLines[j], contentX, cy);
-          cy += 3.4;
+          cy += 3.5;
         }
-        cy += 1.2;
+        cy += 1.5;
       }
     } else {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...GREY_TEXT);
-      doc.text(noContent, cx + colWidth / 2, colTop + 50, { align: 'center' });
+      doc.text(noContent, cx + colWidth / 2, colTop + colHeight / 2, { align: 'center' });
     }
   });
 
-  // ─── Bottom row: A PRIVILEGIER / A LIMITER (25% of height) ───
-  const btmTop = colTop + colHeight + gap;
+  // ─── A PRIVILEGIER / A LIMITER côte à côte ───
+  const btmTop = colTop + colHeight + 6;
   const btmHeight = 38;
-  const btmWidth = (pw - margin * 2 - 8) / 2;
-  const halfW = (btmWidth - innerPad * 1.2) / 2;
+  const btmGap = 6;
+  const btmWidth = (pw - margin * 2 - btmGap) / 2;
+  const btmInnerPad = 6;
 
-  // Helper: render a clean 2-column food list (comma separated)
-  function renderFoodList(items, x0, y0, boxW, boxH, accentColor) {
-    const titleH = 6;
-    const listTop = y0 + titleH + 4;
+  // Rend une liste d'aliments sur 2 sous-colonnes
+  function renderFoodList(items, x0, y0, boxW, boxH, titleH) {
+    const listTop = y0 + titleH + 3;
     const listBottom = y0 + boxH - 3;
-    const colGap = 4;
-    const colW = (boxW - innerPad - colGap) / 2;
-    const fontSize = 7.5;
-    const lineH = 3.2;
+    const subColGap = 4;
+    const subColW = (boxW - btmInnerPad * 2 - subColGap) / 2;
+    const lineH = 3.4;
 
-    doc.setFontSize(fontSize);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...DARK_TEXT);
 
     if (!items || items.length === 0) {
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...GREY_TEXT);
-      doc.text('—', x0 + boxW / 2, y0 + boxH / 2, { align: 'center' });
+      doc.text('—', x0 + boxW / 2, y0 + boxH / 2 + 2, { align: 'center' });
       return;
     }
 
-    // Split list into 2 columns of comma-separated items
     const half = Math.ceil(items.length / 2);
-    const leftItems = items.slice(0, half);
-    const rightItems = items.slice(half);
+    const leftText = items.slice(0, half).join(', ');
+    const rightText = items.slice(half).join(', ');
 
-    const leftText = leftItems.join(', ');
-    const rightText = rightItems.join(', ');
-
-    const leftLines = doc.splitTextToSize(leftText, colW);
-    const rightLines = doc.splitTextToSize(rightText, colW);
-
+    const leftLines = doc.splitTextToSize(leftText, subColW);
+    const rightLines = doc.splitTextToSize(rightText, subColW);
     const maxLines = Math.floor((listBottom - listTop) / lineH);
 
     let ly = listTop;
     for (let i = 0; i < Math.min(leftLines.length, maxLines); i++) {
-      doc.text(leftLines[i], x0 + innerPad / 2, ly);
+      doc.text(leftLines[i], x0 + btmInnerPad, ly);
       ly += lineH;
     }
     let ry = listTop;
     for (let i = 0; i < Math.min(rightLines.length, maxLines); i++) {
-      doc.text(rightLines[i], x0 + innerPad / 2 + colW + colGap, ry);
+      doc.text(rightLines[i], x0 + btmInnerPad + subColW + subColGap, ry);
       ry += lineH;
     }
   }
 
-  // A PRIVILEGIER (green tint)
-  doc.setFillColor(240, 248, 242);
-  doc.setDrawColor(200, 220, 205);
+  // A PRIVILEGIER — fond vert pâle, titre vert foncé
+  doc.setFillColor(...FAVOR_BG);
+  doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
-  doc.roundedRect(margin + 2, btmTop, btmWidth, btmHeight, 2, 2, 'FD');
-  doc.setFontSize(9);
+  doc.roundedRect(margin, btmTop, btmWidth, btmHeight, radius, radius, 'FD');
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...GREEN);
-  doc.text('A PRIVILEGIER', margin + 2 + btmWidth / 2, btmTop + 5.5, { align: 'center' });
-  renderFoodList(meals.toFavor, margin + 2, btmTop, btmWidth, btmHeight);
+  doc.setFontSize(10);
+  doc.setTextColor(...DARK_GREEN);
+  doc.setCharSpace(2);
+  doc.text('A PRIVILEGIER', margin + btmWidth / 2, btmTop + 7, { align: 'center' });
+  doc.setCharSpace(0);
+  renderFoodList(meals.toFavor, margin, btmTop, btmWidth, btmHeight, 8);
 
-  // A LIMITER (red tint)
-  const limX = margin + 2 + btmWidth + 4;
-  doc.setFillColor(252, 242, 242);
-  doc.setDrawColor(225, 200, 200);
-  doc.roundedRect(limX, btmTop, btmWidth, btmHeight, 2, 2, 'FD');
-  doc.setFontSize(9);
+  // A LIMITER — fond rose pâle, titre bordeaux
+  const limX = margin + btmWidth + btmGap;
+  doc.setFillColor(...LIMIT_BG);
+  doc.setDrawColor(...BORDER);
+  doc.roundedRect(limX, btmTop, btmWidth, btmHeight, radius, radius, 'FD');
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(180, 60, 60);
-  doc.text('A LIMITER', limX + btmWidth / 2, btmTop + 5.5, { align: 'center' });
-  renderFoodList(meals.toLimit, limX, btmTop, btmWidth, btmHeight);
+  doc.setFontSize(10);
+  doc.setTextColor(...LIMIT_TITLE);
+  doc.setCharSpace(2);
+  doc.text('A LIMITER', limX + btmWidth / 2, btmTop + 7, { align: 'center' });
+  doc.setCharSpace(0);
+  renderFoodList(meals.toLimit, limX, btmTop, btmWidth, btmHeight, 8);
 
-  // ─── MES COMPLEMENTS (15% of height) ───
+  // ─── MES COMPLEMENTS (optionnel) ───
   if (hasSupplements) {
-    const suppTop = btmTop + btmHeight + gap;
-    const suppWidth = pw - margin * 2 - 4;
-    const suppHeight = 28;
+    const suppTop = btmTop + btmHeight + 4;
+    const suppWidth = pw - margin * 2;
+    const suppHeight = 18;
 
-    // Neutral grey fill
-    doc.setFillColor(248, 248, 245);
-    doc.setDrawColor(215, 215, 205);
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(...BORDER);
     doc.setLineWidth(0.3);
-    doc.roundedRect(margin + 2, suppTop, suppWidth, suppHeight, 2, 2, 'FD');
+    doc.roundedRect(margin, suppTop, suppWidth, suppHeight, radius, radius, 'FD');
 
-    // Title
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(26, 46, 31); // #1a2e1f
-    doc.text('MES COMPLEMENTS', margin + innerPad / 2 + 2, suppTop + 5);
+    doc.setTextColor(...DARK_GREEN);
+    doc.setCharSpace(1.5);
+    doc.text('MES COMPLEMENTS', margin + 6, suppTop + 5.5);
+    doc.setCharSpace(0);
 
-    // Rows: MOMENT : name dosage, name dosage (7.5pt compact)
     const rowMap = [
-      { label: 'MATIN A JEUN',     key: 'morningFasting' },
-      { label: 'PETIT-DEJEUNER',   key: 'breakfast' },
-      { label: 'MIDI',             key: 'lunch' },
-      { label: 'SOIR',             key: 'dinner' },
-      { label: 'COUCHER',          key: 'bedtime' },
+      { label: 'MATIN A JEUN',   key: 'morningFasting' },
+      { label: 'PETIT-DEJEUNER', key: 'breakfast' },
+      { label: 'MIDI',           key: 'lunch' },
+      { label: 'SOIR',           key: 'dinner' },
+      { label: 'COUCHER',        key: 'bedtime' },
     ].filter(r => supplementsData[r.key] && supplementsData[r.key].length > 0);
 
     const rowsAreaTop = suppTop + 9;
     const rowsAreaBottom = suppTop + suppHeight - 2;
     const availableH = rowsAreaBottom - rowsAreaTop;
-    const rowH = rowMap.length > 0 ? Math.min(3.4, availableH / rowMap.length) : 3.4;
+    const rowH = rowMap.length > 0 ? Math.min(2.6, availableH / rowMap.length) : 2.6;
     const labelWidth = 32;
-    const textMaxWidth = suppWidth - labelWidth - innerPad - 4;
+    const textMaxWidth = suppWidth - labelWidth - 14;
 
-    doc.setFontSize(7.5);
-    let sy = rowsAreaTop + 2;
+    doc.setFontSize(7);
+    let sy = rowsAreaTop + 1.8;
     rowMap.forEach((r) => {
       if (sy > rowsAreaBottom) return;
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(26, 46, 31);
-      doc.text(`${r.label} :`, margin + innerPad / 2 + 2, sy);
+      doc.setTextColor(...DARK_GREEN);
+      doc.text(`${r.label} :`, margin + 6, sy);
 
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...DARK_TEXT);
       const content = supplementsData[r.key].join(', ');
       const lines = doc.splitTextToSize(content, textMaxWidth);
-      doc.text(lines[0] || '', margin + innerPad / 2 + 2 + labelWidth, sy);
+      doc.text(lines[0] || '', margin + 6 + labelWidth, sy);
       sy += rowH;
     });
   }
 
-  // ─── Footer (10% of height) ───
-  const footY = ph - 8;
-  doc.setDrawColor(...SEPARATOR);
-  doc.setLineWidth(0.3);
-  doc.line(margin + 2, footY - 3, pw - margin - 2, footY - 3);
+  // ─── Footer : bandeau vert foncé texte blanc ───
+  const footerH = 13;
+  const footerTop = ph - margin - footerH + 2;
+  doc.setFillColor(...DARK_GREEN);
+  doc.roundedRect(margin, footerTop, pw - margin * 2, footerH, radius, radius, 'F');
 
-  doc.setFontSize(8.5);
+  // Gauche : Hydratation + Collation
+  doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...DARK_TEXT);
-  const footerParts = [];
-  if (meals.hydration || form.hydratation) footerParts.push(`Hydratation : ${meals.hydration || form.hydratation}`);
-  if (meals.snack) footerParts.push(`Collation : ${meals.snack}`);
-  if (footerParts.length > 0) doc.text(footerParts.join('     |     '), margin + 4, footY);
+  doc.setFontSize(8);
+  let fy = footerTop + 5;
+  const leftX = margin + 6;
+  const hydration = meals.hydration || form.hydratation;
+  if (hydration) {
+    doc.text('HYDRATATION  ', leftX, fy);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(hydration), leftX + 26, fy);
+    fy += 4;
+  }
+  if (meals.snack) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('COLLATION  ', leftX, fy);
+    doc.setFont('helvetica', 'normal');
+    const snackLines = doc.splitTextToSize(String(meals.snack), 110);
+    doc.text(snackLines[0] || '', leftX + 22, fy);
+  }
 
-  doc.setFontSize(7.5);
+  // Droite : coordonnées Anissa
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GREY_TEXT);
-  doc.text('AB Coaching Sarl · benfitcoach.ch', pw / 2, footY + 3, { align: 'center' });
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  const rightX = pw - margin - 6;
+  doc.text('anissanutrition@gmail.com  ·  www.anissanutrition.ch  ·  076 621 02 05',
+    rightX, footerTop + footerH / 2 + 1, { align: 'right' });
 
   doc.save(`fiche-frigo-${(form.prenom || 'client').toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`);
 }
