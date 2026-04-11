@@ -1706,7 +1706,11 @@ export async function exportCoverPDF(consultation, client) {
 
   const form = client?.form || {};
   const prenom = (form.prenom || 'Client').trim();
-  const objectif = (form.objectifPrincipalNutrition || form.objectifSport || '—').trim();
+  const rawObjectif = (form.objectifPrincipalNutrition || form.objectifSport || '-').trim();
+  // Tronque à 80 chars avec ... si plus long (l'objectif vient d'un textarea libre)
+  const objectif = rawObjectif.length > 80
+    ? rawObjectif.substring(0, 79).trimEnd() + '…'
+    : rawObjectif;
   const dateStr = formatDateFR(new Date().toISOString());
 
   // Type de bilan dérivé des flags de consultation (supporte snake_case et camelCase)
@@ -1717,33 +1721,56 @@ export async function exportCoverPDF(consultation, client) {
   else if (blood)   typeBilan = 'Bilan Nutritionnel & Sanguin';
   else if (dna)     typeBilan = 'Bilan Nutritionnel & ADN';
 
+  console.log('[Cover] generating for', { prenom, objectifLen: rawObjectif.length, typeBilan, dateStr });
+
+  // ─── Chargement du logo Anissa (skip silencieux si indisponible) ───
+  let logoData = null;
+  try {
+    logoData = await loadImageAsBase64('/logo-anissa.png');
+    console.log('[Cover] logo:', logoData ? 'OK' : 'FAILED');
+  } catch (err) {
+    console.warn('[Cover] logo load error (skipped):', err);
+    logoData = null;
+  }
+
   // ─── Fond crème plein ───
   doc.setFillColor(...CREAM);
   doc.rect(0, 0, pw, ph, 'F');
 
   // ══════════════════════════════════════════════════════════════
   //  HEADER — nom Anissa à gauche, localisation à droite
+  //  NOTE: on force charSpace=0 systématiquement avant chaque text()
+  //  et on évite l'em-dash "—" (rendu capricieux dans certaines configs
+  //  jsPDF) — remplacé par un hyphen " - ".
   // ══════════════════════════════════════════════════════════════
   const headerY = 22;
+  doc.setCharSpace(0);
 
+  // Ligne 1 : ANISSA DEROUBAIX (bold)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(...DARK_GREEN);
-  doc.setCharSpace(1.2);
   doc.text('ANISSA DEROUBAIX', margin, headerY);
-  doc.setCharSpace(0);
+  console.log('[Cover] header line 1 drawn at', { x: margin, y: headerY });
 
+  // Ligne 2 : sous-titre principal
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  doc.text('Nutritionniste — Optimisation métabolique & longévité', margin, headerY + 5);
-  doc.setTextColor(...GREY);
-  doc.text('Approche basée sur données biologiques & physiologie appliquée', margin, headerY + 9.5);
+  doc.text('Nutritionniste - Optimisation metabolique & longevite', margin, headerY + 5);
 
+  // Ligne 3 : sous-titre secondaire en gris
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GREY);
+  doc.text('Approche basee sur donnees biologiques & physiologie appliquee', margin, headerY + 9.5);
+
+  // Coin haut-droit : localisation
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GREY);
   doc.text(
-    'Nutritionniste · Longévité & Biomarqueurs · Nyon',
+    'Nutritionniste · Longevite & Biomarqueurs · Nyon',
     pw - margin,
     headerY,
     { align: 'right' }
@@ -1756,9 +1783,18 @@ export async function exportCoverPDF(consultation, client) {
   doc.line(margin, headerBottomY, pw - margin, headerBottomY);
 
   // ══════════════════════════════════════════════════════════════
+  //  LOGO CENTRÉ (25×25mm) — au-dessus du titre
+  // ══════════════════════════════════════════════════════════════
+  const logoSize = 25;
+  const logoY    = 48;
+  if (logoData) {
+    doc.addImage(logoData, 'PNG', pw / 2 - logoSize / 2, logoY, logoSize, logoSize);
+  }
+
+  // ══════════════════════════════════════════════════════════════
   //  TITRE PRINCIPAL (serif, centré sur 2 lignes)
   // ══════════════════════════════════════════════════════════════
-  const titleY = 84;
+  const titleY = 86;
   doc.setFont('times', 'bold');
   doc.setFontSize(26);
   doc.setTextColor(...DARK_GREEN);
@@ -1787,12 +1823,33 @@ export async function exportCoverPDF(consultation, client) {
   });
 
   // ══════════════════════════════════════════════════════════════
-  //  SECTION CLIENT — fond crème foncé, coins arrondis
+  //  SECTION CLIENT — fond crème foncé, hauteur dynamique
+  //  L'objectif peut wrapper sur 2 lignes max ; les lignes
+  //  suivantes (Consultation, Date) et la hauteur de la carte
+  //  s'adaptent en conséquence.
   // ══════════════════════════════════════════════════════════════
   const boxX = margin;
   const boxY = py + 10;
   const boxW = pw - margin * 2;
-  const boxH = 64;
+  const kvAvailW = boxW - 20; // marge intérieure pour le wrapping
+
+  // Pré-mesure de la valeur "Objectif" : max 2 lignes, wrapping strict
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  const objLabel = 'Objectif : ';
+  const objLabelW = doc.getTextWidth(objLabel);
+  const objLinesAll = doc.splitTextToSize(objectif, kvAvailW - objLabelW);
+  const objLines = objLinesAll.slice(0, 2);
+  const objLineCount = objLines.length;
+
+  // Layout vertical dynamique de la carte
+  const kvFirstY  = 38;
+  const kvLineH   = 7;
+  const objLastY  = kvFirstY + (objLineCount - 1) * 4.8; // 2e ligne sous la 1re
+  const consultY  = objLastY + kvLineH;
+  const dateYOff  = consultY + kvLineH;
+  const boxH      = dateYOff + 8; // marge basse
+
   doc.setFillColor(...CREAM_DARK);
   doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
@@ -1803,7 +1860,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFontSize(8.5);
   doc.setTextColor(...GREY);
   doc.setCharSpace(2.5);
-  doc.text('PRÉPARÉ POUR', pw / 2, boxY + 10, { align: 'center' });
+  doc.text('PREPARE POUR', pw / 2, boxY + 10, { align: 'center' });
   doc.setCharSpace(0);
 
   // Prénom en grand serif
@@ -1818,7 +1875,7 @@ export async function exportCoverPDF(consultation, client) {
   const sepW = 40;
   doc.line(pw / 2 - sepW / 2, boxY + 28, pw / 2 + sepW / 2, boxY + 28);
 
-  // 3 lignes d'infos centrées (label gris en bold + valeur sombre en normal)
+  // Ligne KV simple (label bold gris + valeur normale sombre, centrée en bloc)
   const drawKV = (label, value, yy) => {
     const labelText = `${label} : `;
     doc.setFont('helvetica', 'bold');
@@ -1835,14 +1892,34 @@ export async function exportCoverPDF(consultation, client) {
     doc.setTextColor(...INK);
     doc.text(value, startX + labelW, yy);
   };
-  drawKV('Objectif',     objectif,  boxY + 38);
-  drawKV('Consultation', typeBilan, boxY + 45);
-  drawKV('Date',         dateStr,   boxY + 52);
+
+  // Objectif — 1 ou 2 lignes (le label n'apparaît qu'en face de la 1re ligne,
+  // les lignes de wrapping suivantes sont indentées pour suivre le texte).
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  const firstLineValueW = doc.getTextWidth(objLines[0] || '');
+  const firstLineTotalW = objLabelW + firstLineValueW;
+  const firstLineStartX = pw / 2 - firstLineTotalW / 2;
+  doc.setTextColor(...GREY);
+  doc.text(objLabel, firstLineStartX, boxY + kvFirstY);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...INK);
+  doc.text(objLines[0] || '', firstLineStartX + objLabelW, boxY + kvFirstY);
+  if (objLineCount > 1) {
+    // 2e ligne centrée sous la précédente, sans label
+    doc.text(objLines[1], pw / 2, boxY + kvFirstY + 4.8, { align: 'center' });
+  }
+
+  drawKV('Consultation', typeBilan, boxY + consultY);
+  drawKV('Date',         dateStr,   boxY + dateYOff);
+
+  // Y de référence pour la suite du layout — position dynamique après la carte
+  const yAfterCard = boxY + boxH;
 
   // ══════════════════════════════════════════════════════════════
-  //  CITATION (italic serif, centrée)
+  //  CITATION (italic serif, centrée) — positionnée dynamiquement
   // ══════════════════════════════════════════════════════════════
-  const quoteBlockY = boxY + boxH + 22;
+  const quoteBlockY = yAfterCard + 15;
   doc.setDrawColor(...DARK_GREEN);
   doc.setLineWidth(0.4);
   doc.line(pw / 2 - 10, quoteBlockY - 7, pw / 2 + 10, quoteBlockY - 7);
@@ -1850,7 +1927,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFont('times', 'italic');
   doc.setFontSize(11.5);
   doc.setTextColor(...DARK_GREEN);
-  const quote = "« Votre corps suit des règles biologiques. Ce protocole s'y adapte avec précision. »";
+  const quote = "« Votre corps suit des regles biologiques. Ce protocole s'y adapte avec precision. »";
   const quoteLines = doc.splitTextToSize(quote, pw - margin * 2 - 30);
   let qy = quoteBlockY;
   quoteLines.forEach(line => {
@@ -1859,10 +1936,10 @@ export async function exportCoverPDF(consultation, client) {
   });
 
   // ══════════════════════════════════════════════════════════════
-  //  FOOTER — coordonnées Anissa
+  //  FOOTER — position fixe en bas de page (ph - 15)
   // ══════════════════════════════════════════════════════════════
-  const footerLineY = ph - 24;
-  const footerTextY = ph - 18;
+  const footerTextY = ph - 15;
+  const footerLineY = footerTextY - 5;
   doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
   doc.line(margin, footerLineY, pw - margin, footerLineY);
@@ -1875,6 +1952,8 @@ export async function exportCoverPDF(consultation, client) {
     footerTextY,
     { align: 'center' }
   );
+
+  console.log('[Cover] layout', { yAfterCard, quoteBlockY, footerTextY, objLineCount });
 
   doc.save(`cover-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`);
 }
