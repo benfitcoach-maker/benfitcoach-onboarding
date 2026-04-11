@@ -1724,9 +1724,39 @@ export async function exportCoverPDF(consultation, client) {
   console.log('[Cover] generating for', { prenom, objectifLen: rawObjectif.length, typeBilan, dateStr });
 
   // ─── Chargement du logo Anissa (skip silencieux si indisponible) ───
+  // On utilise le chemin canvas (<img> + canvas.toDataURL('image/png'))
+  // plutôt que loadImageAsBase64 qui passe par FileReader.readAsDataURL.
+  // Raison : le fichier public/logo-anissa.png est servi par Vite avec
+  // Content-Type: image/png basé sur l'extension, mais son contenu réel
+  // est un JPEG/JFIF (1024×1024). FileReader produirait un data URL
+  // malformé (préfixe image/png sur des bytes JPEG) que jsPDF ne peut
+  // pas décoder. Le canvas, lui, décode via <img> (transparent au format
+  // réel) puis ré-encode proprement en PNG.
+  const loadCoverLogo = (url) => new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (e) {
+        console.warn('[Cover] canvas re-encode failed:', e);
+        resolve(null);
+      }
+    };
+    img.onerror = (e) => {
+      console.warn('[Cover] image load error:', e);
+      resolve(null);
+    };
+    img.src = url;
+  });
+
   let logoData = null;
   try {
-    logoData = await loadImageAsBase64('/logo-anissa.png');
+    logoData = await loadCoverLogo('/logo-anissa.png');
     console.log('[Cover] logo:', logoData ? 'OK' : 'FAILED');
   } catch (err) {
     console.warn('[Cover] logo load error (skipped):', err);
