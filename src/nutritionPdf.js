@@ -1383,9 +1383,6 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const form = client?.form || {};
   const dateStr = formatDateFR(consultation.date);
   const meals = editedMeals || extractMeals(consultation.nutritionPlan);
-  const supplementsData = (editedMeals && editedMeals.supplements)
-    || extractSupplements(consultation.supplements || '');
-  const hasSupplements = Object.values(supplementsData).some(arr => arr && arr.length > 0);
   const noContent = 'Generez un plan nutrition plus detaille';
 
   // ─── Fond crème plein ───
@@ -1393,52 +1390,43 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.rect(0, 0, pw, ph, 'F');
 
   // ─── Charger le logo en premier (doit s'afficher coute que coute) ───
-  const logoData = await loadImageAsBase64(LOGO_URL);
+  let logoData = null;
+  try {
+    logoData = await loadImageAsBase64(LOGO_URL);
+    console.log('[FicheFrigo] logo loaded:', logoData ? 'OK' : 'FAILED', LOGO_URL);
+  } catch (err) {
+    console.warn('[FicheFrigo] logo load error (skipped):', err);
+    logoData = null;
+  }
 
   // ══════════════════════════════════════════════════════════════
   //  GRILLE STRICTE — derivée des dimensions de la page
+  //  headerH   = 28
+  //  colTop    = headerH + 8
+  //  colH      = (ph - 22 - colTop - 8) * 0.62
+  //  sectionTop= colTop + colH + 4
+  //  sectionH  = ph - 22 - sectionTop - 4
+  //  footerY   = ph - 22
   // ══════════════════════════════════════════════════════════════
-  const HEADER_TOP = margin;                    // 10
-  const HEADER_H = 22;                          // hauteur du logo + titre
-  const HEADER_BOTTOM = HEADER_TOP + HEADER_H;  // 32
-  const SEPARATOR_Y = HEADER_BOTTOM + 2;        // 34
-
-  // Footer : position Y fixe a ph - 22 (per spec user)
-  const FOOTER_TOP = ph - 22;                   // 188
-  const FOOTER_H = 12;                          // bandeau 12mm → fin a 200, marge bas 10mm
-
-  // Content area = espace entre separator et footer
-  const CONTENT_TOP = SEPARATOR_Y + 4;          // 38
-  const CONTENT_BOTTOM = FOOTER_TOP - 2;        // 186
-  const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP; // 148
-  const SECTION_GAP = 4;
-
-  // Hauteurs des sections : remplit strictement CONTENT_H
-  let MEALS_H, FAVOR_H, SUPP_H;
-  if (hasSupplements) {
-    SUPP_H = 18;
-    FAVOR_H = 38;
-    MEALS_H = CONTENT_H - FAVOR_H - SUPP_H - SECTION_GAP * 2; // 148-38-18-8 = 84
-  } else {
-    SUPP_H = 0;
-    FAVOR_H = 40;
-    MEALS_H = CONTENT_H - FAVOR_H - SECTION_GAP; // 148-40-4 = 104
-  }
-
-  const MEALS_TOP = CONTENT_TOP;
-  const FAVOR_TOP = MEALS_TOP + MEALS_H + SECTION_GAP;
-  const SUPP_TOP = FAVOR_TOP + FAVOR_H + SECTION_GAP;
+  const headerH    = 28;
+  const footerY    = ph - 22;                         // 188, toujours collé en bas
+  const footerH    = 12;                              // bandeau 12mm
+  const colTop     = headerH + 8;                     // 36
+  const availableH = footerY - colTop - 8;            // 144
+  const colH       = availableH * 0.62;               // 89.28
+  const sectionTop = colTop + colH + 4;               // 129.28
+  const sectionH   = footerY - sectionTop - 4;        // 54.72
 
   // ══════════════════════════════════════════════════════════════
   //  HEADER : logo gauche + titre centré + date droite
   // ══════════════════════════════════════════════════════════════
   if (logoData) {
-    // Logo 22×22mm, aligné top=HEADER_TOP, left=margin
-    doc.addImage(logoData, 'PNG', margin, HEADER_TOP, 22, 22);
+    // Logo 22×22mm, aligné top=margin, left=margin
+    doc.addImage(logoData, 'PNG', margin, margin, 22, 22);
   }
 
-  // Titre vertically centered with logo (logo center Y = HEADER_TOP + 11)
-  const titleCenterY = HEADER_TOP + 11;
+  // Titre vertically centered with logo (logo center Y = margin + 11)
+  const titleCenterY = margin + 11;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(...DARK_GREEN);
@@ -1446,24 +1434,23 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.text(
     `FICHE NUTRITION  —  ${(form.prenom || 'CLIENT').toUpperCase()}`,
     pw / 2,
-    titleCenterY + 2, // +2 pour l'ascent de la typo
+    titleCenterY + 2,
     { align: 'center' }
   );
   doc.setCharSpace(0);
 
-  // Date à droite, même baseline que le titre
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(...DARK_GREEN);
   doc.text(dateStr, pw - margin, titleCenterY + 2, { align: 'right' });
 
-  // Séparation sous le header
+  // Séparation sous le header (à headerH + 2)
   doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
-  doc.line(margin, SEPARATOR_Y, pw - margin, SEPARATOR_Y);
+  doc.line(margin, headerH + 2, pw - margin, headerH + 2);
 
   // ══════════════════════════════════════════════════════════════
-  //  3 COLONNES REPAS (hauteur fixe MEALS_H)
+  //  3 COLONNES REPAS (top = colTop, hauteur fixe colH)
   // ══════════════════════════════════════════════════════════════
   const colGap = 6;
   const colWidth = (pw - margin * 2 - colGap * 2) / 3;
@@ -1481,29 +1468,29 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     doc.setDrawColor(...BORDER);
     doc.setLineWidth(0.3);
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(cx, MEALS_TOP, colWidth, MEALS_H, radius, radius, 'FD');
+    doc.roundedRect(cx, colTop, colWidth, colH, radius, radius, 'FD');
 
     // Bandeau titre vert foncé plein
-    const headerH = 10;
+    const bandH = 10;
     doc.setFillColor(...DARK_GREEN);
-    doc.roundedRect(cx, MEALS_TOP, colWidth, headerH, radius, radius, 'F');
+    doc.roundedRect(cx, colTop, colWidth, bandH, radius, radius, 'F');
     // Masque pour carrer les coins bas du bandeau
-    doc.rect(cx, MEALS_TOP + headerH - radius, colWidth, radius, 'F');
+    doc.rect(cx, colTop + bandH - radius, colWidth, radius, 'F');
 
-    // Titre blanc bold espacé
+    // Titre centré horizontalement dans la colonne : x = cx + colWidth/2
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
     doc.setCharSpace(2);
-    doc.text(col.title, cx + colWidth / 2, MEALS_TOP + 6.8, { align: 'center' });
+    doc.text(col.title, cx + colWidth / 2, colTop + 6.8, { align: 'center' });
     doc.setCharSpace(0);
 
     // Zone contenu dans la carte
     const contentPad = 5;
     const contentX = cx + contentPad;
     const contentW = colWidth - contentPad * 2;
-    const contentTop = MEALS_TOP + headerH + 4;
-    const contentBottom = MEALS_TOP + MEALS_H - 4;
+    const contentTop = colTop + bandH + 4;
+    const contentBottom = colTop + colH - 4;
     let cy = contentTop + 2;
 
     const maxOptions = Math.min(col.items.length, 3);
@@ -1543,7 +1530,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...GREY_TEXT);
-      doc.text(noContent, cx + colWidth / 2, MEALS_TOP + MEALS_H / 2, { align: 'center' });
+      doc.text(noContent, cx + colWidth / 2, colTop + colH / 2, { align: 'center' });
     }
   });
 
@@ -1600,94 +1587,44 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     }
   }
 
-  // A PRIVILEGIER — fond vert pâle
+  // A PRIVILEGIER — fond vert pâle (top=sectionTop, hauteur=sectionH)
   doc.setFillColor(...FAVOR_BG);
   doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
-  doc.roundedRect(margin, FAVOR_TOP, btmWidth, FAVOR_H, radius, radius, 'FD');
+  doc.roundedRect(margin, sectionTop, btmWidth, sectionH, radius, radius, 'FD');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...DARK_GREEN);
   doc.setCharSpace(2);
-  doc.text('A PRIVILEGIER', margin + btmWidth / 2, FAVOR_TOP + 7, { align: 'center' });
+  doc.text('A PRIVILEGIER', margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
   doc.setCharSpace(0);
-  renderFoodList(meals.toFavor, margin, FAVOR_TOP, btmWidth, FAVOR_H);
+  renderFoodList(meals.toFavor, margin, sectionTop, btmWidth, sectionH);
 
   // A LIMITER — fond rose pâle (même top, même hauteur)
   const limX = margin + btmWidth + btmGap;
   doc.setFillColor(...LIMIT_BG);
   doc.setDrawColor(...BORDER);
-  doc.roundedRect(limX, FAVOR_TOP, btmWidth, FAVOR_H, radius, radius, 'FD');
+  doc.roundedRect(limX, sectionTop, btmWidth, sectionH, radius, radius, 'FD');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...LIMIT_TITLE);
   doc.setCharSpace(2);
-  doc.text('A LIMITER', limX + btmWidth / 2, FAVOR_TOP + 7, { align: 'center' });
+  doc.text('A LIMITER', limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
   doc.setCharSpace(0);
-  renderFoodList(meals.toLimit, limX, FAVOR_TOP, btmWidth, FAVOR_H);
+  renderFoodList(meals.toLimit, limX, sectionTop, btmWidth, sectionH);
 
   // ══════════════════════════════════════════════════════════════
-  //  MES COMPLEMENTS (optionnel, remplit le reste avant le footer)
-  // ══════════════════════════════════════════════════════════════
-  if (hasSupplements) {
-    const suppWidth = pw - margin * 2;
-
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(...BORDER);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin, SUPP_TOP, suppWidth, SUPP_H, radius, radius, 'FD');
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...DARK_GREEN);
-    doc.setCharSpace(1.5);
-    doc.text('MES COMPLEMENTS', margin + 6, SUPP_TOP + 5.5);
-    doc.setCharSpace(0);
-
-    const rowMap = [
-      { label: 'MATIN A JEUN',   key: 'morningFasting' },
-      { label: 'PETIT-DEJEUNER', key: 'breakfast' },
-      { label: 'MIDI',           key: 'lunch' },
-      { label: 'SOIR',           key: 'dinner' },
-      { label: 'COUCHER',        key: 'bedtime' },
-    ].filter(r => supplementsData[r.key] && supplementsData[r.key].length > 0);
-
-    const rowsAreaTop = SUPP_TOP + 9;
-    const rowsAreaBottom = SUPP_TOP + SUPP_H - 2;
-    const availableH = rowsAreaBottom - rowsAreaTop;
-    const rowH = rowMap.length > 0 ? Math.min(2.6, availableH / rowMap.length) : 2.6;
-    const labelWidth = 32;
-    const textMaxWidth = suppWidth - labelWidth - 14;
-
-    doc.setFontSize(7);
-    let sy = rowsAreaTop + 1.8;
-    rowMap.forEach((r) => {
-      if (sy > rowsAreaBottom) return;
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...DARK_GREEN);
-      doc.text(`${r.label} :`, margin + 6, sy);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...DARK_TEXT);
-      const content = supplementsData[r.key].join(', ');
-      const lines = doc.splitTextToSize(content, textMaxWidth);
-      doc.text(lines[0] || '', margin + 6 + labelWidth, sy);
-      sy += rowH;
-    });
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  //  FOOTER : bandeau vert foncé (Y fixe à ph - 22)
+  //  FOOTER : bandeau vert foncé (Y fixe à footerY = ph - 22)
   // ══════════════════════════════════════════════════════════════
   doc.setFillColor(...DARK_GREEN);
-  doc.roundedRect(margin, FOOTER_TOP, pw - margin * 2, FOOTER_H, radius, radius, 'F');
+  doc.roundedRect(margin, footerY, pw - margin * 2, footerH, radius, radius, 'F');
 
   // Gauche : Hydratation + Collation
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   const leftX = margin + 6;
-  let fy = FOOTER_TOP + 5;
+  let fy = footerY + 5;
   const hydration = meals.hydration || form.hydratation;
   if (hydration) {
     doc.text('HYDRATATION', leftX, fy);
@@ -1711,7 +1648,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.text(
     'anissanutrition@gmail.com  ·  www.anissanutrition.ch  ·  076 621 02 05',
     rightX,
-    FOOTER_TOP + FOOTER_H / 2 + 1,
+    footerY + footerH / 2 + 1,
     { align: 'right' }
   );
 
