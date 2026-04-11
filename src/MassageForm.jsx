@@ -90,6 +90,7 @@ function MassageStep1({ form, updateField }) {
       ]} />
       <Field label="Telephone" field="telephone" form={form} updateField={updateField} type="tel" />
       <Field label="Email" field="email" form={form} updateField={updateField} type="email" />
+      <Field label="Tarif reel (CHF)" field="customRate" form={form} updateField={updateField} type="number" />
     </div>
   );
 }

@@ -1,6 +1,19 @@
 import { supabase, isCloudEnabled } from './supabaseClient';
+import { computeMetrics } from './bodyMetrics';
+
+function toNumOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function round1OrNull(v) {
+  if (v == null || !Number.isFinite(v)) return null;
+  return Math.round(v * 10) / 10;
+}
 
 const STORAGE_KEY = 'bfc_clients';
+const NUTRITION_KEY = 'bfc_nutrition_consultations';
 const SYNC_QUEUE_KEY = 'bfc_sync_queue';
 
 // ─── localStorage helpers (always synchronous) ───
@@ -15,6 +28,18 @@ function readAll() {
 
 function writeAll(clients) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+}
+
+function readNutritionConsultations() {
+  try {
+    return JSON.parse(localStorage.getItem(NUTRITION_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeNutritionConsultations(consultations) {
+  localStorage.setItem(NUTRITION_KEY, JSON.stringify(consultations));
 }
 
 // ─── Sync queue for offline operations ───
@@ -42,6 +67,8 @@ function addToSyncQueue(operation) {
 function cloudSyncClient(client) {
   if (!isCloudEnabled) return;
   const { history, progression, massageSessions, ...rest } = client;
+  const f = rest.form || {};
+  const metrics = computeMetrics(f);
   const row = {
     id: rest.id,
     categorie: rest.categorie || 'online',
@@ -49,8 +76,23 @@ function cloudSyncClient(client) {
     formule: rest.formule || '',
     langue: rest.langue || 'FR',
     status: rest.status || 'nouveau',
-    form: rest.form || {},
+    form: f,
+    custom_rate: f.customRate ? Number(f.customRate) : null,
+    waist_cm: toNumOrNull(f.tourTaille),
+    hip_cm: toNumOrNull(f.tourHanche),
+    neck_cm: toNumOrNull(f.tourCou),
+    chest_cm: toNumOrNull(f.tourPoitrine),
+    arm_right_cm: toNumOrNull(f.tourBrasDroit),
+    arm_left_cm: toNumOrNull(f.tourBrasGauche),
+    thigh_right_cm: toNumOrNull(f.tourCuisseDroite),
+    thigh_left_cm: toNumOrNull(f.tourCuisseGauche),
+    calf_cm: toNumOrNull(f.tourMollet),
+    body_fat_percent: round1OrNull(metrics.bodyFat),
+    lean_mass_kg: round1OrNull(metrics.leanMass),
+    bmr_kcal: metrics.bmr != null ? Math.round(metrics.bmr) : null,
+    interview_notes: rest.interviewNotes || null,
     latest_sections: rest.latestSections || null,
+    created_by: rest.createdBy || 'benoit',
     created_at: rest.createdAt || new Date().toISOString(),
     updated_at: rest.updatedAt || new Date().toISOString(),
   };
@@ -134,17 +176,47 @@ function cloudDeleteMassageSession(sessionId) {
   });
 }
 
+function cloudSyncNutritionConsultation(consultation) {
+  if (!isCloudEnabled) return;
+  const row = {
+    id: consultation.id,
+    client_id: consultation.clientId,
+    consultant_name: consultation.consultantName || 'Anissa',
+    date: consultation.date,
+    observations: consultation.observations || '',
+    blood_test_done: consultation.bloodTestDone || false,
+    dna_test_done: consultation.dnaTestDone || false,
+    nutritional_observations: consultation.nutritionalObservations || '',
+    nutrition_plan: consultation.nutritionPlan || '',
+    supplements: consultation.supplements || '',
+    recipes: consultation.recipes || '',
+    notes_for_coach: consultation.notesForCoach || '',
+    private_notes: consultation.privateNotes || '',
+    is_followup: consultation.isFollowup || false,
+    followup_data: consultation.followupData || null,
+    previous_consultation_id: consultation.previousConsultationId || null,
+    created_at: consultation.createdAt || new Date().toISOString(),
+  };
+  supabase.from('nutrition_consultations').upsert(row).then(({ error }) => {
+    if (error) {
+      console.warn('Cloud sync nutrition consultation failed:', error.message);
+      addToSyncQueue({ type: 'upsert_nutrition_consultation', data: row });
+    }
+  });
+}
+
 // ─── Full cloud pull (on login / app start) ───
 
 export async function pullFromCloud() {
   if (!isCloudEnabled) return { synced: false };
 
   try {
-    const [clientsRes, gensRes, sessionsRes, progRes] = await Promise.all([
+    const [clientsRes, gensRes, sessionsRes, progRes, nutritionRes] = await Promise.all([
       supabase.from('clients').select('*'),
       supabase.from('generations').select('*'),
       supabase.from('massage_sessions').select('*'),
       supabase.from('progression').select('*'),
+      supabase.from('nutrition_consultations').select('*').then(r => r).catch(() => ({ data: [], error: null })),
     ]);
 
     if (clientsRes.error) throw clientsRes.error;
@@ -153,6 +225,7 @@ export async function pullFromCloud() {
     const cloudGens = gensRes.data || [];
     const cloudSessions = sessionsRes.data || [];
     const cloudProg = progRes.data || [];
+    const cloudNutrition = nutritionRes.data || [];
 
     // Group related data by client_id
     const gensByClient = {};
@@ -180,6 +253,35 @@ export async function pullFromCloud() {
       });
     }
 
+    // Store nutrition consultations locally
+    const localNutrition = cloudNutrition.map(n => ({
+      id: n.id,
+      clientId: n.client_id,
+      consultantName: n.consultant_name || 'Anissa',
+      date: n.date,
+      observations: n.observations || '',
+      bloodTestDone: n.blood_test_done || false,
+      dnaTestDone: n.dna_test_done || false,
+      nutritionalObservations: n.nutritional_observations || '',
+      nutritionPlan: n.nutrition_plan || '',
+      supplements: n.supplements || '',
+      recipes: n.recipes || '',
+      notesForCoach: n.notes_for_coach || '',
+      privateNotes: n.private_notes || '',
+      isFollowup: n.is_followup || false,
+      followupData: n.followup_data || null,
+      previousConsultationId: n.previous_consultation_id || null,
+      createdAt: n.created_at,
+    }));
+    // Merge with existing local nutrition consultations
+    const existingNutrition = readNutritionConsultations();
+    const nutritionMap = {};
+    for (const n of localNutrition) nutritionMap[n.id] = n;
+    for (const n of existingNutrition) {
+      if (!nutritionMap[n.id]) nutritionMap[n.id] = n;
+    }
+    writeNutritionConsultations(Object.values(nutritionMap));
+
     // Build cloud client objects in localStorage format
     const cloudMap = {};
     for (const c of cloudClients) {
@@ -195,6 +297,8 @@ export async function pullFromCloud() {
         status: c.status || 'nouveau',
         form: c.form || {},
         latestSections: c.latest_sections || null,
+        interviewNotes: c.interview_notes || null,
+        createdBy: c.created_by || 'benoit',
         createdAt: c.created_at,
         updatedAt: c.updated_at,
         history,
@@ -222,7 +326,6 @@ export async function pullFromCloud() {
         const cloudDate = new Date(cloudClient.updatedAt || 0);
         const localDate = new Date(local.updatedAt || 0);
         if (cloudDate >= localDate) {
-          // Cloud wins, but merge arrays (union by id)
           merged[id] = {
             ...cloudClient,
             history: mergeArraysById(cloudClient.history, local.history),
@@ -230,7 +333,6 @@ export async function pullFromCloud() {
             massageSessions: mergeArraysById(cloudClient.massageSessions, local.massageSessions),
           };
         } else {
-          // Local wins, but merge arrays
           merged[id] = {
             ...local,
             history: mergeArraysById(local.history, cloudClient.history),
@@ -255,7 +357,6 @@ export async function pullFromCloud() {
     for (const client of mergedList) {
       if (!cloudMap[client.id]) {
         cloudSyncClient(client);
-        // Also push related data
         for (const gen of (client.history || [])) {
           cloudSyncGeneration(client.id, gen);
         }
@@ -265,6 +366,14 @@ export async function pullFromCloud() {
         for (const session of (client.massageSessions || [])) {
           cloudSyncMassageSession(client.id, session);
         }
+      }
+    }
+
+    // Push local-only nutrition consultations to cloud
+    const cloudNutritionIds = new Set(cloudNutrition.map(n => n.id));
+    for (const n of Object.values(nutritionMap)) {
+      if (!cloudNutritionIds.has(n.id)) {
+        cloudSyncNutritionConsultation(n);
       }
     }
 
@@ -316,6 +425,9 @@ export async function retrySyncQueue() {
       case 'delete_massage_session':
         ({ error } = await supabase.from('massage_sessions').delete().eq('id', op.data.id));
         break;
+      case 'upsert_nutrition_consultation':
+        ({ error } = await supabase.from('nutrition_consultations').upsert(op.data));
+        break;
     }
     if (error) remaining.push(op);
   }
@@ -330,6 +442,24 @@ export function getClients() {
 
 export function getClient(id) {
   return readAll().find(c => c.id === id) || null;
+}
+
+// Get clients shared with Anissa (Suivi Complet or Intensif formulas, created by Benoit)
+export function getSharedClients() {
+  return getClients().filter(c => {
+    const formule = c.formule || '';
+    return (formule === 'suivi' || formule === 'intensif') && (c.createdBy || 'benoit') !== 'anissa';
+  });
+}
+
+// Get clients created by Anissa
+export function getAnissaOwnClients() {
+  return getClients().filter(c => c.createdBy === 'anissa');
+}
+
+// Get clients visible to Benoit (all except Anissa's own clients)
+export function getBenoitClients() {
+  return getClients().filter(c => (c.createdBy || 'benoit') !== 'anissa');
 }
 
 export function saveClient(client) {
@@ -388,6 +518,17 @@ export function updateClientStatus(id, status) {
   client.updatedAt = new Date().toISOString();
   writeAll(clients);
   cloudSyncClient(client);
+}
+
+export function updateInterviewNotes(clientId, interviewNotes) {
+  const clients = readAll();
+  const client = clients.find(c => c.id === clientId);
+  if (!client) return null;
+  client.interviewNotes = interviewNotes;
+  client.updatedAt = new Date().toISOString();
+  writeAll(clients);
+  cloudSyncClient(client);
+  return client;
 }
 
 export function updateClientSection(clientId, sectionTitle, content) {
@@ -461,12 +602,140 @@ export function deleteMassageSession(clientId, sessionId) {
   cloudDeleteMassageSession(sessionId);
 }
 
+// ─── Nutrition Consultations ───
+
+export function getNutritionConsultations(clientId) {
+  return readNutritionConsultations()
+    .filter(n => n.clientId === clientId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export function saveNutritionConsultation(consultation) {
+  const consultations = readNutritionConsultations();
+  const entry = {
+    id: consultation.id || crypto.randomUUID(),
+    clientId: consultation.clientId,
+    consultantName: consultation.consultantName || 'Anissa',
+    date: consultation.date || new Date().toISOString(),
+    observations: consultation.observations || '',
+    bloodTestDone: consultation.bloodTestDone || false,
+    dnaTestDone: consultation.dnaTestDone || false,
+    nutritionalObservations: consultation.nutritionalObservations || '',
+    nutritionPlan: consultation.nutritionPlan || '',
+    supplements: consultation.supplements || '',
+    recipes: consultation.recipes || '',
+    notesForCoach: consultation.notesForCoach || '',
+    privateNotes: consultation.privateNotes || '',
+    ficheFrigoJson: consultation.ficheFrigoJson || null,
+    isFollowup: consultation.isFollowup || false,
+    followupData: consultation.followupData || null,
+    previousConsultationId: consultation.previousConsultationId || null,
+    createdAt: consultation.createdAt || new Date().toISOString(),
+  };
+  const idx = consultations.findIndex(c => c.id === entry.id);
+  if (idx >= 0) {
+    consultations[idx] = entry;
+  } else {
+    consultations.push(entry);
+  }
+  writeNutritionConsultations(consultations);
+  cloudSyncNutritionConsultation(entry);
+  return entry;
+}
+
+// ─── Client reminder frequency (localStorage, default 3 months) ───
+
+const REMINDER_FREQ_KEY = 'bfc_reminder_frequencies';
+export const DEFAULT_REMINDER_MONTHS = 3;
+
+function readReminderFrequencies() {
+  try {
+    return JSON.parse(localStorage.getItem(REMINDER_FREQ_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeReminderFrequencies(data) {
+  localStorage.setItem(REMINDER_FREQ_KEY, JSON.stringify(data));
+}
+
+export function setClientReminderFrequency(clientId, months) {
+  if (!clientId) return;
+  const data = readReminderFrequencies();
+  const n = Number(months);
+  if (!Number.isFinite(n) || n <= 0) {
+    delete data[clientId];
+  } else {
+    data[clientId] = n;
+  }
+  writeReminderFrequencies(data);
+}
+
+export function getClientReminderFrequency(clientId) {
+  if (!clientId) return DEFAULT_REMINDER_MONTHS;
+  const data = readReminderFrequencies();
+  const n = Number(data[clientId]);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_REMINDER_MONTHS;
+}
+
+// ─── Plan versioning (localStorage only, max 3 versions per client) ───
+
+const PLAN_VERSIONS_KEY = 'bfc_plan_versions';
+const MAX_PLAN_VERSIONS = 3;
+
+function readPlanVersions() {
+  try {
+    return JSON.parse(localStorage.getItem(PLAN_VERSIONS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writePlanVersions(data) {
+  localStorage.setItem(PLAN_VERSIONS_KEY, JSON.stringify(data));
+}
+
+export function savePlanVersion(clientId, version) {
+  if (!clientId || !version) return;
+  const all = readPlanVersions();
+  const list = Array.isArray(all[clientId]) ? all[clientId] : [];
+  const entry = {
+    id: crypto.randomUUID(),
+    savedAt: new Date().toISOString(),
+    nutritionPlan: version.nutritionPlan || '',
+    supplements: version.supplements || '',
+    recipes: version.recipes || '',
+    ficheFrigoJson: version.ficheFrigoJson || null,
+    label: version.label || '',
+  };
+  list.unshift(entry);
+  all[clientId] = list.slice(0, MAX_PLAN_VERSIONS);
+  writePlanVersions(all);
+  return entry;
+}
+
+export function getPlanVersions(clientId) {
+  if (!clientId) return [];
+  const all = readPlanVersions();
+  return Array.isArray(all[clientId]) ? all[clientId] : [];
+}
+
+export function deletePlanVersion(clientId, versionId) {
+  if (!clientId || !versionId) return;
+  const all = readPlanVersions();
+  if (!Array.isArray(all[clientId])) return;
+  all[clientId] = all[clientId].filter(v => v.id !== versionId);
+  writePlanVersions(all);
+}
+
 // Export/Import
 export function exportAllData() {
   return JSON.stringify({
     version: 1,
     exportedAt: new Date().toISOString(),
     clients: readAll(),
+    nutritionConsultations: readNutritionConsultations(),
     apiKey: localStorage.getItem('bfc_api_key') || '',
   }, null, 2);
 }
@@ -477,6 +746,9 @@ export function importAllData(jsonString) {
     throw new Error('Format invalide: pas de tableau clients');
   }
   writeAll(data.clients);
+  if (data.nutritionConsultations) {
+    writeNutritionConsultations(data.nutritionConsultations);
+  }
   if (data.apiKey) {
     localStorage.setItem('bfc_api_key', data.apiKey);
   }
@@ -487,6 +759,9 @@ export function importAllData(jsonString) {
       for (const gen of (client.history || [])) cloudSyncGeneration(client.id, gen);
       for (const prog of (client.progression || [])) cloudSyncProgression(client.id, prog);
       for (const session of (client.massageSessions || [])) cloudSyncMassageSession(client.id, session);
+    }
+    if (data.nutritionConsultations) {
+      for (const n of data.nutritionConsultations) cloudSyncNutritionConsultation(n);
     }
   }
   return data.clients.length;

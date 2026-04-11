@@ -3,23 +3,55 @@ import './App.css';
 import {
   STEPS, PRESENTIEL_STEPS, MASSAGE_STEPS,
   INITIAL_FORM, PRESENTIEL_INITIAL_FORM, MASSAGE_INITIAL_FORM,
-  FORMULES, CATEGORIES, PRESENTIEL_PACKS,
+  FORMULES, CATEGORIES, PRESENTIEL_PACKS, NUTRITION_INITIAL_FORM,
 } from './formSteps';
+
+function ensureCustomRate(form, categorie) {
+  if (form.customRate) return form;
+  const key = form.formule || (categorie === 'massage' ? 'massage' : null);
+  const montant = key && FORMULES[key]?.montant;
+  if (montant) return { ...form, customRate: String(montant) };
+  return form;
+}
 import StepForm from './StepForm';
 import MassageForm from './MassageForm';
 import MassageSessionPanel from './MassageSessionPanel';
 import ResultCards from './ResultCards';
 import Dashboard from './Dashboard';
+import AnissaDashboard from './AnissaDashboard';
+import AnissaClientForm from './AnissaClientForm';
+import NutritionConsultation from './NutritionConsultation';
+import NutritionHistory from './NutritionHistory';
 import HistoryPanel from './HistoryPanel';
 import MessageTemplates from './MessageTemplates';
 import ClientAlerts from './ClientAlerts';
 import ProgressionPanel from './ProgressionPanel';
+import BusinessDashboard from './BusinessDashboard';
+import AnissaChiffres from './AnissaChiffres';
+import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes } from './store';
 import { isCloudEnabled } from './supabaseClient';
+import ReminderPanel, { getReminderCount } from './ReminderPanel';
+import { getT } from './translations';
+import InterviewPanel from './InterviewPanel';
+import { applyInterviewNotesToForm } from './interviewTemplates';
+
+// Per-category short-label key map for the step navigator in the form header.
+const STEP_LABEL_KEYS = {
+  online: {
+    1: 'steplabel.identite', 2: 'steplabel.objectifs', 3: 'steplabel.sport', 4: 'steplabel.sante',
+    5: 'steplabel.nutrition', 6: 'steplabel.lifestyle', 7: 'steplabel.contexte', 8: 'steplabel.mesNotes',
+  },
+  presentiel: {
+    1: 'steplabel.identite', 2: 'steplabel.objectifs', 3: 'steplabel.sport', 4: 'steplabel.sante',
+    5: 'steplabel.nutrition', 6: 'steplabel.lifestyle', 7: 'steplabel.mesNotes',
+  },
+};
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69a6ccf52a4f1eb605779f33_logo%20benfitocah.png';
+const ANISSA_LOGO = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
 function getStepsForCategory(cat) {
   if (cat === 'massage') return MASSAGE_STEPS;
@@ -38,14 +70,27 @@ function getStepIcons(cat) {
   return steps.map((_, i) => String(i + 1).padStart(2, '0'));
 }
 
+// Toast component
+function Toast({ message, visible }) {
+  if (!visible) return null;
+  return (
+    <div className="toast-notification">
+      {message}
+    </div>
+  );
+}
+
 function App() {
   // Auth state
   const [authenticated, setAuthenticated] = useState(() => {
-    if (!isCloudEnabled) return true; // No Supabase = no login required
+    if (!isCloudEnabled) return true;
     return sessionStorage.getItem('bfc_auth') === 'true';
   });
+  const [currentUser, setCurrentUser] = useState(() => {
+    return sessionStorage.getItem('bfc_user') || 'Benoit';
+  });
   const [cloudSynced, setCloudSynced] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(''); // '', 'syncing', 'synced', 'offline'
+  const [syncStatus, setSyncStatus] = useState('');
 
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('bfc_api_key') || '');
   const [page, setPage] = useState('dashboard');
@@ -53,6 +98,7 @@ function App() {
   const [categorie, setCategorie] = useState('online');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [originalForm, setOriginalForm] = useState(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState(null);
@@ -61,10 +107,24 @@ function App() {
   const [, setTick] = useState(0);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [convertMode, setConvertMode] = useState(null);
+  const [editingConsultation, setEditingConsultation] = useState(null);
+  const [toast, setToast] = useState({ message: '', visible: false });
+  const [showReminders, setShowReminders] = useState(false);
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  const [interviewNotes, setInterviewNotes] = useState(null);
+  const interviewSaveTimer = useRef(null);
   const fileInputRef = useRef(null);
+
+  const isAnissa = currentUser === 'Anissa';
+  const isBenoit = currentUser === 'Benoit';
 
   const refreshClients = useCallback(() => setClients(getClients()), []);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
+
+  const showToast = useCallback((message) => {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast({ message: '', visible: false }), 3000);
+  }, []);
 
   // Cloud sync on login
   useEffect(() => {
@@ -78,9 +138,7 @@ function App() {
       } else {
         setSyncStatus('offline');
       }
-      // Retry any queued operations
       retrySyncQueue();
-      // Clear sync badge after 3s
       setTimeout(() => setSyncStatus(''), 4000);
     });
   }, [authenticated, cloudSynced, refreshClients]);
@@ -102,7 +160,8 @@ function App() {
     };
   }, []);
 
-  const handleLogin = useCallback(() => {
+  const handleLogin = useCallback((username) => {
+    setCurrentUser(username);
     setAuthenticated(true);
     refreshClients();
   }, [refreshClients]);
@@ -127,8 +186,13 @@ function App() {
     if (!client) return;
     setClientId(client.id);
     setCategorie(client.categorie || 'online');
-    setForm(client.form || getInitialFormForCategory(client.categorie || 'online'));
+    const cat = client.categorie || 'online';
+    const loaded = ensureCustomRate(client.form || getInitialFormForCategory(cat), cat);
+    setForm(loaded);
+    setOriginalForm(loaded);
     setResults(client.latestSections || null);
+    setInterviewNotes(client.interviewNotes || null);
+    setInterviewOpen(false);
     setStep(1);
     setError('');
     setEditTab('form');
@@ -141,8 +205,12 @@ function App() {
     const targetCat = cat || 'online';
     setClientId(null);
     setCategorie(targetCat);
-    setForm(getInitialFormForCategory(targetCat));
+    const fresh = ensureCustomRate(getInitialFormForCategory(targetCat), targetCat);
+    setForm(fresh);
+    setOriginalForm(fresh);
     setResults(null);
+    setInterviewNotes(null);
+    setInterviewOpen(false);
     setStep(1);
     setError('');
     setEditTab('form');
@@ -163,6 +231,23 @@ function App() {
     });
     setClientId(client.id);
     refreshClients();
+    showToast('Client sauvegarde avec succes');
+    setTimeout(() => goToDashboard(), 2000);
+    return client;
+  };
+
+  const handleSaveNoRedirect = () => {
+    const client = saveClient({
+      id: clientId,
+      categorie,
+      form,
+      prenom: form.prenom,
+      formule: categorie === 'massage' ? 'massage' : (categorie === 'presentiel' ? 'presentiel' : form.formule),
+      langue: form.langue || 'FR',
+      latestSections: results,
+    });
+    setClientId(client.id);
+    refreshClients();
     return client;
   };
 
@@ -171,7 +256,7 @@ function App() {
       setError('Entrez votre cle API Anthropic.');
       return;
     }
-    const client = handleSave();
+    const client = handleSaveNoRedirect();
     setLoading(true);
     setError('');
     try {
@@ -276,8 +361,38 @@ function App() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('bfc_auth');
+    sessionStorage.removeItem('bfc_user');
     setAuthenticated(false);
     setCloudSynced(false);
+  };
+
+  // Anissa: nutrition consultation handlers
+  const handleStartConsultation = (id) => {
+    setClientId(id);
+    setEditingConsultation(null);
+    setPage('nutritionConsultation');
+    setMobileMenu(false);
+  };
+
+  const handleSaveConsultation = (consultation) => {
+    saveNutritionConsultation(consultation);
+    showToast('Consultation sauvegardee avec succes');
+    setTimeout(() => {
+      setPage('dashboard');
+    }, 2000);
+  };
+
+  const handleViewNutritionHistory = (id) => {
+    setClientId(id);
+    setPage('nutritionHistory');
+    setMobileMenu(false);
+  };
+
+  const handleEditConsultation = (consultation) => {
+    setEditingConsultation(consultation);
+    setClientId(consultation.clientId);
+    setPage('nutritionConsultation');
+    setMobileMenu(false);
   };
 
   const currentClient = clientId ? getClient(clientId) : null;
@@ -287,25 +402,224 @@ function App() {
   const progressPct = ((step - 1) / (totalSteps - 1)) * 100;
   const isMassage = categorie === 'massage';
 
+  // Get shared clients for Anissa or nutrition notes for Benoit
+  const sharedClients = getSharedClients();
+  const anissaOwnClients = getAnissaOwnClients();
+
+  // Anissa: create new client
+  const handleAnissaNewClient = () => {
+    setPage('anissaNewClient');
+    setMobileMenu(false);
+  };
+
+  const handleAnissaSaveClient = (formData) => {
+    const client = saveClient({
+      categorie: 'nutrition',
+      form: formData,
+      prenom: formData.prenom,
+      formule: 'nutrition',
+      langue: 'FR',
+      createdBy: 'anissa',
+    });
+    refreshClients();
+    showToast('Client cree avec succes');
+    setTimeout(() => goToDashboard(), 2000);
+  };
+
+  // Anissa: open own client for editing
+  const handleAnissaOpenClient = (id) => {
+    const client = getClient(id);
+    if (!client) return;
+    setClientId(client.id);
+    setForm(client.form || {});
+    setPage('anissaEditClient');
+    setMobileMenu(false);
+  };
+
+  // ─── ANISSA'S INTERFACE ───
+  if (isAnissa) {
+    const allAnissaClients = [...sharedClients, ...anissaOwnClients];
+    const reminderCount = getReminderCount(allAnissaClients);
+
+    const anissaNavButtons = (
+      <>
+        <button className={`btn-nav ${page === 'dashboard' ? 'btn-nav-active' : ''}`} onClick={goToDashboard}>Dashboard</button>
+        <button className={`btn-nav ${page === 'anissaNewClient' ? 'btn-nav-active' : ''}`} onClick={handleAnissaNewClient}>+ Nouveau client</button>
+        <button className={`btn-nav ${page === 'anissaChiffres' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('anissaChiffres'); setMobileMenu(false); }}>Chiffres</button>
+        <button className={`btn-nav ${page === 'anissaSupplements' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('anissaSupplements'); setMobileMenu(false); }}>Complements</button>
+      </>
+    );
+
+    return (
+      <div className="app anissa-theme">
+        <Toast message={toast.message} visible={toast.visible} />
+
+        {/* Header */}
+        <div className="header anissa-header">
+          <img src={ANISSA_LOGO} alt="Anissa Nutrition" onClick={goToDashboard} className="anissa-header-logo" />
+          <div className="header-text" onClick={goToDashboard}>
+            <h1>Espace Nutrition</h1>
+            <div className="subtitle">AB Coaching Sarl</div>
+          </div>
+          <div className="header-nav">{anissaNavButtons}</div>
+          <div className="header-io">
+            <div className="reminder-bell-wrapper">
+              <button className="reminder-bell" onClick={() => setShowReminders(true)} title="Clients a recontacter">
+                &#128276;
+                {reminderCount > 0 && <span className="reminder-badge">{reminderCount}</span>}
+              </button>
+            </div>
+            <span className="user-badge anissa-user-badge">Connecte : Anissa</span>
+            {isCloudEnabled && syncStatus && (
+              <span className={`sync-badge sync-${syncStatus}`}>
+                {syncStatus === 'syncing' && 'Sync...'}
+                {syncStatus === 'synced' && 'Synced'}
+                {syncStatus === 'offline' && 'Offline'}
+              </span>
+            )}
+            <button className="btn-nav" onClick={handleLogout}>Deconnexion</button>
+          </div>
+          <button className="hamburger" onClick={() => setMobileMenu(!mobileMenu)}>
+            <span /><span /><span />
+          </button>
+        </div>
+
+        {/* Reminder panel */}
+        {showReminders && (
+          <ReminderPanel
+            clients={allAnissaClients}
+            onClose={() => setShowReminders(false)}
+            onConsultation={handleStartConsultation}
+            onOpenClient={(id) => {
+              const client = getClient(id);
+              if (client?.createdBy === 'anissa') handleAnissaOpenClient(id);
+              else handleViewNutritionHistory(id);
+            }}
+          />
+        )}
+
+        {/* Mobile menu */}
+        <div className={`mobile-menu ${mobileMenu ? 'open' : ''}`}>
+          {anissaNavButtons}
+          <span className="user-badge anissa-user-badge" style={{ padding: '10px 16px' }}>Connecte : Anissa</span>
+          <button className="btn-nav" onClick={() => { handleLogout(); setMobileMenu(false); }}>Deconnexion</button>
+        </div>
+
+        {/* API Key — dev uniquement, en prod la cle est cote serveur (ANTHROPIC_API_KEY) */}
+        {import.meta.env.DEV && (
+          <div className="api-key-bar anissa-api-key-bar">
+            <label>API Key</label>
+            <input type="password" value={apiKey} onChange={handleApiKeyChange} placeholder="sk-ant-..." />
+          </div>
+        )}
+
+        {/* Dashboard */}
+        {page === 'dashboard' && (
+          <AnissaDashboard
+            sharedClients={sharedClients}
+            ownClients={anissaOwnClients}
+            onConsultation={handleStartConsultation}
+            onViewHistory={handleViewNutritionHistory}
+            onNewClient={handleAnissaNewClient}
+            onOpenClient={handleAnissaOpenClient}
+            onRefresh={refreshClients}
+          />
+        )}
+
+        {/* New client form */}
+        {page === 'anissaNewClient' && (
+          <AnissaClientForm
+            onSave={handleAnissaSaveClient}
+            onCancel={goToDashboard}
+          />
+        )}
+
+        {/* Edit own client */}
+        {page === 'anissaEditClient' && clientId && (
+          <AnissaClientForm
+            initialForm={getClient(clientId)?.form}
+            clientId={clientId}
+            onSave={(formData) => {
+              saveClient({
+                id: clientId,
+                categorie: 'nutrition',
+                form: formData,
+                prenom: formData.prenom,
+                formule: 'nutrition',
+                langue: 'FR',
+                createdBy: 'anissa',
+              });
+              refreshClients();
+              showToast('Client sauvegarde avec succes');
+              setTimeout(() => goToDashboard(), 2000);
+            }}
+            onCancel={goToDashboard}
+          />
+        )}
+
+        {/* Nutrition Consultation */}
+        {page === 'nutritionConsultation' && (
+          <NutritionConsultation
+            clientId={clientId}
+            apiKey={apiKey}
+            onSave={handleSaveConsultation}
+            onCancel={goToDashboard}
+            initialConsultation={editingConsultation}
+          />
+        )}
+
+        {/* Nutrition History */}
+        {page === 'nutritionHistory' && (
+          <NutritionHistory
+            clientId={clientId}
+            onBack={goToDashboard}
+            isAnissa={true}
+            onEditConsultation={handleEditConsultation}
+          />
+        )}
+
+        {/* Chiffres Anissa */}
+        {page === 'anissaChiffres' && (
+          <AnissaChiffres />
+        )}
+
+        {/* Bibliotheque Complements */}
+        {page === 'anissaSupplements' && (
+          <SupplementsLibrary />
+        )}
+      </div>
+    );
+  }
+
+  // ─── BENOIT'S INTERFACE (unchanged behavior) ───
+
   const navButtons = (
     <>
       <button className={`btn-nav ${page === 'dashboard' ? 'btn-nav-active' : ''}`} onClick={goToDashboard}>Dashboard</button>
       <button className={`btn-nav ${page === 'newCategory' ? 'btn-nav-active' : ''}`} onClick={() => newClient()}>+ Nouveau client</button>
       <button className={`btn-nav ${page === 'templates' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('templates'); setMobileMenu(false); }}>Messages</button>
+      <button className={`btn-nav ${page === 'business' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('business'); setMobileMenu(false); }}>Chiffres</button>
     </>
   );
 
+  // Check if current client is shared (has nutrition notes)
+  const isSharedClient = currentClient && (currentClient.formule === 'suivi' || currentClient.formule === 'intensif');
+  const clientNutritionNotes = isSharedClient && clientId ? getNutritionConsultations(clientId) : [];
+
   return (
     <div className="app">
+      <Toast message={toast.message} visible={toast.visible} />
+
       {/* Header */}
       <div className="header">
         <img src={LOGO_URL} alt="Benfitcoach" onClick={goToDashboard} />
         <div className="header-text" onClick={goToDashboard}>
           <h1>Benfitcoach</h1>
-          <div className="subtitle">Client Onboarding System</div>
+          <div className="subtitle">AB Coaching Sarl — Onboarding System</div>
         </div>
         <div className="header-nav">{navButtons}</div>
         <div className="header-io">
+          <span className="user-badge benoit-user-badge">Connecte : Benoit</span>
           {isCloudEnabled && syncStatus && (
             <span className={`sync-badge sync-${syncStatus}`}>
               {syncStatus === 'syncing' && 'Sync...'}
@@ -317,7 +631,7 @@ function App() {
           <button className="btn-nav" onClick={() => fileInputRef.current?.click()} title="Importer">Import</button>
           <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
           {isCloudEnabled && (
-            <button className="btn-nav" onClick={handleLogout} title="Deconnexion">Logout</button>
+            <button className="btn-nav" onClick={handleLogout} title="Deconnexion">Deconnexion</button>
           )}
         </div>
         <button className="hamburger" onClick={() => setMobileMenu(!mobileMenu)}>
@@ -328,22 +642,25 @@ function App() {
       {/* Mobile menu */}
       <div className={`mobile-menu ${mobileMenu ? 'open' : ''}`}>
         {navButtons}
+        <span className="user-badge benoit-user-badge" style={{ padding: '10px 16px' }}>Connecte : Benoit</span>
         <button className="btn-nav" onClick={() => { handleExport(); setMobileMenu(false); }}>Export</button>
         <button className="btn-nav" onClick={() => { fileInputRef.current?.click(); setMobileMenu(false); }}>Import</button>
         {isCloudEnabled && (
-          <button className="btn-nav" onClick={() => { handleLogout(); setMobileMenu(false); }}>Logout</button>
+          <button className="btn-nav" onClick={() => { handleLogout(); setMobileMenu(false); }}>Deconnexion</button>
         )}
       </div>
 
-      {/* API Key */}
-      <div className="api-key-bar">
-        <label>API Key</label>
-        <input type="password" value={apiKey} onChange={handleApiKeyChange} placeholder="sk-ant-..." />
-      </div>
+      {/* API Key — dev uniquement, en prod la cle est cote serveur (ANTHROPIC_API_KEY) */}
+      {import.meta.env.DEV && (
+        <div className="api-key-bar">
+          <label>API Key</label>
+          <input type="password" value={apiKey} onChange={handleApiKeyChange} placeholder="sk-ant-..." />
+        </div>
+      )}
 
       {/* Dashboard */}
       {page === 'dashboard' && (
-        <Dashboard clients={clients} onOpen={openClient} onNew={newClient} onHistory={openHistory} onRefresh={refreshClients} />
+        <Dashboard clients={getBenoitClients()} onOpen={openClient} onNew={newClient} onHistory={openHistory} onRefresh={refreshClients} />
       )}
 
       {/* Category Selection for new client */}
@@ -382,6 +699,20 @@ function App() {
         <MessageTemplates onBack={goToDashboard} />
       )}
 
+      {/* Business Dashboard */}
+      {page === 'business' && (
+        <BusinessDashboard />
+      )}
+
+      {/* Nutrition History (Benoit viewing Anissa's notes) */}
+      {page === 'nutritionHistory' && (
+        <NutritionHistory
+          clientId={clientId}
+          onBack={() => openClient(clientId)}
+          isAnissa={false}
+        />
+      )}
+
       {/* Edit / Form */}
       {page === 'edit' && (
         <>
@@ -394,30 +725,43 @@ function App() {
             </div>
           )}
 
-          {clientId && (
-            <>
-              {!isMassage && <ClientAlerts client={currentClient} />}
-              <div className="client-bar">
-                <span className="client-bar-name">{form.prenom || 'Client sans nom'}</span>
-                <span className="category-badge-bar" style={{
-                  color: CATEGORIES[categorie]?.color,
-                  background: CATEGORIES[categorie]?.bgColor,
-                  borderColor: (CATEGORIES[categorie]?.color || '') + '33',
-                }}>
-                  {CATEGORIES[categorie]?.icon} {CATEGORIES[categorie]?.nom}
+          <>
+            {!isMassage && currentClient && <ClientAlerts client={currentClient} />}
+            <div className="client-bar">
+              <span className="client-bar-name">{form.prenom || 'Client sans nom'}</span>
+              <span className="category-badge-bar" style={{
+                color: CATEGORIES[categorie]?.color,
+                background: CATEGORIES[categorie]?.bgColor,
+                borderColor: (CATEGORIES[categorie]?.color || '') + '33',
+              }}>
+                {CATEGORIES[categorie]?.icon} {CATEGORIES[categorie]?.nom}
+              </span>
+              {!isMassage && (
+                <span className="client-bar-formula">
+                  {categorie === 'presentiel'
+                    ? (PRESENTIEL_PACKS[form.pack]?.nom || 'Pack')
+                    : FORMULES[form.formule]?.nom}
                 </span>
-                {!isMassage && (
-                  <span className="client-bar-formula">
-                    {categorie === 'presentiel'
-                      ? (PRESENTIEL_PACKS[form.pack]?.nom || 'Pack')
-                      : FORMULES[form.formule]?.nom}
-                  </span>
-                )}
-                <button className="btn btn-sm btn-secondary" onClick={handleSave}>Sauvegarder</button>
-                {!isMassage && (
-                  <button className="btn btn-sm btn-secondary" onClick={() => openHistory(clientId)}>Historique</button>
-                )}
-              </div>
+              )}
+              <button className="btn btn-sm btn-secondary" onClick={handleSave}>{!isMassage && form.langue === 'EN' ? 'Save' : 'Sauvegarder'}</button>
+              {!isMassage && (
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setInterviewOpen(true)}
+                  style={{ borderColor: '#c4a050', color: '#c4a050' }}
+                >
+                  {form.langue === 'EN' ? 'Interview guide' : "Guide d'entretien"}
+                </button>
+              )}
+              {!isMassage && clientId && (
+                <button className="btn btn-sm btn-secondary" onClick={() => openHistory(clientId)}>Historique</button>
+              )}
+              {isSharedClient && clientNutritionNotes.length > 0 && (
+                <button className="btn btn-sm btn-secondary" onClick={() => handleViewNutritionHistory(clientId)} style={{ borderColor: 'rgba(42,157,92,.4)', color: '#2a9d5c' }}>
+                  Notes Anissa ({clientNutritionNotes.length})
+                </button>
+              )}
+            </div>
               <div className="edit-tabs">
                 <button className={`edit-tab ${editTab === 'form' ? 'edit-tab-active' : ''}`} onClick={() => setEditTab('form')}>
                   {isMassage ? 'Anamnese' : 'Fiche client'}
@@ -433,19 +777,49 @@ function App() {
                 )}
               </div>
 
+              {/* Nutrition notes from Anissa (read-only section for Benoit) */}
+              {isSharedClient && editTab === 'form' && clientNutritionNotes.length > 0 && (
+                <div className="nutrition-notes-readonly">
+                  <h3>Notes nutrition - Anissa</h3>
+                  <div className="nutrition-notes-latest">
+                    <span className="nutrition-notes-date">
+                      Derniere consultation : {new Date(clientNutritionNotes[0].date).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </span>
+                    {clientNutritionNotes[0].notesForCoach && (
+                      <div className="nutrition-notes-content">
+                        <strong>Recommandations pour le coach :</strong>
+                        <p>{clientNutritionNotes[0].notesForCoach}</p>
+                      </div>
+                    )}
+                    {clientNutritionNotes[0].nutritionalObservations && (
+                      <div className="nutrition-notes-content">
+                        <strong>Observations nutritionnelles :</strong>
+                        <p>{clientNutritionNotes[0].nutritionalObservations}</p>
+                      </div>
+                    )}
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => handleViewNutritionHistory(clientId)}
+                      style={{ marginTop: 10, borderColor: 'rgba(42,157,92,.4)', color: '#2a9d5c' }}
+                    >
+                      Voir toutes les consultations ({clientNutritionNotes.length})
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {isMassage && editTab === 'form' && !convertMode && (
                 <div className="convert-section">
                   <span className="convert-label">Convertir en client coaching :</span>
                   <button className="btn btn-sm btn-convert btn-convert-online" onClick={() => handleStartConvert('online')}>
-                    🌐 Coaching Online
+                    Coaching Online
                   </button>
                   <button className="btn btn-sm btn-convert btn-convert-presentiel" onClick={() => handleStartConvert('presentiel')}>
-                    📍 Coaching Presentiel
+                    Coaching Presentiel
                   </button>
                 </div>
               )}
-            </>
-          )}
+          </>
 
           {editTab === 'sessions' && clientId && isMassage ? (
             <MassageSessionPanel clientId={clientId} onRefresh={forceUpdate} />
@@ -475,31 +849,39 @@ function App() {
                   <div className="steps-line">
                     <div className="steps-line-fill" style={{ width: `${progressPct}%` }} />
                   </div>
-                  {currentSteps.map(s => (
-                    <div
-                      key={s.id}
-                      className={`step-node ${s.id === step ? 'active' : ''} ${s.id < step ? 'completed' : ''}`}
-                      onClick={() => setStep(s.id)}
-                    >
-                      <div className="step-circle">{stepIcons[s.id - 1]}</div>
-                      <span className="step-label">{s.label}</span>
-                    </div>
-                  ))}
+                  {currentSteps.map(s => {
+                    const tLang = getT(form.langue);
+                    const catKey = categorie === 'presentiel' ? 'presentiel' : 'online';
+                    const labelKey = STEP_LABEL_KEYS[catKey]?.[s.id];
+                    const labelText = !isMassage && labelKey ? tLang(labelKey) : s.label;
+                    return (
+                      <div
+                        key={s.id}
+                        className={`step-node ${s.id === step ? 'active' : ''} ${s.id < step ? 'completed' : ''}`}
+                        onClick={() => setStep(s.id)}
+                      >
+                        <div className="step-circle">{stepIcons[s.id - 1]}</div>
+                        <span className="step-label">{labelText}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
               {isMassage ? (
                 <MassageForm step={step} form={form} updateField={updateField} />
               ) : (
-                <StepForm step={step} form={form} updateField={updateField} categorie={categorie} />
+                <StepForm step={step} form={form} updateField={updateField} categorie={categorie} originalForm={originalForm} />
               )}
 
               <div className="nav-buttons">
                 <button className="btn btn-secondary" onClick={() => setStep(Math.max(1, step - 1))} disabled={step === 1}>
-                  Precedent
+                  {!isMassage && form.langue === 'EN' ? 'Previous' : 'Precedent'}
                 </button>
                 {step < totalSteps && (
-                  <button className="btn btn-primary" onClick={() => setStep(step + 1)}>Suivant</button>
+                  <button className="btn btn-primary" onClick={() => setStep(step + 1)}>
+                    {!isMassage && form.langue === 'EN' ? 'Next' : 'Suivant'}
+                  </button>
                 )}
               </div>
 
@@ -509,7 +891,9 @@ function App() {
                   onClick={handleGenerate}
                   disabled={loading}
                 >
-                  {loading ? 'Generation en cours...' : results ? 'Regenerer le dossier complet' : "Generer le dossier d'onboarding"}
+                  {form.langue === 'EN'
+                    ? (loading ? 'Generating...' : results ? 'Regenerate full file' : 'Generate onboarding file')
+                    : (loading ? 'Generation en cours...' : results ? 'Regenerer le dossier complet' : "Generer le dossier d'onboarding")}
                 </button>
               )}
 
@@ -534,6 +918,46 @@ function App() {
 
               {results && !isMassage && (
                 <ResultCards sections={results} titles={SECTION_TITLES} apiKey={apiKey} form={form} onSectionUpdate={handleSectionUpdate} />
+              )}
+
+              {!isMassage && (
+                <InterviewPanel
+                  open={interviewOpen}
+                  clientId={clientId}
+                  interviewNotes={interviewNotes}
+                  onChange={(next) => {
+                    setInterviewNotes(next);
+                    if (!clientId) return;
+                    // Debounce persistence so typing in a notes textarea doesn't
+                    // hammer Supabase on every keystroke.
+                    if (interviewSaveTimer.current) clearTimeout(interviewSaveTimer.current);
+                    interviewSaveTimer.current = setTimeout(() => {
+                      updateInterviewNotes(clientId, next);
+                    }, 600);
+                  }}
+                  onClose={() => {
+                    // Flush any pending save before closing.
+                    if (interviewSaveTimer.current) {
+                      clearTimeout(interviewSaveTimer.current);
+                      interviewSaveTimer.current = null;
+                      if (clientId && interviewNotes) updateInterviewNotes(clientId, interviewNotes);
+                    }
+                    setInterviewOpen(false);
+                  }}
+                  onFinish={(templateId) => {
+                    // 1. Flush pending debounced save so the cloud copy of
+                    //    interviewNotes reflects the latest text.
+                    if (interviewSaveTimer.current) {
+                      clearTimeout(interviewSaveTimer.current);
+                      interviewSaveTimer.current = null;
+                      if (clientId && interviewNotes) updateInterviewNotes(clientId, interviewNotes);
+                    }
+                    // 2. Apply mapping to the current form (non-destructive append).
+                    setForm((prev) => applyInterviewNotesToForm(prev, interviewNotes, templateId));
+                    // 3. Close the panel.
+                    setInterviewOpen(false);
+                  }}
+                />
               )}
             </>
           )}

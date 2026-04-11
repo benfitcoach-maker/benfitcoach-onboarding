@@ -9,6 +9,9 @@ export const supabase = (supabaseUrl && supabaseKey)
 
 export const isCloudEnabled = !!supabase;
 
+// Valid users
+export const USERS = ['Benoit', 'Anissa'];
+
 // Password hashing with SHA-256
 export async function hashPassword(password) {
   const encoder = new TextEncoder();
@@ -17,21 +20,23 @@ export async function hashPassword(password) {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Check if a password has been set
-export async function getStoredPasswordHash() {
+// Get stored password hash for a specific user
+export async function getStoredPasswordHash(username) {
   if (!supabase) return null;
+  const key = `password_hash_${username.toLowerCase()}`;
   const { data } = await supabase
     .from('app_config')
     .select('value')
-    .eq('key', 'password_hash')
+    .eq('key', key)
     .single();
   return data?.value || null;
 }
 
-// Set the password hash
-export async function setPasswordHash(hash) {
+// Set the password hash for a specific user
+export async function setPasswordHash(username, hash) {
   if (!supabase) return;
+  const key = `password_hash_${username.toLowerCase()}`;
   await supabase
     .from('app_config')
-    .upsert({ key: 'password_hash', value: hash });
+    .upsert({ key, value: hash });
 }

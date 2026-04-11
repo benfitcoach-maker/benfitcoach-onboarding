@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FORMULES, CATEGORIES, PRESENTIEL_PACKS } from './formSteps';
-import { deleteClient, updateClientStatus } from './store';
+import { deleteClient, updateClientStatus, getNutritionConsultations } from './store';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69a6ccf52a4f1eb605779f33_logo%20benfitocah.png';
 
@@ -19,14 +19,14 @@ const CATEGORY_FILTERS = [
 
 const FORMULE_FILTERS = [
   { value: 'all', label: 'Toutes' },
-  { value: 'essentials', label: 'Essentials' },
   { value: 'autonome', label: 'Autonome' },
-  { value: 'premium', label: 'Premium' },
   { value: 'suivi', label: 'Suivi Complet' },
-  { value: 'ultimate', label: 'Ultimate' },
   { value: 'intensif', label: 'Intensif' },
-  { value: 'presentiel', label: 'Presentiel' },
-  { value: 'inperson', label: 'In-Person' },
+  { value: 'pack10', label: 'Pack 10' },
+  { value: 'pack20', label: 'Pack 20' },
+  { value: 'pack30', label: 'Pack 30' },
+  { value: 'massage', label: 'Massage' },
+  { value: 'custom', label: 'Personnalise' },
 ];
 
 const STATUS_FILTERS = [
@@ -109,8 +109,55 @@ export default function Dashboard({ clients, onOpen, onNew, onHistory, onRefresh
   if (filterStatus !== 'all') filtered = filtered.filter(c => (c.status || 'nouveau') === filterStatus);
   if (filterLang !== 'all') filtered = filtered.filter(c => (c.langue || 'FR') === filterLang);
 
+  // Stats
+  const totalClients = clients.length;
+  const onlineCount = clients.filter(c => (c.categorie || 'online') === 'online').length;
+  const presentielCount = clients.filter(c => c.categorie === 'presentiel').length;
+  const massageCount = clients.filter(c => c.categorie === 'massage').length;
+  const withNutrition = clients.filter(c => getNutritionConsultations(c.id).length > 0).length;
+  const totalGenerations = clients.reduce((sum, c) => sum + (c.history?.length || 0), 0);
+  const now = new Date();
+  const thisMonthClients = clients.filter(c => {
+    const d = new Date(c.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
   return (
     <div className="dashboard">
+      {/* Stats */}
+      <div className="stats-row stats-row-4">
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{totalClients}</span>
+          <span className="stat-label">Total clients</span>
+        </div>
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{onlineCount}</span>
+          <span className="stat-label">Coaching Online</span>
+        </div>
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{presentielCount}</span>
+          <span className="stat-label">Coaching Presentiel</span>
+        </div>
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{massageCount}</span>
+          <span className="stat-label">Massotherapie</span>
+        </div>
+      </div>
+      <div className="stats-row stats-row-3">
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{withNutrition}</span>
+          <span className="stat-label">Consultations Anissa</span>
+        </div>
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{totalGenerations}</span>
+          <span className="stat-label">Generations IA</span>
+        </div>
+        <div className="stat-card benoit-stat">
+          <span className="stat-number">{thisMonthClients}</span>
+          <span className="stat-label">Ce mois-ci</span>
+        </div>
+      </div>
+
       <div className="dashboard-header">
         <h2>Mes clients</h2>
         <span className="dashboard-count">
