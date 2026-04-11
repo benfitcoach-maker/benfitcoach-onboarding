@@ -1370,6 +1370,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   // Palette : crème chaud + vert très foncé + vert pâle + rose pâle
   const CREAM = [245, 242, 236];      // #F5F2EC fond
   const DARK_GREEN = [26, 46, 31];    // #1A2E1F titres/footer
+  const SAGE_GREEN = [184, 193, 175]; // #B8C1AF fond bloc compléments
   const FAVOR_BG = [232, 244, 232];   // #E8F4E8 "à privilégier"
   const LIMIT_BG = [253, 240, 240];   // #FDF0F0 "à limiter"
   const LIMIT_TITLE = [139, 32, 32];  // #8B2020 titre "à limiter"
@@ -1383,6 +1384,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const form = client?.form || {};
   const dateStr = formatDateFR(consultation.date);
   const meals = editedMeals || extractMeals(consultation.nutritionPlan);
+  const supplementsData = (editedMeals && editedMeals.supplements)
+    || extractSupplements(consultation.supplements || '');
   const noContent = 'Generez un plan nutrition plus detaille';
 
   // ─── Fond crème plein ───
@@ -1469,7 +1472,12 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   };
 
   const colH       = Math.max(...cols.map(c => measureColHeight(c.items)));
-  const sectionTop = colTop + colH + 4;
+  const suppTop    = colTop + colH + 4;
+  // Bloc MES COMPLÉMENTS — toujours rendu (sert de zone d'écriture si vide)
+  const suppBandH  = 9;              // bandeau titre vert foncé
+  const suppBodyH  = 20;             // zone sage green (sub-headers + lignes)
+  const suppH      = suppBandH + suppBodyH;
+  const sectionTop = suppTop + suppH + 4;
   // sectionH calculé dynamiquement plus bas, après les constantes BTM_*
 
   cols.forEach((col, idx) => {
@@ -1537,6 +1545,97 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...GREY_TEXT);
       doc.text(noContent, cx + colWidth / 2, colTop + colH / 2, { align: 'center' });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  MES COMPLÉMENTS — bloc pleine largeur, 5 colonnes horaires
+  // ══════════════════════════════════════════════════════════════
+  const suppWidth = pw - margin * 2;
+  const suppSlots = [
+    { label: 'MATIN À JEUN',   key: 'morningFasting' },
+    { label: 'PETIT-DÉJEUNER', key: 'breakfast' },
+    { label: 'MIDI',           key: 'lunch' },
+    { label: 'SOIR',           key: 'dinner' },
+    { label: 'COUCHER',        key: 'bedtime' },
+  ];
+  const suppColW = suppWidth / suppSlots.length;
+
+  // Carte de fond : sage green, coins arrondis
+  doc.setFillColor(...SAGE_GREEN);
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, suppTop, suppWidth, suppH, radius, radius, 'FD');
+
+  // Bandeau titre vert foncé plein (même style que les colonnes repas)
+  doc.setFillColor(...DARK_GREEN);
+  doc.roundedRect(margin, suppTop, suppWidth, suppBandH, radius, radius, 'F');
+  // Carrer les coins bas du bandeau
+  doc.rect(margin, suppTop + suppBandH - radius, suppWidth, radius, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(255, 255, 255);
+  doc.setCharSpace(0);
+  doc.text('MES COMPLÉMENTS', margin + suppWidth / 2, suppTop + 6.3, { align: 'center' });
+
+  // Sous-entêtes (libellés horaires) + contenu par cellule
+  const subHeaderH  = 5;
+  const subLineY    = suppTop + suppBandH + subHeaderH + 0.5;
+  const bodyContentTop    = suppTop + suppBandH + subHeaderH + 1.5;
+  const bodyContentBottom = suppTop + suppH - 2;
+
+  suppSlots.forEach((slot, i) => {
+    const sx = margin + i * suppColW;
+
+    // Séparateur vertical entre cellules (sauf avant la première)
+    if (i > 0) {
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(0.2);
+      doc.line(sx, suppTop + suppBandH + 1, sx, suppTop + suppH - 1);
+    }
+
+    // Libellé horaire (sous-entête) en DARK_GREEN sur sage green
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...DARK_GREEN);
+    doc.setCharSpace(0);
+    doc.text(slot.label, sx + suppColW / 2, suppTop + suppBandH + 3.6, { align: 'center' });
+
+    // Trait fin sous les sous-entêtes, pleine largeur de la cellule
+    doc.setDrawColor(...DARK_GREEN);
+    doc.setLineWidth(0.15);
+    doc.line(sx + 2, subLineY, sx + suppColW - 2, subLineY);
+
+    // Contenu
+    const items = supplementsData[slot.key] || [];
+    const cellPadX = 3;
+    const cellW = suppColW - cellPadX * 2;
+    const lineH = 3.2;
+
+    if (items.length > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...DARK_TEXT);
+      let cy = bodyContentTop + 2;
+      for (const item of items) {
+        const lines = doc.splitTextToSize(String(item), cellW);
+        for (const ln of lines) {
+          if (cy > bodyContentBottom) break;
+          doc.text(ln, sx + cellPadX, cy);
+          cy += lineH;
+        }
+        if (cy > bodyContentBottom) break;
+      }
+    } else {
+      // Vide : lignes d'écriture (blanches sur sage green)
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.25);
+      let ly = bodyContentTop + 2;
+      while (ly <= bodyContentBottom) {
+        doc.line(sx + cellPadX, ly, sx + suppColW - cellPadX, ly);
+        ly += lineH;
+      }
     }
   });
 
