@@ -1420,13 +1420,14 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   // ══════════════════════════════════════════════════════════════
   //  HEADER : logo gauche + titre centré + date droite
   // ══════════════════════════════════════════════════════════════
+  const yLogo = margin;
   if (logoData) {
-    // Logo 22×22mm, aligné top=margin, left=margin
-    doc.addImage(logoData, 'PNG', margin, margin, 22, 22);
+    // Logo 22×22mm, aligné top=yLogo, left=margin
+    doc.addImage(logoData, 'PNG', margin, yLogo, 22, 22);
   }
 
-  // Titre vertically centered with logo (logo center Y = margin + 11)
-  const titleCenterY = margin + 11;
+  // Titre vertically centered with logo (logo center Y = yLogo + 11)
+  const titleCenterY = yLogo + 11;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(...DARK_GREEN);
