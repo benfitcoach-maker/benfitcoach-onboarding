@@ -1470,7 +1470,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
 
   const colH       = Math.max(...cols.map(c => measureColHeight(c.items)));
   const sectionTop = colTop + colH + 4;
-  const sectionH   = footerY - sectionTop - 4;
+  // sectionH calculé dynamiquement plus bas, après les constantes BTM_*
 
   cols.forEach((col, idx) => {
     const cx = margin + idx * (colWidth + colGap);
@@ -1541,7 +1541,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   });
 
   // ══════════════════════════════════════════════════════════════
-  //  A PRIVILEGIER / A LIMITER (même top, même hauteur)
+  //  À PRIVILÉGIER / À LIMITER — hauteur dynamique partagée
   // ══════════════════════════════════════════════════════════════
   const btmGap = 6;
   const btmWidth = (pw - margin * 2 - btmGap) / 2;
@@ -1553,6 +1553,33 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const BTM_LIST_FONT = 8;
   const BTM_LINE_H = 3.6;
   const BTM_SUB_GAP = 4;
+
+  // Mesure la hauteur naturelle requise pour rendre une section
+  // (doit rester en phase avec renderFoodList ci-dessous)
+  const measureSectionHeight = (items) => {
+    if (!items || items.length === 0) {
+      // placeholder "—" centré : on réserve une hauteur minimale
+      return BTM_TITLE_H + 4 + 14 + 3;
+    }
+    const subColW = (btmWidth - BTM_INNER_PAD * 2 - BTM_SUB_GAP) / 2;
+    const half = Math.ceil(items.length / 2);
+    const leftText  = items.slice(0, half).join(', ');
+    const rightText = items.slice(half).join(', ');
+    doc.setFontSize(BTM_LIST_FONT);
+    doc.setFont('helvetica', 'normal');
+    const leftLines  = doc.splitTextToSize(leftText,  subColW);
+    const rightLines = doc.splitTextToSize(rightText, subColW);
+    const nLines = Math.max(leftLines.length, rightLines.length);
+    return BTM_TITLE_H + 4 + nLines * BTM_LINE_H + 3;
+  };
+
+  // Hauteur commune = max des 2 sections, bornée par l'espace dispo
+  // jusqu'au footer pour éviter tout chevauchement.
+  const naturalSectionH = Math.max(
+    measureSectionHeight(meals.toFavor),
+    measureSectionHeight(meals.toLimit)
+  );
+  const sectionH = Math.min(naturalSectionH, footerY - sectionTop - 4);
 
   function renderFoodList(items, x0, y0, boxW, boxH) {
     const listTop = y0 + BTM_TITLE_H + 4;
@@ -1593,7 +1620,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     }
   }
 
-  // A PRIVILEGIER — fond vert pâle (top=sectionTop, hauteur=sectionH)
+  // À PRIVILÉGIER — fond vert pâle (top=sectionTop, hauteur=sectionH)
   doc.setFillColor(...FAVOR_BG);
   doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.3);
@@ -1602,10 +1629,10 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...DARK_GREEN);
   doc.setCharSpace(0);
-  doc.text('A PRIVILEGIER', margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
+  doc.text('À PRIVILÉGIER', margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
   renderFoodList(meals.toFavor, margin, sectionTop, btmWidth, sectionH);
 
-  // A LIMITER — fond rose pâle (même top, même hauteur)
+  // À LIMITER — fond rose pâle (même top, même hauteur)
   const limX = margin + btmWidth + btmGap;
   doc.setFillColor(...LIMIT_BG);
   doc.setDrawColor(...BORDER);
@@ -1614,7 +1641,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...LIMIT_TITLE);
   doc.setCharSpace(0);
-  doc.text('A LIMITER', limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
+  doc.text('À LIMITER', limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
   renderFoodList(meals.toLimit, limX, sectionTop, btmWidth, sectionH);
 
   // ══════════════════════════════════════════════════════════════
