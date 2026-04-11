@@ -1390,22 +1390,12 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.rect(0, 0, pw, ph, 'F');
 
   // ══════════════════════════════════════════════════════════════
-  //  GRILLE STRICTE — derivée des dimensions de la page
-  //  headerH   = 28
-  //  colTop    = headerH + 8
-  //  colH      = (ph - 22 - colTop - 8) * 0.62
-  //  sectionTop= colTop + colH + 4
-  //  sectionH  = ph - 22 - sectionTop - 4
-  //  footerY   = ph - 22
+  //  GRILLE — constantes de base (colH est calculé dynamiquement plus bas)
   // ══════════════════════════════════════════════════════════════
   const headerH    = 28;
   const footerY    = ph - 22;                         // 188, toujours collé en bas
   const footerH    = 12;                              // bandeau 12mm
   const colTop     = headerH + 8;                     // 36
-  const availableH = footerY - colTop - 8;            // 144
-  const colH       = availableH * 0.62;               // 89.28
-  const sectionTop = colTop + colH + 4;               // 129.28
-  const sectionH   = footerY - sectionTop - 4;        // 54.72
 
   // ══════════════════════════════════════════════════════════════
   //  HEADER : logo gauche + titre centré + date droite
@@ -1436,7 +1426,9 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.line(margin, headerH + 2, pw - margin, headerH + 2);
 
   // ══════════════════════════════════════════════════════════════
-  //  3 COLONNES REPAS (top = colTop, hauteur fixe colH)
+  //  3 COLONNES REPAS — hauteur dynamique partagée
+  //  Calcul: on mesure la hauteur naturelle de chaque colonne,
+  //  puis on prend le max pour que les 3 cartes soient alignées.
   // ══════════════════════════════════════════════════════════════
   const colGap = 6;
   const colWidth = (pw - margin * 2 - colGap * 2) / 3;
@@ -1446,6 +1438,39 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     { title: 'DEJEUNER', items: meals.lunch },
     { title: 'DINER', items: meals.dinner },
   ];
+
+  const bandH = 10;
+  const contentPad = 5;
+  const linesPerOption = 6; // plafond de lignes par option
+
+  // Mesure la hauteur requise pour rendre une colonne (doit rester
+  // en phase avec le forEach de rendu ci-dessous : mêmes incréments)
+  const measureColHeight = (items) => {
+    const contentW = colWidth - contentPad * 2;
+    let h = bandH + 4;   // bandeau titre + gap avant contenu
+    h += 2;              // cy démarre à contentTop + 2
+    const maxOptions = Math.min(items?.length || 0, 3);
+    if (maxOptions === 0) {
+      h += 14;           // placeholder "empty"
+    } else {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      for (let i = 0; i < maxOptions; i++) {
+        if (i > 0) h += 2.5;                        // séparateur
+        h += 4;                                     // "Option N"
+        const lines = doc.splitTextToSize(items[i], contentW);
+        const take = Math.min(lines.length, linesPerOption);
+        h += take * 3.5;
+        h += 1.5;                                   // trailing gap
+      }
+    }
+    h += 4;              // marge basse dans la carte
+    return h;
+  };
+
+  const colH       = Math.max(...cols.map(c => measureColHeight(c.items)));
+  const sectionTop = colTop + colH + 4;
+  const sectionH   = footerY - sectionTop - 4;
 
   cols.forEach((col, idx) => {
     const cx = margin + idx * (colWidth + colGap);
@@ -1457,7 +1482,6 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     doc.roundedRect(cx, colTop, colWidth, colH, radius, radius, 'FD');
 
     // Bandeau titre vert foncé plein
-    const bandH = 10;
     doc.setFillColor(...DARK_GREEN);
     doc.roundedRect(cx, colTop, colWidth, bandH, radius, radius, 'F');
     // Masque pour carrer les coins bas du bandeau
@@ -1471,7 +1495,6 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     doc.text(col.title, cx + colWidth / 2, colTop + 6.8, { align: 'center' });
 
     // Zone contenu dans la carte
-    const contentPad = 5;
     const contentX = cx + contentPad;
     const contentW = colWidth - contentPad * 2;
     const contentTop = colTop + bandH + 4;
@@ -1479,8 +1502,6 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     let cy = contentTop + 2;
 
     const maxOptions = Math.min(col.items.length, 3);
-    const blockBudget = maxOptions > 0 ? (contentBottom - contentTop) / maxOptions : 0;
-    const linesPerOption = Math.max(2, Math.floor((blockBudget - 5) / 3.5));
 
     if (col.items.length > 0) {
       for (let i = 0; i < maxOptions; i++) {
