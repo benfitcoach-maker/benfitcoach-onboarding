@@ -1833,12 +1833,18 @@ export async function exportCoverPDF(consultation, client) {
   const boxW = pw - margin * 2;
   const kvAvailW = boxW - 20; // marge intérieure pour le wrapping
 
+  // Gap fixe en mm entre un label "X :" et sa valeur — nécessaire car
+  // doc.getTextWidth() strippe les espaces de fin, donc un trailing " "
+  // dans la chaîne label ne produit AUCUN décalage quand on rend la valeur.
+  const KV_GAP = 1.5;
+
   // Pré-mesure de la valeur "Objectif" : max 2 lignes, wrapping strict
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  const objLabel = 'Objectif : ';
+  const objLabel = 'Objectif :';
   const objLabelW = doc.getTextWidth(objLabel);
-  const objLinesAll = doc.splitTextToSize(objectif, kvAvailW - objLabelW);
+  doc.setFont('helvetica', 'normal');
+  const objLinesAll = doc.splitTextToSize(objectif, kvAvailW - objLabelW - KV_GAP);
   const objLines = objLinesAll.slice(0, 2);
   const objLineCount = objLines.length;
 
@@ -1855,13 +1861,14 @@ export async function exportCoverPDF(consultation, client) {
   doc.setLineWidth(0.3);
   doc.roundedRect(boxX, boxY, boxW, boxH, 4, 4, 'FD');
 
-  // Label "PRÉPARÉ POUR"
+  // Label "PREPARE POUR" — charSpace=0 forcé, sinon le centrage align='center'
+  // est faussé (jsPDF ne prend pas en compte le charSpace dans le calcul de
+  // largeur du texte, même bug que sur les titres de la fiche frigo).
+  doc.setCharSpace(0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GREY);
-  doc.setCharSpace(2.5);
   doc.text('PREPARE POUR', pw / 2, boxY + 10, { align: 'center' });
-  doc.setCharSpace(0);
 
   // Prénom en grand serif
   doc.setFont('times', 'bold');
@@ -1875,36 +1882,39 @@ export async function exportCoverPDF(consultation, client) {
   const sepW = 40;
   doc.line(pw / 2 - sepW / 2, boxY + 28, pw / 2 + sepW / 2, boxY + 28);
 
-  // Ligne KV simple (label bold gris + valeur normale sombre, centrée en bloc)
+  // Ligne KV simple (label bold gris + valeur normale sombre, centrée en bloc).
+  // Utilise KV_GAP (mm) comme décalage fixe entre la fin du label ":" et la
+  // valeur, parce que jsPDF strippe les espaces de fin dans getTextWidth.
   const drawKV = (label, value, yy) => {
-    const labelText = `${label} : `;
+    const labelText = `${label} :`;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     const labelW = doc.getTextWidth(labelText);
     doc.setFont('helvetica', 'normal');
     const valueW = doc.getTextWidth(value);
-    const totalW = labelW + valueW;
+    const totalW = labelW + KV_GAP + valueW;
     const startX = pw / 2 - totalW / 2;
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...GREY);
     doc.text(labelText, startX, yy);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...INK);
-    doc.text(value, startX + labelW, yy);
+    doc.text(value, startX + labelW + KV_GAP, yy);
   };
 
   // Objectif — 1 ou 2 lignes (le label n'apparaît qu'en face de la 1re ligne,
-  // les lignes de wrapping suivantes sont indentées pour suivre le texte).
-  doc.setFont('helvetica', 'bold');
+  // la 2e ligne de wrapping est centrée dessous sans label).
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   const firstLineValueW = doc.getTextWidth(objLines[0] || '');
-  const firstLineTotalW = objLabelW + firstLineValueW;
+  const firstLineTotalW = objLabelW + KV_GAP + firstLineValueW;
   const firstLineStartX = pw / 2 - firstLineTotalW / 2;
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GREY);
   doc.text(objLabel, firstLineStartX, boxY + kvFirstY);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...INK);
-  doc.text(objLines[0] || '', firstLineStartX + objLabelW, boxY + kvFirstY);
+  doc.text(objLines[0] || '', firstLineStartX + objLabelW + KV_GAP, boxY + kvFirstY);
   if (objLineCount > 1) {
     // 2e ligne centrée sous la précédente, sans label
     doc.text(objLines[1], pw / 2, boxY + kvFirstY + 4.8, { align: 'center' });
