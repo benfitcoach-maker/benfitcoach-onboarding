@@ -1417,14 +1417,13 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(...DARK_GREEN);
-  doc.setCharSpace(3);
+  doc.setCharSpace(0);
   doc.text(
     `FICHE NUTRITION  —  ${(form.prenom || 'CLIENT').toUpperCase()}`,
     pw / 2,
     titleCenterY + 2,
     { align: 'center' }
   );
-  doc.setCharSpace(0);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -1468,9 +1467,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
-    doc.setCharSpace(2);
-    doc.text(col.title, cx + colWidth / 2, colTop + 6.8, { align: 'center' });
     doc.setCharSpace(0);
+    doc.text(col.title, cx + colWidth / 2, colTop + 6.8, { align: 'center' });
 
     // Zone contenu dans la carte
     const contentPad = 5;
@@ -1528,7 +1526,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const btmWidth = (pw - margin * 2 - btmGap) / 2;
 
   // Constantes partagées pour l'alignement strict des deux blocs
-  const BTM_TITLE_FONT = 10;
+  const BTM_TITLE_FONT = 11;
   const BTM_TITLE_H = 8;         // hauteur reservée au titre
   const BTM_INNER_PAD = 8;       // padding gauche/droite identique
   const BTM_LIST_FONT = 8;
@@ -1582,9 +1580,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...DARK_GREEN);
-  doc.setCharSpace(2);
-  doc.text('A PRIVILEGIER', margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
   doc.setCharSpace(0);
+  doc.text('A PRIVILEGIER', margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
   renderFoodList(meals.toFavor, margin, sectionTop, btmWidth, sectionH);
 
   // A LIMITER — fond rose pâle (même top, même hauteur)
@@ -1595,9 +1592,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...LIMIT_TITLE);
-  doc.setCharSpace(2);
-  doc.text('A LIMITER', limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
   doc.setCharSpace(0);
+  doc.text('A LIMITER', limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
   renderFoodList(meals.toLimit, limX, sectionTop, btmWidth, sectionH);
 
   // ══════════════════════════════════════════════════════════════
