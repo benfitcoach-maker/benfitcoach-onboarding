@@ -1388,6 +1388,9 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   // ─── Fond crème plein ───
   doc.setFillColor(...CREAM);
   doc.rect(0, 0, pw, ph, 'F');
+  doc.setFontSize(20);
+  doc.setTextColor(255, 0, 0);
+  doc.text('TEST v22c6265', 50, 50);
 
   // ══════════════════════════════════════════════════════════════
   //  GRILLE STRICTE — derivée des dimensions de la page
