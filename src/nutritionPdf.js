@@ -1559,7 +1559,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const measureSectionHeight = (items) => {
     if (!items || items.length === 0) {
       // placeholder "—" centré : on réserve une hauteur minimale
-      return BTM_TITLE_H + 4 + 14 + 3;
+      return BTM_TITLE_H + 7 + 14 + 3;
     }
     const subColW = (btmWidth - BTM_INNER_PAD * 2 - BTM_SUB_GAP) / 2;
     const half = Math.ceil(items.length / 2);
@@ -1570,7 +1570,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     const leftLines  = doc.splitTextToSize(leftText,  subColW);
     const rightLines = doc.splitTextToSize(rightText, subColW);
     const nLines = Math.max(leftLines.length, rightLines.length);
-    return BTM_TITLE_H + 4 + nLines * BTM_LINE_H + 3;
+    return BTM_TITLE_H + 7 + nLines * BTM_LINE_H + 3;
   };
 
   // Hauteur commune = max des 2 sections, bornée par l'espace dispo
@@ -1582,7 +1582,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const sectionH = Math.min(naturalSectionH, footerY - sectionTop - 4);
 
   function renderFoodList(items, x0, y0, boxW, boxH) {
-    const listTop = y0 + BTM_TITLE_H + 4;
+    const listTop = y0 + BTM_TITLE_H + 7;
     const listBottom = y0 + boxH - 3;
     const subColW = (boxW - BTM_INNER_PAD * 2 - BTM_SUB_GAP) / 2;
 
