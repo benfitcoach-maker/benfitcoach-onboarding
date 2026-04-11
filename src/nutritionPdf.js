@@ -1389,16 +1389,6 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFillColor(...CREAM);
   doc.rect(0, 0, pw, ph, 'F');
 
-  // ─── Charger le logo en premier (doit s'afficher coute que coute) ───
-  let logoData = null;
-  try {
-    logoData = await loadImageAsBase64(LOGO_URL);
-    console.log('[FicheFrigo] logo loaded:', logoData ? 'OK' : 'FAILED', LOGO_URL);
-  } catch (err) {
-    console.warn('[FicheFrigo] logo load error (skipped):', err);
-    logoData = null;
-  }
-
   // ══════════════════════════════════════════════════════════════
   //  GRILLE STRICTE — derivée des dimensions de la page
   //  headerH   = 28
@@ -1421,10 +1411,6 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   //  HEADER : logo gauche + titre centré + date droite
   // ══════════════════════════════════════════════════════════════
   const yLogo = margin;
-  if (logoData) {
-    // Logo 22×22mm, aligné top=yLogo, left=margin
-    doc.addImage(logoData, 'PNG', margin, yLogo, 22, 22);
-  }
 
   // Titre vertically centered with logo (logo center Y = yLogo + 11)
   const titleCenterY = yLogo + 11;
