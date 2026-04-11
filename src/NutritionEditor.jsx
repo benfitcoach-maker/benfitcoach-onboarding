@@ -539,7 +539,7 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover }) {
   const [sections, setSections] = useState(() =>
     parsePlanToSections(planText, supplementsText, recipesText)
   );
@@ -748,6 +748,11 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowFrigoPreview(true)}>
           Fiche Frigo
         </button>
+        {onExportCover && (
+          <button type="button" className="btn btn-anissa-secondary" onClick={() => onExportCover()}>
+            Cover PDF
+          </button>
+        )}
         <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowMedicalSummary(true)}>
           Resume medecin
         </button>

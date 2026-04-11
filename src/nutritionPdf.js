@@ -1685,3 +1685,196 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
 
   doc.save(`fiche-frigo-${(form.prenom || 'client').toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`);
 }
+
+// ─────────────────────────────────────────────────────
+// PDF 3: COVER PERSONNALISÉE (Anissa Deroubaix)
+// ─────────────────────────────────────────────────────
+
+export async function exportCoverPDF(consultation, client) {
+  // Palette premium Anissa — cohérente avec la fiche frigo
+  const CREAM      = [245, 242, 236];   // #F5F2EC fond principal
+  const CREAM_DARK = [237, 233, 224];   // fond section client (légèrement plus foncé)
+  const DARK_GREEN = [26, 46, 31];      // #1A2E1F titres
+  const INK        = [49, 45, 45];      // corps de texte
+  const GREY       = [136, 136, 136];   // libellés discrets
+  const BORDER     = [212, 208, 200];   // filets fins
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const pw = doc.internal.pageSize.getWidth();   // 210
+  const ph = doc.internal.pageSize.getHeight();  // 297
+  const margin = 18;
+
+  const form = client?.form || {};
+  const prenom = (form.prenom || 'Client').trim();
+  const objectif = (form.objectifPrincipalNutrition || form.objectifSport || '—').trim();
+  const dateStr = formatDateFR(new Date().toISOString());
+
+  // Type de bilan dérivé des flags de consultation (supporte snake_case et camelCase)
+  const blood = !!consultation?.blood_test_done || !!consultation?.bloodTestDone;
+  const dna   = !!consultation?.dna_test_done   || !!consultation?.dnaTestDone;
+  let typeBilan = 'Bilan Nutritionnel';
+  if (blood && dna) typeBilan = 'Bilan Nutritionnel, Sanguin & ADN';
+  else if (blood)   typeBilan = 'Bilan Nutritionnel & Sanguin';
+  else if (dna)     typeBilan = 'Bilan Nutritionnel & ADN';
+
+  // ─── Fond crème plein ───
+  doc.setFillColor(...CREAM);
+  doc.rect(0, 0, pw, ph, 'F');
+
+  // ══════════════════════════════════════════════════════════════
+  //  HEADER — nom Anissa à gauche, localisation à droite
+  // ══════════════════════════════════════════════════════════════
+  const headerY = 22;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...DARK_GREEN);
+  doc.setCharSpace(1.2);
+  doc.text('ANISSA DEROUBAIX', margin, headerY);
+  doc.setCharSpace(0);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...INK);
+  doc.text('Nutritionniste — Optimisation métabolique & longévité', margin, headerY + 5);
+  doc.setTextColor(...GREY);
+  doc.text('Approche basée sur données biologiques & physiologie appliquée', margin, headerY + 9.5);
+
+  doc.setFontSize(8);
+  doc.setTextColor(...GREY);
+  doc.text(
+    'Nutritionniste · Longévité & Biomarqueurs · Nyon',
+    pw - margin,
+    headerY,
+    { align: 'right' }
+  );
+
+  // Filet sous le header
+  const headerBottomY = headerY + 16;
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(margin, headerBottomY, pw - margin, headerBottomY);
+
+  // ══════════════════════════════════════════════════════════════
+  //  TITRE PRINCIPAL (serif, centré sur 2 lignes)
+  // ══════════════════════════════════════════════════════════════
+  const titleY = 84;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(26);
+  doc.setTextColor(...DARK_GREEN);
+  doc.text('PROTOCOLE NUTRITIONNEL', pw / 2, titleY, { align: 'center' });
+  doc.text('PERSONNALISÉ',           pw / 2, titleY + 10, { align: 'center' });
+
+  // Filet décoratif court sous le titre
+  doc.setDrawColor(...DARK_GREEN);
+  doc.setLineWidth(0.6);
+  const rulerW = 28;
+  doc.line(pw / 2 - rulerW / 2, titleY + 17, pw / 2 + rulerW / 2, titleY + 17);
+
+  // ══════════════════════════════════════════════════════════════
+  //  PARAGRAPHE DESCRIPTIF
+  // ══════════════════════════════════════════════════════════════
+  const paragraphY = titleY + 30;
+  doc.setFont('times', 'italic');
+  doc.setFontSize(11);
+  doc.setTextColor(...INK);
+  const intro = "Ce protocole a été élaboré à partir de votre profil biologique, de vos objectifs de longévité et des recommandations nutritionnelles adaptées à votre physiologie. Chaque choix alimentaire est guidé par la science et votre singularité.";
+  const introLines = doc.splitTextToSize(intro, pw - margin * 2 - 20);
+  let py = paragraphY;
+  introLines.forEach(line => {
+    doc.text(line, pw / 2, py, { align: 'center' });
+    py += 5.5;
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  SECTION CLIENT — fond crème foncé, coins arrondis
+  // ══════════════════════════════════════════════════════════════
+  const boxX = margin;
+  const boxY = py + 10;
+  const boxW = pw - margin * 2;
+  const boxH = 64;
+  doc.setFillColor(...CREAM_DARK);
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(boxX, boxY, boxW, boxH, 4, 4, 'FD');
+
+  // Label "PRÉPARÉ POUR"
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GREY);
+  doc.setCharSpace(2.5);
+  doc.text('PRÉPARÉ POUR', pw / 2, boxY + 10, { align: 'center' });
+  doc.setCharSpace(0);
+
+  // Prénom en grand serif
+  doc.setFont('times', 'bold');
+  doc.setFontSize(24);
+  doc.setTextColor(...DARK_GREEN);
+  doc.text(prenom.toUpperCase(), pw / 2, boxY + 23, { align: 'center' });
+
+  // Filet fin sous le prénom
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.2);
+  const sepW = 40;
+  doc.line(pw / 2 - sepW / 2, boxY + 28, pw / 2 + sepW / 2, boxY + 28);
+
+  // 3 lignes d'infos centrées (label gris en bold + valeur sombre en normal)
+  const drawKV = (label, value, yy) => {
+    const labelText = `${label} : `;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    const labelW = doc.getTextWidth(labelText);
+    doc.setFont('helvetica', 'normal');
+    const valueW = doc.getTextWidth(value);
+    const totalW = labelW + valueW;
+    const startX = pw / 2 - totalW / 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREY);
+    doc.text(labelText, startX, yy);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...INK);
+    doc.text(value, startX + labelW, yy);
+  };
+  drawKV('Objectif',     objectif,  boxY + 38);
+  drawKV('Consultation', typeBilan, boxY + 45);
+  drawKV('Date',         dateStr,   boxY + 52);
+
+  // ══════════════════════════════════════════════════════════════
+  //  CITATION (italic serif, centrée)
+  // ══════════════════════════════════════════════════════════════
+  const quoteBlockY = boxY + boxH + 22;
+  doc.setDrawColor(...DARK_GREEN);
+  doc.setLineWidth(0.4);
+  doc.line(pw / 2 - 10, quoteBlockY - 7, pw / 2 + 10, quoteBlockY - 7);
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(11.5);
+  doc.setTextColor(...DARK_GREEN);
+  const quote = "« Votre corps suit des règles biologiques. Ce protocole s'y adapte avec précision. »";
+  const quoteLines = doc.splitTextToSize(quote, pw - margin * 2 - 30);
+  let qy = quoteBlockY;
+  quoteLines.forEach(line => {
+    doc.text(line, pw / 2, qy, { align: 'center' });
+    qy += 6;
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  FOOTER — coordonnées Anissa
+  // ══════════════════════════════════════════════════════════════
+  const footerLineY = ph - 24;
+  const footerTextY = ph - 18;
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footerLineY, pw - margin, footerLineY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...GREY);
+  doc.text(
+    '076 621 02 05  ·  Rue de Rive 28, 1260 Nyon  ·  anissanutrition@gmail.com  ·  www.anissanutrition.ch',
+    pw / 2,
+    footerTextY,
+    { align: 'center' }
+  );
+
+  doc.save(`cover-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`);
+}

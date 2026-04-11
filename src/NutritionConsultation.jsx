@@ -4,7 +4,7 @@ import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
 import NutritionEditor from './NutritionEditor';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
-import { exportConsultationPDF, exportFicheFrigoPDF } from './nutritionPdf';
+import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF } from './nutritionPdf';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 
@@ -1028,6 +1028,13 @@ ${suppText}`;
                   supplements,
                   recipes,
                   notesForCoach: consultation.notes_for_coach,
+                  date: new Date().toISOString(),
+                }, client);
+              }}
+              onExportCover={() => {
+                exportCoverPDF({
+                  blood_test_done: consultation.blood_test_done,
+                  dna_test_done: consultation.dna_test_done,
                   date: new Date().toISOString(),
                 }, client);
               }}
