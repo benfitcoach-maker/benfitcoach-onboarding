@@ -126,7 +126,7 @@ export default function BusinessDashboard() {
   const currentYear = now.getFullYear();
   const [chartYear, setChartYear] = useState(currentYear);
   const [revenueForm, setRevenueForm] = useState({
-    clientName: '', amount: '', type: 'oneshot', month: currentMonth, year: currentYear, note: '',
+    clientName: '', amount: '', description: '', type: 'oneshot', month: currentMonth, year: currentYear, note: '',
   });
 
   const allClients = getClients();
@@ -316,6 +316,7 @@ export default function BusinessDashboard() {
       id: crypto.randomUUID(),
       clientName: revenueForm.clientName.trim(),
       amount: Number(revenueForm.amount),
+      description: revenueForm.description,
       type: revenueForm.type,
       month: Number(revenueForm.month),
       year: Number(revenueForm.year),
@@ -323,7 +324,7 @@ export default function BusinessDashboard() {
       createdAt: new Date().toISOString(),
     };
     saveManualRevenues([...manualRevenues, newRev]);
-    setRevenueForm({ clientName: '', amount: '', type: 'oneshot', month: currentMonth, year: currentYear, note: '' });
+    setRevenueForm({ clientName: '', amount: '', description: '', type: 'oneshot', month: currentMonth, year: currentYear, note: '' });
     setShowAddRevenue(false);
   };
 
@@ -478,6 +479,10 @@ export default function BusinessDashboard() {
                   <input type="number" value={revenueForm.amount} onChange={e => setRevenueForm(p => ({ ...p, amount: e.target.value }))} />
                 </div>
                 <div className="field">
+                  <label>Description</label>
+                  <input type="text" value={revenueForm.description} onChange={e => setRevenueForm(p => ({ ...p, description: e.target.value }))} placeholder="Ex: Pack 20 — Sophie" />
+                </div>
+                <div className="field">
                   <label>Type</label>
                   <select value={revenueForm.type} onChange={e => setRevenueForm(p => ({ ...p, type: e.target.value }))}>
                     <option value="oneshot">One-shot</option>
@@ -515,13 +520,14 @@ export default function BusinessDashboard() {
           {manualRevenues.length > 0 ? (
             <table className="biz-table biz-table-manual">
               <thead>
-                <tr><th>Client</th><th>Montant</th><th>Type</th><th>Mois</th><th>Note</th><th></th></tr>
+                <tr><th>Client</th><th>Montant</th><th>Description</th><th>Type</th><th>Mois</th><th>Note</th><th></th></tr>
               </thead>
               <tbody>
                 {manualRevenues.map(r => (
                   <tr key={r.id}>
                     <td>{r.clientName}</td>
                     <td>{formatCHF(r.amount)} CHF</td>
+                    <td>{r.description || '-'}</td>
                     <td>{r.type === 'recurring' ? 'Recurrent' : 'One-shot'}</td>
                     <td>{getMonthName(r.month, true)} {r.year}</td>
                     <td>{r.note || '-'}</td>
