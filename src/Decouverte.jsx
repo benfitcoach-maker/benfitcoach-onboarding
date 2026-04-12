@@ -131,8 +131,8 @@ export default function Decouverte() {
               onChange={e => setEmail(e.target.value)}
             />
           </div>
-          <button className="dec-cta dec-cta-full" onClick={handleSendMail}>
-            {'\u00ca'}tre contact{'\u00e9'}e par Anissa {'\u2192'}
+          <button className="dec-cta dec-cta-full" onClick={() => window.open('https://www.instagram.com/anissa.nutri.nyon', '_blank')}>
+            {'\u00c9'}crire {'\u00e0'} Anissa sur Instagram {'\u2192'}
           </button>
         </div>
       </section>
