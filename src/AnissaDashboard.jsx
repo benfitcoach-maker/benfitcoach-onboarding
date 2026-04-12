@@ -104,7 +104,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       </div>
 
       <div className="client-card-bottom anissa-card-bottom">
-        <div className="anissa-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="anissa-card-actions">
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               className="btn btn-sm btn-anissa-primary"

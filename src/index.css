@@ -1461,7 +1461,7 @@ body{
   gap:8px !important;
 }
 .anissa-card-actions{
-  display:flex;gap:8px;
+  display:flex;flex-direction:column;gap:8px;
 }
 .btn-anissa-primary{
   background:linear-gradient(135deg,#2a9d5c,#1a3a2a) !important;
