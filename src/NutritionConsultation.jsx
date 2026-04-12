@@ -202,7 +202,38 @@ Agis comme un auditeur. Analyse le plan genere et liste :
 - Contradictions
 - Recommandations non justifiees
 Corrige automatiquement avant validation finale.
-Ne jamais sortir un plan non audite.`;
+Ne jamais sortir un plan non audite.
+
+PROCESSUS DE GENERATION — SUIVRE DANS L'ORDRE :
+
+1. IDENTIFIER LA PRIORITE : pathologie > digestion > energie > objectif
+
+2. CONSTRUIRE LA BASE ALIMENTAIRE :
+   - Retirer toutes les allergies
+   - Retirer toutes les intolerances
+   - Adapter selon digestion
+
+3. APPLIQUER LES MODULES CONDITIONNELS selon profil :
+   - Module digestion (si troubles)
+   - Module energie (si fatigue)
+   - Module comportement (si fringales/emotionnel)
+   - Module performance (si sport)
+   - Module pathologies (si maladie chronique)
+
+4. GERER LES CONFLITS :
+   - Toujours respecter la priorite la plus haute
+   - En cas de contradiction entre modules, priorite pathologie
+
+5. CALCULER calories et macros selon profil valide
+
+6. GENERER le plan alimentaire coherent
+
+7. VERIFICATION FINALE :
+   - Aucune contradiction
+   - Macros respectes
+   - Plan compatible avec profil complet
+
+Si erreur detectee, corriger avant sortie. Ne jamais livrer un plan non verifie.`;
 
 const SUPPLEMENTS_INSTRUCTION = `Genere SEPAREMENT la section SUPPLEMENTS RECOMMANDES en respectant IMPERATIVEMENT la bibliotheque de complements Benfitcoach :
 
