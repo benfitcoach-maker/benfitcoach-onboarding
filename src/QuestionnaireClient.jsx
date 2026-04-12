@@ -53,6 +53,7 @@ function QuestionnaireClient({ clientId }) {
     niveauStressActuel: '',
     objectifPrincipalNutrition: [],
     pourquoiMaintenant: '',
+    pretProtocole: '',
   });
 
   // Load existing client data
@@ -103,6 +104,7 @@ function QuestionnaireClient({ clientId }) {
               : f.objectifPrincipalNutrition)
             : [],
           pourquoiMaintenant: f.pourquoiMaintenant || '',
+          pretProtocole: f.pretProtocole || '',
         }));
       });
   }, [clientId]);
@@ -148,6 +150,7 @@ function QuestionnaireClient({ clientId }) {
       heuresSommeil: form.heuresSommeil,
       frequenceBallonnements: form.frequenceBallonnements,
       pourquoiMaintenant: form.pourquoiMaintenant,
+      pretProtocole: form.pretProtocole,
     };
 
     try {
@@ -432,6 +435,14 @@ function QuestionnaireClient({ clientId }) {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="q-field">
+              <label className="q-label">Seriez-vous pr{'\u00ea'}t(e) {'\u00e0'} prendre des compl{'\u00e9'}ments alimentaires si recommand{'\u00e9'} ?</label>
+              <BtnGroup field="pretProtocole" options={[
+                { value: 'Oui', label: 'Oui' },
+                { value: 'Non', label: 'Non' },
+                { value: 'Peut-etre', label: 'Peut-\u00eatre' },
+              ]} columns={3} />
             </div>
             <div className="q-field">
               <label className="q-label">Pourquoi maintenant ? (optionnel)</label>
