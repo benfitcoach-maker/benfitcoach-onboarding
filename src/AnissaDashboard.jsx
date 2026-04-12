@@ -10,10 +10,8 @@ function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
     const subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
     const body =
       `Bonjour ${prenom},\n\n` +
-      `Je vous remercie de votre confiance.\n\n` +
-      `Avant notre consultation, je vous invite a remplir ce court questionnaire (5 minutes).\n` +
-      `Cela me permettra de mieux preparer notre rendez-vous et de personnaliser votre accompagnement.\n\n` +
-      `Remplir mon questionnaire :\n${url}\n\n` +
+      `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
+      `➜ ${url}\n\n` +
       `Ce questionnaire est strictement confidentiel.`;
     const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(clientEmail || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank');
