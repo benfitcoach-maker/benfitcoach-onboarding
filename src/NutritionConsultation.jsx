@@ -7,7 +7,7 @@ import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF } from './nutritionPdf';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
-import { getMGDRecommendations } from './mgdAnalysisMatrix';
+import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
 
 // ─── PROMPT MODULES (composition conditionnelle) ───
 
@@ -948,6 +948,281 @@ function NutritionQualityDashboard() {
   );
 }
 
+// ─── MGD ANALYSIS PDF ───
+
+// Map form fields to MGD symptom keys
+function detectSymptomsFromForm(form) {
+  const symptoms = [];
+  const f = form || {};
+
+  // Energy (scale 1-5, low = symptom)
+  if (f.energieJournee && Number(f.energieJournee) <= 2) symptoms.push('fatigue');
+
+  // Digestion (scale 1-5 or text)
+  if (f.frequenceBallonnements && Number(f.frequenceBallonnements) <= 2) symptoms.push('digestion', 'bloating');
+  else if (f.frequenceBallonnements && Number(f.frequenceBallonnements) <= 3) symptoms.push('digestion');
+
+  // Stress (scale 1-5, low = high stress)
+  if (f.niveauStressActuel && Number(f.niveauStressActuel) <= 2) symptoms.push('stress');
+
+  // Sleep
+  if (f.heuresSommeil && Number(f.heuresSommeil) <= 2) symptoms.push('sleep');
+  if (f.difficultesEndormissement && /oui|souvent|regulier/i.test(f.difficultesEndormissement)) symptoms.push('sleep');
+
+  // Cravings
+  if (f.fringalesSucre && /oui|souvent|regulier|fort/i.test(f.fringalesSucre)) symptoms.push('cravings');
+
+  // Inflammation
+  if (f.douleursInflammations && f.douleursInflammations.trim()) symptoms.push('inflammation');
+
+  // Skin/hair
+  if (f.troublesPeau && f.troublesPeau.trim()) symptoms.push('skin_hair');
+
+  // Objectives → symptoms
+  const obj = (f.objectifPrincipalNutrition || '').toLowerCase();
+  if (/poids|perte/.test(obj)) symptoms.push('weight_gain', 'metabolic');
+  if (/hormone/.test(obj)) symptoms.push('female_hormones');
+  if (/performance/.test(obj)) symptoms.push('performance');
+  if (/digestion/.test(obj) && !symptoms.includes('digestion')) symptoms.push('digestion');
+  if (/energie|fatigue/.test(obj) && !symptoms.includes('fatigue')) symptoms.push('fatigue');
+
+  // SPM / cycle
+  if (f.spm && /oui|fort|regulier/i.test(f.spm)) symptoms.push('pms_cycle');
+  if (f.douleursMenstruelles && /oui|fort|regulier/i.test(f.douleursMenstruelles)) symptoms.push('pms_cycle');
+
+  // Thyroid hints
+  if (f.pathologies && /thyro[iï]d|hashimoto|levothyrox/i.test(f.pathologies)) symptoms.push('thyroid');
+
+  return [...new Set(symptoms)];
+}
+
+function validateAnalysesPDF(symptoms, recommendations) {
+  const errors = [];
+  if (!symptoms || symptoms.length === 0) {
+    errors.push('Aucun symptome detecte — impossible de recommander des analyses');
+  }
+  if (!recommendations || (recommendations.essential.length === 0 && recommendations.relevant.length === 0)) {
+    errors.push('Aucune analyse recommandee');
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+async function exportAnalysesPDF(recommendations, symptoms, clientName, dateStr) {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pw = doc.internal.pageSize.getWidth();
+  const margin = 22;
+  const cw = pw - margin * 2;
+  let y = 20;
+
+  // Background
+  doc.setFillColor(245, 242, 236);
+  doc.rect(0, 0, pw, 297, 'F');
+
+  // Header
+  doc.setFontSize(8);
+  doc.setTextColor(138, 138, 122);
+  doc.text(clientName, margin, y);
+  doc.text('Analyses biologiques recommandees', pw / 2, y, { align: 'center' });
+  doc.text(dateStr, pw - margin, y, { align: 'right' });
+  y += 4;
+  doc.setDrawColor(26, 46, 31);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pw - margin, y);
+  y += 10;
+
+  // Intro
+  doc.setFontSize(9);
+  doc.setTextColor(74, 74, 66);
+  const introLines = doc.splitTextToSize('Ces analyses permettent d\'objectiver certains desequilibres potentiels et de mieux personnaliser votre accompagnement nutritionnel. A discuter et valider avec votre medecin ou professionnel de sante.', cw);
+  for (const line of introLines) { doc.text(line, margin, y); y += 4.5; }
+  y += 6;
+
+  // Context
+  if (symptoms.length > 0) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(26, 46, 31);
+    doc.text('Contexte : ', margin, y);
+    const ctxX = margin + doc.getTextWidth('Contexte : ');
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(74, 74, 66);
+    doc.text(symptoms.map(s => s.replace(/_/g, ' ')).join(', '), ctxX, y);
+    y += 8;
+  }
+
+  // Render section
+  const renderSection = (title, items, dotColor) => {
+    if (!items || items.length === 0) return;
+
+    // Check page break
+    if (y > 255) { doc.addPage(); doc.setFillColor(245, 242, 236); doc.rect(0, 0, pw, 297, 'F'); y = 20; }
+
+    // Title
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(26, 46, 31);
+    doc.setFillColor(...dotColor);
+    doc.circle(margin + 2, y - 1.5, 1.5, 'F');
+    doc.text(title.toUpperCase(), margin + 7, y);
+    y += 2;
+    doc.setDrawColor(26, 46, 31);
+    doc.setLineWidth(0.5);
+    doc.line(margin + 7, y, margin + 7 + doc.getTextWidth(title.toUpperCase()), y);
+    y += 6;
+
+    // Items
+    for (const item of items) {
+      if (y > 270) { doc.addPage(); doc.setFillColor(245, 242, 236); doc.rect(0, 0, pw, 297, 'F'); y = 20; }
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(26, 46, 31);
+      doc.text(item.label, margin + 4, y);
+
+      // Category tag
+      if (item.category && item.category !== 'Analyse fonctionnelle') {
+        const labelW = doc.getTextWidth(item.label);
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(138, 138, 122);
+        doc.text(item.category, margin + 4 + labelW + 4, y);
+      }
+      y += 4;
+
+      // Rationale
+      if (item.rationale.length > 0) {
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(138, 138, 122);
+        doc.text(item.rationale.slice(0, 3).join(', '), margin + 4, y);
+        y += 4;
+      }
+      y += 1;
+    }
+    y += 4;
+  };
+
+  renderSection('Analyses essentielles', recommendations.essential, [26, 46, 31]);
+  renderSection('Analyses pertinentes', recommendations.relevant, [232, 160, 64]);
+  renderSection('Analyses optionnelles', recommendations.optional, [138, 138, 122]);
+
+  // Practical tips
+  if (y > 250) { doc.addPage(); doc.setFillColor(245, 242, 236); doc.rect(0, 0, pw, 297, 'F'); y = 20; }
+  doc.setDrawColor(26, 46, 31);
+  doc.setLineWidth(0.8);
+  doc.line(margin, y, margin, y + 22);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(26, 46, 31);
+  doc.text('Conseils pratiques', margin + 4, y + 4);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(74, 74, 66);
+  const tips = [
+    'A jeun pour les prises de sang (12h si bilan lipidique)',
+    'Eviter le sport intense la veille',
+    'Apporter cette liste au laboratoire ou a votre medecin',
+    'Certains examens dependent du contexte — a individualiser',
+  ];
+  tips.forEach((tip, i) => { doc.text('- ' + tip, margin + 4, y + 9 + i * 4); });
+
+  // Footer
+  const ph = doc.internal.pageSize.getHeight();
+  doc.setFontSize(7);
+  doc.setTextColor(138, 138, 122);
+  const totalAnalyses = recommendations.essential.length + recommendations.relevant.length + recommendations.optional.length;
+  doc.text('Anissa Deroubaix Nutrition', margin, ph - 10);
+  doc.text(`${totalAnalyses} analyses recommandees`, pw - margin, ph - 10, { align: 'right' });
+
+  doc.save(`analyses-${clientName.toLowerCase().replace(/\s+/g, '-')}-${dateStr.replace(/\//g, '-')}.pdf`);
+}
+
+function AnalysisPdfBody({ recommendations, symptoms, clientName, date }) {
+  if (!recommendations) return null;
+
+  const { essential, relevant, optional } = recommendations;
+  const hasContent = essential.length > 0 || relevant.length > 0;
+  if (!hasContent) return null;
+
+  const pageHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(26,46,31,.12)', paddingBottom: 8, marginBottom: 16, fontSize: '.7rem', color: '#8a8a7a' };
+  const sectionTitle = { color: '#1A2E1F', fontSize: '.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '2px solid #1A2E1F', paddingBottom: 5, marginBottom: 10 };
+
+  const AnalysisItem = ({ item }) => (
+    <div style={{ padding: '6px 0', borderBottom: '1px solid rgba(26,46,31,.05)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+        <span style={{ color: '#1A2E1F', fontWeight: 600 }}>{item.label}</span>
+        {item.category && item.category !== 'Analyse fonctionnelle' && (
+          <span style={{ fontSize: '.68rem', color: '#fff', background: 'rgba(26,46,31,.55)', borderRadius: 100, padding: '1px 8px', flexShrink: 0 }}>{item.category}</span>
+        )}
+      </div>
+      {item.rationale.length > 0 && (
+        <div style={{ fontSize: '.75rem', color: '#8a8a7a', marginTop: 2 }}>{item.rationale.slice(0, 3).join(', ')}</div>
+      )}
+    </div>
+  );
+
+  const SectionBlock = ({ title, items, color }) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+          <h4 style={sectionTitle}>{title}</h4>
+        </div>
+        <div style={{ background: '#fff', borderRadius: 8, padding: '8px 14px' }}>
+          {items.map((item, i) => <AnalysisItem key={i} item={item} />)}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ background: '#F5F2EC', color: '#1A2E1F', borderRadius: 10, padding: '24px 28px', marginTop: 12, fontSize: '.83rem', lineHeight: 1.65, fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Header */}
+      <div style={pageHeader}>
+        <span>{clientName}</span>
+        <span>Analyses biologiques recommandees</span>
+        <span>{date}</span>
+      </div>
+
+      {/* Intro */}
+      <div style={{ background: '#fff', borderRadius: 8, padding: '12px 16px', marginBottom: 18, fontSize: '.8rem', color: '#4A4A42', lineHeight: 1.6 }}>
+        <p style={{ margin: 0 }}>Ces analyses permettent d'objectiver certains desequilibres potentiels et de mieux personnaliser votre accompagnement nutritionnel.</p>
+        <p style={{ margin: '6px 0 0', fontStyle: 'italic', fontSize: '.76rem', color: '#8a8a7a' }}>A discuter et valider avec votre medecin ou professionnel de sante.</p>
+      </div>
+
+      {/* Context */}
+      {symptoms.length > 0 && (
+        <div style={{ marginBottom: 16, fontSize: '.78rem', color: '#4A4A42' }}>
+          <strong style={{ color: '#1A2E1F' }}>Contexte : </strong>
+          {symptoms.map(s => s.replace(/_/g, ' ')).join(', ')}
+        </div>
+      )}
+
+      {/* Sections */}
+      <SectionBlock title="Analyses essentielles" items={essential} color="#1A2E1F" />
+      <SectionBlock title="Analyses pertinentes" items={relevant} color="#e8a040" />
+      <SectionBlock title="Analyses optionnelles" items={optional} color="#8a8a7a" />
+
+      {/* Practical tips */}
+      <div style={{ background: '#fff', borderLeft: '3px solid #1A2E1F', borderRadius: '0 8px 8px 0', padding: '10px 16px', marginTop: 18, fontSize: '.78rem', color: '#4A4A42' }}>
+        <strong style={{ display: 'block', marginBottom: 4, color: '#1A2E1F', fontSize: '.8rem' }}>Conseils pratiques</strong>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}><span style={{ color: '#2a9d5c' }}>-</span> A jeun pour les prises de sang (12h si bilan lipidique)</div>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}><span style={{ color: '#2a9d5c' }}>-</span> Eviter le sport intense la veille</div>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}><span style={{ color: '#2a9d5c' }}>-</span> Apporter cette liste au laboratoire ou a votre medecin</div>
+        <div style={{ display: 'flex', gap: 4 }}><span style={{ color: '#2a9d5c' }}>-</span> Certains examens dependent du contexte — a individualiser</div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ borderTop: '1px solid rgba(26,46,31,.1)', paddingTop: 8, marginTop: 16, display: 'flex', justifyContent: 'space-between', fontSize: '.68rem', color: '#8a8a7a' }}>
+        <span>Apercu analyses recommandees</span>
+        <span>{essential.length + relevant.length + optional.length} analyse{essential.length + relevant.length + optional.length > 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  );
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -1082,6 +1357,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [pdfError, setPdfError] = useState('');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [showQualityDash, setShowQualityDash] = useState(false);
+  const [showAnalysesPreview, setShowAnalysesPreview] = useState(false);
+  const [analysesError, setAnalysesError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -1901,10 +2178,61 @@ ${suppText}`;
               >
                 {showQualityDash ? 'Masquer dashboard' : 'Dashboard qualite'}
               </button>
+              <button
+                className="btn btn-anissa-secondary"
+                style={{ fontSize: '.78rem', padding: '8px 16px' }}
+                onClick={() => {
+                  setAnalysesError('');
+                  const symp = detectSymptomsFromForm(form);
+                  const recs = getEnrichedMGDRecommendations(symp);
+                  const val = validateAnalysesPDF(symp, recs);
+                  if (!val.valid) {
+                    setAnalysesError(val.errors.join(' | '));
+                    setShowAnalysesPreview(false);
+                    return;
+                  }
+                  setShowAnalysesPreview(p => !p);
+                }}
+              >
+                {showAnalysesPreview ? 'Masquer analyses' : 'Apercu PDF analyses'}
+              </button>
+              <button
+                className="btn btn-anissa-primary"
+                style={{ fontSize: '.78rem', padding: '8px 16px' }}
+                onClick={() => {
+                  setAnalysesError('');
+                  const symp = detectSymptomsFromForm(form);
+                  const recs = getEnrichedMGDRecommendations(symp);
+                  const val = validateAnalysesPDF(symp, recs);
+                  if (!val.valid) {
+                    setAnalysesError('Export bloque : ' + val.errors.join(' | '));
+                    return;
+                  }
+                  const name = form.prenom || client?.prenom || 'Client';
+                  exportAnalysesPDF(recs, symp, name, formatDate(new Date().toISOString()));
+                }}
+              >
+                Exporter PDF analyses
+              </button>
             </div>
           )}
 
+          {analysesError && <div className="error-msg" style={{ marginTop: 8, background: 'rgba(212,92,76,.08)', padding: '10px 14px', borderRadius: 8, fontSize: '.82rem' }}>{analysesError}</div>}
+
           {showQualityDash && <NutritionQualityDashboard />}
+
+          {showAnalysesPreview && (() => {
+            const symp = detectSymptomsFromForm(form);
+            const recs = getEnrichedMGDRecommendations(symp);
+            return (
+              <AnalysisPdfBody
+                recommendations={recs}
+                symptoms={symp}
+                clientName={form.prenom || client?.prenom || 'Client'}
+                date={formatDate(new Date().toISOString())}
+              />
+            );
+          })()}
 
           {showPdfPreview && consultation.nutrition_plan && (
             <NutritionPdfBody
