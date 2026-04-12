@@ -562,11 +562,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   };
 
   const handleGenerate = async () => {
-    if (!apiKey?.trim()) {
-      setGenError('Cle API Anthropic requise.');
-      return;
-    }
-
     // Validation des champs critiques (securite client)
     const missing = [];
     if (!form.allergies || !form.allergies.toString().trim()) missing.push('allergies / intolerances');
