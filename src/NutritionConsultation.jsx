@@ -8,6 +8,7 @@ import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF } from './nu
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
+import { analyzeLabResults } from './labInterpretationEngine';
 
 // ─── PROMPT MODULES (composition conditionnelle) ───
 
@@ -1223,6 +1224,72 @@ function AnalysisPdfBody({ recommendations, symptoms, clientName, date }) {
   );
 }
 
+const LAB_MARKERS_UI = [
+  { key: 'ferritine', label: 'Ferritine', unit: 'ng/mL' },
+  { key: 'fer_serique', label: 'Fer serique', unit: 'µmol/L' },
+  { key: 'vitamine_d', label: 'Vitamine D', unit: 'ng/mL' },
+  { key: 'vitamine_b12', label: 'Vitamine B12', unit: 'pg/mL' },
+  { key: 'folates', label: 'Folates (B9)', unit: 'ng/mL' },
+  { key: 'glucose_jeun', label: 'Glucose a jeun', unit: 'mg/dL' },
+  { key: 'insuline_jeun', label: 'Insuline a jeun', unit: 'µU/mL' },
+  { key: 'hba1c', label: 'HbA1c', unit: '%' },
+  { key: 'tsh', label: 'TSH', unit: 'mUI/L' },
+  { key: 't3_libre', label: 'T3 libre', unit: 'pg/mL' },
+  { key: 't4_libre', label: 'T4 libre', unit: 'ng/dL' },
+  { key: 'crp_us', label: 'CRP ultrasensible', unit: 'mg/L' },
+  { key: 'magnesium', label: 'Magnesium', unit: 'mg/L' },
+  { key: 'zinc', label: 'Zinc', unit: 'µg/dL' },
+];
+
+function buildLabSectionForPlan(labResults) {
+  if (!labResults || Object.keys(labResults).length === 0) return null;
+
+  const analysis = analyzeLabResults(labResults);
+  if (analysis.signals.length === 0) return null;
+
+  const lines = ['', '--- ADAPTATIONS BASEES SUR LES RESULTATS BIOLOGIQUES ---', ''];
+
+  // Markers summary: concerns first (max 3), then borderline (max 2)
+  const concerns = analysis.summary.concerns.slice(0, 3);
+  const borderline = analysis.summary.borderline.slice(0, 2);
+  if (concerns.length > 0) {
+    lines.push('Marqueurs a optimiser :');
+    for (const c of concerns) {
+      lines.push(`- ${c.label} : ${c.value} ${c.unit} (${c.status})`);
+    }
+  }
+  if (borderline.length > 0) {
+    lines.push('Marqueurs en zone limite :');
+    for (const b of borderline) {
+      lines.push(`- ${b.label} : ${b.value} ${b.unit} (${b.status})`);
+    }
+  }
+  lines.push('');
+
+  // Adjustments (max 5) with max 3 cautions
+  const adjustments = analysis.adjustments.slice(0, 5);
+  let cautionCount = 0;
+  lines.push('Ajustements nutritionnels proposes :');
+  for (const adj of adjustments) {
+    lines.push(`\n${adj.label} :`);
+    for (const d of adj.dietary.slice(0, 2)) {
+      lines.push(`- ${d}`);
+    }
+    if (adj.supplement) {
+      lines.push(`- Option : ${adj.supplement}`);
+    }
+    if (adj.caution && cautionCount < 3) {
+      lines.push(`- A noter : ${adj.caution}`);
+      cautionCount++;
+    }
+  }
+
+  lines.push('');
+  lines.push('Ces adaptations sont basees sur une lecture fonctionnelle et restent a individualiser.');
+
+  return lines.join('\n');
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -1234,6 +1301,7 @@ const INITIAL_CONSULTATION = {
   notes_for_coach: '',
   private_notes: '',
   fiche_frigo_json: null,
+  lab_results: {},
 };
 
 const INITIAL_FOLLOWUP = {
@@ -1309,6 +1377,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         notes_for_coach: initialConsultation.notesForCoach || initialConsultation.notes_for_coach || '',
         private_notes: initialConsultation.privateNotes || initialConsultation.private_notes || '',
         fiche_frigo_json: initialConsultation.ficheFrigoJson || initialConsultation.fiche_frigo_json || null,
+        lab_results: initialConsultation.labResults || initialConsultation.lab_results || {},
       };
     }
     // Pre-fill observations from questionnaire data
@@ -1524,8 +1593,19 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       }
     }
 
+    // Add lab results interpretation if available
+    const labData = consultation.lab_results || {};
+    const hasLabData = Object.values(labData).some(v => v !== '' && v != null);
+    if (hasLabData) {
+      const labSection = buildLabSectionForPlan(labData);
+      if (labSection) parts.push(labSection);
+    }
+
     parts.push('');
     parts.push(`Genere un plan nutrition personnalise complet sur 4 semaines avec variete, listes de courses, et alternatives naturelles avant les complements.`);
+    if (hasLabData) {
+      parts.push('Integre les adaptations basees sur les resultats biologiques dans le plan si pertinent.');
+    }
 
     return parts.join('\n');
   };
@@ -1814,6 +1894,7 @@ ${suppText}`;
       notesForCoach: consultation.notes_for_coach,
       privateNotes: consultation.private_notes,
       ficheFrigoJson: consultation.fiche_frigo_json || null,
+      labResults: consultation.lab_results || {},
       isFollowup,
       followupData: isFollowup ? {
         ...followupData,
@@ -2055,6 +2136,58 @@ ${suppText}`;
               <span>Analyse ADN effectuee</span>
             </label>
           </div>
+
+          {/* Lab results input (shown when blood test is done) */}
+          {consultation.blood_test_done && (
+            <div style={{ marginTop: 16 }}>
+              <h4 style={{ fontSize: '.85rem', color: '#d4c9a8', marginBottom: 10 }}>Resultats biologiques</h4>
+              <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>Saisissez les valeurs disponibles. Les champs vides sont ignores.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                {LAB_MARKERS_UI.map(({ key, label, unit }) => (
+                  <div key={key} className="field" style={{ marginBottom: 0 }}>
+                    <label style={{ fontSize: '.72rem' }}>{label} ({unit})</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={consultation.lab_results?.[key] || ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setConsultation(prev => ({
+                          ...prev,
+                          lab_results: { ...prev.lab_results, [key]: val === '' ? '' : Number(val) },
+                        }));
+                      }}
+                      placeholder="-"
+                      style={{ fontSize: '.8rem', padding: '6px 8px' }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Live interpretation preview */}
+              {(() => {
+                const labData = consultation.lab_results || {};
+                const hasData = Object.values(labData).some(v => v !== '' && v != null);
+                if (!hasData) return null;
+                const analysis = analyzeLabResults(labData);
+                if (analysis.signals.length === 0) return (
+                  <div style={{ marginTop: 10, fontSize: '.78rem', color: '#2a9d5c' }}>Tous les marqueurs saisis sont dans les normes fonctionnelles.</div>
+                );
+                return (
+                  <div style={{ marginTop: 10, background: 'rgba(124,92,191,.06)', borderRadius: 8, padding: '10px 14px', fontSize: '.78rem' }}>
+                    <strong style={{ display: 'block', marginBottom: 6, color: '#d4c9a8' }}>Signaux detectes ({analysis.signals.length})</strong>
+                    {analysis.adjustments.slice(0, 6).map((adj, i) => (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <span style={{ color: '#d4c9a8', fontWeight: 600 }}>{adj.label}</span>
+                        <span style={{ color: '#6b5f48', marginLeft: 6 }}>— {adj.dietary[0]}</span>
+                        {adj.caution && <div style={{ color: '#d45c4c', fontSize: '.72rem', marginTop: 2 }}>{adj.caution}</div>}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 
