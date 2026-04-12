@@ -317,7 +317,36 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         fiche_frigo_json: initialConsultation.ficheFrigoJson || initialConsultation.fiche_frigo_json || null,
       };
     }
-    return { ...INITIAL_CONSULTATION };
+    // Pre-fill observations from questionnaire data
+    const c = { ...INITIAL_CONSULTATION };
+    const f = client?.form || {};
+
+    // Build observations from profile data
+    const profileParts = [
+      f.genre && `Genre : ${f.genre}`,
+      f.age && `Age : ${f.age} ans`,
+      f.poids && `Poids : ${f.poids} kg`,
+      f.taille && `Taille : ${f.taille} cm`,
+      f.profession && `Profession : ${f.profession}`,
+      f.heuresSommeil && `Sommeil : ${f.heuresSommeil}/5`,
+      f.niveauStressActuel && `Stress : ${f.niveauStressActuel}/5`,
+      f.energieJournee && `Energie : ${f.energieJournee}/5`,
+    ].filter(Boolean);
+    if (profileParts.length > 0) c.observations = profileParts.join('\n');
+
+    // Build nutritional observations from diet/health data
+    const nutriParts = [
+      f.nbRepas && `Repas/jour : ${f.nbRepas}`,
+      f.hydratation && `Hydratation : ${f.hydratation}`,
+      f.alimentsEvites && `Aliments evites : ${f.alimentsEvites}`,
+      f.frequenceBallonnements && `Digestion : ${f.frequenceBallonnements}/5`,
+      f.pathologies && `Pathologies : ${f.pathologies}`,
+      f.traitements && `Traitements : ${f.traitements}`,
+      f.allergies && `Allergies : ${f.allergies}`,
+    ].filter(Boolean);
+    if (nutriParts.length > 0) c.nutritional_observations = nutriParts.join('\n');
+
+    return c;
   });
   const [followupData, setFollowupData] = useState(() => {
     if (initialConsultation?.followupData) return { ...INITIAL_FOLLOWUP, ...initialConsultation.followupData };
