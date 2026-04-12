@@ -14,10 +14,7 @@ export default function Decouverte() {
   const [email, setEmail] = useState('');
 
   const handleRdv = () => {
-    const subject = 'Demande RDV d\u00e9couverte';
-    const body = `Bonjour Anissa, ${prenom || '(pr\u00e9nom)'} souhaite un RDV d\u00e9couverte. Objectif: ${objectif || '(non pr\u00e9cis\u00e9)'}. Email: ${email || '(non pr\u00e9cis\u00e9)'}`;
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=anissa.nutri@gmail.com&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(gmailUrl, '_blank');
+    window.open('https://calendly.com/anissa-nutri/30min', '_blank');
   };
 
   const BtnGroup = ({ options, value, onChange }) => (
@@ -61,12 +58,12 @@ export default function Decouverte() {
           Anissa Deroubaix — Nutritionniste {'\u00e0'} Nyon.<br />
           Approche bas{'\u00e9'}e sur vos biomarqueurs, votre physiologie et votre mode de vie.
         </p>
-        <a
-          href="mailto:anissa.nutri@gmail.com"
+        <button
           className="dec-cta"
+          onClick={() => window.open('https://calendly.com/anissa-nutri/30min', '_blank')}
         >
           Prendre rendez-vous
-        </a>
+        </button>
       </section>
 
       {/* Duo */}
