@@ -3549,13 +3549,14 @@ body{
 /* Duo encart */
 .dec-duo{
   background:#fff;
-  border:1px solid rgba(74,74,66,.1);
-  border-radius:12px;
+  border:none;
+  border-left:4px solid #1A2E1F;
+  border-radius:0 12px 12px 0;
   padding:18px 22px;
   font-size:.88rem;
   color:#4A4A42;
   line-height:1.5;
-  text-align:center;
+  text-align:left;
 }
 
 /* Badge MGD */

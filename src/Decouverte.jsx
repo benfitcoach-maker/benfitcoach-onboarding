@@ -2,9 +2,9 @@ import { useState } from 'react';
 
 const ANISSA_LOGO = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
-const OBJECTIF_OPTIONS = ['Energie', 'Poids', 'Hormones', 'Digestion', 'Performance'];
+const OBJECTIF_OPTIONS = ['\u00c9nergie', 'Poids', 'Hormones', 'Digestion', 'Performance'];
 const DEJA_OPTIONS = ['Oui', 'Non'];
-const LIEU_OPTIONS = ['Nyon & region', 'Geneve', 'Autre'];
+const LIEU_OPTIONS = ['Nyon & r\u00e9gion', 'Gen\u00e8ve', 'Autre'];
 
 export default function Decouverte() {
   const [objectif, setObjectif] = useState('');
@@ -14,8 +14,8 @@ export default function Decouverte() {
   const [email, setEmail] = useState('');
 
   const handleRdv = () => {
-    const subject = 'Demande RDV decouverte';
-    const body = `Bonjour Anissa, ${prenom || '(prenom)'} souhaite un RDV decouverte. Objectif: ${objectif || '(non precise)'}. Email: ${email || '(non precise)'}`;
+    const subject = 'Demande RDV d\u00e9couverte';
+    const body = `Bonjour Anissa, ${prenom || '(pr\u00e9nom)'} souhaite un RDV d\u00e9couverte. Objectif: ${objectif || '(non pr\u00e9cis\u00e9)'}. Email: ${email || '(non pr\u00e9cis\u00e9)'}`;
     const gmailUrl = `https://mail.google.com/mail/?view=cm&to=anissanutrition@gmail.com&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank');
   };
@@ -35,15 +35,31 @@ export default function Decouverte() {
     </div>
   );
 
+  const EbookVisual = () => (
+    <div style={{
+      background: '#1A2E1F',
+      borderRadius: 10,
+      padding: '18px 16px',
+      textAlign: 'center',
+      color: '#F5F2EC',
+      fontSize: '.78rem',
+      fontWeight: 700,
+      letterSpacing: '.5px',
+      textTransform: 'uppercase',
+    }}>
+      E-book
+    </div>
+  );
+
   return (
     <div className="dec-page">
       {/* Hero */}
       <section className="dec-hero">
         <img src={ANISSA_LOGO} alt="Anissa Nutrition" className="dec-logo" />
-        <h1 className="dec-hero-title">Et si votre fatigue avait une cause precise ?</h1>
+        <h1 className="dec-hero-title">Et si votre fatigue avait une cause pr{'\u00e9'}cise ?</h1>
         <p className="dec-hero-sub">
-          Anissa Deroubaix — Nutritionniste a Nyon.<br />
-          Approche basee sur vos biomarqueurs, votre physiologie et votre mode de vie.
+          Anissa Deroubaix — Nutritionniste {'\u00e0'} Nyon.<br />
+          Approche bas{'\u00e9'}e sur vos biomarqueurs, votre physiologie et votre mode de vie.
         </p>
         <a
           href="mailto:anissanutrition@gmail.com"
@@ -56,14 +72,14 @@ export default function Decouverte() {
       {/* Duo */}
       <section className="dec-section">
         <div className="dec-duo">
-          En synergie avec Benoit Deroubaix, coach sportif &amp; massotherapeute — un accompagnement sport + nutrition unique a Nyon.
+          En synergie avec Beno{'\u00ee'}t Deroubaix, coach sportif &amp; massoth{'\u00e9'}rapeute — un accompagnement sport + nutrition unique {'\u00e0'} Nyon.
         </div>
       </section>
 
       {/* MGD Lab */}
       <section className="dec-section">
         <div className="dec-badge">
-          En partenariat avec <strong>MGD Lab Suisse</strong> — analyses biologiques et genetiques de precision
+          En partenariat avec <strong>MGD Lab Suisse</strong> — analyses biologiques et g{'\u00e9'}n{'\u00e9'}tiques de pr{'\u00e9'}cision
         </div>
       </section>
 
@@ -72,12 +88,14 @@ export default function Decouverte() {
         <h2 className="dec-section-title">Ressources offertes</h2>
         <div className="dec-ebooks">
           <div className="dec-ebook-card">
-            <h3 className="dec-ebook-title">Vous etes epuisee. Et si votre corps vous envoyait un message ?</h3>
-            <a href="#" className="dec-ebook-btn">Telecharger gratuitement</a>
+            <EbookVisual />
+            <h3 className="dec-ebook-title">Vous {'\u00ea'}tes {'\u00e9'}puis{'\u00e9'}e. Et si votre corps vous envoyait un message ?</h3>
+            <a href="#" className="dec-ebook-btn">T{'\u00e9'}l{'\u00e9'}charger gratuitement</a>
           </div>
           <div className="dec-ebook-card">
-            <h3 className="dec-ebook-title">Reequilibrer vos hormones naturellement</h3>
-            <a href="#" className="dec-ebook-btn">Telecharger gratuitement</a>
+            <EbookVisual />
+            <h3 className="dec-ebook-title">R{'\u00e9'}{'\u00e9'}quilibrer vos hormones naturellement</h3>
+            <a href="#" className="dec-ebook-btn">T{'\u00e9'}l{'\u00e9'}charger gratuitement</a>
           </div>
         </div>
       </section>
@@ -86,23 +104,23 @@ export default function Decouverte() {
       <section className="dec-section">
         <h2 className="dec-section-title">Vous reconnaissez-vous ?</h2>
         <div className="dec-quiz">
-          <div className="dec-quiz-q">
+          <div className="dec-quiz-q" style={{ marginBottom: 20 }}>
             <label className="dec-label">Votre objectif ?</label>
             <BtnGroup options={OBJECTIF_OPTIONS} value={objectif} onChange={setObjectif} />
           </div>
-          <div className="dec-quiz-q">
-            <label className="dec-label">Vous avez deja consulte un nutritionniste ?</label>
+          <div className="dec-quiz-q" style={{ marginBottom: 20 }}>
+            <label className="dec-label">Vous avez d{'\u00e9'}j{'\u00e0'} consult{'\u00e9'} un nutritionniste ?</label>
             <BtnGroup options={DEJA_OPTIONS} value={dejaConsulte} onChange={setDejaConsulte} />
           </div>
-          <div className="dec-quiz-q">
-            <label className="dec-label">Vous etes base ou ?</label>
+          <div className="dec-quiz-q" style={{ marginBottom: 20 }}>
+            <label className="dec-label">Vous {'\u00ea'}tes bas{'\u00e9'}(e) o{'\u00f9'} ?</label>
             <BtnGroup options={LIEU_OPTIONS} value={lieu} onChange={setLieu} />
           </div>
           <div className="dec-quiz-fields">
             <input
               className="dec-input"
               type="text"
-              placeholder="Prenom"
+              placeholder="Pr{'\u00e9'}nom"
               value={prenom}
               onChange={e => setPrenom(e.target.value)}
             />
@@ -115,7 +133,7 @@ export default function Decouverte() {
             />
           </div>
           <button className="dec-cta dec-cta-full" onClick={handleRdv}>
-            Je veux un RDV decouverte
+            Je veux un RDV d{'\u00e9'}couverte {'\u2192'}
           </button>
         </div>
       </section>
