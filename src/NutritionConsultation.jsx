@@ -565,22 +565,38 @@ function getLearningInsights() {
 
 // ─── PDF VALIDATION & CLEANUP (body nutrition uniquement, pas de cover) ───
 
-function validatePlanForPDF(planText) {
+function validatePlanForPDF(planText, planScore, { isFollowup = false } = {}) {
   const errors = [];
   const text = (planText || '').toLowerCase();
 
-  // Placeholders / incomplete content
-  const placeholders = ['[a completer]', '[todo]', '[placeholder]', '[insert', '...a definir', 'lorem ipsum'];
-  for (const ph of placeholders) {
-    if (text.includes(ph)) errors.push(`Placeholder detecte : "${ph}"`);
+  // Hard fail from scoring blocks export
+  if (planScore?.hasHardFail) {
+    errors.push(...planScore.hardFails.map(h => `Echec critique : ${h}`));
   }
 
-  // Minimum content length (body nutrition, pas la cover)
-  if ((planText || '').trim().length < 200) {
-    errors.push('Contenu trop court pour un plan complet');
+  // Placeholders
+  const placeholderPatterns = [
+    /\[a completer\]/i, /\[todo\]/i, /\[placeholder\]/i, /\[insert/i,
+    /\.\.\.a definir/i, /lorem ipsum/i, /\[\.{3,}\]/,
+  ];
+  for (const pat of placeholderPatterns) {
+    if (pat.test(text)) errors.push(`Placeholder detecte : ${pat.source}`);
   }
 
-  // Duplicate section headings (body sections only)
+  // Lazy/vague content (AI sometimes outputs filler)
+  const lazyPhrases = ['menus adaptes', 'routine optimisee', 'selon vos besoins', 'a personnaliser selon'];
+  const lazyFound = lazyPhrases.filter(p => text.includes(p));
+  if (lazyFound.length >= 2) {
+    errors.push(`Contenu trop vague (${lazyFound.join(', ')})`);
+  }
+
+  // Minimum content length
+  const minLength = isFollowup ? 100 : 200;
+  if ((planText || '').trim().length < minLength) {
+    errors.push('Contenu trop court');
+  }
+
+  // Duplicate section headings
   const headings = (planText || '').match(/^#{1,3}\s+.+$/gm) || [];
   const headingTexts = headings.map(h => h.replace(/^#+\s+/, '').trim().toLowerCase());
   const seen = new Set();
@@ -590,11 +606,23 @@ function validatePlanForPDF(planText) {
   }
 
   // Supplement timing contradictions
-  if (/fer\b/.test(text) && /fer.*soir|soir.*fer/i.test(text) && !/jamais.*fer.*soir/i.test(text)) {
-    errors.push('Supplement : fer mentionne le soir (doit etre matin a jeun)');
+  if (/\bfer\b/.test(text) && /fer.*soir|soir.*fer/i.test(text) && !/jamais.*fer.*soir|eviter.*fer.*soir/i.test(text)) {
+    errors.push('Supplement : fer mentionne le soir');
   }
-  if (/coq10.*soir|soir.*coq10/i.test(text) && !/jamais.*soir/i.test(text)) {
-    errors.push('Supplement : CoQ10 mentionne le soir (stimulant)');
+  if (/coq10.*soir|soir.*coq10/i.test(text) && !/jamais.*soir|eviter.*soir/i.test(text)) {
+    errors.push('Supplement : CoQ10 mentionne le soir');
+  }
+
+  // Supplement coherence: if tableau horaire exists, check it doesn't contradict the text
+  const hasTableau = /tableau horaire/i.test(text);
+  const hasSupplementSection = /supplements?\s*recommand/i.test(text);
+  if (hasTableau && hasSupplementSection) {
+    // Check for supplements in tableau but not in text body (or vice versa)
+    const tableauSection = text.slice(text.indexOf('tableau horaire'));
+    const suppSection = text.slice(text.indexOf('supplement'), text.indexOf('tableau horaire') > 0 ? text.indexOf('tableau horaire') : undefined);
+    if (tableauSection.includes('magnesium') && !suppSection.includes('magnesium')) {
+      errors.push('Incoherence : magnesium dans le tableau mais absent des recommandations');
+    }
   }
 
   return { valid: errors.length === 0, errors };
@@ -603,10 +631,10 @@ function validatePlanForPDF(planText) {
 function cleanPlanForPDF(planText) {
   let text = planText || '';
 
-  // Remove audit section (internal, not for client PDF)
+  // Remove audit section (internal)
   text = text.replace(/\n---\n\nAUDIT DE COHERENCE :[\s\S]*$/, '');
 
-  // Remove cover/branding elements that may leak from AI output
+  // Remove cover/branding that may leak from AI
   text = text.replace(/^PLAN NUTRITION(?:NEL)?\s*PERSONNALIS[EÉ]?\s*$/gmi, '');
   text = text.replace(/^PROTOCOLE NUTRITIONNEL.*$/gmi, '');
   text = text.replace(/^Anissa Deroubaix.*$/gmi, '');
@@ -616,18 +644,19 @@ function cleanPlanForPDF(planText) {
   // Remove markdown fences
   text = text.replace(/```[\s\S]*?```/g, '');
 
+  // Normalize dashes and bullets
+  text = text.replace(/^[–—]\s/gm, '- ');
+
   // Clean excessive blank lines (3+ → 2)
   text = text.replace(/\n{3,}/g, '\n\n');
 
-  // Remove leading/trailing whitespace per line
+  // Trim lines
   text = text.split('\n').map(l => l.trimEnd()).join('\n').trim();
 
   return text;
 }
 
-function structurePlanSections(planText, supplementsText) {
-  // Structure le body nutrition en sections (sans cover)
-  // Compatible avec assemblage apres la cover existante
+function structurePlanSections(planText, supplementsText, { isFollowup = false } = {}) {
   const sections = [];
   const text = cleanPlanForPDF(planText);
   const lines = text.split('\n');
@@ -639,14 +668,15 @@ function structurePlanSections(planText, supplementsText) {
     if (currentTitle || currentContent.length > 0) {
       const content = currentContent.join('\n').trim();
       if (content) {
-        sections.push({ title: currentTitle || 'Introduction', content });
+        sections.push({ title: currentTitle || 'Introduction', content, type: classifySection(currentTitle) });
       }
     }
     currentContent = [];
   };
 
   for (const line of lines) {
-    const headerMatch = line.match(/^#{1,3}\s+(.+)/) || (line === line.toUpperCase() && line.trim().length > 5 && line.trim().length < 80 ? [null, line.trim()] : null);
+    const headerMatch = line.match(/^#{1,3}\s+(.+)/) ||
+      (line === line.toUpperCase() && line.trim().length > 5 && line.trim().length < 80 ? [null, line.trim()] : null);
     if (headerMatch) {
       flushSection();
       currentTitle = headerMatch[1].trim();
@@ -656,15 +686,61 @@ function structurePlanSections(planText, supplementsText) {
   }
   flushSection();
 
-  // Add supplements as separate section if present
+  // Add supplements as separate section
   if (supplementsText?.trim()) {
     sections.push({
       title: 'Supplements recommandes',
       content: cleanPlanForPDF(supplementsText),
+      type: 'supplements',
     });
   }
 
   return sections;
+}
+
+function classifySection(title) {
+  const t = (title || '').toLowerCase();
+  if (/profil|analyse|bilan|metabol/i.test(t)) return 'analyse';
+  if (/principe|nutritionnel|approche/i.test(t)) return 'principes';
+  if (/semaine|plan.*alimentaire|menu|repas|lundi|mardi/i.test(t)) return 'plan';
+  if (/suppl[eé]ment|compl[eé]ment|tableau horaire/i.test(t)) return 'supplements';
+  if (/conseil|pratique|hydratation|astuce|meal.?prep/i.test(t)) return 'conseils';
+  if (/suivi|progression|ajustement|bilan.*semaine/i.test(t)) return 'suivi';
+  if (/coach|benoit|note/i.test(t)) return 'notes_coach';
+  return 'other';
+}
+
+// Body PDF preview component (body nutrition uniquement, pas de cover)
+function NutritionPdfBody({ sections, isFollowup }) {
+  if (!sections || sections.length === 0) return null;
+
+  const sectionOrder = isFollowup
+    ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
+    : ['analyse', 'principes', 'plan', 'supplements', 'conseils', 'notes_coach', 'other'];
+
+  const sorted = [...sections].sort((a, b) => {
+    const ia = sectionOrder.indexOf(a.type);
+    const ib = sectionOrder.indexOf(b.type);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  return (
+    <div style={{ background: '#F5F2EC', color: '#1A2E1F', borderRadius: 10, padding: '20px 24px', marginTop: 12, fontSize: '.85rem', lineHeight: 1.6 }}>
+      <div style={{ fontSize: '.72rem', color: '#4A4A42', marginBottom: 12, fontStyle: 'italic' }}>
+        Apercu body PDF nutrition (page 2+)
+      </div>
+      {sorted.map((sec, i) => (
+        <div key={i} style={{ marginBottom: 16 }}>
+          <h4 style={{ color: '#1A2E1F', fontSize: '.9rem', fontWeight: 700, borderBottom: '1.5px solid rgba(26,46,31,.15)', paddingBottom: 4, marginBottom: 8 }}>
+            {sec.title}
+          </h4>
+          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0, color: '#4A4A42', fontSize: '.82rem' }}>
+            {sec.content}
+          </pre>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const INITIAL_CONSULTATION = {
@@ -799,6 +875,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [genError, setGenError] = useState('');
   const [autoCorrected, setAutoCorrected] = useState(false);
   const [pdfError, setPdfError] = useState('');
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -1602,6 +1679,23 @@ ${suppText}`;
           {genError && <div className="error-msg" style={{ marginTop: 12 }}>{genError}</div>}
           {pdfError && <div className="error-msg" style={{ marginTop: 12, background: 'rgba(212,92,76,.08)', padding: '10px 14px', borderRadius: 8, fontSize: '.82rem' }}>{pdfError}</div>}
 
+          {consultation.nutrition_plan && !generating && (
+            <button
+              className="btn btn-anissa-secondary"
+              style={{ marginTop: 8, fontSize: '.78rem', padding: '8px 16px' }}
+              onClick={() => setShowPdfPreview(p => !p)}
+            >
+              {showPdfPreview ? 'Masquer apercu PDF' : 'Apercu body PDF'}
+            </button>
+          )}
+
+          {showPdfPreview && consultation.nutrition_plan && (
+            <NutritionPdfBody
+              sections={structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup })}
+              isFollowup={isFollowup}
+            />
+          )}
+
           {generating && (
             <div className="loading" style={{ padding: '30px 20px' }}>
               <div className="loading-spinner" />
@@ -1639,21 +1733,16 @@ ${suppText}`;
               onExportPDF={(plan, supplements, recipes) => {
                 setPdfError('');
 
-                // Block on hard fail
+                // Score + validate content (body uniquement)
                 const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
-                if (currentScore.hasHardFail) {
-                  setPdfError('Export bloque : le plan contient un echec critique (' + currentScore.hardFails.join(', ') + '). Corrigez avant d\'exporter.');
-                  return;
-                }
-
-                // Validate content
-                const validation = validatePlanForPDF(plan);
+                const fullText = (plan || '') + '\n' + (supplements || '');
+                const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
                 if (!validation.valid) {
                   setPdfError('Export bloque : ' + validation.errors.join(' | '));
                   return;
                 }
 
-                // Clean and export
+                // Clean and export (body nutrition, cover generee separement)
                 const cleanedPlan = cleanPlanForPDF(plan);
                 const cleanedSupplements = cleanPlanForPDF(supplements);
                 exportConsultationPDF({
@@ -1666,6 +1755,8 @@ ${suppText}`;
                   recipes,
                   notesForCoach: consultation.notes_for_coach,
                   date: new Date().toISOString(),
+                  isFollowup,
+                  followupData: isFollowup ? followupData : null,
                 }, client);
               }}
               onExportCover={(coverFields) => {
