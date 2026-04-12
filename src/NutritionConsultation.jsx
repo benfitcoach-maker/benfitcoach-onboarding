@@ -1292,6 +1292,68 @@ function buildLabSectionForPlan(labResults) {
   return lines.join('\n');
 }
 
+// ─── CLINICAL SUMMARY ───
+
+function buildClinicalSummary(form, { mgdSymptoms, labAnalysis, isFollowup, followupWeek } = {}) {
+  const lines = ['--- SYNTHESE CLINIQUE INTERNE (orientation IA) ---', ''];
+  const f = form || {};
+
+  // Context
+  if (isFollowup) {
+    lines.push(`Contexte : consultation de suivi, semaine ${followupWeek || '?'}/4.`);
+  } else {
+    lines.push('Contexte : premiere consultation, construction du plan nutritionnel complet.');
+  }
+
+  // Objective
+  const objectif = f.objectifPrincipalNutrition || f.objectifPrincipal || '';
+  if (objectif) {
+    lines.push(`Objectif principal : ${objectif}.`);
+  }
+
+  // Clinical priority
+  const priorities = [];
+  if (f.pathologies && f.pathologies.trim()) priorities.push('pathologie (' + f.pathologies.trim().slice(0, 60) + ')');
+  const symptoms = mgdSymptoms || [];
+  if (symptoms.includes('digestion') || symptoms.includes('bloating')) priorities.push('digestion');
+  if (symptoms.includes('fatigue')) priorities.push('energie');
+  if (symptoms.includes('cravings')) priorities.push('comportement alimentaire');
+  if (symptoms.includes('stress') || symptoms.includes('sleep')) priorities.push('axe stress/sommeil');
+  if (priorities.length > 0) {
+    lines.push(`Priorite clinique : ${priorities.slice(0, 3).join(' > ')}.`);
+  }
+
+  // Dominant symptoms (max 5)
+  if (symptoms.length > 0) {
+    lines.push(`Symptomes dominants : ${symptoms.slice(0, 5).map(s => s.replace(/_/g, ' ')).join(', ')}.`);
+  }
+
+  // Lab signals (max 3)
+  if (labAnalysis && labAnalysis.signals && labAnalysis.signals.length > 0) {
+    const labSignals = labAnalysis.adjustments.slice(0, 3).map(a => a.label);
+    lines.push(`Signaux biologiques : ${labSignals.join(', ')}.`);
+  }
+
+  // Expected strategy (max 4)
+  lines.push('');
+  lines.push('Strategie nutritionnelle attendue :');
+  if (isFollowup) {
+    lines.push('- Ajustements progressifs bases sur le feedback client');
+    if (symptoms.includes('digestion')) lines.push('- Simplifier si digestion instable');
+    if (labAnalysis?.signals?.length > 0) lines.push('- Integrer les adaptations biologiques');
+    lines.push('- Ne pas reecrire le plan complet, ajuster');
+  } else {
+    lines.push('- Plan structure et applicable');
+    if (f.allergies && f.allergies.trim()) lines.push('- Exclure strictement : ' + f.allergies.trim().slice(0, 80));
+    if (symptoms.includes('digestion')) lines.push('- Privilegier aliments neutres et digestibles');
+    if (symptoms.includes('fatigue') || (labAnalysis?.signals || []).includes('low_iron_status')) lines.push('- Optimiser apports en fer, B12, vitamine D');
+    if (symptoms.includes('cravings') || (labAnalysis?.signals || []).includes('glycemic_dysregulation')) lines.push('- Stabiliser la glycemie (IG bas, fibres, proteines)');
+    if (f.frequenceSport && f.frequenceSport !== 'Jamais') lines.push('- Adapter selon activite physique');
+  }
+
+  return lines.join('\n');
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -1598,10 +1660,21 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     // Add lab results interpretation if available
     const labData = consultation.lab_results || {};
     const hasLabData = Object.values(labData).some(v => v !== '' && v != null);
+    const labAnalysis = hasLabData ? analyzeLabResults(labData) : null;
     if (hasLabData) {
       const labSection = buildLabSectionForPlan(labData);
       if (labSection) parts.push(labSection);
     }
+
+    // Clinical summary (orientation for AI)
+    const mgdSymptoms = detectSymptomsFromForm(form);
+    parts.push('');
+    parts.push(buildClinicalSummary(form, {
+      mgdSymptoms,
+      labAnalysis: labAnalysis?.signals?.length > 0 ? labAnalysis : null,
+      isFollowup,
+      followupWeek,
+    }));
 
     parts.push('');
     parts.push(`Genere un plan nutrition personnalise complet sur 4 semaines avec variete, listes de courses, et alternatives naturelles avant les complements.`);
