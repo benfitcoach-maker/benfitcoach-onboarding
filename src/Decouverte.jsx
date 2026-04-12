@@ -131,8 +131,11 @@ export default function Decouverte() {
               onChange={e => setEmail(e.target.value)}
             />
           </div>
-          <button className="dec-cta dec-cta-full" onClick={() => window.open('https://www.instagram.com/anissa.nutri.nyon', '_blank')}>
-            {'\u00c9'}crire {'\u00e0'} Anissa sur Instagram {'\u2192'}
+          <button className="dec-cta dec-cta-full" onClick={() => {
+            const msg = `Bonjour Anissa, je souhaite \u00eatre contact\u00e9e. Pr\u00e9nom : ${prenom || '(non pr\u00e9cis\u00e9)'}. Objectif : ${objectif || '(non pr\u00e9cis\u00e9)'}. D\u00e9j\u00e0 consult\u00e9 un nutritionniste : ${dejaConsulte || '(non pr\u00e9cis\u00e9)'}. R\u00e9gion : ${lieu || '(non pr\u00e9cis\u00e9)'}. Email : ${email || '(non pr\u00e9cis\u00e9)'}`;
+            window.open(`https://wa.me/41766210205?text=${encodeURIComponent(msg)}`, '_blank');
+          }}>
+            Contacter Anissa sur WhatsApp {'\u2192'}
           </button>
         </div>
       </section>
