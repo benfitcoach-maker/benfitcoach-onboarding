@@ -132,7 +132,7 @@ export default function Decouverte() {
             />
           </div>
           <button className="dec-cta dec-cta-full" onClick={handleSendMail}>
-            Je veux mes ressources gratuites {'\u2192'}
+            {'\u00ca'}tre contact{'\u00e9'}e par Anissa {'\u2192'}
           </button>
         </div>
       </section>
