@@ -72,7 +72,7 @@ export default function Decouverte() {
       {/* Duo */}
       <section className="dec-section">
         <div className="dec-duo">
-          En synergie avec Beno{'\u00ee'}t Deroubaix, coach sportif &amp; massoth{'\u00e9'}rapeute — un accompagnement sport + nutrition unique {'\u00e0'} Nyon.
+          En synergie avec Benoit Deroubaix, coach sportif &amp; massoth{'\u00e9'}rapeute — un accompagnement sport + nutrition unique {'\u00e0'} Nyon.
         </div>
       </section>
 
@@ -120,7 +120,7 @@ export default function Decouverte() {
             <input
               className="dec-input"
               type="text"
-              placeholder="Pr{'\u00e9'}nom"
+              placeholder="Prénom"
               value={prenom}
               onChange={e => setPrenom(e.target.value)}
             />
