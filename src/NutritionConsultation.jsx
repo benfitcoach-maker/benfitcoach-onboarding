@@ -293,13 +293,13 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // Steps differ based on followup status
   const stepLabels = isFollowup
-    ? ['Resume client', 'Suivi & Progression', 'Observations', 'Plan nutrition', 'Notes pour Benoit']
-    : ['Resume client', 'Observations', 'Plan nutrition', 'Notes pour Benoit'];
+    ? ['Resume client', 'Suivi & Progression', 'Plan nutrition', 'Notes pour Benoit']
+    : ['Resume client', 'Plan nutrition', 'Notes pour Benoit'];
 
   const totalSteps = stepLabels.length;
 
   const [step, setStep] = useState(() => {
-    if (initialConsultation?.nutrition_plan) return isFollowup ? 4 : 3;
+    if (initialConsultation?.nutrition_plan) return isFollowup ? 3 : 2;
     return 1;
   });
   const [consultation, setConsultation] = useState(() => {
@@ -367,10 +367,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // Map step index to content type based on followup
   const getStepType = (s) => {
     if (isFollowup) {
-      const map = { 1: 'summary', 2: 'followup', 3: 'observations', 4: 'plan', 5: 'notes' };
+      const map = { 1: 'summary', 2: 'followup', 3: 'plan', 4: 'notes' };
       return map[s];
     }
-    const map = { 1: 'summary', 2: 'observations', 3: 'plan', 4: 'notes' };
+    const map = { 1: 'summary', 2: 'plan', 3: 'notes' };
     return map[s];
   };
 
@@ -880,15 +880,22 @@ ${suppText}`;
             </div>
             <div className="nutrition-summary-item full">
               <label>Objectifs</label>
-              <div>{
-                [
+              <textarea
+                className="nutrition-summary-textarea"
+                value={consultation.objectifs_display || [
+                  form.objectifPrincipalNutrition,
                   form.objectifPrincipal,
                   form.objectifSecondaire,
                   form.objectif,
                   (form.symptomesObjectifs || []).join(', '),
                   form.motivationProfonde ? `Motivation : ${form.motivationProfonde}` : '',
-                ].filter(Boolean).join(' | ') || 'Non renseigne'
-              }</div>
+                  form.pourquoiMaintenant ? `Pourquoi maintenant : ${form.pourquoiMaintenant}` : '',
+                ].filter(Boolean).join(' | ') || ''}
+                onChange={(e) => updateField('objectifs_display', e.target.value)}
+                placeholder="Objectifs du client..."
+                rows={2}
+                style={{ width: '100%', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 8, padding: '8px 10px', color: '#d4c9a8', fontSize: '.85rem', fontFamily: 'inherit', resize: 'vertical' }}
+              />
             </div>
             <div className="nutrition-summary-item full">
               <label>Habitudes alimentaires</label>
@@ -924,6 +931,17 @@ ${suppText}`;
               }</div>
             </div>
           </div>
+
+          <div className="nutrition-checkboxes" style={{ marginTop: 16 }}>
+            <label className="nutrition-checkbox">
+              <input type="checkbox" checked={consultation.blood_test_done} onChange={(e) => updateField('blood_test_done', e.target.checked)} />
+              <span>Bilan sanguin effectue</span>
+            </label>
+            <label className="nutrition-checkbox">
+              <input type="checkbox" checked={consultation.dna_test_done} onChange={(e) => updateField('dna_test_done', e.target.checked)} />
+              <span>Analyse ADN effectuee</span>
+            </label>
+          </div>
         </div>
       )}
 
@@ -937,45 +955,7 @@ ${suppText}`;
         />
       )}
 
-      {/* Step: Observations */}
-      {currentStepType === 'observations' && (
-        <div className="nutrition-form-section">
-          <h3>Observations</h3>
-          <div className="field full-width">
-            <label>Observations generales</label>
-            <SmartTextarea
-              value={consultation.observations}
-              onChange={(e) => updateField('observations', e.target.value)}
-              placeholder="Notez vos observations suite a l'entretien avec le client..."
-              rows={4}
-            />
-          </div>
-
-          <div className="nutrition-checkboxes">
-            <label className="nutrition-checkbox">
-              <input type="checkbox" checked={consultation.blood_test_done} onChange={(e) => updateField('blood_test_done', e.target.checked)} />
-              <span>Bilan sanguin effectue</span>
-            </label>
-            <label className="nutrition-checkbox">
-              <input type="checkbox" checked={consultation.dna_test_done} onChange={(e) => updateField('dna_test_done', e.target.checked)} />
-              <span>Analyse ADN effectuee</span>
-            </label>
-          </div>
-
-          <div className="field full-width" style={{ marginTop: 16 }}>
-            <label>Observations nutritionnelles</label>
-            <SmartTextarea
-              value={consultation.nutritional_observations}
-              onChange={(e) => updateField('nutritional_observations', e.target.value)}
-              placeholder="Carences observees, sensibilites identifiees, type de metabolisme, observations genetiques..."
-              rows={5}
-            />
-          </div>
-          <p className="nutrition-nlpd-notice">
-            Conformite nLPD Suisse : ne stockez pas les valeurs medicales brutes. Notez uniquement vos observations et conclusions nutritionnelles.
-          </p>
-        </div>
-      )}
+      {/* Observations step removed — data auto-populated from client questionnaire and used in AI prompt */}
 
       {/* Step: Nutrition Plan */}
       {currentStepType === 'plan' && (
