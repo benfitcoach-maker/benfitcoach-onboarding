@@ -39,6 +39,7 @@ function QuestionnaireClient({ clientId }) {
     taille: '',
     email: '',
     telephone: '',
+    profession: '',
     pathologies: '',
     traitements: '',
     allergies: '',
@@ -84,6 +85,7 @@ function QuestionnaireClient({ clientId }) {
           taille: f.taille || '',
           email: f.email || '',
           telephone: f.telephone || '',
+          profession: f.profession || '',
           pathologies: f.pathologies || '',
           traitements: f.traitements || '',
           allergies: f.allergies || '',
@@ -131,6 +133,7 @@ function QuestionnaireClient({ clientId }) {
       taille: form.taille,
       email: form.email,
       telephone: form.telephone,
+      profession: form.profession,
       pathologies: form.pathologies,
       traitements: form.traitements,
       allergies: form.allergies,
@@ -336,6 +339,10 @@ function QuestionnaireClient({ clientId }) {
                 <label className="q-label">Telephone</label>
                 <input className="q-input" type="tel" value={form.telephone} onChange={e => update('telephone', e.target.value)} />
               </div>
+            </div>
+            <div className="q-field">
+              <label className="q-label">Profession</label>
+              <input className="q-input" value={form.profession} onChange={e => update('profession', e.target.value)} />
             </div>
           </div>
         )}
