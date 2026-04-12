@@ -7,6 +7,7 @@ import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF } from './nutritionPdf';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
+import { getMGDRecommendations } from './mgdAnalysisMatrix';
 
 // ─── PROMPT MODULES (composition conditionnelle) ───
 
