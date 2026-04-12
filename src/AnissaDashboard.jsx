@@ -2,19 +2,26 @@ import { useState } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient } from './store';
 
-function CopyLinkButton({ clientId }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = (e) => {
+function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
+  const handleSend = (e) => {
     e.stopPropagation();
     const url = `${window.location.origin}/questionnaire/${clientId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    const prenom = clientPrenom || '';
+    const subject = encodeURIComponent('Votre questionnaire pre-consultation — Anissa Deroubaix');
+    const body = encodeURIComponent(
+      `Bonjour ${prenom},\n\n` +
+      `Je vous remercie de votre confiance.\n\n` +
+      `Avant notre consultation, je vous invite a remplir ce court questionnaire (5 minutes).\n` +
+      `Cela me permettra de mieux preparer notre rendez-vous et de personnaliser votre accompagnement.\n\n` +
+      `Remplir mon questionnaire :\n${url}\n\n` +
+      `Ce questionnaire est strictement confidentiel.`
+    );
+    const to = clientEmail ? encodeURIComponent(clientEmail) : '';
+    window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_self');
   };
   return (
-    <button className={`q-copy-link-btn ${copied ? 'q-copied' : ''}`} onClick={handleCopy}>
-      {copied ? 'Copie !' : 'Lien questionnaire'}
+    <button className="q-copy-link-btn" onClick={handleSend}>
+      Envoyer questionnaire
     </button>
   );
 }
@@ -113,7 +120,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               {consultations.length} consultation{consultations.length > 1 ? 's' : ''}
             </button>
           )}
-          <CopyLinkButton clientId={client.id} />
+          <SendQuestionnaireButton clientId={client.id} clientEmail={client.form?.email} clientPrenom={client.prenom || client.form?.prenom} />
           {isOwn && (
             <button className="btn btn-xs btn-danger" onClick={handleDelete}>x</button>
           )}
