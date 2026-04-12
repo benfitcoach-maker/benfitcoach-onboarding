@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions } from './store';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -1361,6 +1361,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [analysesError, setAnalysesError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
+  const editorGetDataRef = useRef(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
   const [showVersions, setShowVersions] = useState(false);
 
@@ -2234,15 +2235,21 @@ ${suppText}`;
             );
           })()}
 
-          {showPdfPreview && consultation.nutrition_plan && (
-            <NutritionPdfBody
-              sections={structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup })}
-              isFollowup={isFollowup}
-              clientName={form.prenom || client?.prenom || 'Client'}
-              date={formatDate(new Date().toISOString())}
-              followupWeek={followupWeek}
-            />
-          )}
+          {showPdfPreview && consultation.nutrition_plan && (() => {
+            // Use edited content from NutritionEditor if available, otherwise raw state
+            const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+            const finalPlan = edited ? cleanPlanForPDF(edited.plan) : cleanPlanForPDF(consultation.nutrition_plan);
+            const finalSupp = edited ? cleanPlanForPDF(edited.supplements) : cleanPlanForPDF(consultation.supplements);
+            return (
+              <NutritionPdfBody
+                sections={structurePlanSections(finalPlan, finalSupp, { isFollowup })}
+                isFollowup={isFollowup}
+                clientName={form.prenom || client?.prenom || 'Client'}
+                date={formatDate(new Date().toISOString())}
+                followupWeek={followupWeek}
+              />
+            );
+          })()}
 
           {generating && (
             <div className="loading" style={{ padding: '30px 20px' }}>
@@ -2251,17 +2258,22 @@ ${suppText}`;
             </div>
           )}
 
-          {consultation.nutrition_plan && (
-            <PlanQualityScore
-              score={scorePlanQuality(
-                consultation.nutrition_plan,
-                consultation.supplements,
-                { ...form, _weeklyFeedback: weeklyFeedback },
-                { isFollowup, followupWeek }
-              )}
-              autoCorrected={autoCorrected}
-            />
-          )}
+          {consultation.nutrition_plan && (() => {
+            const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+            const scorePlan = edited ? edited.plan : consultation.nutrition_plan;
+            const scoreSupp = edited ? edited.supplements : consultation.supplements;
+            return (
+              <PlanQualityScore
+                score={scorePlanQuality(
+                  scorePlan,
+                  scoreSupp,
+                  { ...form, _weeklyFeedback: weeklyFeedback },
+                  { isFollowup, followupWeek }
+                )}
+                autoCorrected={autoCorrected}
+              />
+            );
+          })()}
 
           {consultation.nutrition_plan ? (
             <NutritionEditor
@@ -2270,6 +2282,7 @@ ${suppText}`;
               recipesText={consultation.recipes}
               form={form}
               client={client}
+              getEditedDataRef={editorGetDataRef}
               onSave={(plan, supplements, recipes) => {
                 setConsultation(prev => ({
                   ...prev,

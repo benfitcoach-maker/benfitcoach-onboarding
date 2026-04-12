@@ -539,7 +539,7 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, getEditedDataRef }) {
   const [sections, setSections] = useState(() =>
     parsePlanToSections(planText, supplementsText, recipesText)
   );
@@ -667,6 +667,11 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
       recipes: recSection?.content || '',
     };
   }, [readAllSections]);
+
+  // Expose getEditedData to parent via ref callback
+  useEffect(() => {
+    if (getEditedDataRef) getEditedDataRef.current = getEditedData;
+  }, [getEditedData, getEditedDataRef]);
 
   const handleSave = () => {
     const d = getEditedData();
