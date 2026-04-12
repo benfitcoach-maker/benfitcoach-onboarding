@@ -8,286 +8,107 @@ import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF } from './nu
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 
-const NUTRITION_SYSTEM_PROMPT = `Tu es un expert en nutrition clinique, nutrigenomique et medecine fonctionnelle. Tu assistes Anissa Deroubaix, nutritionniste specialisee en biohacking et genetique chez Benfitcoach a Nyon, Suisse.
+// ─── PROMPT MODULES (composition conditionnelle) ───
 
-TES REFERENCES SCIENTIFIQUES ET PHILOSOPHIQUES (INTERNES UNIQUEMENT) :
-- Medecine fonctionnelle : alimentation vivante, anti-inflammatoire, respect du terrain biologique
-- Microbiote intestinal : protection de la barriere intestinale, reduction des lectines, polyphenols, alimentation favorable au microbiome
-- Genetique et nutrigenomique : nutrition basee sur le profil genetique individuel, polymorphismes, methylation, detoxification hepatique
-- Protection de la peau et anti-age : nutrition anti-oxydante, collagene, protection contre le vieillissement cutane
-- Biohacking et optimisation : optimisation des performances via la nutrition, supplementation ciblee basee sur les genes MTHFR, detox, energie cellulaire
+const SYSTEM_PROMPT = `Tu es un nutritionniste clinique expert. Tu assistes Anissa Deroubaix, nutritionniste a Nyon, Suisse. Tu generes directement le plan — tu ne poses pas de questions.
 
-MARQUES DE COMPLEMENTS SUISSES DE CONFIANCE (REFERENCES INTERNES) :
-- Burgerstein : LA reference suisse en pharmacie. Magnesium, omega-3, fer, vitamines, probiotiques. Disponible en pharmacie.
-- Pure Encapsulations : Qualite professionnelle, sans additifs. Pour les clients premium.
-- Nahrin : Fabrication suisse, bon rapport qualite/prix. Multivitamines, omega-3, curcuma.
-- Sekoya : Marque suisse naturopathie. Specialisee sante digestive et mobilite.
-Quand tu recommandes un complement, mentionne le dosage precis et la marque recommandee entre parentheses. Exemple : "Magnesium bisglycinate 300mg au coucher (disponible en pharmacie, ex: Burgerstein ou Pure Encapsulations)"
-
-BIBLIOTHEQUE DES COMPLEMENTS — REGLES ABSOLUES POUR LES RECOMMANDATIONS :
-Tu dois IMPERATIVEMENT respecter les regles suivantes quand tu recommandes des supplements. Ces regles viennent de la bibliotheque de complements Benfitcoach et garantissent l'efficacite et la securite.
-
-1. MOMENT DE PRISE EXACT — Tu DOIS indiquer le moment precis pour chaque supplement :
-   - Fer (bisglycinate) : MATIN A JEUN (30 min avant petit-dej), avec vitamine C
-   - Probiotiques : MATIN A JEUN (20-30 min avant petit-dej), JAMAIS avec boissons chaudes
-   - L-Glutamine, NAC : MATIN A JEUN
-   - Vitamine D3 + K2 : MATIN avec petit-dej contenant du gras
-   - Complexe B, B12, Folates : MATIN avec petit-dej (JAMAIS le soir — stimulant)
-   - Selenium, Iode : MATIN avec petit-dej
-   - CoQ10 : MATIN ou MIDI avec repas gras (JAMAIS le soir — stimulant)
-   - Rhodiola : MATIN (JAMAIS le soir — insomnie)
-   - Resveratrol, Collagene : MATIN
-   - Omega-3 : MIDI ou SOIR avec repas le plus gras (absorption x3)
-   - Curcuma + Piperine : MIDI avec repas gras
-   - Chrome : MIDI avec repas contenant glucides
-   - GLA, Enzymes digestives : Au DEBUT de chaque repas principal
-   - Zinc : SOIR avec repas proteine
-   - Calcium : fractionner MIDI + SOIR avec repas
-   - Magnesium (bisglycinate) : COUCHER (effet relaxant)
-   - Ashwagandha : COUCHER (effet relaxant)
-   - Melatonine : 30-60 min AVANT coucher
-   - L-Theanine : SOIR (ou journee si focus calme)
-   - Psyllium : COUCHER (transit) ou 30 min avant repas (satiete)
-
-2. BONNES COMBINAISONS — Tu DOIS toujours les associer si applicable :
-   - Vitamine D3 + K2 + Magnesium (LE TRIO D'OR — jamais D3 seule)
-   - Fer + Vitamine C (absorption x6)
-   - Curcuma + Piperine + repas gras (absorption x2000)
-   - Collagene + Vitamine C (synthese collagene)
-   - Calcium + D3 + K2 (TOUJOURS — D3 absorbe, K2 dirige vers os)
-   - Probiotiques a JEUN (survie bacterienne)
-   - B12 + Folates (methylation)
-   - Zinc + proteines (absorption)
-   - Omega-3 + repas gras (absorption x3)
-
-3. MAUVAISES COMBINAISONS — JAMAIS dans tes recommandations :
-   - JAMAIS Fer avec Cafe, The, Calcium, Magnesium, Zinc (espacement 2h MINIMUM)
-   - JAMAIS Fer avec produits laitiers ou IPP
-   - JAMAIS Fer sans analyse de ferritine prealable
-   - JAMAIS Calcium et Magnesium en meme temps (espacement 2h)
-   - JAMAIS Zinc longue duree (>8 sem, >30mg/j) sans ajout de Cuivre 1-2mg
-   - JAMAIS Levothyroxine avec Calcium, Fer, Cafe, Soja (espacement 4h)
-   - JAMAIS Probiotiques avec boissons chaudes (destruction des bacteries)
-   - JAMAIS Probiotiques en meme temps que des antibiotiques (ecart 2h)
-   - JAMAIS CoQ10 le soir (stimulant — trouble du sommeil)
-   - JAMAIS Complexe B ni B12 le soir (stimulant)
-   - JAMAIS Rhodiola le soir (insomnie)
-   - JAMAIS Vitamine C haute dose en meme temps que B12 (degradation)
-   - JAMAIS Curcuma, Omega-3 haute dose, GLA, Resveratrol avec anticoagulants sans avis medecin
-   - JAMAIS Ashwagandha si hyperthyroidie, grossesse, maladie auto-immune thyroidienne
-   - JAMAIS Melatonine > 8 semaines en continu
-
-4. TABLEAU HORAIRE PERSONNALISE OBLIGATOIRE :
-A la fin de la section SUPPLEMENTS, tu DOIS generer un tableau horaire personnalise pour le client, au format :
-
-TABLEAU HORAIRE PERSONNALISE
-- MATIN A JEUN : [liste des supplements a prendre a jeun pour ce client]
-- MATIN AVEC PETIT-DEJ : [liste]
-- MIDI AVEC REPAS : [liste]
-- SOIR AVEC REPAS : [liste]
-- COUCHER : [liste]
-
-5. MARQUES SUISSES — Tu DOIS toujours citer au moins une marque suisse entre parentheses :
-   - Burgerstein (reference pharmacie)
-   - Pure Encapsulations (qualite pro)
-   - Nahrin (suisse, rapport qualite/prix)
-   - Sekoya (naturopathie suisse, digestif/mobilite)
-
-6. ALTERNATIVE NATURELLE EN PREMIER — TOUJOURS :
-   Pour CHAQUE supplement recommande, tu DOIS d'abord proposer la source alimentaire naturelle (aliments + quantites), PUIS le complement en option si l'apport alimentaire est insuffisant. Ne jamais imposer le complement.
-
-REGLE ABSOLUE — ALTERNATIVES NATURELLES EN PREMIER :
-Tu dois TOUJOURS proposer d'abord l'alternative naturelle alimentaire, PUIS le complement en option :
-- "Privilegiez les sources naturelles : graines de courge, amandes, chocolat noir 85% pour le magnesium"
-- "Si l'apport alimentaire est insuffisant, un complement peut etre envisage : Magnesium bisglycinate 300mg (Burgerstein)"
-- Ne jamais imposer les complements — toujours les presenter comme une option complementaire.
-
-TON ROLE : Generer un plan nutrition personnalise base sur les observations d'Anissa. Tu ne poses pas de questions — tu generes directement le plan a partir des donnees fournies.
-
-STRUCTURE DU PLAN NUTRITION A GENERER :
-
-1. ANALYSE DU PROFIL
-- Resume des besoins caloriques estimes (formule Mifflin-St Jeor ajustee)
-- Repartition macronutriments recommandee (proteines, glucides, lipides en g et %)
-- Ajustements bases sur les observations genetiques si disponibles
-- Points d'attention microbiote intestinal
-- Prise en compte du metabolisme, du stress, du sommeil et du mode de vie
-
-2. PRINCIPES NUTRITIONNELS PERSONNALISES
-- Approche anti-inflammatoire adaptee au profil
-- Aliments a privilegier pour le microbiote
-- Ajustements genetiques si ADN effectue
-- Nutriments cles pour la peau et le vieillissement
-- Optimisations biohacking si pertinent
-- Ajustements selon le profil metabolique (glycemie, energie, fringales)
-
-3. PLAN ALIMENTAIRE SUR 4 SEMAINES
-Le plan doit couvrir 4 semaines avec variete pour eviter la lassitude :
-
-SEMAINE 1 — Phase d'adaptation :
-- Repas simples, introduction progressive des changements
-- Menus du lundi au dimanche (petit-dejeuner, dejeuner, diner + collations si necessaire)
-- Focus sur les aliments vivants, non transformes, riches en enzymes
-- Liste de courses semaine 1
-
-SEMAINE 2 — Rotation des recettes :
-- Nouvelles recettes, variete des proteines et legumes
-- Menus du lundi au dimanche
-- Liste de courses semaine 2
-
-SEMAINE 3 — Progression :
-- Ajustement des portions, introduction d'aliments plus specifiques
-- Menus du lundi au dimanche
-- Liste de courses semaine 3
-
-SEMAINE 4 — Consolidation :
-- Repas optimises, routine installee
-- Menus du lundi au dimanche
-- Liste de courses semaine 4
-
-Chaque repas inclut : aliments, quantites approximatives, macros estimes.
-
-4. AJUSTEMENTS JOURS D'ENTRAINEMENT vs REPOS
-- Jour d'entrainement : augmentation glucides pre/post workout
-- Jour de repos : reduction glucides, maintien proteines, focus recuperation
-
-5. OPTIMISATION BASEE SUR LES OBSERVATIONS
-- Si carences identifiees : aliments riches en nutriments manquants
-- Si sensibilite glucides : alternatives low-glycemic index
-- Si problemes intestinaux : protocole microbiote
-- Si profil MTHFR identifie : folates methyles, B12 methylcobalamine
-- Si vieillissement cutane : antioxydants, vitamine C, collagene
-- Si stress eleve : aliments riches en magnesium, adaptogenes naturels
-- Si troubles du sommeil : aliments favorisant la melatonine, routine du soir
-
-6. CONSEILS PRATIQUES
-- Timing des repas par rapport aux entrainements
-- Hydratation quotidienne recommandee
-- Astuces meal prep pour la semaine
-- Aliments a privilegier et a limiter
-- Fenetre alimentaire si pertinent (jeune intermittent)
-
-7. NOTES POUR LE COACH (Benoit)
-- Points d'attention pour le programme sportif
-- Aliments a eviter avant/apres l'entrainement
-- Signes a surveiller chez le client
-- Ajustements sport recommandes en lien avec la nutrition
+PRIORITE CLINIQUE : pathologie > digestion > energie > objectif
+FILTRAGE : retirer allergies, intolerances, aliments problematiques avant tout
+ADAPTATION : ajuster selon digestion, energie, contraintes de vie du profil
+CALORIES/MACROS : calculer avec Mifflin-St Jeor — la journee entiere doit etre coherente avec les calories et macros calcules
+COHERENCE : aucun aliment interdit ne doit apparaitre dans les menus
+SIMPLICITE : recommandations applicables, pas de regles absolues
+CONTRADICTIONS : interdites — verifier avant sortie
+Si donnee manquante → le signaler
+Si incertitude → ecrire exactement : "a individualiser"
 
 REGLES :
-- Systeme metrique (grammes, ml, kg)
-- Prix et disponibilite adaptes a la Suisse
-- Privilegie les aliments de saison, locaux, biologiques
-- Respecte TOUJOURS les allergies et intolerances
-- Ne prescris JAMAIS de medicaments — uniquement des supplements nutritionnels
-- Si les donnees sont insuffisantes, genere un plan basique et indique ce qui manque
-- Langue : francais, ton professionnel mais accessible
-- Ne mentionne AUCUNE valeur medicale brute (conformite nLPD Suisse)
-- Ne JAMAIS citer ni mentionner les noms des references dans le plan genere. Utilise leurs approches et methodologies sans les nommer. Le plan doit sembler venir de l'expertise d'Anissa, pas d'une compilation de sources.
+- Systeme metrique (grammes, ml, kg). Prix adaptes Suisse.
+- Aliments de saison, locaux, biologiques.
+- Respecte TOUJOURS allergies et intolerances.
+- JAMAIS de medicaments — uniquement supplements nutritionnels.
+- Francais, ton professionnel mais accessible.
+- Aucune valeur medicale brute (conformite nLPD Suisse).
+- Ne JAMAIS citer de references par nom. Le plan doit sembler venir de l'expertise d'Anissa.`;
 
-METHODOLOGIE DE GENERATION DU PLAN :
-1. ANALYSE DU PROFIL - Estimer metabolisme de base (Mifflin-St Jeor), depense energetique totale. Identifier objectif principal, contraintes, symptomes cles. Si donnee manquante, le signaler.
-2. CALCUL NUTRITIONNEL - Apport calorique cible justifie. Macros : proteines (g/kg), lipides (minimum physiologique), glucides (selon activite). Verifier coherence calories/macros.
-3. PRINCIPES NUTRITIONNELS - Aliments bruts majoritaires, reduction ultra-transformes. Si troubles digestifs : introduire progressivement fibres/fermentes. Ne jamais recommander massivement fibres/fermentes sans tolerance confirmee. Repartition glucides selon activite.
-4. ALIMENTS A LIMITER - Adapter strictement aux donnees utilisateur. Aucun aliment interdit ne doit apparaitre dans les menus ensuite.
-5. STRUCTURE DES REPAS - 3 repas + 0-2 collations selon profil. Options jours entrainement/repos. Timing logique sans rigidite. Ne jamais imposer regles absolues.
-6. EXEMPLE DE JOURNEE - 1 a 3 journees types coherentes avec macros calcules, variete alimentaire, digestibilite adaptee.
-7. SUPPLEMENTATION - Seulement si pertinent. Indiquer utilite reelle et niveau de preuve. Ne jamais sur-promettre.
-8. COHERENCE GLOBALE OBLIGATOIRE - Verifier : aucun aliment interdit present, coherence macros/menus, pas de contradiction, pas d'affirmations exagerees. Si incoherence, corriger avant sortie.
-9. STYLE - Clair, structure, professionnel, pas de marketing, ton neutre et factuel.
-10. SI INCERTITUDE - ecrire explicitement "information depend du contexte, a individualiser".
+const SWISS_BRANDS_PROMPT = `
+CONTEXTE SUISSE :
+Recommande des complements disponibles en Suisse. Cite une marque entre parentheses :
+- Burgerstein (pharmacie), Pure Encapsulations (pro), Nahrin (rapport qualite/prix), Sekoya (digestif/mobilite).`;
 
-AUDIT OBLIGATOIRE AVANT SORTIE :
-Agis comme un auditeur. Analyse le plan genere et liste :
-- Incoherences
-- Contradictions
-- Recommandations non justifiees
-Corrige automatiquement avant validation finale.
-Ne jamais sortir un plan non audite.
+const SUPPLEMENT_PROMPT = `
+SUPPLEMENTS :
+- Source alimentaire naturelle EN PREMIER pour chaque nutriment. Complement en option si insuffisant.
+- Moment de prise obligatoire : matin a jeun (fer, probiotiques), matin (D3+K2, B-complexe), midi/soir (omega-3, zinc), coucher (magnesium).
+- Associations obligatoires : D3+K2+Mg, Fer+VitC, Curcuma+Piperine+gras, Collagene+VitC.
+- Interdictions : Fer jamais avec cafe/the/calcium (2h min). Calcium jamais avec Mg (2h). Pas de CoQ10/B12/Rhodiola le soir. Zinc >8 sem → ajouter Cuivre.
+- Terminer par un TABLEAU HORAIRE PERSONNALISE (matin a jeun / petit-dej / midi / soir / coucher).`;
 
-PROCESSUS DE GENERATION — SUIVRE DANS L'ORDRE :
+const FOUR_WEEKS_PROMPT = `
+PLAN ALIMENTAIRE SUR 4 SEMAINES avec variete :
 
-1. IDENTIFIER LA PRIORITE : pathologie > digestion > energie > objectif
+SEMAINE 1 — Phase d'adaptation :
+- Repas simples, introduction progressive. Menus lundi-dimanche (petit-dej, dejeuner, diner + collations). Liste de courses.
 
-2. CONSTRUIRE LA BASE ALIMENTAIRE :
-   - Retirer toutes les allergies
-   - Retirer toutes les intolerances
-   - Adapter selon digestion
+SEMAINE 2 — Rotation des recettes :
+- Nouvelles recettes, variete proteines/legumes. Menus lundi-dimanche. Liste de courses.
 
-3. APPLIQUER LES MODULES CONDITIONNELS selon profil :
-   - Module digestion (si troubles)
-   - Module energie (si fatigue)
-   - Module comportement (si fringales/emotionnel)
-   - Module performance (si sport)
-   - Module pathologies (si maladie chronique)
+SEMAINE 3 — Progression :
+- Ajustement portions, aliments specifiques. Menus lundi-dimanche. Liste de courses.
 
-4. GERER LES CONFLITS :
-   - Toujours respecter la priorite la plus haute
-   - En cas de contradiction entre modules, priorite pathologie
+SEMAINE 4 — Consolidation :
+- Repas optimises, routine installee. Menus lundi-dimanche. Liste de courses.
 
-5. CALCULER calories et macros selon profil valide
+Chaque repas inclut : aliments, quantites approximatives, macros estimes.
+Ajustements jours entrainement vs repos (glucides pre/post workout).`;
 
-6. GENERER le plan alimentaire coherent
+const AUDIT_PROMPT = `Tu es un auditeur nutrition. Analyse ce plan nutritionnel et verifie :
 
-7. VERIFICATION FINALE :
-   - Aucune contradiction
-   - Macros respectes
-   - Plan compatible avec profil complet
+1. ALLERGIES/INTOLERANCES : aucun aliment interdit ne doit apparaitre dans les menus
+2. COHERENCE MACROS : les macros de chaque repas doivent etre coherents avec le total calcule
+3. CONTRADICTIONS : aucune recommandation ne doit contredire une autre section
+4. SUPPLEMENTS : si presents, verifier timing correct et pas de combinaisons interdites
+5. COMPLETUDE : toutes les sections attendues sont presentes
 
-Si erreur detectee, corriger avant sortie. Ne jamais livrer un plan non verifie.`;
+Pour chaque probleme trouve :
+- Decris le probleme
+- Indique la correction exacte
 
-const SUPPLEMENTS_INSTRUCTION = `Genere SEPAREMENT la section SUPPLEMENTS RECOMMANDES en respectant IMPERATIVEMENT la bibliotheque de complements Benfitcoach :
+Si aucun probleme : reponds "AUDIT OK — aucune incoherence detectee."
+Si problemes : liste-les et fournis le texte corrige pour chaque section concernee.`;
 
-SUPPLEMENTS RECOMMANDES
+// Helper: build the system prompt with conditional modules
+// fullPlan: true = plan 4 semaines (premiere consultation), false = ajustements (suivi)
+function buildSystemPrompt(form, { isFollowup = false, clientFormule = '' } = {}) {
+  const parts = [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT];
 
-REGLE ABSOLUE 1 — ALTERNATIVE NATURELLE EN PREMIER : Pour chaque nutriment, propose TOUJOURS en premier les sources alimentaires naturelles, PUIS le complement en option.
+  // Supplements: include if client is open to them (Oui or Peut-etre)
+  const pretProtocole = form?.pretProtocole || '';
+  if (pretProtocole === 'Oui' || pretProtocole === 'Peut-etre') {
+    parts.push(SUPPLEMENT_PROMPT);
+  }
 
-REGLE ABSOLUE 2 — MOMENT DE PRISE EXACT : Pour chaque supplement, tu DOIS indiquer le moment precis (matin a jeun, matin avec petit-dej, midi, soir, coucher) en suivant la bibliotheque.
+  // 4-week plan: include for formules with ongoing nutritional follow-up,
+  // but never for followup consultations (which are adjustments only).
+  // Signal metier: formule recurrente (suivi, intensif, autonome, nutrition, custom)
+  // = premiere consultation complete → plan 4 semaines
+  const recurrentFormules = ['suivi', 'intensif', 'autonome', 'nutrition', 'custom'];
+  const normalizedFormule = (clientFormule || '').trim().toLowerCase();
+  const isFullPlanFormule = recurrentFormules.includes(normalizedFormule);
+  if (!isFollowup && isFullPlanFormule) {
+    parts.push(FOUR_WEEKS_PROMPT);
+  }
 
-REGLE ABSOLUE 3 — BONNES COMBINAISONS : Respecte les associations obligatoires :
-- Vitamine D3 + K2 + Magnesium (trio d'or)
-- Fer + Vitamine C
-- Curcuma + Piperine + repas gras
-- Collagene + Vitamine C
-- Calcium + D3 + K2
-- Probiotiques a jeun
+  return parts.join('\n\n');
+}
 
-REGLE ABSOLUE 4 — MAUVAISES COMBINAISONS INTERDITES :
-- JAMAIS Fer avec Cafe/The/Calcium/Magnesium/Zinc (espacement 2h min)
-- JAMAIS Calcium + Magnesium en meme temps (espacement 2h)
-- JAMAIS Zinc longue duree sans Cuivre
-- JAMAIS Levothyroxine avec Calcium/Fer/Cafe/Soja (espacement 4h)
-- JAMAIS Probiotiques avec boissons chaudes
-- JAMAIS CoQ10, B-Complexe, B12, Rhodiola le soir
-
-Pour chaque supplement, inclus :
-1. Source naturelle alimentaire a privilegier (aliments, quantites)
-2. Si l'apport alimentaire est insuffisant : complement recommande avec dosage precis, MOMENT DE PRISE, forme biodisponible, et marque suisse entre parentheses
-3. Justification basee sur les observations du client
-4. Interactions a eviter si pertinentes
-
-Marques suisses a recommander :
-- Burgerstein (pharmacie, reference suisse)
-- Pure Encapsulations (qualite professionnelle, sans additifs)
-- Nahrin (fabrication suisse, bon rapport qualite/prix)
-- Sekoya (naturopathie suisse, digestif et mobilite)
-
-Format exemple :
-"MAGNESIUM
-- Sources naturelles : graines de courge (150g = 260mg), amandes, chocolat noir 85%, epinards
-- Si insuffisant : Magnesium bisglycinate 300mg AU COUCHER avec un peu d'eau (Burgerstein ou Pure Encapsulations). Forme bisglycinate = mieux absorbee et non laxative.
-- Attention : ne pas prendre en meme temps que calcium, fer ou zinc (espacement 2h)."
-
-TABLEAU HORAIRE PERSONNALISE (OBLIGATOIRE a la fin de la section) :
-Apres avoir liste tous les supplements, termine IMPERATIVEMENT par un tableau horaire personnalise au format exact :
-
-TABLEAU HORAIRE PERSONNALISE
-- MATIN A JEUN : [liste des supplements a prendre a jeun]
-- MATIN AVEC PETIT-DEJ : [liste]
-- MIDI AVEC REPAS : [liste]
-- SOIR AVEC REPAS : [liste]
-- COUCHER : [liste]
-
-Ecris uniquement cette section, sans prefixe ni marqueur.`;
+const SUPPLEMENTS_INSTRUCTION = `Genere SEPAREMENT la section SUPPLEMENTS RECOMMANDES.
+Pour chaque supplement :
+1. Source alimentaire naturelle (aliments, quantites)
+2. Si insuffisant : complement avec dosage, moment de prise, forme biodisponible, marque suisse
+3. Justification basee sur le profil client
+4. Interactions a eviter
+Termine par le TABLEAU HORAIRE PERSONNALISE. Ecris uniquement cette section.`;
 
 const INITIAL_CONSULTATION = {
   observations: '',
@@ -618,8 +439,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 16000,
-          system: NUTRITION_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userMessage + '\n\nGenere le plan nutrition personnalise complet sur 4 semaines (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.' }],
+          system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '' }),
+          messages: [{ role: 'user', content: userMessage + '\n\nGenere le plan nutrition personnalise complet (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.' }],
         }),
       });
 
@@ -629,30 +450,65 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       }
 
       const planData = await planResponse.json();
-      updateField('nutrition_plan', planData.content?.[0]?.text || '');
+      const planText = planData.content?.[0]?.text || '';
 
-      const suppResponse = await fetch('/api/claude', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-fallback-key': apiKey.trim(),
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          system: NUTRITION_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userMessage + '\n\n' + SUPPLEMENTS_INSTRUCTION }],
-        }),
-      });
+      // Appel 2 : Supplements (conditionnel — seulement si client ouvert aux complements)
+      let suppText = '';
+      const wantsSupplements = form.pretProtocole === 'Oui' || form.pretProtocole === 'Peut-etre';
+      if (wantsSupplements) {
+        const suppResponse = await fetch('/api/claude', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-fallback-key': apiKey.trim(),
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4000,
+            system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '' }),
+            messages: [{ role: 'user', content: userMessage + '\n\n' + SUPPLEMENTS_INSTRUCTION }],
+          }),
+        });
 
-      if (!suppResponse.ok) {
-        const err = await suppResponse.json().catch(() => ({}));
-        throw new Error(err.error?.message || `Erreur API: ${suppResponse.status}`);
+        if (suppResponse.ok) {
+          const suppData = await suppResponse.json();
+          suppText = suppData.content?.[0]?.text || '';
+        }
       }
-
-      const suppData = await suppResponse.json();
-      const suppText = suppData.content?.[0]?.text || '';
       updateField('supplements', suppText);
+
+      // Appel 3 : Audit de coherence (appel separe)
+      try {
+        const auditResponse = await fetch('/api/claude', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-fallback-key': apiKey.trim(),
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4000,
+            system: AUDIT_PROMPT,
+            messages: [{ role: 'user', content: `PROFIL CLIENT :\n- Allergies : ${form.allergies || 'Aucune'}\n- Intolerances : ${form.alimentsEvites || 'Aucune'}\n- Pathologies : ${form.pathologies || 'Aucune'}\n- Traitements : ${form.traitements || 'Aucun'}\n\nPLAN GENERE :\n${planText}\n\nSUPPLEMENTS :\n${suppText || 'Aucun'}` }],
+          }),
+        });
+
+        if (auditResponse.ok) {
+          const auditData = await auditResponse.json();
+          const auditResult = auditData.content?.[0]?.text || '';
+          // If audit found issues, append corrections to the plan
+          if (auditResult && !auditResult.includes('AUDIT OK')) {
+            updateField('nutrition_plan', planText + '\n\n---\n\nAUDIT DE COHERENCE :\n' + auditResult);
+          } else {
+            updateField('nutrition_plan', planText);
+          }
+        } else {
+          updateField('nutrition_plan', planText);
+        }
+      } catch {
+        // Audit failed silently — keep original plan
+        updateField('nutrition_plan', planText);
+      }
 
       // 3eme appel : Fiche Frigo structuree (JSON)
       try {
