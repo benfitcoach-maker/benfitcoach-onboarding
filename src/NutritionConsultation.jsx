@@ -598,11 +598,13 @@ function validatePlanForPDF(planText, planScore, { isFollowup = false } = {}) {
     errors.push('Contenu trop court');
   }
 
-  // Duplicate section headings
+  // Duplicate section headings (major sections only)
+  const REPEATABLE_HEADINGS = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|petit.?d[eé]j|d[eé]jeuner|d[iî]ner|collation|jour\s+\d|option|variante|alternative|liste de courses)/i;
   const headings = (planText || '').match(/^#{1,3}\s+.+$/gm) || [];
   const headingTexts = headings.map(h => h.replace(/^#+\s+/, '').trim().toLowerCase());
   const seen = new Set();
   for (const h of headingTexts) {
+    if (REPEATABLE_HEADINGS.test(h)) continue;
     if (seen.has(h)) errors.push(`Section en double : "${h}"`);
     seen.add(h);
   }
