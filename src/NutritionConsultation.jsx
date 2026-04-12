@@ -711,7 +711,110 @@ function classifySection(title) {
 }
 
 // Body PDF preview component (body nutrition uniquement, pas de cover)
-function NutritionPdfBody({ sections, isFollowup }) {
+
+function renderSectionContent(content, type) {
+  // Parse content into structured blocks for premium rendering
+  const lines = (content || '').split('\n');
+  const blocks = [];
+  let currentBlock = [];
+
+  for (const line of lines) {
+    if (line.trim() === '' && currentBlock.length > 0) {
+      blocks.push(currentBlock);
+      currentBlock = [];
+    } else if (line.trim()) {
+      currentBlock.push(line);
+    }
+  }
+  if (currentBlock.length > 0) blocks.push(currentBlock);
+
+  return blocks.map((block, bi) => {
+    // Detect sub-headers (### or ** bold lines or CAPS short lines)
+    const firstLine = block[0] || '';
+    const isSubHeader = /^#{1,4}\s+/.test(firstLine) ||
+      /^\*\*[^*]+\*\*\s*$/.test(firstLine) ||
+      (firstLine === firstLine.toUpperCase() && /^[A-ZÀ-Ü]/.test(firstLine.trim()) && firstLine.trim().length > 3 && firstLine.trim().length < 60 && !/^[-–•\d]/.test(firstLine));
+
+    if (isSubHeader) {
+      const title = firstLine.replace(/^#+\s+/, '').replace(/\*\*/g, '').trim();
+      const rest = block.slice(1);
+      return (
+        <div key={bi} style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: '.82rem', fontWeight: 700, color: '#1A2E1F', marginBottom: 4, letterSpacing: '.3px' }}>
+            {title}
+          </div>
+          {rest.map((l, li) => renderLine(l, li, type))}
+        </div>
+      );
+    }
+
+    // Detect meal blocks (plan type: lines starting with repas names)
+    if (type === 'plan' && /petit.?d[eé]j|d[eé]jeuner|d[iî]ner|collation/i.test(firstLine)) {
+      return (
+        <div key={bi} style={{ background: '#fff', border: '1px solid rgba(26,46,31,.08)', borderRadius: 8, padding: '10px 14px', marginBottom: 8 }}>
+          {block.map((l, li) => renderLine(l, li, type))}
+        </div>
+      );
+    }
+
+    // Detect supplement timing blocks
+    if (type === 'supplements' && /matin|midi|soir|coucher|jeun/i.test(firstLine)) {
+      return (
+        <div key={bi} style={{ background: '#fff', borderLeft: '3px solid #1A2E1F', borderRadius: '0 8px 8px 0', padding: '8px 14px', marginBottom: 6 }}>
+          {block.map((l, li) => renderLine(l, li, type))}
+        </div>
+      );
+    }
+
+    // Default paragraph block
+    return (
+      <div key={bi} style={{ marginBottom: 8 }}>
+        {block.map((l, li) => renderLine(l, li, type))}
+      </div>
+    );
+  });
+}
+
+function renderLine(line, key, type) {
+  const trimmed = line.trim();
+
+  // Bullet point
+  if (/^[-–•]\s/.test(trimmed)) {
+    const text = trimmed.replace(/^[-–•]\s+/, '');
+    return (
+      <div key={key} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
+        <span style={{ color: '#2a9d5c', fontWeight: 700, flexShrink: 0 }}>-</span>
+        <span style={{ color: '#4A4A42' }}>{text}</span>
+      </div>
+    );
+  }
+
+  // Numbered item
+  if (/^\d+[.)]\s/.test(trimmed)) {
+    const num = trimmed.match(/^(\d+)[.)]\s/)[1];
+    const text = trimmed.replace(/^\d+[.)]\s+/, '');
+    return (
+      <div key={key} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
+        <span style={{ color: '#1A2E1F', fontWeight: 700, minWidth: 18, flexShrink: 0 }}>{num}.</span>
+        <span style={{ color: '#4A4A42' }}>{text}</span>
+      </div>
+    );
+  }
+
+  // Bold line (**text**)
+  if (/^\*\*[^*]+\*\*/.test(trimmed)) {
+    return (
+      <div key={key} style={{ fontWeight: 600, color: '#1A2E1F', marginBottom: 2 }}>
+        {trimmed.replace(/\*\*/g, '')}
+      </div>
+    );
+  }
+
+  // Regular line
+  return <div key={key} style={{ color: '#4A4A42', marginBottom: 2 }}>{trimmed}</div>;
+}
+
+function NutritionPdfBody({ sections, isFollowup, clientName, date, followupWeek }) {
   if (!sections || sections.length === 0) return null;
 
   const sectionOrder = isFollowup
@@ -724,21 +827,37 @@ function NutritionPdfBody({ sections, isFollowup }) {
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
 
+  const docType = isFollowup ? `Suivi semaine ${followupWeek || ''}/4` : 'Plan nutritionnel';
+
+  // Styles
+  const pageHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(26,46,31,.12)', paddingBottom: 8, marginBottom: 16, fontSize: '.7rem', color: '#8a8a7a' };
+  const sectionStyle = { marginBottom: 24, pageBreakInside: 'avoid' };
+  const titleStyle = { color: '#1A2E1F', fontSize: '.88rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '2px solid #1A2E1F', paddingBottom: 6, marginBottom: 14 };
+
   return (
-    <div style={{ background: '#F5F2EC', color: '#1A2E1F', borderRadius: 10, padding: '20px 24px', marginTop: 12, fontSize: '.85rem', lineHeight: 1.6 }}>
-      <div style={{ fontSize: '.72rem', color: '#4A4A42', marginBottom: 12, fontStyle: 'italic' }}>
-        Apercu body PDF nutrition (page 2+)
+    <div style={{ background: '#F5F2EC', color: '#1A2E1F', borderRadius: 10, padding: '24px 28px', marginTop: 12, fontSize: '.83rem', lineHeight: 1.65, fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Page header */}
+      <div style={pageHeader}>
+        <span>{clientName}</span>
+        <span>{docType}</span>
+        <span>{date}</span>
       </div>
+
+      {/* Sections */}
       {sorted.map((sec, i) => (
-        <div key={i} style={{ marginBottom: 16 }}>
-          <h4 style={{ color: '#1A2E1F', fontSize: '.9rem', fontWeight: 700, borderBottom: '1.5px solid rgba(26,46,31,.15)', paddingBottom: 4, marginBottom: 8 }}>
+        <div key={i} style={sectionStyle}>
+          <h4 style={titleStyle}>
             {sec.title}
           </h4>
-          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0, color: '#4A4A42', fontSize: '.82rem' }}>
-            {sec.content}
-          </pre>
+          <div>{renderSectionContent(sec.content, sec.type)}</div>
         </div>
       ))}
+
+      {/* Footer */}
+      <div style={{ borderTop: '1px solid rgba(26,46,31,.1)', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '.68rem', color: '#8a8a7a' }}>
+        <span>Apercu du contenu nutrition</span>
+        <span>{sorted.length} section{sorted.length > 1 ? 's' : ''}</span>
+      </div>
     </div>
   );
 }
@@ -1693,6 +1812,9 @@ ${suppText}`;
             <NutritionPdfBody
               sections={structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup })}
               isFollowup={isFollowup}
+              clientName={form.prenom || client?.prenom || 'Client'}
+              date={formatDate(new Date().toISOString())}
+              followupWeek={followupWeek}
             />
           )}
 
