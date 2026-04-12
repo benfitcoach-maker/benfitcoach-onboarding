@@ -104,6 +104,10 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           <span className="anissa-detail-label">Allergies</span>
           <span className="anissa-detail-value">{client.form?.allergies || client.form?.alimentsEvites || 'Aucune'}</span>
         </div>
+        <div className="anissa-detail">
+          <span className="anissa-detail-label">Sommeil</span>
+          <span className="anissa-detail-value">{client.form?.heuresSommeil ? `${client.form.heuresSommeil}h/nuit` : '-'}</span>
+        </div>
         {lastConsultation && (
           <div className="anissa-detail">
             <span className="anissa-detail-label">Derniere consultation</span>
