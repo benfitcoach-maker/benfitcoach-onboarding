@@ -79,7 +79,7 @@ Si problemes : liste-les et fournis le texte corrige pour chaque section concern
 
 // Helper: build the system prompt with conditional modules
 // fullPlan: true = plan 4 semaines (premiere consultation), false = ajustements (suivi)
-function buildSystemPrompt(form, { isFollowup = false, clientFormule = '' } = {}) {
+function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', followupWeek = 0 } = {}) {
   const parts = [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT];
 
   // Supplements: include if client is open to them (Oui or Peut-etre)
@@ -88,18 +88,91 @@ function buildSystemPrompt(form, { isFollowup = false, clientFormule = '' } = {}
     parts.push(SUPPLEMENT_PROMPT);
   }
 
-  // 4-week plan: include for formules with ongoing nutritional follow-up,
-  // but never for followup consultations (which are adjustments only).
-  // Signal metier: formule recurrente (suivi, intensif, autonome, nutrition, custom)
-  // = premiere consultation complete → plan 4 semaines
-  const recurrentFormules = ['suivi', 'intensif', 'autonome', 'nutrition', 'custom'];
-  const normalizedFormule = (clientFormule || '').trim().toLowerCase();
-  const isFullPlanFormule = recurrentFormules.includes(normalizedFormule);
-  if (!isFollowup && isFullPlanFormule) {
-    parts.push(FOUR_WEEKS_PROMPT);
+  if (isFollowup && followupWeek > 0) {
+    // Followup: progressive adjustment prompt based on week number
+    parts.push(buildFollowupPrompt(followupWeek));
+  } else {
+    // 4-week plan: include for formules with ongoing nutritional follow-up
+    const recurrentFormules = ['suivi', 'intensif', 'autonome', 'nutrition', 'custom'];
+    const normalizedFormule = (clientFormule || '').trim().toLowerCase();
+    const isFullPlanFormule = recurrentFormules.includes(normalizedFormule);
+    if (isFullPlanFormule) {
+      parts.push(FOUR_WEEKS_PROMPT);
+    }
   }
 
   return parts.join('\n\n');
+}
+
+// ─── FOLLOWUP WEEKLY PROMPTS ───
+
+const INITIAL_WEEKLY_FEEDBACK = {
+  energy: '',
+  digestion: '',
+  hunger: '',
+  adherence: '',
+  performance: '',
+  cravings: '',
+  notes: '',
+};
+
+const FOLLOWUP_WEEK_INSTRUCTIONS = {
+  1: `SEMAINE 1 — TOLERANCE & ADHERENCE :
+- Objectif : evaluer la tolerance au plan initial et l'adherence du client.
+- Ajustements autorises : MINIMES (digestion, portions, horaires repas).
+- Ne PAS modifier les macros ni la structure globale.
+- Si adherence faible : simplifier, pas complexifier.
+- Si troubles digestifs : reduire fibres/fermentes, revenir a des aliments neutres.
+- Maximum 2-3 ajustements concrets.`,
+
+  2: `SEMAINE 2 — PREMIERS AJUSTEMENTS :
+- Objectif : ajuster energie, faim et digestion selon le feedback.
+- Ajustements autorises : portions, repartition glucides, timing collations, hydratation.
+- Si faim excessive : augmenter proteines ou ajouter collation.
+- Si energie basse : verifier glucides pre-entrainement et sommeil.
+- Si digestion ok : introduction progressive d'aliments plus varies.
+- Maximum 3-4 ajustements concrets.`,
+
+  3: `SEMAINE 3 — OPTIMISATION :
+- Objectif : optimiser portions, timing, recuperation et performance.
+- Ajustements autorises : macros fins, timing peri-entrainement, supplements si pertinent.
+- Si performance stagne : ajuster glucides autour de l'effort.
+- Si cravings persistantes : verifier deficits (magnesium, chrome, sommeil).
+- Commencer a preparer l'autonomie du client.
+- Maximum 3-4 ajustements concrets.`,
+
+  4: `SEMAINE 4 — CONSOLIDATION & AUTONOMIE :
+- Objectif : consolider les acquis, preparer le client a etre autonome.
+- Proposer des substitutions pour varier sans perdre l'equilibre.
+- Valider les habitudes installees, identifier celles a renforcer.
+- Fournir un mini-guide d'autonomie : quoi faire si voyage, restaurant, fatigue.
+- Ajustements uniquement si necessaire — stabiliser.
+- Maximum 2-3 ajustements concrets.`,
+};
+
+function buildFollowupPrompt(weekNum) {
+  const week = Math.min(Math.max(weekNum || 1, 1), 4);
+  return `
+CONSULTATION DE SUIVI — SEMAINE ${week}/4
+
+Tu generes un AJUSTEMENT du plan existant, PAS un nouveau plan complet.
+Le client suit deja un protocole nutritionnel. Tu dois :
+1. Analyser le feedback hebdomadaire du client
+2. Comparer avec les objectifs initiaux
+3. Proposer des ajustements cibles et progressifs
+
+PRIORITE CLINIQUE DU SUIVI (TOUJOURS respecter cet ordre) :
+digestion > adherence > energie > faim/cravings > performance > objectif
+Si digestion ou adherence sont mauvaises → simplifier le plan avant toute optimisation.
+Ne jamais optimiser timing/portions/performance si la base (digestion + adherence) n'est pas stable.
+
+${FOLLOWUP_WEEK_INSTRUCTIONS[week]}
+
+FORMAT DE SORTIE :
+- BILAN DE LA SEMAINE : resume factuel du feedback (3-5 lignes)
+- AJUSTEMENTS PROPOSES : liste numerotee, chaque ajustement = 1 action concrete
+- PLAN MIS A JOUR : uniquement les repas/jours modifies (pas tout le plan)
+- PROCHAINE ETAPE : ce que le client doit observer pour la semaine suivante`;
 }
 
 const SUPPLEMENTS_INSTRUCTION = `Genere SEPAREMENT la section SUPPLEMENTS RECOMMANDES.
@@ -162,6 +235,15 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const existingConsultations = getNutritionConsultations(clientId);
   const isFollowup = !initialConsultation && existingConsultations.length > 0;
   const previousConsultation = isFollowup ? existingConsultations[0] : null;
+  // Week number: prefer persisted value, fallback to nutrition followup count
+  const followupWeek = (() => {
+    if (initialConsultation?.followupWeek) return initialConsultation.followupWeek;
+    if (!isFollowup) return 0;
+    // Count only followup consultations (exclude the initial plan)
+    const followupCount = existingConsultations.filter(c => c.isFollowup).length;
+    // Current consultation is the next followup (+1), capped at 4
+    return Math.min(followupCount + 1, 4);
+  })();
 
   // Steps differ based on followup status
   const stepLabels = isFollowup
@@ -223,6 +305,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [followupData, setFollowupData] = useState(() => {
     if (initialConsultation?.followupData) return { ...INITIAL_FOLLOWUP, ...initialConsultation.followupData };
     return { ...INITIAL_FOLLOWUP };
+  });
+  const [weeklyFeedback, setWeeklyFeedback] = useState(() => {
+    if (initialConsultation?.weeklyFeedback) return { ...INITIAL_WEEKLY_FEEDBACK, ...initialConsultation.weeklyFeedback };
+    return { ...INITIAL_WEEKLY_FEEDBACK };
   });
   const [consultationId] = useState(initialConsultation?.id || null);
   const [generating, setGenerating] = useState(false);
@@ -356,13 +442,31 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     // Add followup data for returning clients
     if (isFollowup && previousConsultation) {
       parts.push('');
+      parts.push(`--- SUIVI SEMAINE ${followupWeek}/4 ---`);
       parts.push(buildFollowupSummary(followupData, previousConsultation, form));
+
+      // Weekly feedback (structured)
+      const wf = weeklyFeedback;
+      const feedbackLines = [
+        wf.energy && `Energie : ${wf.energy}`,
+        wf.digestion && `Digestion : ${wf.digestion}`,
+        wf.hunger && `Faim/Satiete : ${wf.hunger}`,
+        wf.adherence && `Adherence : ${wf.adherence}`,
+        wf.performance && `Performance : ${wf.performance}`,
+        wf.cravings && `Fringales/Envies : ${wf.cravings}`,
+        wf.notes && `Notes : ${wf.notes}`,
+      ].filter(Boolean);
+      if (feedbackLines.length > 0) {
+        parts.push('');
+        parts.push('--- FEEDBACK HEBDOMADAIRE CLIENT ---');
+        parts.push(feedbackLines.join('\n'));
+      }
 
       // Add previous plan summary
       if (previousConsultation.nutritionPlan) {
         const planLines = previousConsultation.nutritionPlan.split('\n').slice(0, 30);
         parts.push('');
-        parts.push('--- RESUME DU PLAN PRECEDENT ---');
+        parts.push('--- PLAN INITIAL A AJUSTER ---');
         parts.push(planLines.join('\n'));
         parts.push('...(plan complet non inclus pour brievete)');
       }
@@ -371,9 +475,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         parts.push('--- SUPPLEMENTS PRECEDEMMENT RECOMMANDES ---');
         parts.push(previousConsultation.supplements.split('\n').slice(0, 15).join('\n'));
       }
-
-      parts.push('');
-      parts.push(`INSTRUCTION IMPORTANTE : Le client revient pour un suivi. Adapte le plan en tenant compte de sa progression, de ce qui a fonctionne et de ce qui n'a pas fonctionne. Ajuste les recommandations en consequence. Si le client a perdu du poids, adapte les calories. Si le sommeil s'est ameliore, maintiens les recommandations. Si la digestion est degradee, renforce le protocole digestif. Renforce ce qui marche, corrige ce qui ne marche pas, et adapte les objectifs.`);
     }
 
     parts.push('');
@@ -439,7 +540,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 16000,
-          system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '' }),
+          system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '', followupWeek }),
           messages: [{ role: 'user', content: userMessage + '\n\nGenere le plan nutrition personnalise complet (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.' }],
         }),
       });
@@ -465,7 +566,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
           body: JSON.stringify({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
-            system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '' }),
+            system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '', followupWeek }),
             messages: [{ role: 'user', content: userMessage + '\n\n' + SUPPLEMENTS_INSTRUCTION }],
           }),
         });
@@ -616,6 +717,8 @@ ${suppText}`;
         _prevTourCuisse: previousConsultation?.followupData?.tour_cuisse || form.tourCuisse || null,
         _prevMasseGrasse: previousConsultation?.followupData?.masse_grasse || form.masseGrasse || null,
       } : null,
+      weeklyFeedback: isFollowup ? weeklyFeedback : null,
+      followupWeek: isFollowup ? followupWeek : null,
       previousConsultationId: previousConsultation?.id || null,
     });
   };
@@ -704,7 +807,7 @@ ${suppText}`;
       {/* Followup banner */}
       {isFollowup && previousConsultation && (
         <div className="followup-banner">
-          Consultation de suivi — Derniere consultation : {formatDate(previousConsultation.date)}
+          Consultation de suivi — Semaine {followupWeek}/4 — Derniere consultation : {formatDate(previousConsultation.date)}
         </div>
       )}
 
@@ -849,12 +952,56 @@ ${suppText}`;
 
       {/* Step: Follow-up (only for returning clients) */}
       {currentStepType === 'followup' && (
-        <FollowUpStep
-          followupData={followupData}
-          onChange={setFollowupData}
-          previousConsultation={previousConsultation}
-          clientForm={form}
-        />
+        <>
+          <div className="nutrition-form-section" style={{ marginBottom: 16 }}>
+            <h3>Suivi semaine {followupWeek}/4</h3>
+            <p style={{ fontSize: '.85rem', color: '#8a8a7a', marginBottom: 12 }}>
+              {followupWeek === 1 && 'Evaluation de la tolerance et de l\'adherence au plan initial.'}
+              {followupWeek === 2 && 'Premiers ajustements energie, faim et digestion.'}
+              {followupWeek === 3 && 'Optimisation des portions, timing et recuperation.'}
+              {followupWeek === 4 && 'Consolidation des acquis et preparation a l\'autonomie.'}
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { key: 'energy', label: 'Energie' },
+                { key: 'digestion', label: 'Digestion' },
+                { key: 'hunger', label: 'Faim / Satiete' },
+                { key: 'adherence', label: 'Adherence au plan' },
+                { key: 'performance', label: 'Performance' },
+                { key: 'cravings', label: 'Fringales / Envies' },
+              ].map(({ key, label }) => (
+                <div key={key} className="field">
+                  <label>{label}</label>
+                  <select
+                    value={weeklyFeedback[key]}
+                    onChange={e => setWeeklyFeedback(prev => ({ ...prev, [key]: e.target.value }))}
+                  >
+                    <option value="">--</option>
+                    <option value="Nettement ameliore">Nettement ameliore</option>
+                    <option value="Legerement ameliore">Legerement ameliore</option>
+                    <option value="Identique">Identique</option>
+                    <option value="Degrade">Degrade</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="field full-width" style={{ marginTop: 10 }}>
+              <label>Notes client cette semaine</label>
+              <textarea
+                value={weeklyFeedback.notes}
+                onChange={e => setWeeklyFeedback(prev => ({ ...prev, notes: e.target.value }))}
+                rows={2}
+                placeholder="Observations, difficultes, questions..."
+              />
+            </div>
+          </div>
+          <FollowUpStep
+            followupData={followupData}
+            onChange={setFollowupData}
+            previousConsultation={previousConsultation}
+            clientForm={form}
+          />
+        </>
       )}
 
       {/* Observations step removed — data auto-populated from client questionnaire and used in AI prompt */}
