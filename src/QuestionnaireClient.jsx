@@ -296,33 +296,33 @@ function QuestionnaireClient({ clientId }) {
 
         {/* Section 1 — Vous */}
         {section === 1 && (
-          <div className="q-section">
-            <h2 className="q-section-title">Vous</h2>
-            <div className="q-row">
-              <div className="q-field q-field-half">
+          <div className="q-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h2 className="q-section-title" style={{ marginBottom: 0 }}>Vous</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
                 <label className="q-label">Prenom</label>
                 <input className="q-input" value={form.prenom} onChange={e => update('prenom', e.target.value)} readOnly={!!clientName} />
               </div>
-              <div className="q-field q-field-half">
+              <div>
                 <label className="q-label">Nom</label>
                 <input className="q-input" value={form.nom} onChange={e => update('nom', e.target.value)} />
               </div>
             </div>
-            <div className="q-row">
-              <div className="q-field q-field-third">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              <div>
                 <label className="q-label">Age</label>
                 <input className="q-input" type="number" value={form.age} onChange={e => update('age', e.target.value)} />
               </div>
-              <div className="q-field q-field-third">
+              <div>
                 <label className="q-label">Poids (kg)</label>
                 <input className="q-input" type="number" value={form.poids} onChange={e => update('poids', e.target.value)} />
               </div>
-              <div className="q-field q-field-third">
+              <div>
                 <label className="q-label">Taille (cm)</label>
                 <input className="q-input" type="number" value={form.taille} onChange={e => update('taille', e.target.value)} />
               </div>
             </div>
-            <div className="q-field">
+            <div>
               <label className="q-label">Genre</label>
               <BtnGroup field="genre" options={[
                 { value: 'M', label: 'Homme' },
@@ -330,17 +330,17 @@ function QuestionnaireClient({ clientId }) {
                 { value: 'Autre', label: 'Autre' },
               ]} columns={3} />
             </div>
-            <div className="q-row">
-              <div className="q-field q-field-half">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
                 <label className="q-label">Email</label>
                 <input className="q-input" type="email" value={form.email} onChange={e => update('email', e.target.value)} />
               </div>
-              <div className="q-field q-field-half">
+              <div>
                 <label className="q-label">Telephone</label>
                 <input className="q-input" type="tel" value={form.telephone} onChange={e => update('telephone', e.target.value)} />
               </div>
             </div>
-            <div className="q-field">
+            <div>
               <label className="q-label">Profession</label>
               <input className="q-input" value={form.profession} onChange={e => update('profession', e.target.value)} />
             </div>
