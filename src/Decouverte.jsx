@@ -16,7 +16,7 @@ export default function Decouverte() {
   const handleRdv = () => {
     const subject = 'Demande RDV d\u00e9couverte';
     const body = `Bonjour Anissa, ${prenom || '(pr\u00e9nom)'} souhaite un RDV d\u00e9couverte. Objectif: ${objectif || '(non pr\u00e9cis\u00e9)'}. Email: ${email || '(non pr\u00e9cis\u00e9)'}`;
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=anissanutrition@gmail.com&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=anissa.nutri@gmail.com&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank');
   };
 
@@ -62,7 +62,7 @@ export default function Decouverte() {
           Approche bas{'\u00e9'}e sur vos biomarqueurs, votre physiologie et votre mode de vie.
         </p>
         <a
-          href="mailto:anissanutrition@gmail.com"
+          href="mailto:anissa.nutri@gmail.com"
           className="dec-cta"
         >
           Prendre rendez-vous
@@ -140,7 +140,7 @@ export default function Decouverte() {
 
       {/* Footer */}
       <footer className="dec-footer">
-        <span>anissanutrition@gmail.com</span>
+        <span>anissa.nutri@gmail.com</span>
         <span>076 621 02 05</span>
         <span>www.anissanutrition.ch</span>
         <span>Rue de Rive 28, 1260 Nyon</span>

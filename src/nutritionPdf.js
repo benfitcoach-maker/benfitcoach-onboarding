@@ -1776,7 +1776,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setTextColor(255, 255, 255);
   const rightX = pw - margin - 6;
   doc.text(
-    'anissanutrition@gmail.com  ·  www.anissanutrition.ch  ·  076 621 02 05',
+    'anissa.nutri@gmail.com  ·  www.anissanutrition.ch  ·  076 621 02 05',
     rightX,
     footerY + footerH / 2 + 1,
     { align: 'right' }
@@ -2092,7 +2092,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFontSize(8);
   doc.setTextColor(...GREY);
   doc.text(
-    '076 621 02 05  ·  Rue de Rive 28, 1260 Nyon  ·  anissanutrition@gmail.com  ·  www.anissanutrition.ch',
+    '076 621 02 05  ·  Rue de Rive 28, 1260 Nyon  ·  anissa.nutri@gmail.com  ·  www.anissanutrition.ch',
     pw / 2,
     footerTextY,
     { align: 'center' }
