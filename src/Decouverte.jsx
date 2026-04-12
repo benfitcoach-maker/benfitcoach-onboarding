@@ -13,8 +13,12 @@ export default function Decouverte() {
   const [prenom, setPrenom] = useState('');
   const [email, setEmail] = useState('');
 
-  const handleRdv = () => {
-    window.open('https://wa.me/41766210205', '_blank');
+  const handleSendMail = () => {
+    const p = prenom || '(non pr\u00e9cis\u00e9)';
+    const subject = `Nouvelle demande de RDV — ${p}`;
+    const body = `Bonjour Anissa, ${p} souhaite \u00eatre contact\u00e9(e). Objectif : ${objectif || '(non pr\u00e9cis\u00e9)'}. D\u00e9j\u00e0 consult\u00e9 : ${dejaConsulte || '(non pr\u00e9cis\u00e9)'}. R\u00e9gion : ${lieu || '(non pr\u00e9cis\u00e9)'}. Email : ${email || '(non pr\u00e9cis\u00e9)'}`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=anissa.nutri@gmail.com&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
   };
 
   const BtnGroup = ({ options, value, onChange }) => (
@@ -127,10 +131,9 @@ export default function Decouverte() {
               onChange={e => setEmail(e.target.value)}
             />
           </div>
-          <div className="dec-cta-row" style={{ marginTop: 8 }}>
-            <a href="tel:+41766210205" className="dec-cta dec-cta-half">Appeler</a>
-            <button className="dec-cta dec-cta-half" onClick={() => window.open('https://wa.me/41766210205', '_blank')}>WhatsApp</button>
-          </div>
+          <button className="dec-cta dec-cta-full" onClick={handleSendMail}>
+            Je veux mes ressources gratuites {'\u2192'}
+          </button>
         </div>
       </section>
 
