@@ -32,7 +32,7 @@ function fromFicheJson(json, supplementsText) {
 }
 
 export default function FicheFrigoPreview({ consultation, client, onClose }) {
-  // Source : JSON structure > regex fallback
+  // Source : fusion champ par champ JSON > regex fallback
   const ficheJson = consultation.ficheFrigoJson || consultation.fiche_frigo_json || null;
   const fromJson = fromFicheJson(ficheJson, consultation.supplements);
 
@@ -41,18 +41,35 @@ export default function FicheFrigoPreview({ consultation, client, onClose }) {
   const form = client?.form || {};
   const prenom = (form.prenom || 'CLIENT').toUpperCase();
 
-  const source = fromJson || {
-    breakfast: regexMeals.breakfast,
-    lunch: regexMeals.lunch,
-    dinner: regexMeals.dinner,
-    snack: regexMeals.snack,
-    toFavor: regexMeals.toFavor,
-    toLimit: regexMeals.toLimit,
-    hydration: regexMeals.hydration || form.hydratation || '',
-    supplements: regexSupp,
+  // Per-field merge: use JSON value if non-empty, otherwise regex fallback
+  const pickArr = (jsonArr, regexArr) =>
+    Array.isArray(jsonArr) && jsonArr.length > 0 ? jsonArr : (regexArr || []);
+  const pickStr = (jsonStr, regexStr) =>
+    (typeof jsonStr === 'string' && jsonStr.trim()) ? jsonStr : (regexStr || '');
+  const pickSuppArr = (jsonArr, regexArr) =>
+    Array.isArray(jsonArr) && jsonArr.length > 0 ? jsonArr : (regexArr || []);
+
+  const j = fromJson || {};
+  const jSupp = j.supplements || {};
+  const source = {
+    breakfast: pickArr(j.breakfast, regexMeals.breakfast),
+    lunch: pickArr(j.lunch, regexMeals.lunch),
+    dinner: pickArr(j.dinner, regexMeals.dinner),
+    snack: pickStr(j.snack, regexMeals.snack),
+    toFavor: pickArr(j.toFavor, regexMeals.toFavor),
+    toLimit: pickArr(j.toLimit, regexMeals.toLimit),
+    hydration: pickStr(j.hydration, regexMeals.hydration) || form.hydratation || '',
+    supplements: {
+      morningFasting: pickSuppArr(jSupp.morningFasting, regexSupp.morningFasting),
+      breakfast: pickSuppArr(jSupp.breakfast, regexSupp.breakfast),
+      lunch: pickSuppArr(jSupp.lunch, regexSupp.lunch),
+      dinner: pickSuppArr(jSupp.dinner, regexSupp.dinner),
+      bedtime: pickSuppArr(jSupp.bedtime, regexSupp.bedtime),
+    },
   };
 
-  const sourceBadge = fromJson ? 'JSON structure (IA)' : 'Extraction regex';
+  const hasJson = !!fromJson;
+  const sourceBadge = hasJson ? 'JSON + regex (fusion)' : 'Extraction regex';
 
   const [breakfast, setBreakfast] = useState((source.breakfast || []).join('\n\n') || '');
   const [lunch, setLunch] = useState((source.lunch || []).join('\n\n') || '');
@@ -102,7 +119,7 @@ export default function FicheFrigoPreview({ consultation, client, onClose }) {
 
         <div className="ffp-body">
           <div style={{ marginBottom: 12 }}>
-            <span className={`ffp-source-badge ${fromJson ? 'ffp-source-json' : 'ffp-source-regex'}`}>
+            <span className={`ffp-source-badge ${hasJson ? 'ffp-source-json' : 'ffp-source-regex'}`}>
               Source : {sourceBadge}
             </span>
           </div>
