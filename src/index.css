@@ -3282,33 +3282,48 @@ body{
   color:#fff;
 }
 
-/* Emoji scale */
-.q-emoji-row{
+/* Numeric scale (1-5) */
+.q-scale-wrapper{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.q-scale-label-low,.q-scale-label-high{
+  font-size:.72rem;
+  font-weight:600;
+  color:#6b8a72;
+  min-width:52px;
+  flex-shrink:0;
+}
+.q-scale-label-low{text-align:right}
+.q-scale-label-high{text-align:left}
+.q-scale-row{
   display:flex;
   gap:8px;
-  justify-content:space-between;
-}
-.q-emoji-btn{
   flex:1;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:4px;
-  padding:12px 4px;
-  border:1.5px solid rgba(26,46,31,.12);
-  border-radius:12px;
+  justify-content:center;
+}
+.q-scale-btn{
+  width:44px;
+  height:44px;
+  border:1.5px solid rgba(26,46,31,.15);
+  border-radius:10px;
   background:#fff;
+  color:#1A2E1F;
+  font-size:.95rem;
+  font-weight:700;
   cursor:pointer;
   transition:all .15s;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 }
-.q-emoji-btn:hover{border-color:#2a9d5c;transform:scale(1.05)}
-.q-emoji-active{
+.q-scale-btn:hover{border-color:#2a9d5c;background:rgba(42,157,92,.05)}
+.q-scale-btn-active{
   border-color:#2a9d5c;
-  background:rgba(42,157,92,.1);
-  transform:scale(1.08);
+  background:#2a9d5c;
+  color:#fff;
 }
-.q-emoji{font-size:1.6rem}
-.q-emoji-label{font-size:.72rem;font-weight:700;color:#6b8a72}
 
 /* Checkboxes (multi select) */
 .q-checkbox-group{

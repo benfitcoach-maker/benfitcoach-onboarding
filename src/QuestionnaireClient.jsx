@@ -15,7 +15,12 @@ const OBJECTIF_OPTIONS = [
   'Perte de poids', 'Energie', 'Digestion', 'Hormones', 'Performance', 'Anti-age', 'Autre',
 ];
 
-const EMOJI_SCALE = ['😫', '😕', '😐', '🙂', '😊'];
+const SCALE_LABELS = {
+  energieJournee: ['Faible', 'Excellent'],
+  sommeil: ['Mauvais', 'Excellent'],
+  digestion: ['Difficile', 'Parfaite'],
+  niveauStressActuel: ['Tres eleve', 'Aucun'],
+};
 
 function QuestionnaireClient({ clientId }) {
   const [section, setSection] = useState(1);
@@ -187,24 +192,30 @@ function QuestionnaireClient({ clientId }) {
     </div>
   );
 
-  const EmojiScale = ({ field, label }) => (
-    <div className="q-field">
-      <label className="q-label">{label}</label>
-      <div className="q-emoji-row">
-        {EMOJI_SCALE.map((emoji, i) => (
-          <button
-            key={i}
-            type="button"
-            className={`q-emoji-btn ${form[field] === String(i + 1) ? 'q-emoji-active' : ''}`}
-            onClick={() => update(field, String(i + 1))}
-          >
-            <span className="q-emoji">{emoji}</span>
-            <span className="q-emoji-label">{i + 1}</span>
-          </button>
-        ))}
+  const NumericScale = ({ field, label }) => {
+    const [low, high] = SCALE_LABELS[field] || ['1', '5'];
+    return (
+      <div className="q-field">
+        <label className="q-label">{label}</label>
+        <div className="q-scale-wrapper">
+          <span className="q-scale-label-low">{low}</span>
+          <div className="q-scale-row">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                type="button"
+                className={`q-scale-btn ${form[field] === String(n) ? 'q-scale-btn-active' : ''}`}
+                onClick={() => update(field, String(n))}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <span className="q-scale-label-high">{high}</span>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // --- Loading / Error / Submitted states ---
 
@@ -388,11 +399,10 @@ function QuestionnaireClient({ clientId }) {
         {section === 4 && (
           <div className="q-section">
             <h2 className="q-section-title">Comment vous vous sentez</h2>
-            <p className="q-section-hint">1 = tres mauvais, 5 = excellent</p>
-            <EmojiScale field="energieJournee" label="Energie" />
-            <EmojiScale field="sommeil" label="Sommeil" />
-            <EmojiScale field="digestion" label="Digestion" />
-            <EmojiScale field="niveauStressActuel" label="Stress" />
+            <NumericScale field="energieJournee" label="Energie" />
+            <NumericScale field="sommeil" label="Sommeil" />
+            <NumericScale field="digestion" label="Digestion" />
+            <NumericScale field="niveauStressActuel" label="Stress" />
           </div>
         )}
 
