@@ -127,6 +127,10 @@ export default function Decouverte() {
               onChange={e => setEmail(e.target.value)}
             />
           </div>
+          <div className="dec-cta-row" style={{ marginTop: 8 }}>
+            <a href="tel:+41766210205" className="dec-cta dec-cta-half">Appeler</a>
+            <button className="dec-cta dec-cta-half" onClick={() => window.open('https://wa.me/41766210205', '_blank')}>WhatsApp</button>
+          </div>
         </div>
       </section>
 
