@@ -563,6 +563,110 @@ function getLearningInsights() {
   } catch { return null; }
 }
 
+// ─── PDF VALIDATION & CLEANUP (body nutrition uniquement, pas de cover) ───
+
+function validatePlanForPDF(planText) {
+  const errors = [];
+  const text = (planText || '').toLowerCase();
+
+  // Placeholders / incomplete content
+  const placeholders = ['[a completer]', '[todo]', '[placeholder]', '[insert', '...a definir', 'lorem ipsum'];
+  for (const ph of placeholders) {
+    if (text.includes(ph)) errors.push(`Placeholder detecte : "${ph}"`);
+  }
+
+  // Minimum content length (body nutrition, pas la cover)
+  if ((planText || '').trim().length < 200) {
+    errors.push('Contenu trop court pour un plan complet');
+  }
+
+  // Duplicate section headings (body sections only)
+  const headings = (planText || '').match(/^#{1,3}\s+.+$/gm) || [];
+  const headingTexts = headings.map(h => h.replace(/^#+\s+/, '').trim().toLowerCase());
+  const seen = new Set();
+  for (const h of headingTexts) {
+    if (seen.has(h)) errors.push(`Section en double : "${h}"`);
+    seen.add(h);
+  }
+
+  // Supplement timing contradictions
+  if (/fer\b/.test(text) && /fer.*soir|soir.*fer/i.test(text) && !/jamais.*fer.*soir/i.test(text)) {
+    errors.push('Supplement : fer mentionne le soir (doit etre matin a jeun)');
+  }
+  if (/coq10.*soir|soir.*coq10/i.test(text) && !/jamais.*soir/i.test(text)) {
+    errors.push('Supplement : CoQ10 mentionne le soir (stimulant)');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+function cleanPlanForPDF(planText) {
+  let text = planText || '';
+
+  // Remove audit section (internal, not for client PDF)
+  text = text.replace(/\n---\n\nAUDIT DE COHERENCE :[\s\S]*$/, '');
+
+  // Remove cover/branding elements that may leak from AI output
+  text = text.replace(/^PLAN NUTRITION(?:NEL)?\s*PERSONNALIS[EÉ]?\s*$/gmi, '');
+  text = text.replace(/^PROTOCOLE NUTRITIONNEL.*$/gmi, '');
+  text = text.replace(/^Anissa Deroubaix.*$/gmi, '');
+  text = text.replace(/^AB Coaching.*$/gmi, '');
+  text = text.replace(/^Rue de Rive.*$/gmi, '');
+
+  // Remove markdown fences
+  text = text.replace(/```[\s\S]*?```/g, '');
+
+  // Clean excessive blank lines (3+ → 2)
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  // Remove leading/trailing whitespace per line
+  text = text.split('\n').map(l => l.trimEnd()).join('\n').trim();
+
+  return text;
+}
+
+function structurePlanSections(planText, supplementsText) {
+  // Structure le body nutrition en sections (sans cover)
+  // Compatible avec assemblage apres la cover existante
+  const sections = [];
+  const text = cleanPlanForPDF(planText);
+  const lines = text.split('\n');
+
+  let currentTitle = '';
+  let currentContent = [];
+
+  const flushSection = () => {
+    if (currentTitle || currentContent.length > 0) {
+      const content = currentContent.join('\n').trim();
+      if (content) {
+        sections.push({ title: currentTitle || 'Introduction', content });
+      }
+    }
+    currentContent = [];
+  };
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^#{1,3}\s+(.+)/) || (line === line.toUpperCase() && line.trim().length > 5 && line.trim().length < 80 ? [null, line.trim()] : null);
+    if (headerMatch) {
+      flushSection();
+      currentTitle = headerMatch[1].trim();
+    } else {
+      currentContent.push(line);
+    }
+  }
+  flushSection();
+
+  // Add supplements as separate section if present
+  if (supplementsText?.trim()) {
+    sections.push({
+      title: 'Supplements recommandes',
+      content: cleanPlanForPDF(supplementsText),
+    });
+  }
+
+  return sections;
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -694,6 +798,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState('');
   const [autoCorrected, setAutoCorrected] = useState(false);
+  const [pdfError, setPdfError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -1495,6 +1600,7 @@ ${suppText}`;
           </div>
 
           {genError && <div className="error-msg" style={{ marginTop: 12 }}>{genError}</div>}
+          {pdfError && <div className="error-msg" style={{ marginTop: 12, background: 'rgba(212,92,76,.08)', padding: '10px 14px', borderRadius: 8, fontSize: '.82rem' }}>{pdfError}</div>}
 
           {generating && (
             <div className="loading" style={{ padding: '30px 20px' }}>
@@ -1531,13 +1637,32 @@ ${suppText}`;
                 }));
               }}
               onExportPDF={(plan, supplements, recipes) => {
+                setPdfError('');
+
+                // Block on hard fail
+                const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
+                if (currentScore.hasHardFail) {
+                  setPdfError('Export bloque : le plan contient un echec critique (' + currentScore.hardFails.join(', ') + '). Corrigez avant d\'exporter.');
+                  return;
+                }
+
+                // Validate content
+                const validation = validatePlanForPDF(plan);
+                if (!validation.valid) {
+                  setPdfError('Export bloque : ' + validation.errors.join(' | '));
+                  return;
+                }
+
+                // Clean and export
+                const cleanedPlan = cleanPlanForPDF(plan);
+                const cleanedSupplements = cleanPlanForPDF(supplements);
                 exportConsultationPDF({
                   observations: consultation.observations,
                   nutritionalObservations: consultation.nutritional_observations,
                   bloodTestDone: consultation.blood_test_done,
                   dnaTestDone: consultation.dna_test_done,
-                  nutritionPlan: plan,
-                  supplements,
+                  nutritionPlan: cleanedPlan,
+                  supplements: cleanedSupplements,
                   recipes,
                   notesForCoach: consultation.notes_for_coach,
                   date: new Date().toISOString(),
