@@ -17,8 +17,8 @@ const OBJECTIF_OPTIONS = [
 
 const SCALE_LABELS = {
   energieJournee: ['Faible', 'Excellent'],
-  sommeil: ['Mauvais', 'Excellent'],
-  digestion: ['Difficile', 'Parfaite'],
+  heuresSommeil: ['Mauvais', 'Excellent'],
+  frequenceBallonnements: ['Difficile', 'Parfaite'],
   niveauStressActuel: ['Tres eleve', 'Aucun'],
 };
 
@@ -47,8 +47,8 @@ function QuestionnaireClient({ clientId }) {
     hydratation: '',
     alimentsEvites: '',
     energieJournee: '',
-    sommeil: '',
-    digestion: '',
+    heuresSommeil: '',
+    frequenceBallonnements: '',
     niveauStressActuel: '',
     objectifPrincipalNutrition: [],
     pourquoiMaintenant: '',
@@ -92,8 +92,8 @@ function QuestionnaireClient({ clientId }) {
           hydratation: f.hydratation || '',
           alimentsEvites: f.alimentsEvites || '',
           energieJournee: f.energieJournee || '',
-          sommeil: f.sommeil || '',
-          digestion: f.digestion || '',
+          heuresSommeil: f.heuresSommeil || '',
+          frequenceBallonnements: f.frequenceBallonnements || '',
           niveauStressActuel: f.niveauStressActuel || '',
           objectifPrincipalNutrition: f.objectifPrincipalNutrition
             ? (typeof f.objectifPrincipalNutrition === 'string'
@@ -142,8 +142,8 @@ function QuestionnaireClient({ clientId }) {
       niveauStressActuel: form.niveauStressActuel,
       objectifPrincipalNutrition: form.objectifPrincipalNutrition.join(', '),
       // Extra fields not in NUTRITION_INITIAL_FORM but useful
-      sommeil: form.sommeil,
-      digestion: form.digestion,
+      heuresSommeil: form.heuresSommeil,
+      frequenceBallonnements: form.frequenceBallonnements,
       pourquoiMaintenant: form.pourquoiMaintenant,
     };
 
@@ -400,8 +400,8 @@ function QuestionnaireClient({ clientId }) {
           <div className="q-section">
             <h2 className="q-section-title">Comment vous vous sentez</h2>
             <NumericScale field="energieJournee" label="Energie" />
-            <NumericScale field="sommeil" label="Sommeil" />
-            <NumericScale field="digestion" label="Digestion" />
+            <NumericScale field="heuresSommeil" label="Sommeil" />
+            <NumericScale field="frequenceBallonnements" label="Digestion" />
             <NumericScale field="niveauStressActuel" label="Stress" />
           </div>
         )}
