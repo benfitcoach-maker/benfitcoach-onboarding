@@ -14,7 +14,7 @@ export default function Decouverte() {
   const [email, setEmail] = useState('');
 
   const handleRdv = () => {
-    window.open('https://calendly.com/anissa-nutri/30min', '_blank');
+    window.open('https://wa.me/41766210205', '_blank');
   };
 
   const BtnGroup = ({ options, value, onChange }) => (
@@ -58,12 +58,10 @@ export default function Decouverte() {
           Anissa Deroubaix — Nutritionniste {'\u00e0'} Nyon.<br />
           Approche bas{'\u00e9'}e sur vos biomarqueurs, votre physiologie et votre mode de vie.
         </p>
-        <button
-          className="dec-cta"
-          onClick={() => window.open('https://calendly.com/anissa-nutri/30min', '_blank')}
-        >
-          Prendre rendez-vous
-        </button>
+        <div className="dec-cta-row">
+          <a href="tel:+41766210205" className="dec-cta">Appeler</a>
+          <button className="dec-cta" onClick={() => window.open('https://wa.me/41766210205', '_blank')}>WhatsApp</button>
+        </div>
       </section>
 
       {/* Duo */}
@@ -129,9 +127,10 @@ export default function Decouverte() {
               onChange={e => setEmail(e.target.value)}
             />
           </div>
-          <button className="dec-cta dec-cta-full" onClick={handleRdv}>
-            Je veux un RDV d{'\u00e9'}couverte {'\u2192'}
-          </button>
+          <div className="dec-cta-row" style={{ marginTop: 8 }}>
+            <a href="tel:+41766210205" className="dec-cta dec-cta-half">Appeler</a>
+            <button className="dec-cta dec-cta-half" onClick={handleRdv}>WhatsApp</button>
+          </div>
         </div>
       </section>
 

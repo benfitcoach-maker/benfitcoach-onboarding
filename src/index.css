@@ -3530,6 +3530,11 @@ body{
 }
 .dec-cta:hover{opacity:.85}
 .dec-cta-full{width:100%;text-align:center;margin-top:8px}
+.dec-cta-row{display:flex;gap:12px;justify-content:center}
+.dec-cta-half{flex:1;text-align:center}
+@media(max-width:480px){
+  .dec-cta-row{flex-direction:column}
+}
 
 /* Sections */
 .dec-section{
