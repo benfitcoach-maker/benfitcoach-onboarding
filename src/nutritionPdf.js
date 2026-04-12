@@ -671,6 +671,7 @@ export async function exportConsultationPDF(consultation, client) {
   doc.setFillColor(...BG_PAGE);
   doc.rect(0, 0, pw, 297, 'F');
   let isFirstPage = true;
+  let y = 20;
 
   // ─── PROGRESSION (for followup consultations) ───
   if (consultation.isFollowup && consultation.followupData) {
