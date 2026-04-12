@@ -351,7 +351,7 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
 }
 
 // Score display component
-function PlanQualityScore({ score }) {
+function PlanQualityScore({ score, autoCorrected }) {
   if (!score) return null;
 
   const getColor = (val, max = 10) => {
@@ -376,6 +376,12 @@ function PlanQualityScore({ score }) {
           {score.normalized}/10
         </span>
       </div>
+
+      {autoCorrected && (
+        <div style={{ background: 'rgba(42,157,92,.1)', border: '1px solid rgba(42,157,92,.25)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.8rem', color: '#2a9d5c', fontWeight: 600 }}>
+          Auto-correction appliquee — le plan a ete corrige automatiquement
+        </div>
+      )}
 
       {score.hasHardFail && (
         <div style={{ background: 'rgba(212,92,76,.12)', border: '1px solid rgba(212,92,76,.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.8rem', color: '#d45c4c', fontWeight: 600 }}>
@@ -410,6 +416,52 @@ function PlanQualityScore({ score }) {
       )}
     </div>
   );
+}
+
+// ─── AUTO-CORRECTION ───
+
+function shouldAutoCorrect(score) {
+  if (!score) return false;
+  return score.hasHardFail || score.normalized < 6.5 || score.coherence < 6 || score.constraints < 6;
+}
+
+function buildCorrectionPrompt(planText, score, form, auditResult) {
+  return `Tu recois un plan nutritionnel qui contient des problemes de qualite. Corrige-le.
+
+ECHECS CRITIQUES :
+${score.hardFails.length > 0 ? score.hardFails.map(p => `- ${p}`).join('\n') : '- Aucun'}
+
+PENALITES :
+${score.penalties.length > 0 ? score.penalties.map(p => `- ${p}`).join('\n') : '- Aucune'}
+
+SCORES ACTUELS :
+- Coherence : ${score.coherence}/10
+- Simplicite : ${score.simplicity}/10
+- Applicabilite : ${score.applicability}/10
+- Contraintes : ${score.constraints}/10
+- Global : ${score.normalized}/10
+
+${auditResult ? `AUDIT DE COHERENCE :\n${auditResult}\n\n` : ''}CONTRAINTES CLIENT :
+- Allergies : ${form?.allergies || 'Aucune'}
+- Aliments evites : ${form?.alimentsEvites || 'Aucun'}
+- Pathologies : ${form?.pathologies || 'Aucune'}
+- Traitements : ${form?.traitements || 'Aucun'}
+- Sport : ${form?.frequenceSport || 'Non renseigne'}
+
+PLAN A CORRIGER :
+${planText}
+
+REGLES DE CORRECTION :
+1. Supprimer tout aliment interdit (allergies, intolerances) des menus
+2. Corriger les contradictions entre sections "a limiter" et menus
+3. Si coherence macros/calories insuffisante : ajouter ou corriger les totaux
+4. Si trop complexe : simplifier (moins de supplements, menus plus courts)
+5. Si digestion/adherence en cause : privilegier des aliments neutres et simples
+6. Conserver au maximum ce qui fonctionne — ne pas reecrire les sections sans probleme
+7. Ne PAS ajouter de commentaires sur les corrections — renvoyer uniquement le plan corrige
+8. Ne PAS introduire de nouveaux aliments interdits
+
+Renvoie le plan complet corrige, pret a etre utilise.`;
 }
 
 const INITIAL_CONSULTATION = {
@@ -542,6 +594,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [consultationId] = useState(initialConsultation?.id || null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState('');
+  const [autoCorrected, setAutoCorrected] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -806,39 +859,92 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         }
       }
       updateField('supplements', suppText);
+      setAutoCorrected(false);
 
       // Appel 3 : Audit de coherence (appel separe)
-      try {
-        const auditResponse = await fetch('/api/claude', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-fallback-key': apiKey.trim(),
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 4000,
-            system: AUDIT_PROMPT,
-            messages: [{ role: 'user', content: `PROFIL CLIENT :\n- Allergies : ${form.allergies || 'Aucune'}\n- Intolerances : ${form.alimentsEvites || 'Aucune'}\n- Pathologies : ${form.pathologies || 'Aucune'}\n- Traitements : ${form.traitements || 'Aucun'}\n\nPLAN GENERE :\n${planText}\n\nSUPPLEMENTS :\n${suppText || 'Aucun'}` }],
-          }),
-        });
+      let finalPlan = planText;
+      let auditResult = '';
+      const auditClientProfile = `PROFIL CLIENT :\n- Allergies : ${form.allergies || 'Aucune'}\n- Intolerances : ${form.alimentsEvites || 'Aucune'}\n- Pathologies : ${form.pathologies || 'Aucune'}\n- Traitements : ${form.traitements || 'Aucun'}`;
+      const scoreFormData = { ...form, _weeklyFeedback: weeklyFeedback };
 
-        if (auditResponse.ok) {
-          const auditData = await auditResponse.json();
-          const auditResult = auditData.content?.[0]?.text || '';
-          // If audit found issues, append corrections to the plan
-          if (auditResult && !auditResult.includes('AUDIT OK')) {
-            updateField('nutrition_plan', planText + '\n\n---\n\nAUDIT DE COHERENCE :\n' + auditResult);
-          } else {
-            updateField('nutrition_plan', planText);
+      // Helper: run audit on a plan
+      const runAudit = async (planToAudit) => {
+        try {
+          const resp = await fetch('/api/claude', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-fallback-key': apiKey.trim() },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 4000,
+              system: AUDIT_PROMPT,
+              messages: [{ role: 'user', content: `${auditClientProfile}\n\nPLAN GENERE :\n${planToAudit}\n\nSUPPLEMENTS :\n${suppText || 'Aucun'}` }],
+            }),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            return data.content?.[0]?.text || '';
           }
-        } else {
-          updateField('nutrition_plan', planText);
-        }
-      } catch {
-        // Audit failed silently — keep original plan
-        updateField('nutrition_plan', planText);
+        } catch { /* silent */ }
+        return '';
+      };
+
+      // Initial audit
+      auditResult = await runAudit(planText);
+      if (auditResult && !auditResult.includes('AUDIT OK')) {
+        finalPlan = planText + '\n\n---\n\nAUDIT DE COHERENCE :\n' + auditResult;
       }
+
+      // Score the plan
+      const initialScore = scorePlanQuality(finalPlan, suppText, scoreFormData, { isFollowup, followupWeek });
+
+      // Auto-correction: single attempt if score is too low or hard fail
+      if (shouldAutoCorrect(initialScore)) {
+        try {
+          const correctionResponse = await fetch('/api/claude', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-fallback-key': apiKey.trim() },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 16000,
+              system: buildCorrectionPrompt(finalPlan, initialScore, form, auditResult),
+              messages: [{ role: 'user', content: 'Corrige le plan ci-dessus selon les problemes detectes. Renvoie uniquement le plan corrige.' }],
+            }),
+          });
+
+          if (correctionResponse.ok) {
+            const correctionData = await correctionResponse.json();
+            const correctedPlan = correctionData.content?.[0]?.text || '';
+
+            if (correctedPlan) {
+              // Re-audit the corrected version
+              let correctedAuditResult = await runAudit(correctedPlan);
+              let correctedFinal = correctedPlan;
+              if (correctedAuditResult && !correctedAuditResult.includes('AUDIT OK')) {
+                correctedFinal = correctedPlan + '\n\n---\n\nAUDIT DE COHERENCE :\n' + correctedAuditResult;
+              }
+
+              // Re-score the corrected + re-audited version
+              const correctedScore = scorePlanQuality(correctedFinal, suppText, scoreFormData, { isFollowup, followupWeek });
+
+              // Strict selection: never accept if new hard fail introduced
+              if (!correctedScore.hasHardFail) {
+                const fixedHardFail = initialScore.hasHardFail;
+                const improvedWithoutRegression =
+                  correctedScore.normalized > initialScore.normalized &&
+                  correctedScore.coherence >= initialScore.coherence &&
+                  correctedScore.constraints >= initialScore.constraints;
+
+                if (fixedHardFail || improvedWithoutRegression) {
+                  finalPlan = correctedFinal;
+                  setAutoCorrected(true);
+                }
+              }
+            }
+          }
+        } catch { /* correction failed silently — keep initial */ }
+      }
+
+      updateField('nutrition_plan', finalPlan);
 
       // 3eme appel : Fiche Frigo structuree (JSON)
       try {
@@ -1298,6 +1404,7 @@ ${suppText}`;
                 { ...form, _weeklyFeedback: weeklyFeedback },
                 { isFollowup, followupWeek }
               )}
+              autoCorrected={autoCorrected}
             />
           )}
 
