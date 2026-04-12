@@ -862,6 +862,91 @@ function NutritionPdfBody({ sections, isFollowup, clientName, date, followupWeek
   );
 }
 
+// ─── QUALITY DASHBOARD ───
+
+function NutritionQualityDashboard() {
+  const insights = getLearningInsights();
+  if (!insights || insights.total === 0) {
+    return (
+      <div style={{ background: '#F5F2EC', borderRadius: 10, padding: '16px 20px', marginTop: 12, fontSize: '.82rem', color: '#4A4A42' }}>
+        Aucune donnee de generation disponible.
+      </div>
+    );
+  }
+
+  const { total, avgScoreInitial, avgScoreFinal, autoCorrectionRate, initialHardFailRate, finalHardFailRate, topPenalties, profilePatterns } = insights;
+
+  const getColor = (val, good, bad) => val >= good ? '#2a9d5c' : val >= bad ? '#e8a040' : '#d45c4c';
+
+  const MetricCard = ({ label, value, suffix, good, bad }) => (
+    <div style={{ background: '#fff', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+      <div style={{ fontSize: '1.1rem', fontWeight: 700, color: good != null ? getColor(typeof value === 'number' ? value : 0, good, bad) : '#1A2E1F' }}>
+        {value}{suffix || ''}
+      </div>
+      <div style={{ fontSize: '.7rem', color: '#8a8a7a', marginTop: 2 }}>{label}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: '#F5F2EC', borderRadius: 10, padding: '20px 24px', marginTop: 12, fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <strong style={{ fontSize: '.9rem', color: '#1A2E1F' }}>Dashboard qualite IA</strong>
+        <span style={{ fontSize: '.7rem', color: '#8a8a7a' }}>{total} generation{total > 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Metrics grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+        <MetricCard label="Score initial moyen" value={avgScoreInitial} suffix="/10" good={7} bad={5} />
+        <MetricCard label="Score final moyen" value={avgScoreFinal} suffix="/10" good={7} bad={5} />
+        <MetricCard label="Taux auto-correction" value={autoCorrectionRate} suffix="%" good={80} bad={100} />
+        <MetricCard label="Hard fail initial" value={initialHardFailRate} suffix="%" good={0} bad={10} />
+      </div>
+
+      {/* Hard fail resolution */}
+      {initialHardFailRate > 0 && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '.78rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ color: '#4A4A42' }}>Hard fails resolus par auto-correction</span>
+            <span style={{ fontWeight: 700, color: finalHardFailRate < initialHardFailRate ? '#2a9d5c' : '#d45c4c' }}>
+              {initialHardFailRate}% → {finalHardFailRate}%
+            </span>
+          </div>
+          <div style={{ height: 4, background: 'rgba(26,46,31,.08)', borderRadius: 4 }}>
+            <div style={{ height: '100%', width: `${100 - finalHardFailRate}%`, background: '#2a9d5c', borderRadius: 4 }} />
+          </div>
+        </div>
+      )}
+
+      {/* Top penalties */}
+      {topPenalties.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: '.78rem', fontWeight: 600, color: '#1A2E1F', marginBottom: 6 }}>Top problemes detectes</div>
+          {topPenalties.map((p, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid rgba(26,46,31,.06)', fontSize: '.76rem' }}>
+              <span style={{ color: '#4A4A42', flex: 1 }}>{p.penalty}</span>
+              <span style={{ color: '#8a8a7a', marginLeft: 8, flexShrink: 0 }}>{p.count}x ({p.pct}%)</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Profile patterns */}
+      {Object.keys(profilePatterns).length > 0 && (
+        <div>
+          <div style={{ fontSize: '.78rem', fontWeight: 600, color: '#1A2E1F', marginBottom: 6 }}>Profils les plus corriges</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {Object.entries(profilePatterns).sort((a, b) => b[1] - a[1]).map(([key, count]) => (
+              <span key={key} style={{ background: '#fff', border: '1px solid rgba(26,46,31,.1)', borderRadius: 100, padding: '4px 12px', fontSize: '.72rem', color: '#4A4A42' }}>
+                {key} ({count})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -995,6 +1080,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [autoCorrected, setAutoCorrected] = useState(false);
   const [pdfError, setPdfError] = useState('');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showQualityDash, setShowQualityDash] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -1799,14 +1885,25 @@ ${suppText}`;
           {pdfError && <div className="error-msg" style={{ marginTop: 12, background: 'rgba(212,92,76,.08)', padding: '10px 14px', borderRadius: 8, fontSize: '.82rem' }}>{pdfError}</div>}
 
           {consultation.nutrition_plan && !generating && (
-            <button
-              className="btn btn-anissa-secondary"
-              style={{ marginTop: 8, fontSize: '.78rem', padding: '8px 16px' }}
-              onClick={() => setShowPdfPreview(p => !p)}
-            >
-              {showPdfPreview ? 'Masquer apercu PDF' : 'Apercu body PDF'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                className="btn btn-anissa-secondary"
+                style={{ fontSize: '.78rem', padding: '8px 16px' }}
+                onClick={() => setShowPdfPreview(p => !p)}
+              >
+                {showPdfPreview ? 'Masquer apercu PDF' : 'Apercu body PDF'}
+              </button>
+              <button
+                className="btn btn-anissa-secondary"
+                style={{ fontSize: '.78rem', padding: '8px 16px' }}
+                onClick={() => setShowQualityDash(p => !p)}
+              >
+                {showQualityDash ? 'Masquer dashboard' : 'Dashboard qualite'}
+              </button>
+            </div>
           )}
+
+          {showQualityDash && <NutritionQualityDashboard />}
 
           {showPdfPreview && consultation.nutrition_plan && (
             <NutritionPdfBody
