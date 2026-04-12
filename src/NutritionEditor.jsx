@@ -286,152 +286,89 @@ function DropdownPopup({ children, onClose }) {
   return <div className="ne-color-popup" ref={ref}>{children}</div>;
 }
 
-// ─── TOOLBAR COMPONENT ───
+// ─── MINI TOOLBAR (simplified for preview-first editor) ───
 
-function Toolbar({ editorRef }) {
-  const [openPopup, setOpenPopup] = useState(null); // 'color' | 'hl' | 'size' | 'symbol' | null
-  const [lastColor, setLastColor] = useState('#4ade80');
-  const [lastHL, setLastHL] = useState('rgba(251,191,36,0.3)');
-  const savedSelRef = useRef(null);
-
+function MiniToolbar({ editorRef }) {
   const exec = (cmd, val) => {
     document.execCommand(cmd, false, val || null);
     editorRef.current?.focus();
   };
 
-  const saveSelection = () => {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) savedSelRef.current = sel.getRangeAt(0).cloneRange();
-  };
-
-  const restoreSelection = () => {
-    if (!savedSelRef.current) return;
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(savedSelRef.current);
-    savedSelRef.current = null;
-  };
-
-  const togglePopup = (name) => { saveSelection(); setOpenPopup(p => p === name ? null : name); };
-  const closePopup = () => setOpenPopup(null);
-
-  const applyColor = (hex) => {
-    restoreSelection();
-    document.execCommand('foreColor', false, hex);
-    setLastColor(hex);
-    closePopup();
-    editorRef.current?.focus();
-  };
-
-  const applyHighlight = (css) => {
-    restoreSelection();
-    document.execCommand('hiliteColor', false, css);
-    setLastHL(css);
-    closePopup();
-    editorRef.current?.focus();
-  };
-
-  const applySize = (cmd) => {
-    restoreSelection();
-    document.execCommand('fontSize', false, cmd);
-    closePopup();
-    editorRef.current?.focus();
-  };
-
-  const insertSymbol = (char) => {
-    restoreSelection();
-    document.execCommand('insertText', false, char);
-    closePopup();
-    editorRef.current?.focus();
-  };
-
-  const insertBlock = (html) => {
-    editorRef.current?.focus();
-    document.execCommand('insertHTML', false, '<br/>' + html + '<br/>');
-  };
-
   return (
-    <div className="ne-toolbar">
+    <div className="ne-toolbar" style={{ padding: '4px 8px', gap: 4 }}>
       <button type="button" className="ne-tool-btn" onClick={() => exec('bold')} title="Gras"><strong>B</strong></button>
-      <button type="button" className="ne-tool-btn" onClick={() => exec('italic')} title="Italique"><em>I</em></button>
-      <button type="button" className="ne-tool-btn" onClick={() => exec('insertUnorderedList')} title="Liste">&#8226;</button>
-      <button type="button" className="ne-tool-btn" onClick={() => exec('formatBlock', 'h3')} title="Sous-titre">H3</button>
-
-      {/* Color picker */}
-      <div className="ne-color-btn-wrapper">
-        <button type="button" className="ne-tool-btn ne-color-btn" onClick={() => togglePopup('color')} title="Couleur du texte">
-          <span className="ne-color-letter">A</span>
-          <span className="ne-color-bar" style={{ background: lastColor }} />
-        </button>
-        {openPopup === 'color' && (
-          <DropdownPopup onClose={closePopup}>
-            {COLOR_PALETTE.map(c => (
-              <button key={c.hex} type="button" className="ne-color-swatch" style={{ background: c.hex }} title={c.label} onClick={() => applyColor(c.hex)} />
-            ))}
-          </DropdownPopup>
-        )}
-      </div>
-
-      {/* Highlight picker */}
-      <div className="ne-color-btn-wrapper">
-        <button type="button" className="ne-tool-btn ne-color-btn" onClick={() => togglePopup('hl')} title="Surlignage">
-          <span className="ne-color-letter">H</span>
-          <span className="ne-color-bar" style={{ background: lastHL }} />
-        </button>
-        {openPopup === 'hl' && (
-          <DropdownPopup onClose={closePopup}>
-            {HIGHLIGHT_PALETTE.map(c => (
-              <button key={c.css} type="button" className="ne-color-swatch" style={{ background: c.css }} title={c.label} onClick={() => applyHighlight(c.css)} />
-            ))}
-          </DropdownPopup>
-        )}
-      </div>
-
-      {/* Note block */}
-      <button type="button" className="ne-tool-btn ne-tool-note" onClick={() => insertBlock(NOTE_HTML)} title="Note d'Anissa">Note</button>
-
-      {/* Alert block */}
-      <button type="button" className="ne-tool-btn ne-tool-alert" onClick={() => insertBlock(ALERT_HTML)} title="Alerte / Important">!</button>
-
-      {/* Font size */}
-      <div className="ne-color-btn-wrapper">
-        <button type="button" className="ne-tool-btn" onClick={() => togglePopup('size')} title="Taille du texte">T&#8597;</button>
-        {openPopup === 'size' && (
-          <DropdownPopup onClose={closePopup}>
-            <div className="ne-size-list">
-              {SIZE_OPTIONS.map(s => (
-                <button key={s.cmd} type="button" className="ne-size-option" style={{ fontSize: `${s.px}px` }} onClick={() => applySize(s.cmd)}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </DropdownPopup>
-        )}
-      </div>
-
-      {/* Symbols */}
-      <div className="ne-color-btn-wrapper">
-        <button type="button" className="ne-tool-btn" onClick={() => togglePopup('symbol')} title="Icones / Symboles">&#9734;</button>
-        {openPopup === 'symbol' && (
-          <DropdownPopup onClose={closePopup}>
-            {SYMBOLS.map(s => (
-              <button key={s.char} type="button" className="ne-color-swatch ne-symbol-swatch" title={s.label} onClick={() => insertSymbol(s.char)}>
-                {s.char}
-              </button>
-            ))}
-          </DropdownPopup>
-        )}
-      </div>
-
+      <button type="button" className="ne-tool-btn ne-tool-note" onClick={() => {
+        editorRef.current?.focus();
+        document.execCommand('insertHTML', false, '<br/>' + NOTE_HTML + '<br/>');
+      }} title="Note d'Anissa">Note</button>
+      <button type="button" className="ne-tool-btn ne-tool-alert" onClick={() => {
+        editorRef.current?.focus();
+        document.execCommand('insertHTML', false, '<br/>' + ALERT_HTML + '<br/>');
+      }} title="Alerte">!</button>
       <button type="button" className="ne-tool-btn" onClick={() => exec('undo')} title="Annuler">&#8617;</button>
     </div>
   );
 }
 
 
-// ─── SECTION BLOCK COMPONENT ───
-// Content is NOT controlled by React state during editing.
-// We use refs to track edits and only sync to parent on blur.
+// ─── PREMIUM SECTION RENDER (read-only, like PDF body) ───
+
+function PremiumSectionRender({ content }) {
+  const lines = (content || '').split('\n');
+  return (
+    <div style={{ fontSize: '.83rem', lineHeight: 1.65, color: '#d4c9a8' }}>
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={i} style={{ height: 6 }} />;
+
+        // Sub-header
+        if (/^#{1,4}\s+/.test(trimmed) || /^\*\*[^*]+\*\*\s*$/.test(trimmed)) {
+          const title = trimmed.replace(/^#+\s+/, '').replace(/\*\*/g, '');
+          return <div key={i} style={{ fontWeight: 700, color: '#f0f0e8', marginTop: 8, marginBottom: 4 }}>{title}</div>;
+        }
+
+        // Bullet
+        if (/^[-–•]\s/.test(trimmed)) {
+          return (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
+              <span style={{ color: '#4ade80', fontWeight: 700, flexShrink: 0 }}>-</span>
+              <span>{trimmed.replace(/^[-–•]\s+/, '')}</span>
+            </div>
+          );
+        }
+
+        // Numbered
+        if (/^\d+[.)]\s/.test(trimmed)) {
+          const num = trimmed.match(/^(\d+)/)[1];
+          return (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
+              <span style={{ fontWeight: 700, minWidth: 18, flexShrink: 0 }}>{num}.</span>
+              <span>{trimmed.replace(/^\d+[.)]\s+/, '')}</span>
+            </div>
+          );
+        }
+
+        // Bold inline
+        if (/^\*\*[^*]+\*\*/.test(trimmed)) {
+          return <div key={i} style={{ fontWeight: 600, marginBottom: 2 }}>{trimmed.replace(/\*\*/g, '')}</div>;
+        }
+
+        // Note/alert blocks
+        if (/^\{\{note\}\}/.test(trimmed)) {
+          return <div key={i} style={{ borderLeft: '3px solid #4ade80', padding: '6px 10px', margin: '4px 0', background: 'rgba(74,222,128,0.05)', borderRadius: 4, fontSize: '.8rem' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
+        }
+        if (/^\{\{alert\}\}/.test(trimmed)) {
+          return <div key={i} style={{ borderLeft: '3px solid #f87171', padding: '6px 10px', margin: '4px 0', background: 'rgba(248,113,113,0.05)', borderRadius: 4, fontSize: '.8rem', color: '#f87171' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
+        }
+
+        return <div key={i} style={{ marginBottom: 2 }}>{trimmed}</div>;
+      })}
+    </div>
+  );
+}
+
+
+// ─── SECTION BLOCK COMPONENT (preview-first) ───
 
 function SectionBlock({
   section,
@@ -446,92 +383,115 @@ function SectionBlock({
   justMoved,
 }) {
   const editorRef = useRef(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [localContent, setLocalContent] = useState(section.content);
 
-  // Set initial HTML only on mount or when resetCounter changes (reset action)
+  // Sync local content when reset
   useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.innerHTML = section.html;
-    }
+    setLocalContent(section.content);
+    setIsEditing(false);
   }, [resetCounter]);
 
-  // Read current content from the DOM (not from state)
+  // Read current content
   const readContent = useCallback(() => {
-    if (!editorRef.current) return { text: section.content, html: section.html };
-    const html = editorRef.current.innerHTML;
-    const text = htmlToPlaintext(html);
-    return { text, html };
-  }, [section.content, section.html]);
+    if (isEditing && editorRef.current) {
+      const html = editorRef.current.innerHTML;
+      const text = htmlToPlaintext(html);
+      return { text, html };
+    }
+    return { text: localContent, html: markdownToHtml(localContent) };
+  }, [isEditing, localContent]);
 
-  // Expose the read function to the parent
+  // Expose read function to parent
   useEffect(() => {
     onContentRead(section.id, readContent);
   }, [section.id, readContent, onContentRead]);
 
-  // Sync dirty flag on blur so save button knows there are changes
-  const handleBlur = useCallback(() => {
-    // No-op: parent reads content on demand via readContent ref
-  }, []);
+  // Enter edit mode
+  const startEditing = () => {
+    setIsEditing(true);
+  };
+
+  // Exit edit mode, save changes
+  const finishEditing = () => {
+    if (editorRef.current) {
+      const text = htmlToPlaintext(editorRef.current.innerHTML);
+      setLocalContent(text);
+    }
+    setIsEditing(false);
+  };
 
   const classNames = [
     'ne-section',
     justMoved ? 'ne-section-just-moved' : '',
   ].filter(Boolean).join(' ');
 
+  // Premium card style
+  const cardStyle = {
+    background: 'rgba(255,255,255,.03)',
+    border: isEditing ? '1.5px solid rgba(74,222,128,.4)' : '1px solid rgba(255,255,255,.06)',
+    borderRadius: 10,
+    marginBottom: 12,
+    overflow: 'hidden',
+    transition: 'border-color .2s',
+  };
+
+  const headerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 14px',
+    background: 'rgba(26,46,31,.15)',
+    borderBottom: '1px solid rgba(255,255,255,.06)',
+  };
+
+  const titleStyle = {
+    flex: 1,
+    fontSize: '.82rem',
+    fontWeight: 700,
+    color: '#f0f0e8',
+    textTransform: 'uppercase',
+    letterSpacing: '.4px',
+  };
+
   return (
-    <div className={classNames}>
-      <div className="ne-section-header">
-        <span
-          className="ne-drag-handle"
-          title="Utilisez les fleches pour reorganiser"
-          aria-hidden="true"
-        >
-          &#8942;&#8942;
-        </span>
-        <div className="ne-move-buttons">
-          <button
-            type="button"
-            className="ne-move-btn"
-            onClick={() => onMoveUp(section.id)}
-            disabled={!canMoveUp}
-            title="Deplacer vers le haut"
-            aria-label="Deplacer la section vers le haut"
-          >
-            &#9650;
-          </button>
-          <button
-            type="button"
-            className="ne-move-btn"
-            onClick={() => onMoveDown(section.id)}
-            disabled={!canMoveDown}
-            title="Deplacer vers le bas"
-            aria-label="Deplacer la section vers le bas"
-          >
-            &#9660;
-          </button>
+    <div className={classNames} style={cardStyle}>
+      {/* Header: locked title + action buttons */}
+      <div style={headerStyle}>
+        <div className="ne-move-buttons" style={{ display: 'flex', gap: 2 }}>
+          <button type="button" className="ne-move-btn" onClick={() => onMoveUp(section.id)} disabled={!canMoveUp} title="Monter">&#9650;</button>
+          <button type="button" className="ne-move-btn" onClick={() => onMoveDown(section.id)} disabled={!canMoveDown} title="Descendre">&#9660;</button>
         </div>
-        <button type="button" className="ne-collapse-btn" onClick={() => setIsCollapsed(!isCollapsed)}>
-          {isCollapsed ? '+' : '–'}
-        </button>
-        <span className="ne-section-title">{section.title}</span>
-        <div className="ne-section-actions">
+        <span style={titleStyle}>{section.title}</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {!isEditing ? (
+            <button type="button" className="ne-action-btn" onClick={startEditing} title="Modifier" style={{ color: '#4ade80', fontWeight: 600, fontSize: '.72rem' }}>Modifier</button>
+          ) : (
+            <button type="button" className="ne-action-btn" onClick={finishEditing} title="Valider" style={{ color: '#4ade80', fontWeight: 600, fontSize: '.72rem' }}>Valider</button>
+          )}
           <button type="button" className="ne-action-btn" onClick={() => onReset(section.id)} title="Reinitialiser">&#8634;</button>
           <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
         </div>
       </div>
-      {!isCollapsed && (
-        <>
-          <Toolbar editorRef={editorRef} />
-          <div
-            ref={editorRef}
-            className="ne-editor"
-            contentEditable
-            onBlur={handleBlur}
-            dangerouslySetInnerHTML={{ __html: section.html }}
-            suppressContentEditableWarning
-          />
-        </>
-      )}
+
+      {/* Body: premium render OR editor */}
+      <div style={{ padding: '12px 16px' }}>
+        {isEditing ? (
+          <>
+            <MiniToolbar editorRef={editorRef} />
+            <div
+              ref={editorRef}
+              className="ne-editor"
+              contentEditable
+              dangerouslySetInnerHTML={{ __html: markdownToHtml(localContent) }}
+              suppressContentEditableWarning
+              style={{ minHeight: 80, padding: '8px 0' }}
+            />
+          </>
+        ) : (
+          <PremiumSectionRender content={localContent} />
+        )}
+      </div>
     </div>
   );
 }
