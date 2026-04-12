@@ -38,6 +38,7 @@ import { getT } from './translations';
 import InterviewPanel from './InterviewPanel';
 import { applyInterviewNotesToForm } from './interviewTemplates';
 import QuestionnaireClient from './QuestionnaireClient';
+import Decouverte from './Decouverte';
 
 // Per-category short-label key map for the step navigator in the form header.
 const STEP_LABEL_KEYS = {
@@ -88,10 +89,13 @@ function getQuestionnaireClientId() {
 }
 
 function App() {
-  // Public route: /questionnaire/:clientId
+  // Public routes — no auth required
   const questionnaireClientId = getQuestionnaireClientId();
   if (questionnaireClientId) {
     return <QuestionnaireClient clientId={questionnaireClientId} />;
+  }
+  if (window.location.pathname === '/decouverte') {
+    return <Decouverte />;
   }
 
   // Auth state
