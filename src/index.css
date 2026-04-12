@@ -3251,11 +3251,12 @@ body{
 .q-textarea{resize:vertical;min-height:60px}
 
 /* Row layout */
-.q-row{display:flex;gap:12px}
+.q-row{display:flex;gap:16px;margin-bottom:16px}
 .q-field-half{flex:1}
 .q-field-third{flex:1}
+.q-row .q-field{margin-bottom:0}
 @media(max-width:480px){
-  .q-row{flex-direction:column;gap:0}
+  .q-row{flex-direction:column;gap:12px}
 }
 
 /* Button groups (single select) */
