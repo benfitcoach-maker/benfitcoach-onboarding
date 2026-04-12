@@ -562,7 +562,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
     try {
       const userMessage = buildUserMessage();
-      console.log('[NutritionConsultation] Prompt complet envoye a Claude :', userMessage);
 
       const planResponse = await fetch('/api/claude', {
         method: 'POST',
