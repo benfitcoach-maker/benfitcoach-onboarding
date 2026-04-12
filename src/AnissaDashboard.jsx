@@ -19,7 +19,18 @@ function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
     window.open(gmailUrl, '_blank');
   };
   return (
-    <button className="q-copy-link-btn" onClick={handleSend}>
+    <button onClick={handleSend} style={{
+      backgroundColor: '#1A2E1F',
+      color: 'white',
+      border: 'none',
+      padding: '8px 16px',
+      borderRadius: '20px',
+      cursor: 'pointer',
+      fontSize: '13px',
+      fontWeight: '500',
+      width: '100%',
+      marginTop: '8px',
+    }}>
       Envoyer questionnaire
     </button>
   );
