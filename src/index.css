@@ -3464,16 +3464,17 @@ body{
 
 /* Copy link button (dashboard) */
 .q-copy-link-btn{
-  background:rgba(42,157,92,.1);
-  border:1px solid rgba(42,157,92,.25);
-  color:#2a9d5c;
-  padding:5px 10px;
+  width:100%;
+  background:#1A2E1F;
+  border:1px solid #1A2E1F;
+  color:#fff;
+  padding:7px 10px;
   border-radius:6px;
   font-size:.72rem;
   font-weight:700;
   cursor:pointer;
   transition:all .15s;
   white-space:nowrap;
+  text-align:center;
 }
-.q-copy-link-btn:hover{background:rgba(42,157,92,.2)}
-.q-copy-link-btn.q-copied{background:#2a9d5c;color:#fff;border-color:#2a9d5c}
+.q-copy-link-btn:hover{background:#2a9d5c;border-color:#2a9d5c}

@@ -104,25 +104,27 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       </div>
 
       <div className="client-card-bottom anissa-card-bottom">
-        <div className="anissa-card-actions">
-          <button
-            className="btn btn-sm btn-anissa-primary"
-            onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
-          >
-            + Consultation
-          </button>
-          {consultations.length > 0 && (
+        <div className="anissa-card-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
-              className="btn btn-sm btn-anissa-secondary"
-              onClick={(e) => { e.stopPropagation(); onViewHistory(client.id); }}
+              className="btn btn-sm btn-anissa-primary"
+              onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
             >
-              {consultations.length} consultation{consultations.length > 1 ? 's' : ''}
+              + Consultation
             </button>
-          )}
+            {consultations.length > 0 && (
+              <button
+                className="btn btn-sm btn-anissa-secondary"
+                onClick={(e) => { e.stopPropagation(); onViewHistory(client.id); }}
+              >
+                {consultations.length} consultation{consultations.length > 1 ? 's' : ''}
+              </button>
+            )}
+            {isOwn && (
+              <button className="btn btn-xs btn-danger" onClick={handleDelete} style={{ marginLeft: 'auto' }}>x</button>
+            )}
+          </div>
           <SendQuestionnaireButton clientId={client.id} clientEmail={client.form?.email} clientPrenom={client.prenom || client.form?.prenom} />
-          {isOwn && (
-            <button className="btn btn-xs btn-danger" onClick={handleDelete}>x</button>
-          )}
         </div>
       </div>
     </div>
