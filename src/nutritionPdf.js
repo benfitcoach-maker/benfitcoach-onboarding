@@ -1,11 +1,11 @@
 import { jsPDF } from 'jspdf';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/69c276fd79d460813b99867a/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
-const GREEN = [26, 46, 31];
-const DARK_TEXT = [49, 45, 45];
+const GREEN = [26, 46, 31];       // #1A2E1F
+const DARK_TEXT = [74, 74, 66];   // #4A4A42
 const GREY_TEXT = [136, 136, 136];
 const SEPARATOR = [232, 230, 225];
-const BG_PAGE = [247, 246, 243];
+const BG_PAGE = [245, 242, 236];  // #F5F2EC
 
 function formatDateFR(iso) {
   if (!iso) return '-';
@@ -666,58 +666,16 @@ export async function exportConsultationPDF(consultation, client) {
     consultation.nutritionPlan, consultation.supplements, consultation.recipes
   );
 
-  // ─── PAGE 1: COVER ───
+  // Cover page supprimee — generee separement via exportCoverPDF
+  // Le contenu demarre directement sur la page 1
   doc.setFillColor(...BG_PAGE);
   doc.rect(0, 0, pw, 297, 'F');
+  let isFirstPage = true;
 
-  let logoData = null;
-  try { logoData = await loadImageAsBase64(LOGO_URL); } catch {}
-
-  let y = 65;
-  if (logoData) { doc.addImage(logoData, 'PNG', pw / 2 - 25, y, 50, 50); y += 58; }
-
-  y += 10;
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...GREEN);
-  doc.text('PLAN NUTRITION', pw / 2, y, { align: 'center' });
-  y += 8;
-  doc.text('PERSONNALISE', pw / 2, y, { align: 'center' });
-  y += 10;
-
-  doc.setDrawColor(...GREEN);
-  doc.setLineWidth(0.5);
-  doc.line(pw / 2 - 14, y, pw / 2 + 14, y);
-  y += 14;
-
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...DARK_TEXT);
-  doc.text(prenom, pw / 2, y, { align: 'center' });
-  y += 10;
-
-  if (objectif) {
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(...GREY_TEXT);
-    const objLines = doc.splitTextToSize(`Votre objectif : ${objectif}`, cw);
-    for (const ol of objLines) { doc.text(ol, pw / 2, y, { align: 'center' }); y += 5; }
-    y += 2;
-  }
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...GREY_TEXT);
-  doc.text(dateStr, pw / 2, y, { align: 'center' });
-
-  doc.setFontSize(9);
-  doc.text('Anissa Deroubaix Nutrition · AB Coaching Sarl', pw / 2, 268, { align: 'center' });
-  doc.text('Rue de Rive 28, 1260 Nyon', pw / 2, 274, { align: 'center' });
-
-  // ─── PAGE 2: PROGRESSION (for followup consultations) ───
+  // ─── PROGRESSION (for followup consultations) ───
   if (consultation.isFollowup && consultation.followupData) {
     const fd = consultation.followupData;
-    doc.addPage();
+    isFirstPage = false;
     y = 20;
     y = addSectionTitle(doc, 'Votre Progression', y, margin);
 
@@ -847,7 +805,7 @@ export async function exportConsultationPDF(consultation, client) {
 
   // ─── INTRODUCTION (if available) ───
   if (sections.intro) {
-    doc.addPage();
+    if (isFirstPage) { isFirstPage = false; } else { doc.addPage(); }
     y = 20;
     y = addSectionTitle(doc, 'Votre Plan En Quelques Mots', y, margin);
     y = addBody(doc, sections.intro, margin, y, cw);
@@ -856,7 +814,7 @@ export async function exportConsultationPDF(consultation, client) {
 
   // ─── WEEKS (each on new page) ───
   for (const week of sections.weeks) {
-    doc.addPage();
+    if (isFirstPage) { isFirstPage = false; } else { doc.addPage(); }
     y = 20;
     // Week title with subtle background
     doc.setFillColor(247, 249, 247);
@@ -1804,13 +1762,15 @@ export async function exportCoverPDF(consultation, client) {
   const margin = 18;
 
   const form = client?.form || {};
-  const prenom = (form.prenom || 'Client').trim();
-  const rawObjectif = (form.objectifPrincipalNutrition || form.objectifSport || '-').trim();
+  const cf = consultation?.coverFields || {};
+  const prenom = (cf.prenom || form.prenom || 'Client').trim();
+  const rawObjectif = (cf.objectif || form.objectifPrincipalNutrition || form.objectifSport || '-').trim();
   // Tronque à 80 chars avec ... si plus long (l'objectif vient d'un textarea libre)
   const objectif = rawObjectif.length > 80
     ? rawObjectif.substring(0, 79).trimEnd() + '…'
     : rawObjectif;
-  const dateStr = formatDateFR(new Date().toISOString());
+  const dateStr = cf.date || formatDateFR(new Date().toISOString());
+  const sousTitre = cf.sousTitre || 'PROTOCOLE NUTRITIONNEL PERSONNALIS\u00c9';
 
   // Type de bilan dérivé des flags de consultation (supporte snake_case et camelCase)
   const blood = !!consultation?.blood_test_done || !!consultation?.bloodTestDone;
@@ -1932,8 +1892,10 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFont('times', 'bold');
   doc.setFontSize(26);
   doc.setTextColor(...DARK_GREEN);
-  doc.text('PROTOCOLE NUTRITIONNEL', pw / 2, titleY, { align: 'center' });
-  doc.text('PERSONNALISÉ',           pw / 2, titleY + 10, { align: 'center' });
+  const titleLines = doc.splitTextToSize(sousTitre.toUpperCase(), pw - margin * 2);
+  for (let i = 0; i < titleLines.length; i++) {
+    doc.text(titleLines[i], pw / 2, titleY + i * 10, { align: 'center' });
+  }
 
   // Filet décoratif court sous le titre
   doc.setDrawColor(...DARK_GREEN);

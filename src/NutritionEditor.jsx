@@ -549,6 +549,13 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   const [resetCounter, setResetCounter] = useState(0);
   const [showAddSection, setShowAddSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [showCoverForm, setShowCoverForm] = useState(false);
+  const [coverFields, setCoverFields] = useState({
+    prenom: form?.prenom || client?.prenom || '',
+    objectif: form?.objectifPrincipalNutrition || form?.objectifPrincipal || '',
+    date: new Date().toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    sousTitre: 'Plan nutrition personnalis\u00e9',
+  });
   const [justMovedId, setJustMovedId] = useState(null);
 
   // Store content-reading functions from each SectionBlock
@@ -749,7 +756,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           Fiche Frigo
         </button>
         {onExportCover && (
-          <button type="button" className="btn btn-anissa-secondary" onClick={() => onExportCover()}>
+          <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowCoverForm(true)}>
             Cover PDF
           </button>
         )}
@@ -779,6 +786,37 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           consultation={{ ...getEditedData(), bloodTestDone: true, dnaTestDone: true }}
           onClose={() => setShowMedicalSummary(false)}
         />
+      )}
+
+      {/* Cover PDF form modal */}
+      {showCoverForm && (
+        <div className="modal-overlay" onClick={() => setShowCoverForm(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 24 }}>
+            <h3 style={{ marginBottom: 16, color: '#d4c9a8' }}>Cover PDF — personnaliser</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Prenom client</label>
+                <input type="text" value={coverFields.prenom} onChange={e => setCoverFields(p => ({ ...p, prenom: e.target.value }))} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Objectif principal</label>
+                <input type="text" value={coverFields.objectif} onChange={e => setCoverFields(p => ({ ...p, objectif: e.target.value }))} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Date</label>
+                <input type="text" value={coverFields.date} onChange={e => setCoverFields(p => ({ ...p, date: e.target.value }))} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Sous-titre</label>
+                <input type="text" value={coverFields.sousTitre} onChange={e => setCoverFields(p => ({ ...p, sousTitre: e.target.value }))} style={{ width: '100%' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-sm btn-anissa-primary" onClick={() => { onExportCover(coverFields); setShowCoverForm(false); }}>Exporter Cover</button>
+              <button className="btn btn-sm btn-secondary" onClick={() => setShowCoverForm(false)}>Annuler</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

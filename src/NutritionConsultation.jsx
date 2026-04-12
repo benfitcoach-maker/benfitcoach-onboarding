@@ -182,7 +182,27 @@ REGLES :
 - Si les donnees sont insuffisantes, genere un plan basique et indique ce qui manque
 - Langue : francais, ton professionnel mais accessible
 - Ne mentionne AUCUNE valeur medicale brute (conformite nLPD Suisse)
-- Ne JAMAIS citer ni mentionner les noms des references dans le plan genere. Utilise leurs approches et methodologies sans les nommer. Le plan doit sembler venir de l'expertise d'Anissa, pas d'une compilation de sources.`;
+- Ne JAMAIS citer ni mentionner les noms des references dans le plan genere. Utilise leurs approches et methodologies sans les nommer. Le plan doit sembler venir de l'expertise d'Anissa, pas d'une compilation de sources.
+
+METHODOLOGIE DE GENERATION DU PLAN :
+1. ANALYSE DU PROFIL - Estimer metabolisme de base (Mifflin-St Jeor), depense energetique totale. Identifier objectif principal, contraintes, symptomes cles. Si donnee manquante, le signaler.
+2. CALCUL NUTRITIONNEL - Apport calorique cible justifie. Macros : proteines (g/kg), lipides (minimum physiologique), glucides (selon activite). Verifier coherence calories/macros.
+3. PRINCIPES NUTRITIONNELS - Aliments bruts majoritaires, reduction ultra-transformes. Si troubles digestifs : introduire progressivement fibres/fermentes. Ne jamais recommander massivement fibres/fermentes sans tolerance confirmee. Repartition glucides selon activite.
+4. ALIMENTS A LIMITER - Adapter strictement aux donnees utilisateur. Aucun aliment interdit ne doit apparaitre dans les menus ensuite.
+5. STRUCTURE DES REPAS - 3 repas + 0-2 collations selon profil. Options jours entrainement/repos. Timing logique sans rigidite. Ne jamais imposer regles absolues.
+6. EXEMPLE DE JOURNEE - 1 a 3 journees types coherentes avec macros calcules, variete alimentaire, digestibilite adaptee.
+7. SUPPLEMENTATION - Seulement si pertinent. Indiquer utilite reelle et niveau de preuve. Ne jamais sur-promettre.
+8. COHERENCE GLOBALE OBLIGATOIRE - Verifier : aucun aliment interdit present, coherence macros/menus, pas de contradiction, pas d'affirmations exagerees. Si incoherence, corriger avant sortie.
+9. STYLE - Clair, structure, professionnel, pas de marketing, ton neutre et factuel.
+10. SI INCERTITUDE - ecrire explicitement "information depend du contexte, a individualiser".
+
+AUDIT OBLIGATOIRE AVANT SORTIE :
+Agis comme un auditeur. Analyse le plan genere et liste :
+- Incoherences
+- Contradictions
+- Recommandations non justifiees
+Corrige automatiquement avant validation finale.
+Ne jamais sortir un plan non audite.`;
 
 const SUPPLEMENTS_INSTRUCTION = `Genere SEPAREMENT la section SUPPLEMENTS RECOMMANDES en respectant IMPERATIVEMENT la bibliotheque de complements Benfitcoach :
 
@@ -1040,11 +1060,12 @@ ${suppText}`;
                   date: new Date().toISOString(),
                 }, client);
               }}
-              onExportCover={() => {
+              onExportCover={(coverFields) => {
                 exportCoverPDF({
                   blood_test_done: consultation.blood_test_done,
                   dna_test_done: consultation.dna_test_done,
                   date: new Date().toISOString(),
+                  coverFields,
                 }, client);
               }}
             />
