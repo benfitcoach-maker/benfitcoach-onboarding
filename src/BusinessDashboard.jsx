@@ -328,6 +328,22 @@ export default function BusinessDashboard() {
     setShowAddRevenue(false);
   };
 
+  const [editingRevenue, setEditingRevenue] = useState(null);
+  const [editRevForm, setEditRevForm] = useState({});
+
+  const startEditRevenue = (r) => {
+    setEditingRevenue(r.id);
+    setEditRevForm({ amount: String(r.amount), description: r.description || '', month: r.month, year: r.year });
+  };
+
+  const saveEditRevenue = (id) => {
+    const updated = manualRevenues.map(r =>
+      r.id === id ? { ...r, amount: Number(editRevForm.amount), description: editRevForm.description, month: Number(editRevForm.month), year: Number(editRevForm.year) } : r
+    );
+    saveManualRevenues(updated);
+    setEditingRevenue(null);
+  };
+
   const deleteRevenue = (id) => {
     saveManualRevenues(manualRevenues.filter(r => r.id !== id));
     if (isCloudEnabled && supabase) {
@@ -524,15 +540,41 @@ export default function BusinessDashboard() {
               </thead>
               <tbody>
                 {manualRevenues.map(r => (
-                  <tr key={r.id}>
-                    <td>{r.clientName}</td>
-                    <td>{formatCHF(r.amount)} CHF</td>
-                    <td>{r.description || '-'}</td>
-                    <td>{r.type === 'recurring' ? 'Recurrent' : 'One-shot'}</td>
-                    <td>{getMonthName(r.month, true)} {r.year}</td>
-                    <td>{r.note || '-'}</td>
-                    <td><button className="btn btn-xs btn-danger" onClick={() => deleteRevenue(r.id)}>x</button></td>
-                  </tr>
+                  editingRevenue === r.id ? (
+                    <tr key={r.id}>
+                      <td>{r.clientName}</td>
+                      <td><input type="number" value={editRevForm.amount} onChange={e => setEditRevForm(p => ({ ...p, amount: e.target.value }))} style={{ width: 80 }} /></td>
+                      <td><input type="text" value={editRevForm.description} onChange={e => setEditRevForm(p => ({ ...p, description: e.target.value }))} style={{ width: 120 }} /></td>
+                      <td>{r.type === 'recurring' ? 'Recurrent' : 'One-shot'}</td>
+                      <td>
+                        <select value={editRevForm.month} onChange={e => setEditRevForm(p => ({ ...p, month: Number(e.target.value) }))} style={{ width: 70 }}>
+                          {Array.from({ length: 12 }, (_, i) => <option key={i} value={i}>{getMonthName(i, true)}</option>)}
+                        </select>
+                        {' '}
+                        <select value={editRevForm.year} onChange={e => setEditRevForm(p => ({ ...p, year: Number(e.target.value) }))} style={{ width: 70 }}>
+                          {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </td>
+                      <td>{r.note || '-'}</td>
+                      <td style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-xs btn-primary" onClick={() => saveEditRevenue(r.id)}>OK</button>
+                        <button className="btn btn-xs btn-secondary" onClick={() => setEditingRevenue(null)}>x</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={r.id}>
+                      <td>{r.clientName}</td>
+                      <td>{formatCHF(r.amount)} CHF</td>
+                      <td>{r.description || '-'}</td>
+                      <td>{r.type === 'recurring' ? 'Recurrent' : 'One-shot'}</td>
+                      <td>{getMonthName(r.month, true)} {r.year}</td>
+                      <td>{r.note || '-'}</td>
+                      <td style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-xs btn-secondary" onClick={() => startEditRevenue(r)} title="Modifier">&#9998;</button>
+                        <button className="btn btn-xs btn-danger" onClick={() => deleteRevenue(r.id)}>x</button>
+                      </td>
+                    </tr>
+                  )
                 ))}
               </tbody>
             </table>
