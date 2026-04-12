@@ -37,6 +37,7 @@ import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
 import InterviewPanel from './InterviewPanel';
 import { applyInterviewNotesToForm } from './interviewTemplates';
+import QuestionnaireClient from './QuestionnaireClient';
 
 // Per-category short-label key map for the step navigator in the form header.
 const STEP_LABEL_KEYS = {
@@ -80,7 +81,19 @@ function Toast({ message, visible }) {
   );
 }
 
+// Public questionnaire route — no auth required
+function getQuestionnaireClientId() {
+  const match = window.location.pathname.match(/^\/questionnaire\/([a-f0-9-]+)$/i);
+  return match ? match[1] : null;
+}
+
 function App() {
+  // Public route: /questionnaire/:clientId
+  const questionnaireClientId = getQuestionnaireClientId();
+  if (questionnaireClientId) {
+    return <QuestionnaireClient clientId={questionnaireClientId} />;
+  }
+
   // Auth state
   const [authenticated, setAuthenticated] = useState(() => {
     if (!isCloudEnabled) return true;

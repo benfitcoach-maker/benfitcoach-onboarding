@@ -3141,3 +3141,324 @@ body{
 }
 .reminder-badge-overdue{background:rgba(251,191,36,.18);color:#fbbf24}
 .reminder-badge-upcoming{background:rgba(96,165,250,.18);color:#60a5fa}
+
+/* ─── Questionnaire Client (public page) ─── */
+.q-page{
+  min-height:100vh;
+  background:#F5F2EC;
+  font-family:'Inter',system-ui,sans-serif;
+  color:#1A2E1F;
+  padding:0;
+}
+.q-container{
+  max-width:560px;
+  margin:0 auto;
+  padding:24px 20px 40px;
+}
+.q-header{
+  text-align:center;
+  padding:20px 0 12px;
+}
+.q-logo{
+  height:64px;
+  margin-bottom:12px;
+  object-fit:contain;
+}
+.q-title{
+  font-size:1.2rem;
+  font-weight:700;
+  color:#1A2E1F;
+  margin-bottom:2px;
+}
+.q-subtitle{
+  font-size:.9rem;
+  color:#4a6b52;
+  font-weight:500;
+}
+
+/* Progress bar */
+.q-progress-bar{
+  height:6px;
+  background:rgba(26,46,31,.12);
+  border-radius:100px;
+  margin:16px 0 8px;
+  overflow:hidden;
+}
+.q-progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,#4a9966,#2a9d5c);
+  border-radius:100px;
+  transition:width .3s ease;
+}
+.q-progress-labels{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:20px;
+}
+.q-progress-label{
+  font-size:.7rem;
+  font-weight:600;
+  color:rgba(26,46,31,.35);
+  cursor:pointer;
+  transition:color .2s;
+}
+.q-progress-label-active{color:#2a9d5c}
+.q-progress-label-done{color:#1A2E1F}
+
+/* Sections */
+.q-section{animation:qFadeIn .25s ease}
+@keyframes qFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.q-section-title{
+  font-size:1.1rem;
+  font-weight:700;
+  color:#1A2E1F;
+  margin-bottom:16px;
+  padding-bottom:8px;
+  border-bottom:2px solid rgba(42,157,92,.2);
+}
+.q-section-hint{
+  font-size:.78rem;
+  color:#6b8a72;
+  margin:-10px 0 16px;
+}
+
+/* Fields */
+.q-field{margin-bottom:16px}
+.q-label{
+  display:block;
+  font-size:.82rem;
+  font-weight:600;
+  color:#1A2E1F;
+  margin-bottom:6px;
+}
+.q-input,.q-textarea{
+  width:100%;
+  padding:12px 14px;
+  border:1.5px solid rgba(26,46,31,.15);
+  border-radius:10px;
+  background:#fff;
+  font-size:.92rem;
+  color:#1A2E1F;
+  font-family:inherit;
+  transition:border-color .2s;
+  outline:none;
+}
+.q-input:focus,.q-textarea:focus{
+  border-color:#2a9d5c;
+  box-shadow:0 0 0 3px rgba(42,157,92,.1);
+}
+.q-input[readonly]{background:#f0ede6;color:#6b8a72;cursor:not-allowed}
+.q-textarea{resize:vertical;min-height:60px}
+
+/* Row layout */
+.q-row{display:flex;gap:12px}
+.q-field-half{flex:1}
+.q-field-third{flex:1}
+@media(max-width:480px){
+  .q-row{flex-direction:column;gap:0}
+}
+
+/* Button groups (single select) */
+.q-btn-group{
+  display:grid;
+  gap:8px;
+}
+.q-btn-option{
+  padding:12px 8px;
+  border:1.5px solid rgba(26,46,31,.15);
+  border-radius:10px;
+  background:#fff;
+  color:#1A2E1F;
+  font-size:.88rem;
+  font-weight:600;
+  cursor:pointer;
+  transition:all .15s;
+  text-align:center;
+}
+.q-btn-option:hover{border-color:#2a9d5c;background:rgba(42,157,92,.05)}
+.q-btn-active{
+  border-color:#2a9d5c;
+  background:#2a9d5c;
+  color:#fff;
+}
+
+/* Emoji scale */
+.q-emoji-row{
+  display:flex;
+  gap:8px;
+  justify-content:space-between;
+}
+.q-emoji-btn{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  padding:12px 4px;
+  border:1.5px solid rgba(26,46,31,.12);
+  border-radius:12px;
+  background:#fff;
+  cursor:pointer;
+  transition:all .15s;
+}
+.q-emoji-btn:hover{border-color:#2a9d5c;transform:scale(1.05)}
+.q-emoji-active{
+  border-color:#2a9d5c;
+  background:rgba(42,157,92,.1);
+  transform:scale(1.08);
+}
+.q-emoji{font-size:1.6rem}
+.q-emoji-label{font-size:.72rem;font-weight:700;color:#6b8a72}
+
+/* Checkboxes (multi select) */
+.q-checkbox-group{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.q-checkbox-btn{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:10px 16px;
+  border:1.5px solid rgba(26,46,31,.15);
+  border-radius:100px;
+  background:#fff;
+  color:#1A2E1F;
+  font-size:.85rem;
+  font-weight:600;
+  cursor:pointer;
+  transition:all .15s;
+}
+.q-checkbox-btn:hover{border-color:#2a9d5c}
+.q-checkbox-active{
+  border-color:#2a9d5c;
+  background:#2a9d5c;
+  color:#fff;
+}
+.q-check-mark{
+  display:inline-block;
+  width:16px;
+  height:16px;
+  line-height:16px;
+  text-align:center;
+  font-size:.7rem;
+  border-radius:4px;
+  border:1.5px solid rgba(26,46,31,.2);
+  background:#fff;
+  color:#2a9d5c;
+  font-weight:700;
+}
+.q-checkbox-active .q-check-mark{
+  background:#fff;
+  border-color:#fff;
+}
+
+/* Navigation */
+.q-nav{
+  display:flex;
+  align-items:center;
+  margin-top:24px;
+  padding-top:16px;
+  border-top:1px solid rgba(26,46,31,.08);
+}
+.q-nav-spacer{flex:1}
+.q-btn-prev,.q-btn-next,.q-btn-submit{
+  padding:12px 28px;
+  border:none;
+  border-radius:100px;
+  font-size:.9rem;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .15s;
+}
+.q-btn-prev{
+  background:transparent;
+  color:#4a6b52;
+  border:1.5px solid rgba(26,46,31,.15);
+}
+.q-btn-prev:hover{background:rgba(26,46,31,.05)}
+.q-btn-next{
+  background:#2a9d5c;
+  color:#fff;
+}
+.q-btn-next:hover{background:#238a4e}
+.q-btn-submit{
+  background:linear-gradient(135deg,#2a9d5c,#1A2E1F);
+  color:#fff;
+  padding:14px 36px;
+  font-size:.95rem;
+}
+.q-btn-submit:hover{opacity:.9}
+.q-btn-submit:disabled{opacity:.5;cursor:not-allowed}
+
+/* States */
+.q-loading{
+  text-align:center;
+  padding:80px 20px;
+  font-size:1rem;
+  color:#6b8a72;
+}
+.q-error-box{
+  text-align:center;
+  padding:60px 20px;
+  font-size:1rem;
+  color:#d45c4c;
+  background:rgba(212,92,76,.08);
+  border-radius:12px;
+  margin-top:20px;
+}
+.q-error-banner{
+  background:rgba(212,92,76,.1);
+  color:#d45c4c;
+  padding:10px 16px;
+  border-radius:10px;
+  margin-bottom:16px;
+  font-size:.85rem;
+  font-weight:600;
+}
+
+/* Confirmation */
+.q-confirmation{
+  text-align:center;
+  padding:60px 20px;
+}
+.q-confirm-icon{
+  width:64px;
+  height:64px;
+  margin:0 auto 16px;
+  background:#2a9d5c;
+  color:#fff;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:2rem;
+  font-weight:700;
+}
+.q-confirmation h2{
+  font-size:1.3rem;
+  color:#1A2E1F;
+  margin-bottom:8px;
+}
+.q-confirmation p{
+  color:#4a6b52;
+  font-size:.95rem;
+  line-height:1.5;
+}
+
+/* Copy link button (dashboard) */
+.q-copy-link-btn{
+  background:rgba(42,157,92,.1);
+  border:1px solid rgba(42,157,92,.25);
+  color:#2a9d5c;
+  padding:5px 10px;
+  border-radius:6px;
+  font-size:.72rem;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .15s;
+  white-space:nowrap;
+}
+.q-copy-link-btn:hover{background:rgba(42,157,92,.2)}
+.q-copy-link-btn.q-copied{background:#2a9d5c;color:#fff;border-color:#2a9d5c}

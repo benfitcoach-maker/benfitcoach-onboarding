@@ -2,6 +2,23 @@ import { useState } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient } from './store';
 
+function CopyLinkButton({ clientId }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/questionnaire/${clientId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button className={`q-copy-link-btn ${copied ? 'q-copied' : ''}`} onClick={handleCopy}>
+      {copied ? 'Copie !' : 'Lien questionnaire'}
+    </button>
+  );
+}
+
 function formatDate(iso) {
   if (!iso) return '-';
   return new Date(iso).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -96,6 +113,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               {consultations.length} consultation{consultations.length > 1 ? 's' : ''}
             </button>
           )}
+          <CopyLinkButton clientId={client.id} />
           {isOwn && (
             <button className="btn btn-xs btn-danger" onClick={handleDelete}>x</button>
           )}
