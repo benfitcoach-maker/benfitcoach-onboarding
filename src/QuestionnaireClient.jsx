@@ -252,7 +252,7 @@ function QuestionnaireClient({ clientId }) {
           <div className="q-confirmation">
             <div className="q-confirm-icon">&#10003;</div>
             <h2>Merci{clientName ? `, ${clientName}` : ''} !</h2>
-            <p>Anissa a recu vos informations et vous contactera bientot.</p>
+            <p>Anissa a reçu vos informations et vous contactera bientôt.</p>
           </div>
         </div>
       </div>
