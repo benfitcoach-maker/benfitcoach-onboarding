@@ -183,6 +183,235 @@ Pour chaque supplement :
 4. Interactions a eviter
 Termine par le TABLEAU HORAIRE PERSONNALISE. Ecris uniquement cette section.`;
 
+// ─── PLAN QUALITY SCORING ───
+
+function scorePlanQuality(planText, supplementsText, form, { isFollowup = false, followupWeek = 0 } = {}) {
+  const plan = (planText || '').toLowerCase();
+  const supps = (supplementsText || '').toLowerCase();
+  const full = plan + '\n' + supps;
+  const hardFails = [];
+  const penalties = [];
+  const notes = []; // indicateurs secondaires non scores
+
+  // --- Helpers ---
+  function extractList(field) {
+    return (form?.[field] || '').split(/[,;/]+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 2);
+  }
+
+  const allergies = extractList('allergies');
+  const alimentsEvites = extractList('alimentsEvites');
+  const forbidden = [...new Set([...allergies, ...alimentsEvites])];
+
+  // --- AXIS 1: COHERENCE (constraints respected, no contradictions) ---
+  let coherence = 10;
+
+  // Hard fail: forbidden foods (allergies/intolerances) present in plan
+  const foundForbidden = forbidden.filter(f => full.includes(f));
+  if (foundForbidden.length > 0) {
+    hardFails.push(`Aliments interdits presents : ${foundForbidden.join(', ')}`);
+    coherence = 0;
+  }
+
+  // Check calorie/macro mentions
+  const hasCalories = /\d{3,4}\s*(kcal|calories)/i.test(planText || '');
+  const hasMacros = /prot[eé]ines.*\d+\s*g/i.test(planText || '');
+  if (!isFollowup) {
+    if (!hasCalories) { coherence -= 2; penalties.push('Calories non mentionnees'); }
+    if (!hasMacros) { coherence -= 2; penalties.push('Macros non detailles'); }
+  } else {
+    // Followup: macros/calories moins critiques (ajustements partiels)
+    if (!hasCalories && !hasMacros) { coherence -= 1; penalties.push('Macros/calories absents du suivi'); }
+  }
+
+  // Penalty (not hard fail): "a limiter" items found in menus
+  const limitSection = full.match(/[àa] limiter.*?(?=\n\n|\nsemaine|$)/s);
+  if (limitSection) {
+    const limitedItems = limitSection[0].match(/[-–•]\s*(.+)/g)?.map(l => l.replace(/^[-–•]\s*/, '').trim().toLowerCase()) || [];
+    const menuSection = plan.slice(plan.indexOf('semaine'));
+    const contradictions = limitedItems.filter(item => item.length > 3 && menuSection.includes(item));
+    if (contradictions.length > 0) {
+      coherence -= 2;
+      penalties.push(`Aliments "a limiter" dans les menus : ${contradictions.slice(0, 3).join(', ')}`);
+    }
+  }
+
+  // Followup: clinical priority check (nuanced — needs 3 conditions for hard fail)
+  if (isFollowup) {
+    const wf = form?._weeklyFeedback || {};
+    const digestionDegraded = wf.digestion === 'Degrade';
+    const adherenceDegraded = wf.adherence === 'Degrade';
+    const hasSimplification = /simplifi|redui|retir|supprimer|alleger/i.test(planText || '');
+    const performanceDominant = (() => {
+      // Count performance vs digestion mentions in plan
+      const perfCount = (plan.match(/performance|entrainement|workout|pre.?workout|post.?workout/gi) || []).length;
+      const digiCount = (plan.match(/digestion|digestif|ballonnement|transit|intestin/gi) || []).length;
+      return perfCount > 3 && digiCount < 2;
+    })();
+
+    if ((digestionDegraded || adherenceDegraded) && performanceDominant && !hasSimplification) {
+      hardFails.push('Priorite clinique : digestion/adherence degradee, pas de simplification, optimisation performance dominante');
+      coherence = Math.min(coherence, 2);
+    } else if (digestionDegraded && !hasSimplification) {
+      coherence -= 2;
+      penalties.push('Digestion degradee sans simplification visible');
+    }
+  }
+
+  coherence = Math.max(coherence, 0);
+
+  // --- AXIS 2: SIMPLICITY ---
+  let simplicity = 10;
+
+  const lineCount = (planText || '').split('\n').filter(l => l.trim()).length;
+  const lineThresholdHigh = isFollowup ? 200 : 500;
+  const lineThresholdMed = isFollowup ? 120 : 350;
+  if (lineCount > lineThresholdHigh) { simplicity -= 3; penalties.push(`Plan tres long (>${lineThresholdHigh} lignes)`); }
+  else if (lineCount > lineThresholdMed) { simplicity -= 1; }
+
+  // Supplements count
+  const suppCount = (supps.match(/\b\d+\s*mg\b/gi) || []).length;
+  if (suppCount > 12) { simplicity -= 3; penalties.push(`Trop de supplements (${suppCount})`); }
+  else if (suppCount > 8) { simplicity -= 1; }
+
+  // Followup: adjustment count
+  if (isFollowup) {
+    const adjustmentMatches = plan.match(/^\s*\d+[.)]/gm) || [];
+    const maxAdjust = (followupWeek === 1 || followupWeek === 4) ? 3 : 4;
+    if (adjustmentMatches.length > maxAdjust + 2) {
+      simplicity -= 2;
+      penalties.push(`Trop d'ajustements (${adjustmentMatches.length}) pour semaine ${followupWeek}`);
+    }
+  }
+
+  simplicity = Math.max(simplicity, 0);
+
+  // --- AXIS 3: APPLICABILITY (contextual to plan type) ---
+  let applicability = 10;
+
+  const hasQuantities = /\d+\s*g\b/i.test(planText || '');
+  const hasMealStructure = /petit.?d[eé]j|d[eé]jeuner|d[iî]ner|collation/i.test(planText || '');
+  const hasShoppingList = /liste.*course|courses/i.test(planText || '');
+  const hasHydration = /hydratation|eau.*litre|litre.*eau|\d+\s*l.*eau/i.test(planText || '');
+
+  if (isFollowup) {
+    // Followup: meal structure and quantities less critical
+    if (!hasQuantities && !hasMealStructure) { applicability -= 1; penalties.push('Pas de detail concret dans les ajustements'); }
+  } else {
+    // Plan initial: full expectations
+    if (!hasQuantities) { applicability -= 2; penalties.push('Quantites absentes'); }
+    if (!hasMealStructure) { applicability -= 3; penalties.push('Structure repas absente'); }
+    if (!hasShoppingList) { applicability -= 1; penalties.push('Liste de courses absente'); }
+    if (!hasHydration) { applicability -= 1; }
+  }
+
+  applicability = Math.max(applicability, 0);
+
+  // --- AXIS 4: CONSTRAINTS (respects client profile) ---
+  let constraints = 10;
+
+  // Allergies hard fail already in coherence — double penalty on constraints
+  if (foundForbidden.length > 0) { constraints = 0; }
+
+  // Pathologies addressed
+  const pathologies = extractList('pathologies');
+  if (pathologies.length > 0) {
+    const addressed = pathologies.filter(p => full.includes(p));
+    if (addressed.length === 0) { constraints -= 3; penalties.push('Pathologies non prises en compte'); }
+  }
+
+  // Sport adaptation
+  const sportFreq = form?.frequenceSport || '';
+  if (sportFreq && sportFreq !== 'Jamais' && !/entra[iî]nement|sport|workout|repos/i.test(planText || '')) {
+    constraints -= 2; penalties.push('Pas d\'adaptation sport');
+  }
+
+  constraints = Math.max(constraints, 0);
+
+  // --- SECONDARY INDICATORS (not scored) ---
+  if (supps && !/burgerstein|pure encapsulations|nahrin|sekoya/i.test(supps)) {
+    notes.push('Aucune marque suisse mentionnee');
+  }
+
+  // --- TOTALS ---
+  const total = coherence + simplicity + applicability + constraints;
+  const normalized = Math.round((total / 40) * 100) / 10;
+
+  return {
+    coherence,
+    simplicity,
+    applicability,
+    constraints,
+    total,
+    normalized,
+    hardFails,
+    penalties,
+    notes,
+    hasHardFail: hardFails.length > 0,
+  };
+}
+
+// Score display component
+function PlanQualityScore({ score }) {
+  if (!score) return null;
+
+  const getColor = (val, max = 10) => {
+    const pct = val / max;
+    if (pct >= 0.8) return '#2a9d5c';
+    if (pct >= 0.6) return '#e8a040';
+    return '#d45c4c';
+  };
+
+  const axes = [
+    { key: 'coherence', label: 'Coherence', desc: 'Allergies, macros, contradictions' },
+    { key: 'simplicity', label: 'Simplicite', desc: 'Longueur, nb supplements, ajustements' },
+    { key: 'applicability', label: 'Applicabilite', desc: 'Quantites, structure, praticite' },
+    { key: 'constraints', label: 'Contraintes', desc: 'Pathologies, sport, profil client' },
+  ];
+
+  return (
+    <div style={{ background: 'rgba(124,92,191,.06)', border: '1px solid rgba(124,92,191,.15)', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <strong style={{ fontSize: '.9rem' }}>Score qualite du plan</strong>
+        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: getColor(score.normalized) }}>
+          {score.normalized}/10
+        </span>
+      </div>
+
+      {score.hasHardFail && (
+        <div style={{ background: 'rgba(212,92,76,.12)', border: '1px solid rgba(212,92,76,.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.8rem', color: '#d45c4c', fontWeight: 600 }}>
+          ECHEC CRITIQUE : {score.hardFails.join(' | ')}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {axes.map(({ key, label, desc }) => (
+          <div key={key} style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '8px 10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: '.78rem', fontWeight: 600 }}>{label}</span>
+              <span style={{ fontSize: '.78rem', fontWeight: 700, color: getColor(score[key]) }}>{score[key]}/10</span>
+            </div>
+            <div style={{ height: 4, background: 'rgba(255,255,255,.08)', borderRadius: 4 }}>
+              <div style={{ height: '100%', width: `${score[key] * 10}%`, background: getColor(score[key]), borderRadius: 4, transition: 'width .3s' }} />
+            </div>
+            <div style={{ fontSize: '.68rem', color: '#6b5f48', marginTop: 3 }}>{desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {score.penalties.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: '.72rem', color: '#8a8a7a' }}>
+          Penalites : {score.penalties.join(' · ')}
+        </div>
+      )}
+      {score.notes.length > 0 && (
+        <div style={{ marginTop: 4, fontSize: '.68rem', color: '#5f5848', fontStyle: 'italic' }}>
+          Notes : {score.notes.join(' · ')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -1059,6 +1288,17 @@ ${suppText}`;
               <div className="loading-spinner" />
               <p>Claude analyse le profil et genere le plan nutrition...</p>
             </div>
+          )}
+
+          {consultation.nutrition_plan && (
+            <PlanQualityScore
+              score={scorePlanQuality(
+                consultation.nutrition_plan,
+                consultation.supplements,
+                { ...form, _weeklyFeedback: weeklyFeedback },
+                { isFollowup, followupWeek }
+              )}
+            />
           )}
 
           {consultation.nutrition_plan ? (
