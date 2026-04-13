@@ -4,7 +4,7 @@ import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
 import NutritionEditor from './NutritionEditor';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
-import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF } from './nutritionPdf';
+import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF } from './nutritionPdf';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
@@ -2776,6 +2776,23 @@ ${suppText}`;
                   date: new Date().toISOString(),
                   coverFields,
                 }, client);
+              }}
+              onExportPack={(plan, supplements, recipes) => {
+                const sections = structurePlanSections(plan, supplements, { isFollowup });
+                exportClientPackPDF({
+                  nutritionPlan: cleanPlanForPDF(plan),
+                  supplements: cleanPlanForPDF(supplements),
+                  recipes,
+                  date: new Date().toISOString(),
+                  isFollowup,
+                  sections,
+                }, client, {
+                  sections,
+                  coverFields: {
+                    prenom: form.prenom || client?.prenom || '',
+                    objectif: form.objectifPrincipalNutrition || form.objectifPrincipal || '',
+                  },
+                });
               }}
             />
           ) : (

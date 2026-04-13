@@ -2288,3 +2288,250 @@ export async function exportCoverPDF(consultation, client) {
 
   doc.save(`cover-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`);
 }
+
+
+// ─────────────────────────────────────────────────────
+// PACK CLIENT COMPLET — single PDF with cover + plan + fiche frigo + guide
+// ─────────────────────────────────────────────────────
+
+export async function exportClientPackPDF(consultation, client, { sections: unifiedSections, coverFields } = {}) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pw = doc.internal.pageSize.getWidth();
+  const ph = doc.internal.pageSize.getHeight();
+  const margin = 25;
+  const cw = pw - margin * 2;
+  const form = client?.form || {};
+  const prenom = (coverFields?.prenom || form.prenom || 'Client').trim();
+  const dateStr = formatDateFR(consultation.date || new Date().toISOString());
+  const objectif = (coverFields?.objectif || form.objectifPrincipalNutrition || form.objectifSport || '').trim();
+  const sousTitre = coverFields?.sousTitre || 'Plan nutrition personnalise';
+
+  // ═══════════ PAGE 1: COVER ═══════════
+  doc.setFillColor(...BG_PAGE);
+  doc.rect(0, 0, pw, ph, 'F');
+
+  // Decorative top line
+  let y = 60;
+  doc.setDrawColor(200, 198, 190);
+  doc.setLineWidth(0.3);
+  doc.line(pw / 2 - 35, y, pw / 2 + 35, y);
+
+  y += 16;
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GREY_TEXT);
+  doc.text('Anissa Deroubaix Nutrition', pw / 2, y, { align: 'center' });
+
+  y += 20;
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  doc.text(sousTitre.toUpperCase(), pw / 2, y, { align: 'center' });
+
+  y += 14;
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...DARK_TEXT);
+  doc.text(prenom, pw / 2, y, { align: 'center' });
+
+  if (objectif) {
+    y += 20;
+    doc.setFontSize(10);
+    doc.setTextColor(...GREY_TEXT);
+    const objLines = doc.splitTextToSize(objectif, cw - 20);
+    for (const ol of objLines) {
+      doc.text(ol, pw / 2, y, { align: 'center' });
+      y += 5;
+    }
+  }
+
+  y = 200;
+  doc.setDrawColor(200, 198, 190);
+  doc.line(pw / 2 - 35, y, pw / 2 + 35, y);
+  y += 12;
+  doc.setFontSize(9);
+  doc.setTextColor(...GREY_TEXT);
+  doc.text(dateStr, pw / 2, y, { align: 'center' });
+  y += 6;
+  doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, y, { align: 'center' });
+  y += 10;
+  doc.setFontSize(7.5);
+  doc.text('Document confidentiel — usage personnel uniquement', pw / 2, y, { align: 'center' });
+
+  // ═══════════ PAGES 2+: PLAN NUTRITION ═══════════
+  if (unifiedSections && unifiedSections.length > 0) {
+    const sectionOrder = consultation.isFollowup
+      ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
+      : ['analyse', 'principes', 'plan', 'supplements', 'conseils', 'notes_coach', 'other'];
+    const sorted = [...unifiedSections].sort((a, b) => {
+      const ia = sectionOrder.indexOf(a.type);
+      const ib = sectionOrder.indexOf(b.type);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+
+    for (const sec of sorted) {
+      if (!sec.content?.trim()) continue;
+      doc.addPage();
+      doc.setFillColor(...BG_PAGE);
+      doc.rect(0, 0, pw, ph, 'F');
+      y = 20;
+      y = addSectionTitle(doc, sec.title, y, margin);
+      const tokens = parseNutritionPlan(sec.content);
+      y = renderTokens(doc, tokens, margin, y, cw);
+    }
+  } else if (consultation.nutritionPlan) {
+    // Fallback: legacy split
+    const legSections = splitPlanIntoClientSections(
+      consultation.nutritionPlan, consultation.supplements, consultation.recipes
+    );
+    for (const week of (legSections.weeks || [])) {
+      doc.addPage();
+      doc.setFillColor(...BG_PAGE);
+      doc.rect(0, 0, pw, ph, 'F');
+      y = 20;
+      y = addSectionTitle(doc, week.title, y, margin);
+      const tokens = parseNutritionPlan(week.content);
+      y = renderTokens(doc, tokens, margin, y, cw);
+    }
+  }
+
+  // ═══════════ FICHE FRIGO PAGE ═══════════
+  const meals = extractMeals(consultation.nutritionPlan || '');
+  const hasMeals = meals.breakfast.length || meals.lunch.length || meals.dinner.length;
+  if (hasMeals) {
+    doc.addPage();
+    doc.setFillColor(...BG_PAGE);
+    doc.rect(0, 0, pw, ph, 'F');
+    y = 20;
+    y = addSectionTitle(doc, 'Votre Fiche Frigo', y, margin);
+
+    const mealBlocks = [
+      { label: 'PETIT-DEJEUNER', items: meals.breakfast },
+      { label: 'DEJEUNER', items: meals.lunch },
+      { label: 'DINER', items: meals.dinner },
+    ];
+
+    for (const block of mealBlocks) {
+      if (!block.items.length) continue;
+      y = ensurePage(doc, y, 20);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      doc.text(block.label, margin + 2, y);
+      y += 2;
+      doc.setDrawColor(...GREEN);
+      doc.setLineWidth(0.4);
+      doc.line(margin + 2, y, margin + 28, y);
+      y += 6;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...DARK_TEXT);
+      for (let i = 0; i < Math.min(block.items.length, 3); i++) {
+        const lines = doc.splitTextToSize(block.items[i], cw - 10);
+        for (const l of lines) {
+          y = ensurePage(doc, y);
+          doc.text('—  ' + l, margin + 6, y);
+          y += 4.5;
+        }
+        y += 2;
+      }
+      y += 4;
+    }
+
+    // Collation
+    if (meals.snack) {
+      y = ensurePage(doc, y, 12);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      doc.text('COLLATION', margin + 2, y);
+      y += 6;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...DARK_TEXT);
+      doc.text('—  ' + meals.snack, margin + 6, y);
+      y += 8;
+    }
+
+    // A privilegier / A limiter
+    if (meals.toFavor.length) {
+      y = ensurePage(doc, y, 14);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      doc.text('A PRIVILEGIER', margin + 2, y);
+      y += 6;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...DARK_TEXT);
+      doc.text(meals.toFavor.slice(0, 10).join(', '), margin + 6, y);
+      y += 8;
+    }
+    if (meals.toLimit.length) {
+      y = ensurePage(doc, y, 14);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(180, 60, 60);
+      doc.text('A LIMITER', margin + 2, y);
+      y += 6;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...DARK_TEXT);
+      doc.text(meals.toLimit.slice(0, 10).join(', '), margin + 6, y);
+      y += 8;
+    }
+  }
+
+  // ═══════════ GUIDE DE DÉMARRAGE (last page) ═══════════
+  doc.addPage();
+  doc.setFillColor(...BG_PAGE);
+  doc.rect(0, 0, pw, ph, 'F');
+  y = 20;
+  y = addSectionTitle(doc, 'Guide de demarrage', y, margin);
+
+  const guideLines = [
+    'Commencez par la Semaine 1 : suivez les trames de repas sans chercher la perfection.',
+    'Preparez vos courses a l\'avance avec la fiche frigo — collez-la sur votre refrigerateur.',
+    'Buvez un grand verre d\'eau au reveil et avant chaque repas.',
+    'Ne sautez pas le petit-dejeuner — c\'est la cle de la stabilite energetique.',
+    'Mastiquez lentement (20 mastications par bouchee) pour ameliorer la digestion.',
+    'Les jours d\'entrainement, ajoutez un feculent a chaque repas.',
+    'Si fringale l\'apres-midi : 10 amandes + 1 fruit, pas de sucre raffine.',
+    'Notez votre energie, digestion et sommeil chaque soir (note sur 10).',
+    'Apres 2 semaines, commencez a varier avec les rotations proposees.',
+    'En cas de doute, contactez votre nutritionniste avant de modifier le plan.',
+  ];
+
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...DARK_TEXT);
+  for (const line of guideLines) {
+    y = ensurePage(doc, y, 8);
+    const wrapped = doc.splitTextToSize(line, cw - 12);
+    wrapped.forEach((wl, i) => {
+      doc.text(i === 0 ? '—  ' + wl : '     ' + wl, margin + 6, y);
+      y += 4.8;
+    });
+    y += 2;
+  }
+
+  // Closing note
+  y += 10;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...GREY_TEXT);
+  doc.text('La regularite bat l\'intensite. Mieux vaut un plan simple suivi a 90%', pw / 2, y, { align: 'center' });
+  y += 5;
+  doc.text('qu\'un plan parfait suivi a 50%.', pw / 2, y, { align: 'center' });
+
+  // ═══════════ HEADERS & FOOTERS (all pages except cover) ═══════════
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 2; i <= totalPages; i++) {
+    doc.setPage(i);
+    addHeaderFooter(doc, prenom, i - 1, totalPages - 1, dateStr);
+  }
+
+  const fileName = `pack-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`;
+  doc.save(fileName);
+}

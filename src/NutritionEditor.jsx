@@ -504,7 +504,7 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, getEditedDataRef }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef }) {
   const [sections, setSections] = useState(() =>
     parsePlanToSections(planText, supplementsText, recipesText)
   );
@@ -760,6 +760,14 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowMedicalSummary(true)}>
           Resume medecin
         </button>
+        {onExportPack && (
+          <button type="button" className="btn btn-anissa-primary" style={{ background: '#1a2e1f' }} onClick={() => {
+            const d = getEditedData();
+            onExportPack(d.plan, d.supplements, d.recipes);
+          }}>
+            Pack client complet
+          </button>
+        )}
         <button type="button" className="btn btn-anissa-secondary ne-reset-all" onClick={handleResetAll}>
           Reinitialiser tout
         </button>
