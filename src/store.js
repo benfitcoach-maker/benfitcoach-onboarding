@@ -829,3 +829,36 @@ export function markAllNotificationsRead() {
   const list = readNotifications().map(n => ({ ...n, read: true }));
   writeNotifications(list);
 }
+
+export function syncReminderNotifications(clients) {
+  const list = readNotifications();
+  // Remove stale reminder notifications (regenerated each sync)
+  const cleaned = list.filter(n => n.type !== 'consultation_reminder');
+
+  for (const c of clients) {
+    const consultations = readNutritionConsultations().filter(n => n.clientId === c.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (consultations.length === 0) continue;
+    const lastDate = consultations[0].date;
+    const freqMonths = getClientReminderFrequency(c.id);
+    const dueDate = new Date(lastDate);
+    dueDate.setMonth(dueDate.getMonth() + freqMonths);
+    const daysUntilDue = Math.ceil((dueDate - new Date()) / (1000 * 60 * 60 * 24));
+
+    if (daysUntilDue <= 0) {
+      const prenom = c.prenom || c.form?.prenom || 'Client';
+      const severity = daysUntilDue <= -30 ? 'urgent' : 'overdue';
+      const label = severity === 'urgent' ? 'Suivi urgent' : 'Suivi en retard';
+      cleaned.push({
+        id: `reminder-${c.id}`,
+        type: 'consultation_reminder',
+        clientId: c.id,
+        clientName: prenom,
+        message: `${label} : ${prenom} (${Math.abs(daysUntilDue)}j de retard)`,
+        date: dueDate.toISOString(),
+        read: false,
+      });
+    }
+  }
+
+  writeNotifications(cleaned);
+}
