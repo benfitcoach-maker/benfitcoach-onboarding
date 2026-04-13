@@ -1478,6 +1478,26 @@ function buildClinicalSummary(form, { mgdSymptoms, labAnalysis, isFollowup, foll
   return lines.join('\n');
 }
 
+// ─── CLIENT PIPELINE STATUSES ───
+
+const PIPELINE_STATUSES = [
+  { key: 'questionnaire_recu', label: 'Questionnaire recu', color: '#60a5fa' },
+  { key: 'rdv_effectue', label: 'RDV effectue', color: '#a78bfa' },
+  { key: 'attente_analyses', label: 'Attente analyses', color: '#fbbf24' },
+  { key: 'dossier_complet', label: 'Dossier complet', color: '#4ade80' },
+  { key: 'plan_en_cours', label: 'Plan en cours', color: '#f97316' },
+  { key: 'a_valider', label: 'A valider', color: '#f87171' },
+  { key: 'envoye', label: 'Envoye', color: '#22d3ee' },
+];
+
+function suggestStatus(consultation) {
+  const c = consultation || {};
+  if (c.nutrition_plan && c.nutrition_plan.trim()) return 'a_valider';
+  if (c.blood_test_done && (!c.lab_results || Object.values(c.lab_results || {}).every(v => !v))) return 'attente_analyses';
+  if (c.lab_results && Object.values(c.lab_results || {}).some(v => v)) return 'dossier_complet';
+  return null;
+}
+
 const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
@@ -1490,6 +1510,7 @@ const INITIAL_CONSULTATION = {
   private_notes: '',
   fiche_frigo_json: null,
   lab_results: {},
+  status: 'questionnaire_recu',
 };
 
 const INITIAL_FOLLOWUP = {
@@ -2202,6 +2223,37 @@ ${suppText}`;
         <h2>Consultation nutrition</h2>
         <span className="nutrition-client-name">{form.prenom || 'Client'}</span>
       </div>
+
+      {/* Pipeline status bar */}
+      {(() => {
+        const current = consultation.status || 'questionnaire_recu';
+        const statusInfo = PIPELINE_STATUSES.find(s => s.key === current) || PIPELINE_STATUSES[0];
+        const suggested = suggestStatus(consultation);
+        const suggestedInfo = suggested && suggested !== current ? PIPELINE_STATUSES.find(s => s.key === suggested) : null;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', background: 'rgba(255,255,255,.03)', borderRadius: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: '.72rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.3px', flexShrink: 0 }}>Statut</span>
+            <select
+              value={current}
+              onChange={(e) => updateField('status', e.target.value)}
+              style={{ background: statusInfo.color + '22', border: `1px solid ${statusInfo.color}55`, borderRadius: 6, padding: '4px 10px', color: statusInfo.color, fontSize: '.78rem', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+            >
+              {PIPELINE_STATUSES.map(s => (
+                <option key={s.key} value={s.key}>{s.label}</option>
+              ))}
+            </select>
+            {suggestedInfo && (
+              <button
+                type="button"
+                onClick={() => updateField('status', suggested)}
+                style={{ background: suggestedInfo.color + '18', border: `1px solid ${suggestedInfo.color}44`, borderRadius: 6, padding: '3px 10px', color: suggestedInfo.color, fontSize: '.72rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                &#8594; {suggestedInfo.label}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Followup banner */}
       {isFollowup && previousConsultation && (

@@ -195,6 +195,7 @@ function cloudSyncNutritionConsultation(consultation) {
     is_followup: consultation.isFollowup || false,
     followup_data: consultation.followupData || null,
     previous_consultation_id: consultation.previousConsultationId || null,
+    status: consultation.status || 'questionnaire_recu',
     created_at: consultation.createdAt || new Date().toISOString(),
   };
   supabase.from('nutrition_consultations').upsert(row).then(({ error }) => {
@@ -271,6 +272,7 @@ export async function pullFromCloud() {
       isFollowup: n.is_followup || false,
       followupData: n.followup_data || null,
       previousConsultationId: n.previous_consultation_id || null,
+      status: n.status || 'questionnaire_recu',
       createdAt: n.created_at,
     }));
     // Merge with existing local nutrition consultations
@@ -630,6 +632,7 @@ export function saveNutritionConsultation(consultation) {
     isFollowup: consultation.isFollowup || false,
     followupData: consultation.followupData || null,
     previousConsultationId: consultation.previousConsultationId || null,
+    status: consultation.status || 'questionnaire_recu',
     createdAt: consultation.createdAt || new Date().toISOString(),
   };
   const idx = consultations.findIndex(c => c.id === entry.id);
