@@ -175,7 +175,10 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
             <div className="field"><label>Genre</label><select value={form.genre} onChange={e => updateField('genre', e.target.value)}><option value="">-</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select></div>
             <div className="field"><label>Poids (kg)</label><input type="number" value={form.poids} onChange={e => updateField('poids', e.target.value)} /></div>
             <div className="field"><label>Taille (cm)</label><input type="number" value={form.taille} onChange={e => updateField('taille', e.target.value)} /></div>
+            <div className="field"><label>Email</label><input type="email" value={form.email || ''} onChange={e => updateField('email', e.target.value)} placeholder="email@exemple.com" /></div>
+            <div className="field"><label>Telephone</label><input type="tel" value={form.telephone || ''} onChange={e => updateField('telephone', e.target.value)} placeholder="+41..." /></div>
             <div className="field"><label>Profession</label><input type="text" value={form.profession} onChange={e => updateField('profession', e.target.value)} /></div>
+            <div className="field"><label>Pret pour protocole</label><select value={form.pretProtocole || ''} onChange={e => updateField('pretProtocole', e.target.value)}><option value="">-</option><option value="Oui">Oui</option><option value="Non">Non</option><option value="Peut-etre">Peut-etre</option></select></div>
           </div>
 
           <div className="anamnese-subsection" style={{ marginTop: 32 }}>
@@ -232,6 +235,9 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
         <div className="nutrition-form-section">
           <h3>Digestion</h3>
           <div className="form-grid">
+            <div className="field"><label>Nombre de repas / jour</label><select value={form.nbRepas || ''} onChange={e => updateField('nbRepas', e.target.value)}><option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5+">5+</option></select></div>
+            <div className="field"><label>Hydratation</label><input type="text" value={form.hydratation || ''} onChange={e => updateField('hydratation', e.target.value)} placeholder="Ex: 1.5L, < 1L..." /></div>
+            <div className="field full-width"><label>Aliments evites / intolerances</label><SmartTextarea value={form.alimentsEvites || ''} onChange={e => updateField('alimentsEvites', e.target.value)} placeholder="Gluten, lactose, FODMAPs..." rows={2} /></div>
             <div className="field full-width"><label>Ballonnements</label>
               <div className="radio-group">{['Jamais', 'Occasionnellement', 'Frequemment', 'Quotidiennement'].map(opt => (<label key={opt} className="radio-label"><input type="radio" name="frequenceBallonnements" value={opt} checked={form.frequenceBallonnements === opt} onChange={e => updateField('frequenceBallonnements', e.target.value)} /><span>{opt}</span></label>))}</div>
             </div>
