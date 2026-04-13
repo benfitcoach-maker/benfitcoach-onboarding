@@ -1169,6 +1169,169 @@ function extractFoodList(lines, fullText, mode) {
 
 
 // ─────────────────────────────────────────────────────
+// STRUCTURED FRIDGE DATA from plan sections
+// ─────────────────────────────────────────────────────
+
+/**
+ * Extract fridge data from structured sections (from structurePlanSections / parsePlanToSections).
+ * Looks for FICHE FRIGO section first, then falls back to SEMAINE 1 / REGLES.
+ * Returns null if no usable data found (caller should fall back to regex).
+ */
+export function extractFridgeDataFromSections(sections) {
+  if (!sections || sections.length === 0) return null;
+
+  // Find the fiche frigo section
+  const frigoSection = sections.find(s =>
+    /fiche\s*frigo/i.test(s.title)
+  );
+
+  if (frigoSection && frigoSection.content?.trim()) {
+    const data = parseFridgeContent(frigoSection.content);
+    if (data) return data;
+  }
+
+  // Fallback: try SEMAINE 1 for meal data + other sections for lists
+  const week1 = sections.find(s => /semaine\s*1/i.test(s.title));
+  const regles = sections.find(s => /r[eè]gles?\s*(?:simples?|cl[eé]s?)?/i.test(s.title));
+  if (!week1 && !regles) return null;
+
+  const result = { breakfast: [], lunch: [], dinner: [], snack: '', hydration: '', toFavor: [], toLimit: [] };
+
+  if (week1) {
+    const meals = extractMealsFromContent(week1.content);
+    Object.assign(result, meals);
+  }
+
+  if (regles) {
+    const hydMatch = regles.content.match(/(?:hydratation|eau)[^.\n]*?(\d[\d.,]*\s*(?:l(?:itres?)?|ml))/i);
+    if (hydMatch) result.hydration = hydMatch[1];
+  }
+
+  // Look for privilegier/limiter in any section
+  for (const sec of sections) {
+    if (!result.toFavor.length) {
+      const favor = extractListFromContent(sec.content, 'favor');
+      if (favor.length) result.toFavor = favor;
+    }
+    if (!result.toLimit.length) {
+      const limit = extractListFromContent(sec.content, 'limit');
+      if (limit.length) result.toLimit = limit;
+    }
+  }
+
+  const hasData = result.breakfast.length || result.lunch.length || result.dinner.length;
+  return hasData ? result : null;
+}
+
+function parseFridgeContent(content) {
+  const lines = content.split('\n');
+  const result = { breakfast: [], lunch: [], dinner: [], snack: '', hydration: '', toFavor: [], toLimit: [] };
+
+  let currentField = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Detect sub-headers
+    const cleaned = line.replace(/\*\*/g, '').replace(/^#{1,4}\s*/, '').replace(/^[-–•*]\s*/, '').trim();
+    const upper = cleaned.toUpperCase();
+
+    if (/petit[- ]?d[eé]jeuner/i.test(cleaned)) { currentField = 'breakfast'; continue; }
+    if (/(?<!petit[- ]?)d[eé]jeuner/i.test(cleaned) && !/petit/i.test(cleaned)) { currentField = 'lunch'; continue; }
+    if (/d[iî]ner/i.test(cleaned)) { currentField = 'dinner'; continue; }
+    if (/collation|go[uû]ter|snack/i.test(cleaned)) { currentField = 'snack'; continue; }
+    if (/a\s+privil[eé]gier|aliments?\s+recommand/i.test(cleaned)) { currentField = 'toFavor'; continue; }
+    if (/a\s+limiter|a\s+[eé]viter/i.test(cleaned)) { currentField = 'toLimit'; continue; }
+    if (/hydratation/i.test(cleaned)) { currentField = 'hydration'; continue; }
+
+    if (!currentField) continue;
+
+    // Extract bullet content
+    const bullet = line.replace(/^[-–•*\d.)\s]+/, '').trim();
+    if (!bullet || bullet.length < 3) continue;
+
+    switch (currentField) {
+      case 'breakfast': result.breakfast.push(bullet); break;
+      case 'lunch': result.lunch.push(bullet); break;
+      case 'dinner': result.dinner.push(bullet); break;
+      case 'snack':
+        result.snack = result.snack ? result.snack + '\n' + bullet : bullet;
+        break;
+      case 'toFavor': result.toFavor.push(...bullet.split(/,\s*/).filter(s => s.length > 2)); break;
+      case 'toLimit': result.toLimit.push(...bullet.split(/,\s*/).filter(s => s.length > 2)); break;
+      case 'hydration':
+        if (!result.hydration) result.hydration = bullet;
+        break;
+    }
+  }
+
+  const hasData = result.breakfast.length || result.lunch.length || result.dinner.length;
+  return hasData ? result : null;
+}
+
+function extractMealsFromContent(content) {
+  const result = { breakfast: [], lunch: [], dinner: [], snack: '' };
+  const lines = content.split('\n');
+  let currentMeal = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const cleaned = line.replace(/\*\*/g, '').replace(/^#{1,4}\s*/, '').trim();
+
+    if (/petit[- ]?d[eé]jeuner/i.test(cleaned)) { currentMeal = 'breakfast'; continue; }
+    if (/(?<!petit[- ]?)d[eé]jeuner/i.test(cleaned) && !/petit/i.test(cleaned)) { currentMeal = 'lunch'; continue; }
+    if (/d[iî]ner/i.test(cleaned)) { currentMeal = 'dinner'; continue; }
+    if (/collation|go[uû]ter|snack/i.test(cleaned)) { currentMeal = 'snack'; continue; }
+    if (/semaine|section|jour\s*(type|repos|entra)/i.test(cleaned)) { currentMeal = null; continue; }
+
+    if (!currentMeal) continue;
+    const bullet = line.replace(/^[-–•*\d.)\s]+/, '').trim();
+    if (!bullet || bullet.length < 3) continue;
+
+    if (currentMeal === 'snack') {
+      if (!result.snack) result.snack = bullet;
+    } else if (result[currentMeal].length < 4) {
+      result[currentMeal].push(bullet);
+    }
+  }
+
+  return result;
+}
+
+function extractListFromContent(content, mode) {
+  const headerRe = mode === 'favor'
+    ? /a\s+privil[eé]gier|aliments?\s+recommand/i
+    : /a\s+limiter|a\s+[eé]viter/i;
+  const stopRe = mode === 'favor'
+    ? /a\s+limiter|a\s+[eé]viter|supplements|collation|hydratation/i
+    : /a\s+privil[eé]gier|supplements|collation|hydratation/i;
+
+  const lines = content.split('\n');
+  const items = [];
+  let collecting = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (headerRe.test(line)) { collecting = true; continue; }
+    if (collecting && stopRe.test(line)) break;
+    if (!collecting) continue;
+
+    const bullet = line.replace(/^[-–•*\d.)\s]+/, '').trim();
+    if (bullet.length > 2) {
+      items.push(...bullet.split(/,\s*/).filter(s => s.length > 2));
+    }
+    if (items.length >= 15) break;
+  }
+
+  return items;
+}
+
+
+// ─────────────────────────────────────────────────────
 // SUPPLEMENT EXTRACTION for Fiche Frigo
 // ─────────────────────────────────────────────────────
 

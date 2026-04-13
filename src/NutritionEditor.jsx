@@ -733,17 +733,21 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         </button>
       </div>
 
-      {showFrigoPreview && (
-        <FicheFrigoPreview
-          consultation={{
-            nutritionPlan: getEditedData().plan,
-            supplements: getEditedData().supplements,
-            date: new Date().toISOString(),
-          }}
-          client={client}
-          onClose={() => setShowFrigoPreview(false)}
-        />
-      )}
+      {showFrigoPreview && (() => {
+        const edited = getEditedData();
+        return (
+          <FicheFrigoPreview
+            consultation={{
+              nutritionPlan: edited.plan,
+              supplements: edited.supplements,
+              date: new Date().toISOString(),
+            }}
+            sections={parsePlanToSections(edited.plan, edited.supplements, edited.recipes)}
+            client={client}
+            onClose={() => setShowFrigoPreview(false)}
+          />
+        );
+      })()}
 
       {showMedicalSummary && (
         <MedicalSummary
