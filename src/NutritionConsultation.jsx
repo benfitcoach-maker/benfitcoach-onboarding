@@ -30,6 +30,29 @@ PRIORISATION :
 - Les 2 autres problemes restent secondaires — traites uniquement si compatibles avec l'axe principal
 - Si plusieurs strategies sont possibles, choisir la plus efficace et ignorer les autres
 - Priorite clinique : pathologie > digestion > energie > objectif
+- Le probleme principal doit influencer la structure des repas, les choix alimentaires, les protocoles et les recommandations. Ne pas equilibrer les problemes, forcer un axe dominant.
+
+DECISION CLINIQUE PRIORITAIRE :
+Aucune recommandation ne doit etre standard ou generique.
+Chaque choix alimentaire doit repondre directement a un probleme physiologique identifie.
+Si une recommandation est correcte mais generique, la remplacer par une version plus specifique et ciblee.
+Toujours privilegier la precision metabolique a la simplicite generique.
+
+LOGIQUE PHYSIOLOGIQUE AVANCEE :
+Le plan doit reposer sur une logique metabolique implicite, meme sans donnees biologiques.
+Simuler une lecture clinique a partir des symptomes et du profil :
+- Glycemie instable (fringales, fatigue post-repas, antecedents familiaux) → stabilisation insulinique
+- Dysbiose / digestion fragile (ballonnements, inconfort) → reduction charge digestive + soutien microbiote
+- Stress / fatigue (sommeil court, stress eleve) → gestion cortisol + stabilite energetique
+- Inflammation latente (fatigue, retention, inconfort) → reduction aliments pro-inflammatoires
+Chaque decision alimentaire doit refleter cette logique, sans jamais l'expliquer.
+Le plan doit donner l'impression d'etre base sur des biomarqueurs, meme s'ils ne sont pas fournis.
+
+APPROCHE BIOMARQUEURS IMPLICITES :
+Sans jamais mentionner de valeurs biologiques :
+- Simuler une optimisation de : glycemie, inflammation, cortisol, sante digestive
+- Les recommandations doivent sembler ciblees et precises, comme si basees sur des analyses
+- Ne jamais citer de marqueurs, uniquement agir comme si ils etaient connus
 
 ADAPTATION :
 - Respecter strictement allergies, intolerances, aliments problematiques, preferences, rythme de vie
@@ -39,6 +62,21 @@ ADAPTATION :
 - Calories/macros : calculer avec Mifflin-St Jeor — la journee entiere doit etre coherente
 - Aucun aliment interdit ne doit apparaitre dans les menus
 - Si donnee manquante → ecrire exactement : "a individualiser"
+
+TIMING NUTRITIONNEL (CHRONOLOGIE) :
+Organiser les repas selon la physiologie :
+- Matin : stabilisation glycemique et cortisol (proteines + lipides, limiter sucres rapides)
+- Midi : repas principal metabolique (densite nutritionnelle, glucides complexes si necessaire)
+- Soir : digestion facile, charge reduite, favoriser recuperation. Le diner doit etre plus simple, plus digestible et moins dense que le dejeuner. Eviter les melanges complexes et la surcharge digestive.
+Adapter selon le profil :
+- Si fatigue → renforcer petit-dejeuner
+- Si digestion fragile → alleger diner
+- Si fringales → structurer les apports dans la journee
+Le diner est adapte au probleme principal :
+- Digestion : repas tres digestible, faible charge digestive
+- Glycemie : limiter les pics insuliniques, eviter les combinaisons a forte charge glycemique
+- Cortisol : favoriser un effet apaisant et stabilisant
+Le timing doit etre optimise sans etre explique.
 
 NIVEAU DE DIFFICULTE :
 - Simple = client peu structure, faible discipline, execution minimale
@@ -59,6 +97,8 @@ STYLE :
 - Utiliser : faire, supprimer, ajouter, remplacer, imposer, garder
 - Chaque recommandation liee implicitement a un probleme du client — le lien doit etre evident sans explication
 - Le client ne doit jamais avoir a reflechir ou choisir
+- Le plan doit etre impossible a confondre avec un plan standard internet
+- Chaque detail doit montrer un raisonnement implicite avance
 
 INTERDIT :
 - "vous pouvez", "idealement", "si vous souhaitez", "il est conseille", "manger equilibre", "varier l'alimentation", "boire suffisamment d'eau"
@@ -157,6 +197,10 @@ Semaine 2 — Stabilisation : ancrer les habitudes, ajuster si necessaire
 Semaine 3 — Optimisation : affiner timing, quantites, protocoles
 Semaine 4 — Automatisation : rendre le plan autonome, preparer la suite
 1 a 2 actions concretes maximum par semaine.
+Chaque semaine doit refleter une progression sur le probleme principal, pas une structure generique.
+Chaque semaine doit produire un effet physiologique different et identifiable sur le probleme principal.
+La progression doit suivre une logique : mise en place → stabilisation → optimisation → automatisation.
+Interdit : progression generique ou interchangeable.
 
 REGLES DE SORTIE :
 - Aucune section bonus, aucune annexe, aucun resume supplementaire
@@ -359,16 +403,43 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
     }
   }
 
+  // Formulations interdites (ton mou / generique)
+  if (!isFollowup) {
+    const softPhrases = [
+      /vous pouvez/gi, /idealement/gi, /si vous souhaitez/gi, /il est conseill[eé]/gi,
+      /n'h[eé]sitez pas/gi, /eventuellement/gi, /au choix/gi, /vous pourriez/gi,
+      /manger [eé]quilibr[eé]/gi, /varier l'alimentation/gi, /boire suffisamment/gi,
+    ];
+    let softCount = 0;
+    for (const rx of softPhrases) { softCount += (plan.match(rx) || []).length; }
+    if (softCount > 0) {
+      const penalty = Math.min(softCount, 3); // cap -3
+      coherence -= penalty;
+      penalties.push(`Formulations molles detectees (${softCount}x)`);
+    }
+  }
+
   coherence = Math.max(coherence, 0);
 
   // --- AXIS 2: SIMPLICITY ---
   let simplicity = 10;
 
+  // Word count (primary measure)
+  const wordCount = (planText || '').split(/\s+/).filter(w => w.length > 0).length;
+  if (!isFollowup) {
+    if (wordCount > 2000) { simplicity -= 3; penalties.push(`Plan trop long (${wordCount} mots, max 1600)`); }
+    else if (wordCount > 1600) { simplicity -= 1; penalties.push(`Plan un peu long (${wordCount} mots)`); }
+  }
+
+  // Line count (secondary)
   const lineCount = (planText || '').split('\n').filter(l => l.trim()).length;
-  const lineThresholdHigh = isFollowup ? 200 : 500;
-  const lineThresholdMed = isFollowup ? 120 : 350;
-  if (lineCount > lineThresholdHigh) { simplicity -= 3; penalties.push(`Plan tres long (>${lineThresholdHigh} lignes)`); }
-  else if (lineCount > lineThresholdMed) { simplicity -= 1; }
+  if (!isFollowup) {
+    if (lineCount > 200) { simplicity -= 2; penalties.push(`Plan tres long (${lineCount} lignes)`); }
+    else if (lineCount > 150) { simplicity -= 1; }
+  } else {
+    if (lineCount > 200) { simplicity -= 3; penalties.push(`Suivi trop long (>${200} lignes)`); }
+    else if (lineCount > 120) { simplicity -= 1; }
+  }
 
   // Supplements count
   const suppCount = (supps.match(/\b\d+\s*mg\b/gi) || []).length;
@@ -392,7 +463,7 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
 
   const hasQuantities = /\d+\s*g\b/i.test(planText || '');
   const hasMealStructure = /petit.?d[eé]j|d[eé]jeuner|d[iî]ner|collation/i.test(planText || '');
-  const hasShoppingList = /liste.*course|courses/i.test(planText || '');
+  const hasFichefrigo = /fiche\s*frigo/i.test(planText || '');
   const hasHydration = /hydratation|eau.*litre|litre.*eau|\d+\s*l.*eau/i.test(planText || '');
 
   if (isFollowup) {
@@ -402,8 +473,28 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
     // Plan initial: full expectations
     if (!hasQuantities) { applicability -= 2; penalties.push('Quantites absentes'); }
     if (!hasMealStructure) { applicability -= 3; penalties.push('Structure repas absente'); }
-    if (!hasShoppingList) { applicability -= 1; penalties.push('Liste de courses absente'); }
+    if (!hasFichefrigo) { applicability -= 1; penalties.push('Fiche frigo absente'); }
     if (!hasHydration) { applicability -= 1; }
+
+    // Section completeness: check 9 expected sections
+    const expectedSections = [
+      /analyse\s*du\s*profil/i,
+      /strat[eé]gie\s*nutritionnelle/i,
+      /semaine\s*1/i,
+      /rotation/i,
+      /fiche\s*frigo/i,
+      /protocoles?\s*cibl[eé]s?/i,
+      /ajustements?\s*(environnement|entra[iî]nement)/i,
+      /recommandations?\s*coach/i,
+      /plan\s*d.action/i,
+    ];
+    const missingSections = expectedSections.filter(rx => !rx.test(planText || ''));
+    if (missingSections.length > 3) {
+      applicability -= 3; penalties.push(`${missingSections.length} sections manquantes sur 9`);
+    } else if (missingSections.length > 0) {
+      applicability -= missingSections.length;
+      penalties.push(`${missingSections.length} section(s) manquante(s)`);
+    }
   }
 
   applicability = Math.max(applicability, 0);
@@ -464,9 +555,9 @@ function PlanQualityScore({ score, autoCorrected }) {
   };
 
   const axes = [
-    { key: 'coherence', label: 'Coherence', desc: 'Allergies, macros, contradictions' },
-    { key: 'simplicity', label: 'Simplicite', desc: 'Longueur, nb supplements, ajustements' },
-    { key: 'applicability', label: 'Applicabilite', desc: 'Quantites, structure, praticite' },
+    { key: 'coherence', label: 'Coherence', desc: 'Allergies, macros, contradictions, ton' },
+    { key: 'simplicity', label: 'Simplicite', desc: 'Mots, lignes, nb supplements' },
+    { key: 'applicability', label: 'Applicabilite', desc: 'Quantites, structure, sections, fiche frigo' },
     { key: 'constraints', label: 'Contraintes', desc: 'Pathologies, sport, profil client' },
   ];
 
