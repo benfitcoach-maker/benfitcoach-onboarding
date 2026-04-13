@@ -47,22 +47,51 @@ SUPPLEMENTS :
 - Terminer par un TABLEAU HORAIRE PERSONNALISE (matin a jeun / petit-dej / midi / soir / coucher).`;
 
 const FOUR_WEEKS_PROMPT = `
-PLAN ALIMENTAIRE SUR 4 SEMAINES avec variete :
+STRUCTURE DU PLAN — FORMAT PREMIUM COURT (lisible en 3 minutes) :
 
-SEMAINE 1 — Phase d'adaptation :
-- Repas simples, introduction progressive. Menus lundi-dimanche (petit-dej, dejeuner, diner + collations). Liste de courses.
+1. SYNTHESE (5-6 lignes max)
+- Objectif, priorites (max 3), points d'attention
 
-SEMAINE 2 — Rotation des recettes :
-- Nouvelles recettes, variete proteines/legumes. Menus lundi-dimanche. Liste de courses.
+2. REGLES SIMPLES
+- Structure des repas (proteine + legume + bon gras + feculent module)
+- Timing des repas
+- Hydratation (objectif + regles)
 
-SEMAINE 3 — Progression :
-- Ajustement portions, aliments specifiques. Menus lundi-dimanche. Liste de courses.
+3. SEMAINE 1 — MISE EN PLACE
+- 2 trames de journees types : jour repos + jour entrainement
+- Repas simples, repetables (petit-dej, dejeuner, collation, diner)
+- Quantites approximatives pour chaque aliment
+- PAS de detail jour par jour (lundi a dimanche) — uniquement des trames
 
-SEMAINE 4 — Consolidation :
-- Repas optimises, routine installee. Menus lundi-dimanche. Liste de courses.
+4. SEMAINES 2-4 — ROTATION & ADAPTATION
+- Rotations proteines (liste de 6-7 sources)
+- Rotations feculents (liste de 5-6 sources)
+- Regles adaptation jours entrainement vs repos
+- 3-4 substitutions rapides (tableau si/alors)
+- PAS de menus detailles jour par jour
 
-Chaque repas inclut : aliments, quantites approximatives, macros estimes.
-Ajustements jours entrainement vs repos (glucides pre/post workout).`;
+5. FICHE FRIGO
+- 3 options petit-dejeuner (1 ligne chacune)
+- 3 options dejeuner (1 ligne chacune)
+- 3 options diner (1 ligne chacune)
+- Collations (3 options, 1 ligne chacune)
+- Aliments a privilegier (liste courte)
+- Aliments a limiter (liste courte)
+
+6. AJUSTEMENTS ENTRAINEMENT
+- Tableau compact : feculents, proteines, collation, hydratation, post-entrainement pour jours sport vs repos
+
+7. SUIVI
+- Quoi observer (4-5 signaux)
+- Quand ajuster (tableau signal → action, 4-5 lignes max)
+
+REGLES DE FORMAT STRICTES :
+- Court et lisible — PAS de paragraphes longs
+- Bullet points et tableaux compacts uniquement
+- JAMAIS de menus detailles sur 7 jours ou 4 semaines
+- JAMAIS de repetitions entre sections
+- Chaque repas = 1 ligne (aliments + quantites)
+- Principe directeur en fin de plan (1 phrase)`;
 
 const AUDIT_PROMPT = `Tu es un auditeur nutrition. Analyse ce plan nutritionnel et verifie :
 
@@ -1677,7 +1706,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }));
 
     parts.push('');
-    parts.push(`Genere un plan nutrition personnalise complet sur 4 semaines avec variete, listes de courses, et alternatives naturelles avant les complements.`);
+    parts.push(`Genere un plan nutrition personnalise COURT et PREMIUM. Format compact : synthese, regles, 2 trames de journees types (semaine 1), rotations et substitutions (semaines 2-4), fiche frigo, ajustements entrainement, suivi. PAS de menus detailles jour par jour. Lisible en 3 minutes.`);
     if (hasLabData) {
       parts.push('Integre les adaptations basees sur les resultats biologiques dans le plan si pertinent.');
     }
