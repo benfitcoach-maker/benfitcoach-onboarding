@@ -514,6 +514,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   const [resetCounter, setResetCounter] = useState(0);
   const [showAddSection, setShowAddSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCoverForm, setShowCoverForm] = useState(false);
   const [coverFields, setCoverFields] = useState({
     prenom: form?.prenom || client?.prenom || '',
@@ -738,39 +739,75 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="ne-bottom-actions">
-        <button type="button" className="btn btn-anissa-primary ne-save-btn" onClick={handleSave}>
-          {saved ? 'Sauvegarde !' : 'Sauvegarder le plan'}
-        </button>
-        <button type="button" className="btn btn-anissa-secondary" onClick={() => {
-          const d = getEditedData();
-          onExportPDF(d.plan, d.supplements, d.recipes);
-        }}>
-          Exporter PDF
-        </button>
-        <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowFrigoPreview(true)}>
-          Fiche Frigo
-        </button>
-        {onExportCover && (
-          <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowCoverForm(true)}>
-            Cover PDF
-          </button>
-        )}
-        <button type="button" className="btn btn-anissa-secondary" onClick={() => setShowMedicalSummary(true)}>
-          Resume medecin
-        </button>
-        {onExportPack && (
-          <button type="button" className="btn btn-anissa-primary" style={{ background: '#1a2e1f' }} onClick={() => {
+      {/* Action buttons — restructured */}
+      <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Action principale */}
+        <div style={{ borderRadius: 14, border: '1px solid rgba(42,157,92,.35)', background: 'rgba(26,58,42,.25)', padding: '16px 18px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="ne-actions-responsive" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: '.95rem', fontWeight: 600, color: '#f0f0e8' }}>Export client</div>
+                <div style={{ fontSize: '.8rem', color: 'rgba(106,191,138,.7)', marginTop: 2 }}>Telecharger le plan nutrition au format PDF pret a envoyer.</div>
+              </div>
+              <button type="button" className="btn btn-anissa-primary" style={{ padding: '10px 22px', borderRadius: 12, fontSize: '.88rem', whiteSpace: 'nowrap' }} onClick={() => {
+                const d = getEditedData();
+                onExportPDF(d.plan, d.supplements, d.recipes);
+              }}>
+                Telecharger le plan PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions secondaires */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 16px', fontSize: '.84rem' }} onClick={() => {
             const d = getEditedData();
-            onExportPack(d.plan, d.supplements, d.recipes);
+            onExportPDF(d.plan, d.supplements, d.recipes);
           }}>
-            Pack client complet
+            Voir le PDF
           </button>
-        )}
-        <button type="button" className="btn btn-anissa-secondary ne-reset-all" onClick={handleResetAll}>
-          Reinitialiser tout
-        </button>
+          <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 16px', fontSize: '.84rem' }} onClick={() => setShowFrigoPreview(true)}>
+            Fiche frigo
+          </button>
+          <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 16px', fontSize: '.84rem', borderColor: 'rgba(106,191,138,.25)', color: '#8abf9a' }} onClick={handleSave}>
+            {saved ? 'Sauvegarde !' : 'Sauvegarder le plan'}
+          </button>
+        </div>
+
+        {/* Outils avances */}
+        <div style={{ borderRadius: 14, border: '1px solid rgba(255,255,255,.08)', background: 'rgba(255,255,255,.03)' }}>
+          <button type="button" onClick={() => setShowAdvanced(v => !v)} style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <div>
+              <div style={{ fontSize: '.85rem', fontWeight: 600, color: '#f0f0e8' }}>Outils avances</div>
+              <div style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)', marginTop: 2 }}>Cover, resume medecin, dossier complet, reinitialisation</div>
+            </div>
+            <span style={{ fontSize: '.9rem', color: 'rgba(255,255,255,.45)', fontWeight: 600 }}>{showAdvanced ? '−' : '+'}</span>
+          </button>
+          {showAdvanced && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, borderTop: '1px solid rgba(255,255,255,.08)', padding: 14 }}>
+              {onExportCover && (
+                <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 14px', fontSize: '.82rem' }} onClick={() => setShowCoverForm(true)}>
+                  Personnaliser la cover
+                </button>
+              )}
+              <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 14px', fontSize: '.82rem' }} onClick={() => setShowMedicalSummary(true)}>
+                Resume medecin
+              </button>
+              {onExportPack && (
+                <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 14px', fontSize: '.82rem' }} onClick={() => {
+                  const d = getEditedData();
+                  onExportPack(d.plan, d.supplements, d.recipes);
+                }}>
+                  Telecharger dossier client complet
+                </button>
+              )}
+              <button type="button" style={{ borderRadius: 12, padding: '10px 14px', fontSize: '.82rem', background: 'rgba(212,92,76,.08)', border: '1px solid rgba(212,92,76,.25)', color: '#d4806c', cursor: 'pointer', transition: 'background .15s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,92,76,.15)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(212,92,76,.08)'} onClick={handleResetAll}>
+                Reinitialiser
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {showFrigoPreview && (() => {
