@@ -305,39 +305,58 @@ function parseNutritionPlan(markdownText) {
 // ─────────────────────────────────────────────────────
 
 function ensurePage(doc, y, needed = 10) {
-  if (y > 272 - needed) { doc.addPage(); return 20; }
+  if (y > 272 - needed) {
+    doc.addPage();
+    doc.setFillColor(...BG_PAGE);
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 297, 'F');
+    return 20;
+  }
   return y;
 }
 
-function addHeaderFooter(doc, prenom, pageNum, totalPages) {
+function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr) {
   const pw = doc.internal.pageSize.getWidth();
   const m = 25;
-  doc.setDrawColor(...SEPARATOR);
-  doc.setLineWidth(0.3);
-  doc.line(m, 14, pw - m, 14);
-  doc.setFontSize(8);
+
+  // ─── Page background ───
+  doc.setFillColor(...BG_PAGE);
+  doc.rect(0, 0, pw, 297, 'F');
+
+  // ─── Header ───
+  doc.setDrawColor(210, 208, 200);
+  doc.setLineWidth(0.2);
+  doc.line(m, 15, pw - m, 15);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(153, 153, 153);
-  doc.text(`Plan Nutrition — ${prenom}`, m, 12);
-  doc.text('Anissa Deroubaix Nutrition', pw - m, 12, { align: 'right' });
-  doc.line(m, 282, pw - m, 282);
-  doc.text('Document confidentiel', m, 288);
-  doc.text(`Page ${pageNum}/${totalPages}`, pw - m, 288, { align: 'right' });
+  doc.setTextColor(160, 158, 150);
+  doc.text(prenom, m, 12);
+  doc.text('Plan nutrition personnalise', pw / 2, 12, { align: 'center' });
+  doc.text(dateStr || '', pw - m, 12, { align: 'right' });
+
+  // ─── Footer ───
+  doc.setDrawColor(210, 208, 200);
+  doc.line(m, 281, pw - m, 281);
+  doc.setFontSize(7);
+  doc.setTextColor(160, 158, 150);
+  doc.text('Anissa Deroubaix Nutrition', m, 287);
+  doc.text(`${pageNum} / ${totalPages}`, pw / 2, 287, { align: 'center' });
+  doc.text('Confidentiel', pw - m, 287, { align: 'right' });
 }
 
 function addSectionTitle(doc, title, y, margin) {
-  y = ensurePage(doc, y, 15);
+  y = ensurePage(doc, y, 20);
+  y += 4; // extra top margin before section
   doc.setFillColor(...GREEN);
-  doc.rect(margin, y - 3, 4, 4, 'F');
-  doc.setFontSize(14);
+  doc.rect(margin, y - 3.5, 3.5, 5, 'F');
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GREEN);
   doc.text(title.toUpperCase(), margin + 8, y);
-  y += 3;
-  doc.setDrawColor(...SEPARATOR);
-  doc.setLineWidth(0.3);
+  y += 4;
+  doc.setDrawColor(200, 198, 190);
+  doc.setLineWidth(0.25);
   doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y);
-  return y + 8;
+  return y + 10;
 }
 
 function addBody(doc, text, x, y, maxWidth) {
@@ -361,58 +380,60 @@ function renderTokens(doc, tokens, x, y, maxWidth) {
   for (const tok of tokens) {
     switch (tok.type) {
       case 'space':
-        y += 3;
+        y += 4;
         break;
 
       case 'noteblock': {
-        y = ensurePage(doc, y, 16);
-        const noteW = maxWidth - 4;
+        y = ensurePage(doc, y, 18);
+        y += 2;
+        const noteW = maxWidth - 6;
         const noteText = cleanMarkdown(tok.content);
-        const noteLines = doc.splitTextToSize(noteText, noteW - 16);
-        const noteH = Math.max(16, noteLines.length * 4.2 + 10);
+        const noteLines = doc.splitTextToSize(noteText, noteW - 18);
+        const noteH = Math.max(18, noteLines.length * 4.5 + 12);
         // Background
-        doc.setFillColor(240, 253, 244);
-        doc.rect(margin + 2, y - 3, noteW, noteH, 'F');
-        // Green left border
+        doc.setFillColor(238, 250, 242);
+        doc.roundedRect(margin + 3, y - 4, noteW, noteH, 2, 2, 'F');
+        // Green left accent
         doc.setFillColor(74, 222, 128);
-        doc.rect(margin + 2, y - 3, 2.5, noteH, 'F');
+        doc.rect(margin + 3, y - 4, 2.5, noteH, 'F');
         // Text
-        doc.setFontSize(9.5);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(74, 222, 128);
+        doc.setTextColor(40, 100, 60);
         let ny = y + 2;
         for (const nl of noteLines) {
-          doc.text(nl, margin + 10, ny);
-          ny += 4.2;
+          doc.text(nl, margin + 12, ny);
+          ny += 4.5;
         }
         doc.setTextColor(...DARK_TEXT);
-        y += noteH + 4;
+        y += noteH + 6;
         break;
       }
 
       case 'alertblock': {
-        y = ensurePage(doc, y, 16);
-        const alertW = maxWidth - 4;
+        y = ensurePage(doc, y, 18);
+        y += 2;
+        const alertW = maxWidth - 6;
         const alertText = cleanMarkdown(tok.content);
-        const alertLines = doc.splitTextToSize(alertText, alertW - 16);
-        const alertH = Math.max(16, alertLines.length * 4.2 + 10);
+        const alertLines = doc.splitTextToSize(alertText, alertW - 18);
+        const alertH = Math.max(18, alertLines.length * 4.5 + 12);
         // Background
-        doc.setFillColor(254, 242, 242);
-        doc.rect(margin + 2, y - 3, alertW, alertH, 'F');
-        // Red left border
+        doc.setFillColor(253, 240, 240);
+        doc.roundedRect(margin + 3, y - 4, alertW, alertH, 2, 2, 'F');
+        // Red left accent
         doc.setFillColor(248, 113, 113);
-        doc.rect(margin + 2, y - 3, 2.5, alertH, 'F');
+        doc.rect(margin + 3, y - 4, 2.5, alertH, 'F');
         // Text
-        doc.setFontSize(9.5);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(248, 113, 113);
+        doc.setTextColor(180, 60, 60);
         let ay = y + 2;
         for (const al of alertLines) {
-          doc.text(al, margin + 10, ay);
-          ay += 4.2;
+          doc.text(al, margin + 12, ay);
+          ay += 4.5;
         }
         doc.setTextColor(...DARK_TEXT);
-        y += alertH + 4;
+        y += alertH + 6;
         break;
       }
 
@@ -429,22 +450,22 @@ function renderTokens(doc, tokens, x, y, maxWidth) {
         break;
 
       case 'section':
-        y = ensurePage(doc, y, 14);
-        y += 6;
+        y = ensurePage(doc, y, 18);
+        y += 8;
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GREEN);
         doc.text(tok.content, margin, y);
-        y += 3;
-        doc.setDrawColor(...SEPARATOR);
+        y += 4;
+        doc.setDrawColor(200, 198, 190);
         doc.setLineWidth(0.2);
         doc.line(margin, y, pw - margin, y);
         y += 8;
         break;
 
       case 'title':
-        y = ensurePage(doc, y, 12);
-        y += 3;
+        y = ensurePage(doc, y, 14);
+        y += 5;
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GREEN);
@@ -454,32 +475,32 @@ function renderTokens(doc, tokens, x, y, maxWidth) {
           doc.text(tl, margin, y);
           y += 5;
         }
-        y += 2;
+        y += 3;
         break;
 
       case 'day':
-        y = ensurePage(doc, y, 10);
-        y += 6;
-        doc.setFillColor(248, 250, 248);
-        doc.rect(margin - 1, y - 4, maxWidth + 2, 7, 'F');
+        y = ensurePage(doc, y, 12);
+        y += 8;
+        doc.setFillColor(240, 238, 232);
+        doc.rect(margin - 1, y - 4.5, maxWidth + 2, 8, 'F');
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GREEN);
-        doc.text(tok.content, margin + 2, y);
-        y += 8;
+        doc.text(tok.content, margin + 3, y);
+        y += 10;
         break;
 
       case 'meal':
-        y = ensurePage(doc, y, 12);
-        y += 4;
-        doc.setFontSize(11);
+        y = ensurePage(doc, y, 14);
+        y += 6;
+        doc.setFontSize(10.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GREEN);
-        doc.text(tok.content, margin, y);
-        y += 2;
+        doc.text(tok.content, margin + 2, y);
+        y += 2.5;
         doc.setDrawColor(...GREEN);
-        doc.setLineWidth(0.4);
-        doc.line(margin, y, margin + 30, y);
+        doc.setLineWidth(0.5);
+        doc.line(margin + 2, y, margin + 28, y);
         y += 6;
         break;
 
@@ -507,30 +528,31 @@ function renderTokens(doc, tokens, x, y, maxWidth) {
         break;
 
       case 'bullet':
-        y = ensurePage(doc, y);
+        y = ensurePage(doc, y, 6);
         doc.setFontSize(9.5);
         doc.setFont('helvetica', 'normal');
         if (hasFormattingMarkers(tok.content)) {
           const prefix = '—  ';
           doc.setTextColor(...DARK_TEXT);
-          doc.text(prefix, margin + 5, y);
-          const bx = margin + 5 + doc.getTextWidth(prefix);
+          doc.text(prefix, margin + 6, y);
+          const bx = margin + 6 + doc.getTextWidth(prefix);
           if (hasSizeMarkers(tok.content)) {
             renderSizedLine(doc, tok.content, bx, y, DARK_TEXT);
           } else if (hasHighlightMarkers(tok.content)) {
-            renderHighlightedLine(doc, tok.content, bx, y, maxWidth - 10, DARK_TEXT);
+            renderHighlightedLine(doc, tok.content, bx, y, maxWidth - 12, DARK_TEXT);
           } else {
             renderColoredLine(doc, parseColorSegments(tok.content), bx, y, DARK_TEXT);
           }
-          y += 4.2;
+          y += 4.8;
         } else {
           doc.setTextColor(...DARK_TEXT);
-          const bulletLines = doc.splitTextToSize(tok.content, maxWidth - 10);
+          const bulletLines = doc.splitTextToSize(tok.content, maxWidth - 12);
           bulletLines.forEach((bl, i) => {
             y = ensurePage(doc, y);
-            doc.text(i === 0 ? '—  ' + bl : '    ' + bl, margin + 5, y);
-            y += 4.2;
+            doc.text(i === 0 ? '—  ' + bl : '     ' + bl, margin + 6, y);
+            y += 4.5;
           });
+          y += 0.5;
         }
         break;
 
@@ -826,7 +848,7 @@ export async function exportConsultationPDF(consultation, client) {
       y = addSectionTitle(doc, sec.title, y, margin);
       const tokens = parseNutritionPlan(sec.content);
       y = renderTokens(doc, tokens, margin, y, cw);
-      y += 8;
+      y += 12;
     }
   } else {
     // Legacy path: splitPlanIntoClientSections (backward compatibility)
@@ -900,40 +922,58 @@ export async function exportConsultationPDF(consultation, client) {
 
   // ─── CLOSING PAGE ───
   doc.addPage();
-  y = 80;
   doc.setFillColor(...BG_PAGE);
   doc.rect(0, 0, pw, 297, 'F');
 
-  doc.setFontSize(10);
+  y = 100;
+  // Decorative line
+  doc.setDrawColor(200, 198, 190);
+  doc.setLineWidth(0.3);
+  doc.line(pw / 2 - 30, y, pw / 2 + 30, y);
+  y += 14;
+
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...DARK_TEXT);
   const closingLines = [
-    `Ce plan a ete elabore specifiquement pour vous par Anissa Deroubaix,`,
-    `nutritionniste specialisee en biohacking et genetique.`,
-    ``,
-    `Il est recommande de suivre ce plan pendant 4 semaines`,
-    `avant d'envisager des ajustements.`,
+    `Ce plan a ete elabore specifiquement pour vous`,
+    `par Anissa Deroubaix, nutritionniste specialisee`,
+    `en biohacking et genetique.`,
   ];
   for (const cl of closingLines) {
     doc.text(cl, pw / 2, y, { align: 'center' });
-    y += 5;
+    y += 5.5;
   }
 
-  y += 12;
-  doc.setFontSize(9);
+  y += 6;
+  doc.setFontSize(9.5);
   doc.setTextColor(...GREY_TEXT);
-  doc.text('Anissa Deroubaix Nutrition · AB Coaching Sarl', pw / 2, y, { align: 'center' });
+  doc.text('Il est recommande de suivre ce plan pendant 4 semaines', pw / 2, y, { align: 'center' });
   y += 5;
-  doc.text('Rue de Rive 28, 1260 Nyon', pw / 2, y, { align: 'center' });
-  y += 10;
-  doc.setFontSize(8);
+  doc.text("avant d'envisager des ajustements.", pw / 2, y, { align: 'center' });
+
+  y += 20;
+  doc.setDrawColor(200, 198, 190);
+  doc.line(pw / 2 - 30, y, pw / 2 + 30, y);
+
+  y += 14;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  doc.text('Anissa Deroubaix Nutrition', pw / 2, y, { align: 'center' });
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GREY_TEXT);
+  doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, y, { align: 'center' });
+  y += 12;
+  doc.setFontSize(7.5);
   doc.text('Document confidentiel — usage personnel uniquement', pw / 2, y, { align: 'center' });
 
   // ─── HEADERS & FOOTERS (all pages except cover and closing) ───
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 2; i < totalPages; i++) {
     doc.setPage(i);
-    addHeaderFooter(doc, prenom, i - 1, totalPages - 2);
+    addHeaderFooter(doc, prenom, i - 1, totalPages - 2, dateStr);
   }
 
   const fileName = `plan-nutrition-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`;
