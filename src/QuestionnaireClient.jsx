@@ -126,6 +126,21 @@ function QuestionnaireClient({ clientId }) {
     setError('');
 
     // Map questionnaire fields to the NUTRITION_INITIAL_FORM fields
+    // Normalize scales: questionnaire uses 1-5, full anamnesis uses different ranges
+    // niveauStressActuel: questionnaire 1=high stress, 5=none → anamnesis 1-10 high=stressed
+    const rawStress = Number(form.niveauStressActuel) || 3;
+    const normalizedStress = Math.round((6 - rawStress) * 2); // 1→10, 2→8, 3→6, 4→4, 5→2
+
+    // heuresSommeil: questionnaire 1=bad, 5=excellent → approximate hours
+    const sleepMap = { '1': '4', '2': '5', '3': '6', '4': '7', '5': '8' };
+    const normalizedSleep = sleepMap[form.heuresSommeil] || form.heuresSommeil;
+
+    // fringalesSucre: not derived — too fragile from energy alone, Anissa fills manually
+
+    // difficultesEndormissement: derive from low sleep quality
+    const rawSleep = Number(form.heuresSommeil) || 3;
+    const derivedEndormissement = rawSleep <= 2 ? 'Oui' : '';
+
     const formUpdate = {
       prenom: form.prenom,
       nom: form.nom,
@@ -144,13 +159,14 @@ function QuestionnaireClient({ clientId }) {
       hydratation: form.hydratation,
       alimentsEvites: form.alimentsEvites,
       energieJournee: form.energieJournee,
-      niveauStressActuel: form.niveauStressActuel,
+      niveauStressActuel: String(normalizedStress),
       objectifPrincipalNutrition: form.objectifPrincipalNutrition.join(', '),
-      // Extra fields not in NUTRITION_INITIAL_FORM but useful
-      heuresSommeil: form.heuresSommeil,
+      heuresSommeil: normalizedSleep,
       frequenceBallonnements: form.frequenceBallonnements,
       pourquoiMaintenant: form.pourquoiMaintenant,
       pretProtocole: form.pretProtocole,
+      // Derived field (approximation, only set if not already filled by Anissa)
+      difficultesEndormissement: derivedEndormissement,
     };
 
     try {
@@ -161,7 +177,11 @@ function QuestionnaireClient({ clientId }) {
         .eq('id', clientId)
         .single();
 
-      const mergedForm = { ...(existing?.form || {}), ...formUpdate };
+      // Merge: questionnaire fills gaps, doesn't override Anissa's manual entries for derived fields
+      const existingForm = existing?.form || {};
+      const mergedForm = { ...existingForm, ...formUpdate };
+      // Preserve Anissa's value for derived field if already set
+      if (existingForm.difficultesEndormissement) mergedForm.difficultesEndormissement = existingForm.difficultesEndormissement;
 
       const { error: err } = await supabase
         .from('clients')

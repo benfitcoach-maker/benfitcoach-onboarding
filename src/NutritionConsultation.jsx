@@ -994,11 +994,11 @@ function detectSymptomsFromForm(form) {
   if (f.frequenceBallonnements && Number(f.frequenceBallonnements) <= 2) symptoms.push('digestion', 'bloating');
   else if (f.frequenceBallonnements && Number(f.frequenceBallonnements) <= 3) symptoms.push('digestion');
 
-  // Stress (scale 1-5, low = high stress)
-  if (f.niveauStressActuel && Number(f.niveauStressActuel) <= 2) symptoms.push('stress');
+  // Stress (scale 1-10, high = high stress)
+  if (f.niveauStressActuel && Number(f.niveauStressActuel) >= 7) symptoms.push('stress');
 
-  // Sleep
-  if (f.heuresSommeil && Number(f.heuresSommeil) <= 2) symptoms.push('sleep');
+  // Sleep (actual hours)
+  if (f.heuresSommeil && Number(f.heuresSommeil) <= 5) symptoms.push('sleep');
   if (f.difficultesEndormissement && /oui|souvent|regulier/i.test(f.difficultesEndormissement)) symptoms.push('sleep');
 
   // Cravings
@@ -1050,7 +1050,7 @@ function buildPreRdvSummary(form) {
   if (ballonnements && ballonnements <= 2) signals.push({ label: 'Digestion perturbee (ballonnements frequents)', priority: 1 });
   else if (ballonnements && ballonnements <= 3) signals.push({ label: 'Digestion fragile', priority: 2 });
 
-  // Stress
+  // Stress (1-10 scale, high = stressed)
   const stress = Number(f.niveauStressActuel);
   if (stress && stress >= 7) signals.push({ label: `Stress eleve (${stress}/10)`, priority: 1 });
   else if (stress && stress >= 5) signals.push({ label: `Stress modere (${stress}/10)`, priority: 3 });
