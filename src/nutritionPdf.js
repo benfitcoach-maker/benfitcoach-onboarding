@@ -661,8 +661,12 @@ export async function exportConsultationPDF(consultation, client) {
   const dateStr = formatDateFR(consultation.date);
   const objectif = form.objectifPrincipalNutrition || form.objectifSport || '';
 
-  // Split the AI plan into client-facing sections
-  const sections = splitPlanIntoClientSections(
+  // Use pre-computed sections from structurePlanSections (same as preview) if available,
+  // otherwise fall back to splitPlanIntoClientSections for backward compatibility
+  const unifiedSections = consultation.sections || null;
+
+  // Legacy fallback — only used when sections are not pre-computed
+  const legacySections = unifiedSections ? null : splitPlanIntoClientSections(
     consultation.nutritionPlan, consultation.supplements, consultation.recipes
   );
 
@@ -804,78 +808,94 @@ export async function exportConsultationPDF(consultation, client) {
     }
   }
 
-  // ─── INTRODUCTION (if available) ───
-  if (sections.intro) {
-    if (isFirstPage) { isFirstPage = false; } else { doc.addPage(); }
-    y = 20;
-    y = addSectionTitle(doc, 'Votre Plan En Quelques Mots', y, margin);
-    y = addBody(doc, sections.intro, margin, y, cw);
-    y += 12;
-  }
+  // ─── PLAN SECTIONS ───
+  if (unifiedSections) {
+    // Unified path: same sections as preview, same order
+    const sectionOrder = consultation.isFollowup
+      ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
+      : ['analyse', 'principes', 'plan', 'supplements', 'conseils', 'notes_coach', 'other'];
+    const sorted = [...unifiedSections].sort((a, b) => {
+      const ia = sectionOrder.indexOf(a.type);
+      const ib = sectionOrder.indexOf(b.type);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
 
-  // ─── WEEKS (each on new page) ───
-  for (const week of sections.weeks) {
-    if (isFirstPage) { isFirstPage = false; } else { doc.addPage(); }
-    y = 20;
-    // Week title with subtle background
-    doc.setFillColor(247, 249, 247);
-    doc.rect(margin - 2, y - 5, cw + 4, 11, 'F');
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...GREEN);
-    doc.text(week.title, margin + 2, y + 1);
-    y += 16;
+    for (const sec of sorted) {
+      if (!sec.content?.trim()) continue;
+      if (isFirstPage) { isFirstPage = false; } else if (y > 200) { doc.addPage(); y = 20; }
+      y = addSectionTitle(doc, sec.title, y, margin);
+      const tokens = parseNutritionPlan(sec.content);
+      y = renderTokens(doc, tokens, margin, y, cw);
+      y += 8;
+    }
+  } else {
+    // Legacy path: splitPlanIntoClientSections (backward compatibility)
+    const sections = legacySections;
 
-    const tokens = parseNutritionPlan(week.content);
-    y = renderTokens(doc, tokens, margin, y, cw);
-  }
+    if (sections.intro) {
+      if (isFirstPage) { isFirstPage = false; } else { doc.addPage(); }
+      y = 20;
+      y = addSectionTitle(doc, 'Votre Plan En Quelques Mots', y, margin);
+      y = addBody(doc, sections.intro, margin, y, cw);
+      y += 12;
+    }
 
-  // ─── SHOPPING LISTS (one page, one section per week) ───
-  if (sections.shopping && sections.shopping.length > 0) {
-    doc.addPage();
-    y = 20;
-    y = addSectionTitle(doc, 'Vos Listes De Courses', y, margin);
-    y += 4;
-    for (const list of sections.shopping) {
-      if (y > 250) { doc.addPage(); y = 20; }
-      // Week subtitle with background
+    for (const week of sections.weeks) {
+      if (isFirstPage) { isFirstPage = false; } else { doc.addPage(); }
+      y = 20;
       doc.setFillColor(247, 249, 247);
-      doc.rect(margin - 2, y - 5, cw + 4, 10, 'F');
-      doc.setFontSize(11);
+      doc.rect(margin - 2, y - 5, cw + 4, 11, 'F');
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...GREEN);
-      doc.text(list.title, margin + 2, y + 1);
-      y += 14;
-      const tokens = parseNutritionPlan(list.content);
+      doc.text(week.title, margin + 2, y + 1);
+      y += 16;
+      const tokens = parseNutritionPlan(week.content);
       y = renderTokens(doc, tokens, margin, y, cw);
-      y += 6;
     }
-  }
 
-  // ─── SUPPLEMENTS & NATURAL ALTERNATIVES ───
-  if (sections.supplements) {
-    if (y > 180) { doc.addPage(); y = 20; }
-    y = addSectionTitle(doc, 'Recommandations Complementaires', y, margin);
-    const tokens = parseNutritionPlan(sections.supplements);
-    y = renderTokens(doc, tokens, margin, y, cw);
-    y += 8;
-  }
+    if (sections.shopping && sections.shopping.length > 0) {
+      doc.addPage();
+      y = 20;
+      y = addSectionTitle(doc, 'Vos Listes De Courses', y, margin);
+      y += 4;
+      for (const list of sections.shopping) {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFillColor(247, 249, 247);
+        doc.rect(margin - 2, y - 5, cw + 4, 10, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GREEN);
+        doc.text(list.title, margin + 2, y + 1);
+        y += 14;
+        const tokens = parseNutritionPlan(list.content);
+        y = renderTokens(doc, tokens, margin, y, cw);
+        y += 6;
+      }
+    }
 
-  // ─── RECIPES ───
-  if (sections.recipes) {
-    if (y > 200) { doc.addPage(); y = 20; }
-    y = addSectionTitle(doc, 'Recettes Recommandees', y, margin);
-    const tokens = parseNutritionPlan(sections.recipes);
-    y = renderTokens(doc, tokens, margin, y, cw);
-    y += 8;
-  }
+    if (sections.supplements) {
+      if (y > 180) { doc.addPage(); y = 20; }
+      y = addSectionTitle(doc, 'Recommandations Complementaires', y, margin);
+      const tokens = parseNutritionPlan(sections.supplements);
+      y = renderTokens(doc, tokens, margin, y, cw);
+      y += 8;
+    }
 
-  // ─── PRACTICAL ADVICE ───
-  if (sections.advice) {
-    if (y > 200) { doc.addPage(); y = 20; }
-    y = addSectionTitle(doc, 'Vos Conseils Au Quotidien', y, margin);
-    const tokens = parseNutritionPlan(sections.advice);
-    y = renderTokens(doc, tokens, margin, y, cw);
+    if (sections.recipes) {
+      if (y > 200) { doc.addPage(); y = 20; }
+      y = addSectionTitle(doc, 'Recettes Recommandees', y, margin);
+      const tokens = parseNutritionPlan(sections.recipes);
+      y = renderTokens(doc, tokens, margin, y, cw);
+      y += 8;
+    }
+
+    if (sections.advice) {
+      if (y > 200) { doc.addPage(); y = 20; }
+      y = addSectionTitle(doc, 'Vos Conseils Au Quotidien', y, margin);
+      const tokens = parseNutritionPlan(sections.advice);
+      y = renderTokens(doc, tokens, margin, y, cw);
+    }
   }
 
   // ─── CLOSING PAGE ───

@@ -2473,10 +2473,11 @@ ${suppText}`;
           })()}
 
           {showPdfPreview && consultation.nutrition_plan && (() => {
-            // Use edited content from NutritionEditor if available, otherwise raw state
+            // Source of truth: edited content from NutritionEditor, fallback to raw state
             const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
-            const finalPlan = edited ? cleanPlanForPDF(edited.plan) : cleanPlanForPDF(consultation.nutrition_plan);
-            const finalSupp = edited ? cleanPlanForPDF(edited.supplements) : cleanPlanForPDF(consultation.supplements);
+            const finalPlan = edited ? edited.plan : consultation.nutrition_plan;
+            const finalSupp = edited ? edited.supplements : consultation.supplements;
+            // structurePlanSections applies cleanPlanForPDF internally — no double-cleaning
             return (
               <NutritionPdfBody
                 sections={structurePlanSections(finalPlan, finalSupp, { isFollowup })}
@@ -2540,21 +2541,21 @@ ${suppText}`;
                   return;
                 }
 
-                // Clean and export (body nutrition, cover generee separement)
-                const cleanedPlan = cleanPlanForPDF(plan);
-                const cleanedSupplements = cleanPlanForPDF(supplements);
+                // Same sections as preview — single source of truth
+                const sections = structurePlanSections(plan, supplements, { isFollowup });
                 exportConsultationPDF({
                   observations: consultation.observations,
                   nutritionalObservations: consultation.nutritional_observations,
                   bloodTestDone: consultation.blood_test_done,
                   dnaTestDone: consultation.dna_test_done,
-                  nutritionPlan: cleanedPlan,
-                  supplements: cleanedSupplements,
+                  nutritionPlan: cleanPlanForPDF(plan),
+                  supplements: cleanPlanForPDF(supplements),
                   recipes,
                   notesForCoach: consultation.notes_for_coach,
                   date: new Date().toISOString(),
                   isFollowup,
                   followupData: isFollowup ? followupData : null,
+                  sections,
                 }, client);
               }}
               onExportCover={(coverFields) => {
