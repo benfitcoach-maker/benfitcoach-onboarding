@@ -61,7 +61,7 @@ function extractPreviousData(prevConsultation, clientForm) {
     masseGrasse: prevFollowup.masse_grasse || form.masseGrasse || null,
     energie: prevFollowup.energie
       || form.energieJournee
-      || form.reactionGlucides
+      || (Array.isArray(form.reactionGlucides) ? form.reactionGlucides.join(', ') : form.reactionGlucides)
       || 'Non renseigne',
     sommeil: prevFollowup.sommeil
       || (form.difficultesEndormissement

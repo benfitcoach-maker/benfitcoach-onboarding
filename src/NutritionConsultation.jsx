@@ -1742,7 +1742,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       `- Energie au cours de la journee : ${form.energieJournee || nr}`,
       `- Fringales / envies de sucre : ${form.fringalesSucre || nr}`,
       `- Variations de glycemie : ${form.variationsGlycemie || nr}`,
-      `- Reaction apres repas riche en glucides : ${form.reactionGlucides || nr}`,
+      `- Reaction apres repas riche en glucides : ${Array.isArray(form.reactionGlucides) ? (form.reactionGlucides.length ? form.reactionGlucides.join(', ') : nr) : (form.reactionGlucides || nr)}`,
       ``,
       `--- ETAPE 7 : DIGESTION & MICROBIOTE ---`,
       `- Frequence ballonnements : ${form.frequenceBallonnements || nr}`,

@@ -54,7 +54,7 @@ export const NUTRITION_INITIAL_FORM = {
   energieJournee: '',
   fringalesSucre: '',
   variationsGlycemie: '',
-  reactionGlucides: '',
+  reactionGlucides: [],
   // Etape 7 - Digestion & Microbiote
   frequenceBallonnements: '',
   transitType: '',
