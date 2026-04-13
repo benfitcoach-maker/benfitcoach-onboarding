@@ -1028,6 +1028,101 @@ function detectSymptomsFromForm(form) {
   return [...new Set(symptoms)];
 }
 
+// ─── PRE-RDV CLINICAL SUMMARY (UI + AI prompt) ───
+
+function buildPreRdvSummary(form) {
+  const f = form || {};
+  const symptoms = detectSymptomsFromForm(f);
+
+  // Objective
+  const objectif = f.objectifPrincipalNutrition || f.objectifPrincipal || '';
+
+  // Scoring: detect problematic fields and rank them
+  const signals = [];
+
+  // Energy (scale fields: 1-2 = problematic, 3 = borderline)
+  const energie = Number(f.energieJournee);
+  if (energie && energie <= 2) signals.push({ label: 'Energie basse', priority: 1 });
+  else if (energie && energie <= 3) signals.push({ label: 'Energie moyenne', priority: 3 });
+
+  // Digestion
+  const ballonnements = Number(f.frequenceBallonnements);
+  if (ballonnements && ballonnements <= 2) signals.push({ label: 'Digestion perturbee (ballonnements frequents)', priority: 1 });
+  else if (ballonnements && ballonnements <= 3) signals.push({ label: 'Digestion fragile', priority: 2 });
+
+  // Stress
+  const stress = Number(f.niveauStressActuel);
+  if (stress && stress >= 7) signals.push({ label: `Stress eleve (${stress}/10)`, priority: 1 });
+  else if (stress && stress >= 5) signals.push({ label: `Stress modere (${stress}/10)`, priority: 3 });
+
+  // Sleep
+  const heures = Number(f.heuresSommeil);
+  if (heures && heures <= 5) signals.push({ label: `Sommeil insuffisant (${heures}h)`, priority: 1 });
+  else if (heures && heures <= 6) signals.push({ label: `Sommeil limite (${heures}h)`, priority: 2 });
+  if (f.difficultesEndormissement && /oui|souvent|regulier/i.test(f.difficultesEndormissement)) {
+    signals.push({ label: 'Difficultes d\'endormissement', priority: 2 });
+  }
+
+  // Cravings
+  if (f.fringalesSucre && /oui|souvent|regulier|fort/i.test(f.fringalesSucre)) {
+    signals.push({ label: 'Fringales sucrees', priority: 2 });
+  }
+
+  // Hydration
+  if (f.hydratation && /faible|insuffisant|peu|<\s*1/i.test(f.hydratation)) {
+    signals.push({ label: 'Hydratation faible', priority: 2 });
+  }
+
+  // Inflammation
+  if (f.douleursInflammations && f.douleursInflammations.trim()) {
+    signals.push({ label: 'Inflammation / douleurs', priority: 2 });
+  }
+
+  // Pathologies (always priority 1)
+  if (f.pathologies && f.pathologies.trim()) {
+    signals.push({ label: `Pathologie : ${f.pathologies.trim().slice(0, 50)}`, priority: 1 });
+  }
+
+  // Allergies
+  if (f.allergies && f.allergies.trim() && !/aucune|non|rien/i.test(f.allergies)) {
+    signals.push({ label: `Allergies : ${f.allergies.trim().slice(0, 50)}`, priority: 1 });
+  }
+
+  // Sort by priority (1 = highest)
+  signals.sort((a, b) => a.priority - b.priority);
+
+  // Build priorities (top 3 problematic signals)
+  const priorities = signals.filter(s => s.priority <= 2).slice(0, 3).map(s => s.label);
+
+  // Build vigilance points (lower priority items not in priorities)
+  const vigilance = signals.filter(s => !priorities.includes(s.label)).slice(0, 3).map(s => s.label);
+
+  // Build axes de travail (derived from priorities + symptoms)
+  const axes = [];
+  if (symptoms.includes('digestion') || symptoms.includes('bloating')) axes.push('Ameliorer le confort digestif');
+  if (symptoms.includes('fatigue')) axes.push('Restaurer l\'energie');
+  if (symptoms.includes('cravings')) axes.push('Stabiliser la glycemie et reduire les fringales');
+  if (symptoms.includes('stress') || symptoms.includes('sleep')) axes.push('Soutenir l\'axe stress-sommeil');
+  if (symptoms.includes('weight_gain') || symptoms.includes('metabolic')) axes.push('Favoriser la perte de gras');
+  if (symptoms.includes('inflammation')) axes.push('Reduire l\'inflammation');
+  if (symptoms.includes('pms_cycle') || symptoms.includes('female_hormones')) axes.push('Equilibrer le cycle hormonal');
+  if (symptoms.includes('performance')) axes.push('Optimiser la performance sportive');
+
+  // Sport context
+  const sport = [f.typeSport, f.frequenceSport ? `${f.frequenceSport}x/sem` : ''].filter(Boolean).join(' ');
+
+  return {
+    objectif,
+    priorities,
+    vigilance,
+    axes: axes.slice(0, 3),
+    sport: sport || null,
+    nbRepas: f.nbRepas || null,
+    hydratation: f.hydratation || null,
+    hasData: !!(objectif || priorities.length || axes.length),
+  };
+}
+
 function validateAnalysesPDF(symptoms, recommendations) {
   const errors = [];
   if (!symptoms || symptoms.length === 0) {
@@ -1695,6 +1790,17 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       if (labSection) parts.push(labSection);
     }
 
+    // Pre-RDV summary (priorities + axes, also shown in UI)
+    const preRdv = buildPreRdvSummary(form);
+    if (preRdv.hasData) {
+      parts.push('');
+      parts.push('--- SYNTHESE PRE-RDV (priorites detectees) ---');
+      if (preRdv.objectif) parts.push(`Objectif : ${preRdv.objectif}`);
+      if (preRdv.priorities.length > 0) parts.push(`Priorites : ${preRdv.priorities.join(' > ')}`);
+      if (preRdv.axes.length > 0) parts.push(`Axes de travail : ${preRdv.axes.join(', ')}`);
+      if (preRdv.vigilance.length > 0) parts.push(`Vigilance : ${preRdv.vigilance.join(', ')}`);
+    }
+
     // Clinical summary (orientation for AI)
     const mgdSymptoms = detectSymptomsFromForm(form);
     parts.push('');
@@ -2121,6 +2227,59 @@ ${suppText}`;
       {/* Step: Client summary (read-only) */}
       {currentStepType === 'summary' && (
         <div className="nutrition-form-section">
+          {/* Pre-RDV clinical summary */}
+          {(() => {
+            const summary = buildPreRdvSummary(form);
+            if (!summary.hasData) return null;
+            return (
+              <div style={{ background: 'rgba(26,46,31,.15)', border: '1px solid rgba(74,222,128,.2)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
+                <h4 style={{ fontSize: '.85rem', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>Synthese pre-RDV</h4>
+                {summary.objectif && (
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.3px' }}>Objectif</span>
+                    <div style={{ fontSize: '.88rem', color: '#f0f0e8', fontWeight: 600, marginTop: 2 }}>{summary.objectif}</div>
+                  </div>
+                )}
+                {summary.priorities.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.3px' }}>Priorites detectees</span>
+                    <div style={{ marginTop: 4 }}>
+                      {summary.priorities.map((p, i) => (
+                        <div key={i} style={{ fontSize: '.83rem', color: '#f87171', display: 'flex', gap: 6, marginBottom: 2 }}>
+                          <span style={{ color: '#f87171', fontWeight: 700 }}>{i + 1}.</span> {p}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {summary.vigilance.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.3px' }}>Points de vigilance</span>
+                    <div style={{ marginTop: 4 }}>
+                      {summary.vigilance.map((v, i) => (
+                        <div key={i} style={{ fontSize: '.83rem', color: '#fbbf24', display: 'flex', gap: 6, marginBottom: 2 }}>
+                          <span>&#9888;</span> {v}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {summary.axes.length > 0 && (
+                  <div>
+                    <span style={{ fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.3px' }}>Axes de travail</span>
+                    <div style={{ marginTop: 4 }}>
+                      {summary.axes.map((a, i) => (
+                        <div key={i} style={{ fontSize: '.83rem', color: '#4ade80', display: 'flex', gap: 6, marginBottom: 2 }}>
+                          <span>&#8594;</span> {a}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <h3>Resume du client</h3>
           <p className="nutrition-readonly-notice">Donnees du profil (lecture seule)</p>
           <div className="nutrition-summary-grid">
