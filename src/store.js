@@ -832,7 +832,11 @@ export function markAllNotificationsRead() {
 
 export function syncReminderNotifications(clients) {
   const list = readNotifications();
-  // Remove stale reminder notifications (regenerated each sync)
+  // Preserve read state of existing reminders before regenerating
+  const readState = {};
+  for (const n of list) {
+    if (n.type === 'consultation_reminder') readState[n.id] = n.read;
+  }
   const cleaned = list.filter(n => n.type !== 'consultation_reminder');
 
   for (const c of clients) {
@@ -848,14 +852,15 @@ export function syncReminderNotifications(clients) {
       const prenom = c.prenom || c.form?.prenom || 'Client';
       const severity = daysUntilDue <= -30 ? 'urgent' : 'overdue';
       const label = severity === 'urgent' ? 'Suivi urgent' : 'Suivi en retard';
+      const reminderId = `reminder-${c.id}`;
       cleaned.push({
-        id: `reminder-${c.id}`,
+        id: reminderId,
         type: 'consultation_reminder',
         clientId: c.id,
         clientName: prenom,
         message: `${label} : ${prenom} (${Math.abs(daysUntilDue)}j de retard)`,
         date: dueDate.toISOString(),
-        read: false,
+        read: readState[reminderId] || false,
       });
     }
   }

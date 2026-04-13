@@ -32,7 +32,7 @@ import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
 import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications } from './store';
-import { isCloudEnabled } from './supabaseClient';
+import { supabase, isCloudEnabled } from './supabaseClient';
 import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
 import InterviewPanel from './InterviewPanel';
@@ -128,18 +128,51 @@ function App() {
   const [toast, setToast] = useState({ message: '', visible: false });
   const [showReminders, setShowReminders] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [notifCount, setNotifCount] = useState(0);
 
-  // Poll unified notification count + sync reminders (every 30s, not every render)
-  useEffect(() => {
-    const sync = () => {
-      if (currentUser === 'Anissa') {
-        syncReminderNotifications([...getSharedClients(), ...getAnissaOwnClients()]);
+  // Load notifications from Supabase + sync local reminders
+  const loadNotifications = async () => {
+    // Sync local reminder notifications
+    if (currentUser === 'Anissa') {
+      syncReminderNotifications([...getSharedClients(), ...getAnissaOwnClients()]);
+    }
+
+    // Fetch from Supabase
+    if (isCloudEnabled) {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (!error && data) {
+        // Merge Supabase notifications with local reminders
+        const localReminders = getNotifications().filter(n => n.type === 'consultation_reminder');
+        const merged = [...data.map(n => ({
+          id: n.id,
+          type: n.type,
+          clientId: n.client_id,
+          clientName: n.client_name,
+          message: n.message,
+          date: n.created_at,
+          read: n.read,
+        })), ...localReminders].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const newCount = merged.filter(n => !n.read).length;
+        setNotifCount(prev => prev === newCount ? prev : newCount);
+        setNotifications(merged);
+        return;
       }
-      setNotifCount(getUnreadNotificationCount());
-    };
-    sync();
-    const interval = setInterval(sync, 30000);
+    }
+
+    // Fallback: local only
+    const local = getNotifications();
+    setNotifications(local);
+    setNotifCount(local.filter(n => !n.read).length);
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 10000);
     return () => clearInterval(interval);
   }, [currentUser]);
   const [interviewOpen, setInterviewOpen] = useState(false);
@@ -502,7 +535,7 @@ function App() {
                 {notifCount > 0 && <span className="reminder-badge" style={{ background: '#f87171' }}>{notifCount}</span>}
               </button>
               {showNotifications && (() => {
-                const notifs = getNotifications().slice(0, 20);
+                const notifs = notifications.slice(0, 20);
                 const TAG_STYLES = {
                   questionnaire_completed: { label: 'Questionnaire', color: '#4ade80' },
                   consultation_reminder: { label: 'Rappel', color: '#fbbf24' },
@@ -513,7 +546,7 @@ function App() {
                       <span style={{ fontSize: '.82rem', fontWeight: 700, color: '#f0f0e8' }}>Notifications</span>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {notifCount > 0 && (
-                          <button onClick={() => { markAllNotificationsRead(); setNotifCount(0); }} style={{ background: 'none', border: 'none', color: '#4ade80', fontSize: '.72rem', cursor: 'pointer' }}>Tout marquer lu</button>
+                          <button onClick={async () => { markAllNotificationsRead(); if (isCloudEnabled) await supabase.from('notifications').update({ read: true }).eq('read', false); loadNotifications(); }} style={{ background: 'none', border: 'none', color: '#4ade80', fontSize: '.72rem', cursor: 'pointer' }}>Tout marquer lu</button>
                         )}
                         <button onClick={() => { setShowNotifications(false); setShowReminders(true); }} style={{ background: 'none', border: 'none', color: '#8a8a7a', fontSize: '.72rem', cursor: 'pointer' }}>Gerer rappels</button>
                       </div>
@@ -526,9 +559,12 @@ function App() {
                         return (
                           <div
                             key={n.id}
-                            onClick={() => {
+                            onClick={async () => {
                               markNotificationRead(n.id);
-                              setNotifCount(getUnreadNotificationCount());
+                              if (isCloudEnabled && n.type !== 'consultation_reminder') {
+                                await supabase.from('notifications').update({ read: true }).eq('id', n.id);
+                              }
+                              loadNotifications();
                               setShowNotifications(false);
                               if (n.type === 'consultation_reminder' && n.clientId) {
                                 handleStartConsultation(n.clientId);

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { addNotification } from './store';
 
 const ANISSA_LOGO = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
@@ -175,14 +174,22 @@ function QuestionnaireClient({ clientId }) {
 
       if (err) throw err;
 
-      // Notify Anissa that questionnaire was completed
+      // Notify Anissa via Supabase (not localStorage — client browser != Anissa's)
       const fullName = [form.prenom, form.nom].filter(Boolean).join(' ') || 'Client';
-      addNotification({
-        type: 'questionnaire_completed',
-        clientId,
-        clientName: fullName,
-        message: `${fullName} a rempli son questionnaire`,
-      });
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          type: 'questionnaire_completed',
+          category: 'questionnaire',
+          client_id: clientId,
+          client_name: fullName,
+          message: `${fullName} a rempli son questionnaire`,
+          read: false,
+        });
+
+      if (notifError) {
+        console.error('Erreur notification Supabase:', notifError);
+      }
 
       setSubmitted(true);
     } catch (e) {
