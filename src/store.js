@@ -15,6 +15,7 @@ function round1OrNull(v) {
 const STORAGE_KEY = 'bfc_clients';
 const NUTRITION_KEY = 'bfc_nutrition_consultations';
 const SYNC_QUEUE_KEY = 'bfc_sync_queue';
+const NOTIFICATIONS_KEY = 'bfc_notifications';
 
 // ─── localStorage helpers (always synchronous) ───
 
@@ -768,4 +769,63 @@ export function importAllData(jsonString) {
     }
   }
   return data.clients.length;
+}
+
+
+// ─── Notifications (localStorage + optional Supabase) ───
+
+function readNotifications() {
+  try { return JSON.parse(localStorage.getItem(NOTIFICATIONS_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function writeNotifications(list) {
+  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(list));
+}
+
+export function getNotifications() {
+  return readNotifications().sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export function getUnreadNotificationCount() {
+  return readNotifications().filter(n => !n.read).length;
+}
+
+export function addNotification({ type, clientId, clientName, message }) {
+  const list = readNotifications();
+  const notif = {
+    id: crypto.randomUUID(),
+    type: type || 'info',
+    clientId: clientId || null,
+    clientName: clientName || '',
+    message: message || '',
+    date: new Date().toISOString(),
+    read: false,
+  };
+  list.push(notif);
+  writeNotifications(list);
+  // Sync to Supabase if available
+  if (isCloudEnabled) {
+    supabase.from('notifications').upsert(notif).then(({ error }) => {
+      if (error) console.warn('Notification sync failed:', error.message);
+    });
+  }
+  return notif;
+}
+
+export function markNotificationRead(id) {
+  const list = readNotifications();
+  const notif = list.find(n => n.id === id);
+  if (notif) {
+    notif.read = true;
+    writeNotifications(list);
+    if (isCloudEnabled) {
+      supabase.from('notifications').update({ read: true }).eq('id', id).then(() => {});
+    }
+  }
+}
+
+export function markAllNotificationsRead() {
+  const list = readNotifications().map(n => ({ ...n, read: true }));
+  writeNotifications(list);
 }

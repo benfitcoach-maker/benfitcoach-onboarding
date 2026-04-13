@@ -31,7 +31,7 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from './store';
 import { isCloudEnabled } from './supabaseClient';
 import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
@@ -127,6 +127,16 @@ function App() {
   const [editingConsultation, setEditingConsultation] = useState(null);
   const [toast, setToast] = useState({ message: '', visible: false });
   const [showReminders, setShowReminders] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+
+  // Poll notification count (lightweight, localStorage only)
+  useEffect(() => {
+    const updateCount = () => setNotifCount(getUnreadNotificationCount());
+    updateCount();
+    const interval = setInterval(updateCount, 10000);
+    return () => clearInterval(interval);
+  }, []);
   const [interviewOpen, setInterviewOpen] = useState(false);
   const [interviewNotes, setInterviewNotes] = useState(null);
   const interviewSaveTimer = useRef(null);
@@ -480,8 +490,52 @@ function App() {
           </div>
           <div className="header-nav">{anissaNavButtons}</div>
           <div className="header-io">
+            {/* Notifications bell */}
+            <div className="reminder-bell-wrapper" style={{ position: 'relative' }}>
+              <button className="reminder-bell" onClick={() => { setShowNotifications(prev => !prev); setShowReminders(false); }} title="Notifications">
+                &#128276;
+                {notifCount > 0 && <span className="reminder-badge" style={{ background: '#f87171' }}>{notifCount}</span>}
+              </button>
+              {showNotifications && (() => {
+                const notifs = getNotifications().slice(0, 15);
+                return (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, width: 340, background: '#1e1e1e', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,.4)', zIndex: 1000, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                      <span style={{ fontSize: '.82rem', fontWeight: 700, color: '#f0f0e8' }}>Notifications</span>
+                      {notifCount > 0 && (
+                        <button onClick={() => { markAllNotificationsRead(); setNotifCount(0); }} style={{ background: 'none', border: 'none', color: '#4ade80', fontSize: '.72rem', cursor: 'pointer' }}>Tout marquer lu</button>
+                      )}
+                    </div>
+                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      {notifs.length === 0 ? (
+                        <div style={{ padding: 20, textAlign: 'center', color: '#8a8a7a', fontSize: '.8rem' }}>Aucune notification</div>
+                      ) : notifs.map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            markNotificationRead(n.id);
+                            setNotifCount(getUnreadNotificationCount());
+                            setShowNotifications(false);
+                            if (n.clientId) {
+                              const cl = getClient(n.clientId);
+                              if (cl?.createdBy === 'anissa') handleAnissaOpenClient(n.clientId);
+                              else handleStartConsultation(n.clientId);
+                            }
+                          }}
+                          style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,.05)', cursor: 'pointer', background: n.read ? 'transparent' : 'rgba(74,222,128,.06)' }}
+                        >
+                          <div style={{ fontSize: '.8rem', color: n.read ? '#8a8a7a' : '#f0f0e8', fontWeight: n.read ? 400 : 600 }}>{n.message}</div>
+                          <div style={{ fontSize: '.68rem', color: '#6b5f48', marginTop: 2 }}>{new Date(n.date).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            {/* Reminders bell */}
             <div className="reminder-bell-wrapper">
-              <button className="reminder-bell" onClick={() => setShowReminders(true)} title="Clients a recontacter">
+              <button className="reminder-bell" onClick={() => { setShowReminders(true); setShowNotifications(false); }} title="Clients a recontacter">
                 &#128276;
                 {reminderCount > 0 && <span className="reminder-badge">{reminderCount}</span>}
               </button>
