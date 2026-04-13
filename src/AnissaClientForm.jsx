@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NUTRITION_INITIAL_FORM } from './formSteps';
 import { SmartTextarea } from './KeywordHints';
 
@@ -53,7 +53,29 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
     }
   };
 
-  const isFemme = form.genre === 'Femme';
+  const isFemme = form.genre === 'Femme' || form.genre === 'F';
+
+  // Normalize questionnaire numeric scales to Anissa radio labels on first load
+  useEffect(() => {
+    if (!initialForm) return;
+    const fixes = {};
+
+    // energieJournee: questionnaire 1-5 → radio labels
+    const energieMap = { '1': 'Fatigue en matinee', '2': "Gros coup de fatigue l'apres-midi", '3': 'Fatigue apres les repas', '4': 'Stable', '5': 'Stable' };
+    if (energieMap[form.energieJournee]) fixes.energieJournee = energieMap[form.energieJournee];
+
+    // frequenceBallonnements: questionnaire 1-5 → radio labels
+    const digestionMap = { '1': 'Quotidiennement', '2': 'Frequemment', '3': 'Occasionnellement', '4': 'Occasionnellement', '5': 'Jamais' };
+    if (digestionMap[form.frequenceBallonnements]) fixes.frequenceBallonnements = digestionMap[form.frequenceBallonnements];
+
+    // genre: questionnaire M/F → Homme/Femme
+    if (form.genre === 'M') fixes.genre = 'Homme';
+    if (form.genre === 'F') fixes.genre = 'Femme';
+
+    if (Object.keys(fixes).length > 0) {
+      setForm(prev => ({ ...prev, ...fixes }));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── QUICK CREATE MODE ───
   if (mode === 'quick' && !clientId) {
