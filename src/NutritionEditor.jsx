@@ -381,44 +381,51 @@ function SectionBlock({
   canMoveUp,
   canMoveDown,
   justMoved,
+  isActive,
+  onActivate,
 }) {
   const editorRef = useRef(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const sectionRef = useRef(null);
   const [localContent, setLocalContent] = useState(section.content);
 
   // Sync local content when reset
   useEffect(() => {
     setLocalContent(section.content);
-    setIsEditing(false);
   }, [resetCounter]);
 
   // Read current content
   const readContent = useCallback(() => {
-    if (isEditing && editorRef.current) {
+    if (isActive && editorRef.current) {
       const html = editorRef.current.innerHTML;
       const text = htmlToPlaintext(html);
       return { text, html };
     }
     return { text: localContent, html: markdownToHtml(localContent) };
-  }, [isEditing, localContent]);
+  }, [isActive, localContent]);
 
   // Expose read function to parent
   useEffect(() => {
     onContentRead(section.id, readContent);
   }, [section.id, readContent, onContentRead]);
 
-  // Enter edit mode
-  const startEditing = () => {
-    setIsEditing(true);
-  };
-
-  // Exit edit mode, save changes
-  const finishEditing = () => {
-    if (editorRef.current) {
+  // Auto-save when leaving active state
+  useEffect(() => {
+    if (!isActive && editorRef.current) {
       const text = htmlToPlaintext(editorRef.current.innerHTML);
       setLocalContent(text);
     }
-    setIsEditing(false);
+  }, [isActive]);
+
+  // Focus editor when becoming active
+  useEffect(() => {
+    if (isActive && editorRef.current) {
+      editorRef.current.focus();
+    }
+  }, [isActive]);
+
+  // Click on preview → activate this section
+  const handleContentClick = () => {
+    if (!isActive) onActivate(section.id);
   };
 
   const classNames = [
@@ -429,7 +436,7 @@ function SectionBlock({
   // Premium card style
   const cardStyle = {
     background: 'rgba(255,255,255,.03)',
-    border: isEditing ? '1.5px solid rgba(74,222,128,.4)' : '1px solid rgba(255,255,255,.06)',
+    border: isActive ? '1.5px solid rgba(74,222,128,.4)' : '1px solid rgba(255,255,255,.06)',
     borderRadius: 10,
     marginBottom: 12,
     overflow: 'hidden',
@@ -441,8 +448,9 @@ function SectionBlock({
     alignItems: 'center',
     gap: 8,
     padding: '10px 14px',
-    background: 'rgba(26,46,31,.15)',
+    background: isActive ? 'rgba(26,46,31,.25)' : 'rgba(26,46,31,.15)',
     borderBottom: '1px solid rgba(255,255,255,.06)',
+    transition: 'background .2s',
   };
 
   const titleStyle = {
@@ -455,7 +463,7 @@ function SectionBlock({
   };
 
   return (
-    <div className={classNames} style={cardStyle}>
+    <div className={classNames} style={cardStyle} ref={sectionRef}>
       {/* Header: locked title + action buttons */}
       <div style={headerStyle}>
         <div className="ne-move-buttons" style={{ display: 'flex', gap: 2 }}>
@@ -464,19 +472,14 @@ function SectionBlock({
         </div>
         <span style={titleStyle}>{section.title}</span>
         <div style={{ display: 'flex', gap: 4 }}>
-          {!isEditing ? (
-            <button type="button" className="ne-action-btn" onClick={startEditing} title="Modifier" style={{ color: '#4ade80', fontWeight: 600, fontSize: '.72rem' }}>Modifier</button>
-          ) : (
-            <button type="button" className="ne-action-btn" onClick={finishEditing} title="Valider" style={{ color: '#4ade80', fontWeight: 600, fontSize: '.72rem' }}>Valider</button>
-          )}
           <button type="button" className="ne-action-btn" onClick={() => onReset(section.id)} title="Reinitialiser">&#8634;</button>
           <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
         </div>
       </div>
 
-      {/* Body: premium render OR editor */}
+      {/* Body: click-to-edit */}
       <div style={{ padding: '12px 16px' }}>
-        {isEditing ? (
+        {isActive ? (
           <>
             <MiniToolbar editorRef={editorRef} />
             <div
@@ -489,7 +492,9 @@ function SectionBlock({
             />
           </>
         ) : (
-          <PremiumSectionRender content={localContent} />
+          <div onClick={handleContentClick} style={{ cursor: 'text', minHeight: 40 }}>
+            <PremiumSectionRender content={localContent} />
+          </div>
         )}
       </div>
     </div>
@@ -517,9 +522,32 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     sousTitre: 'Plan nutrition personnalis\u00e9',
   });
   const [justMovedId, setJustMovedId] = useState(null);
+  const [activeSectionId, setActiveSectionId] = useState(null);
+  const editorContainerRef = useRef(null);
 
   // Store content-reading functions from each SectionBlock
   const contentReadersRef = useRef({});
+
+  // Deactivate section when clicking outside any section
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!activeSectionId) return;
+      // Don't deactivate if clicking inside the editor container (toolbar buttons, etc.)
+      if (editorContainerRef.current && editorContainerRef.current.contains(e.target)) {
+        // But do deactivate if the click is on a non-section area (buttons bar, profile, etc.)
+        const sectionEl = e.target.closest('.ne-section');
+        if (!sectionEl) setActiveSectionId(null);
+      } else {
+        setActiveSectionId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeSectionId]);
+
+  const handleActivateSection = useCallback((id) => {
+    setActiveSectionId(id);
+  }, []);
 
   // Re-parse when AI generates new content
   useEffect(() => {
@@ -554,6 +582,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   }, []);
 
   const handleReset = useCallback((id) => {
+    setActiveSectionId(null);
     setSections(prev => prev.map(s =>
       s.id === id ? { ...s, content: s.originalContent, html: markdownToHtml(s.originalContent) } : s
     ));
@@ -563,6 +592,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
 
   const handleResetAll = () => {
     if (!confirm('Reinitialiser tout le contenu au plan original de l\'IA ?')) return;
+    setActiveSectionId(null);
     setSections(parsePlanToSections(planText, supplementsText, recipesText));
     setResetCounter(c => c + 1);
     setSaved(false);
@@ -653,7 +683,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   if (sections.length === 0) return null;
 
   return (
-    <div className="ne-container">
+    <div className="ne-container" ref={editorContainerRef}>
       {/* Read-only profile summary */}
       <div className="ne-profile">
         <span className="ne-section-title">PROFIL CLIENT</span>
@@ -676,6 +706,8 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           canMoveUp={idx > 0}
           canMoveDown={idx < sections.length - 1}
           justMoved={justMovedId === section.id}
+          isActive={activeSectionId === section.id}
+          onActivate={handleActivateSection}
         />
       ))}
 
