@@ -163,12 +163,11 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
         ))}
       </div>
 
-      {/* ─── ETAPE 1 : Identite ─── */}
       {/* ─── ETAPE 1 : Validation & Mesures ─── */}
       {step === 1 && (
         <div className="nutrition-form-section">
           <h3>Validation des donnees client & Mesures</h3>
-          <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 12 }}>Ces donnees proviennent du questionnaire client — verifiez et corrigez si necessaire.</p>
+          <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 20 }}>Ces donnees proviennent du questionnaire client — verifiez et corrigez si necessaire.</p>
           <div className="form-grid">
             <div className="field"><label>Prenom *</label><input type="text" value={form.prenom} onChange={e => updateField('prenom', e.target.value)} /></div>
             <div className="field"><label>Nom</label><input type="text" value={form.nom} onChange={e => updateField('nom', e.target.value)} /></div>
@@ -179,7 +178,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
             <div className="field"><label>Profession</label><input type="text" value={form.profession} onChange={e => updateField('profession', e.target.value)} /></div>
           </div>
 
-          <div className="anamnese-subsection">
+          <div className="anamnese-subsection" style={{ marginTop: 32 }}>
             <h4>Mesures corporelles</h4>
             <div className="form-grid">
               <div className="field"><label>Tour de taille (cm)</label><input type="number" step="0.1" value={form.tourTaille || ''} onChange={e => updateField('tourTaille', e.target.value)} /></div>
@@ -192,7 +191,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
             </div>
           </div>
 
-          <div className="anamnese-subsection">
+          <div className="anamnese-subsection" style={{ marginTop: 32 }}>
             <h4>Antecedents & Allergies</h4>
             <div className="form-grid">
               <div className="field full-width"><label>Pathologies</label><SmartTextarea value={form.pathologies} onChange={e => updateField('pathologies', e.target.value)} placeholder="Thyroide, diabete, SIBO..." rows={3} /></div>
