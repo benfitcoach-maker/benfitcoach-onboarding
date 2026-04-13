@@ -1481,6 +1481,7 @@ function buildClinicalSummary(form, { mgdSymptoms, labAnalysis, isFollowup, foll
 // ─── CLIENT PIPELINE STATUSES ───
 
 const PIPELINE_STATUSES = [
+  { key: 'questionnaire_envoye', label: 'Questionnaire envoye', color: '#94a3b8' },
   { key: 'questionnaire_recu', label: 'Questionnaire recu', color: '#60a5fa' },
   { key: 'rdv_effectue', label: 'RDV effectue', color: '#a78bfa' },
   { key: 'attente_analyses', label: 'Attente analyses', color: '#fbbf24' },

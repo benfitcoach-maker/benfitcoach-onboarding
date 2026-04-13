@@ -547,6 +547,31 @@ function App() {
         {page === 'anissaNewClient' && (
           <AnissaClientForm
             onSave={handleAnissaSaveClient}
+            onSaveQuick={(formData) => {
+              const client = saveClient({
+                categorie: 'nutrition',
+                form: formData,
+                prenom: formData.prenom,
+                formule: 'nutrition',
+                langue: 'FR',
+                createdBy: 'anissa',
+                status: 'questionnaire_envoye',
+              });
+              refreshClients();
+              // Open Gmail with questionnaire link
+              const url = `${window.location.origin}/questionnaire/${client.id}`;
+              const prenom = formData.prenom || '';
+              const subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
+              const body =
+                `Bonjour ${prenom},\n\n` +
+                `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
+                `➜ ${url}\n\n` +
+                `Ce questionnaire est strictement confidentiel.`;
+              const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(formData.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+              window.open(gmailUrl, '_blank');
+              showToast('Client cree — questionnaire pret a envoyer');
+              setTimeout(() => goToDashboard(), 1500);
+            }}
             onCancel={goToDashboard}
           />
         )}

@@ -24,9 +24,10 @@ const CONSOMMATION_REGULIERE_OPTIONS = [
   'Aucun des deux',
 ];
 
-export default function AnissaClientForm({ onSave, onCancel, initialForm, clientId }) {
+export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initialForm, clientId }) {
   const [form, setForm] = useState(initialForm || NUTRITION_INITIAL_FORM);
   const [step, setStep] = useState(1);
+  const [mode, setMode] = useState(clientId ? 'full' : 'quick'); // quick = creation rapide, full = anamnese complete
   const totalSteps = 13;
 
   const updateField = (field, value) => {
@@ -48,7 +49,81 @@ export default function AnissaClientForm({ onSave, onCancel, initialForm, client
     onSave(form);
   };
 
+  const handleQuickCreate = () => {
+    if (!form.prenom.trim() || !form.email.trim()) return;
+    if (onSaveQuick) {
+      onSaveQuick(form);
+    } else {
+      onSave(form);
+    }
+  };
+
   const isFemme = form.genre === 'Femme';
+
+  // ─── QUICK CREATE MODE ───
+  if (mode === 'quick' && !clientId) {
+    const canCreate = form.prenom.trim() && form.email.trim();
+    return (
+      <div className="nutrition-consultation">
+        <div className="nutrition-header">
+          <h2>Nouveau client</h2>
+        </div>
+
+        <div style={{ maxWidth: 520, margin: '0 auto' }}>
+          {/* Quick create card */}
+          <div style={{ background: 'rgba(26,46,31,.12)', border: '1px solid rgba(74,222,128,.25)', borderRadius: 12, padding: '24px 28px', marginBottom: 20 }}>
+            <h3 style={{ fontSize: '.95rem', fontWeight: 700, color: '#4ade80', marginBottom: 4 }}>Creation rapide</h3>
+            <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 16 }}>Creez le client et envoyez-lui le questionnaire par email. Il remplira sa fiche avant le RDV.</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field">
+                <label>Prenom *</label>
+                <input type="text" value={form.prenom} onChange={e => updateField('prenom', e.target.value)} placeholder="Prenom" autoFocus />
+              </div>
+              <div className="field">
+                <label>Nom</label>
+                <input type="text" value={form.nom} onChange={e => updateField('nom', e.target.value)} placeholder="Nom" />
+              </div>
+              <div className="field">
+                <label>Email *</label>
+                <input type="email" value={form.email} onChange={e => updateField('email', e.target.value)} placeholder="email@exemple.com" />
+              </div>
+              <div className="field">
+                <label>Telephone</label>
+                <input type="tel" value={form.telephone} onChange={e => updateField('telephone', e.target.value)} placeholder="+41..." />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button
+                className="btn btn-anissa-primary"
+                onClick={handleQuickCreate}
+                disabled={!canCreate}
+                style={{ flex: 1, padding: '12px 20px', fontSize: '.85rem', fontWeight: 600 }}
+              >
+                Creer et envoyer le questionnaire
+              </button>
+            </div>
+          </div>
+
+          {/* Switch to full form */}
+          <div style={{ textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setMode('full')}
+              style={{ background: 'none', border: 'none', color: '#8a8a7a', fontSize: '.78rem', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Remplir l'anamnese complete maintenant
+            </button>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 16 }}>
+            <button className="btn btn-anissa-secondary" onClick={onCancel}>Annuler</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="nutrition-consultation">
