@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
-import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions } from './store';
+import { useState, useEffect, useRef } from 'react';
+import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient } from './store';
+import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
 import NutritionEditor from './NutritionEditor';
@@ -1545,9 +1546,31 @@ function formatDate(iso) {
 }
 
 export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation }) {
-  const client = getClient(clientId);
+  const [client, setClient] = useState(() => getClient(clientId));
   const form = client?.form || {};
   const formule = FORMULES[client?.formule] || {};
+
+  // Fetch latest client data from Supabase on mount (questionnaire may have been filled since local cache)
+  useEffect(() => {
+    if (!isCloudEnabled || !clientId) return;
+    supabase
+      .from('clients')
+      .select('form, prenom, updated_at')
+      .eq('id', clientId)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data?.form) return;
+        const local = getClient(clientId);
+        const cloudDate = new Date(data.updated_at || 0);
+        const localDate = new Date(local?.updatedAt || 0);
+        // Only update if cloud is newer (questionnaire was submitted after local creation)
+        if (cloudDate > localDate) {
+          const merged = { ...local, form: { ...(local?.form || {}), ...data.form }, updatedAt: data.updated_at };
+          saveClient(merged);
+          setClient(merged);
+        }
+      });
+  }, [clientId]);
 
   // Detect returning client
   const existingConsultations = getNutritionConsultations(clientId);
