@@ -2394,24 +2394,9 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   // NOTE: 'conseils' and 'notes_coach' are excluded from non-followup packs (internal only).
 
   if (unifiedSections && unifiedSections.length > 0) {
-    // Deduplicate: keep only the FIRST section of each type
-    const seenTypes = new Set();
-    const dedupedSections = [];
+    // Render all sections linearly (same order as editor), skip frigo (handled separately)
     for (const sec of unifiedSections) {
-      if (sec.type === 'frigo') continue; // handled separately below
-      if (seenTypes.has(sec.type)) continue; // skip duplicates
-      seenTypes.add(sec.type);
-      dedupedSections.push(sec);
-    }
-
-    // Sort by canonical order
-    const sorted = [...dedupedSections].sort((a, b) => {
-      const ia = SECTION_ORDER.indexOf(a.type);
-      const ib = SECTION_ORDER.indexOf(b.type);
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    });
-
-    for (const sec of sorted) {
+      if (sec.type === 'frigo') continue;
       if (!sec.content?.trim()) continue;
       doc.addPage();
       doc.setFillColor(...BG_PAGE);
