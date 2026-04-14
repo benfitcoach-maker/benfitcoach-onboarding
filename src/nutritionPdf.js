@@ -867,74 +867,14 @@ export async function exportConsultationPDF(consultation, client) {
       doc.line(pw / 2 - 30, coverY + 90, pw / 2 + 30, coverY + 90);
     }
 
-    // ── PAGE 2: ANALYSE + STRATEGIE ──
+    // ── RENDER ALL SECTIONS LINEARLY (same order as preview) ──
     newPage();
-    renderSec(findSec('analyse'));
-    renderSec(findSec('principes'));
-
-    // ── PAGE 3: STRUCTURE ALIMENTAIRE ──
-    newPage();
-    renderSec(findSec('plan'));
-
-    // ── PAGE 4: ROTATION + AJUSTEMENTS ──
-    {
-      const rotation = findSec('rotation');
-      const ajustements = findSec('ajustements');
-      if (rotation?.content?.trim() || ajustements?.content?.trim()) {
-        newPage();
-        renderSec(rotation);
-        renderSec(ajustements);
-      }
-    }
-
-    // ── PAGE 5: FICHE FRIGO ──
-    {
-      const frigo = findSec('frigo');
-      if (frigo?.content?.trim()) {
-        newPage();
-        renderSec(frigo);
-      }
-    }
-
-    // ── PAGE 6: PROTOCOLES + RECOMMANDATIONS COACH ──
-    {
-      const protocoles = findSec('protocoles');
-      const coach = findSec('coach');
-      if (protocoles?.content?.trim() || coach?.content?.trim()) {
-        newPage();
-        renderSec(protocoles);
-        renderSec(coach);
-      }
-    }
-
-    // ── PAGE 7: PLAN D'ACTION ──
-    {
-      const action = findSec('action');
-      if (action?.content?.trim()) {
-        newPage();
-        renderSec(action);
-      }
-    }
-
-    // ── SUPPLEMENTS (separate, if present) ──
-    {
-      const supps = findSec('supplements');
-      if (supps?.content?.trim()) {
-        newPage();
-        renderSec(supps);
-      }
-    }
-
-    // ── REMAINING SECTIONS (conseils, notes_coach, other) ──
-    {
-      const remaining = unifiedSections.filter(s =>
-        s.content?.trim() && !['analyse', 'principes', 'plan', 'rotation', 'frigo',
-          'protocoles', 'ajustements', 'coach', 'action', 'supplements'].includes(s.type)
-      );
-      for (const sec of remaining) {
-        if (y > 200) newPage();
-        renderSec(sec);
-      }
+    for (let i = 0; i < unifiedSections.length; i++) {
+      const sec = unifiedSections[i];
+      if (!sec?.content?.trim()) continue;
+      // Start a new page if we'd overflow (leave room for title + some content)
+      if (i > 0 && y > 180) newPage();
+      renderSec(sec);
     }
   } else {
     // Legacy path: splitPlanIntoClientSections (backward compatibility)
