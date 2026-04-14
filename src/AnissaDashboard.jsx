@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient } from './store';
 
@@ -18,18 +18,11 @@ function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
   };
   return (
     <button onClick={handleSend} style={{
-      backgroundColor: '#1A2E1F',
-      color: 'white',
-      border: 'none',
-      padding: '8px 16px',
-      borderRadius: '20px',
-      cursor: 'pointer',
-      fontSize: '13px',
-      fontWeight: '500',
-      width: '100%',
-      marginTop: '8px',
+      display: 'block', width: '100%', textAlign: 'left',
+      padding: '10px 16px', background: 'none', border: 'none',
+      color: 'var(--text)', cursor: 'pointer', fontSize: '.85rem',
     }}>
-      Envoyer questionnaire
+      📩 Envoyer questionnaire
     </button>
   );
 }
@@ -56,96 +49,152 @@ function getFollowUpStatus(clientId) {
 }
 
 function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh }) {
-  const formule = FORMULES[client.formule] || {};
+  const [menuOpen, setMenuOpen] = useState(false);
   const consultations = getNutritionConsultations(client.id);
-  const lastConsultation = consultations[0];
-  const isNutrition = client.categorie === 'nutrition';
   const followUp = getFollowUpStatus(client.id);
+  const lastConsultation = consultations[0];
+  const objectif = client.form?.objectif
+    || (client.form?.symptomesObjectifs || []).slice(0, 2).join(', ')
+    || client.form?.objectifPrincipal
+    || null;
 
   const handleDelete = (e) => {
     e.stopPropagation();
+    setMenuOpen(false);
     if (confirm('Supprimer ce client ?')) {
       deleteClient(client.id);
       onRefresh();
     }
   };
 
+  const urgencyColor = followUp === 'urgent'
+    ? '#e05252' : followUp === 'recommended'
+    ? '#e09a3a' : 'transparent';
+
   return (
     <div
-      className="client-card anissa-client-card"
-      style={{ animationDelay: `${i * 50}ms` }}
+      style={{
+        background: 'rgba(255,255,255,.04)',
+        border: '1px solid rgba(255,255,255,.08)',
+        borderTop: `3px solid ${urgencyColor === 'transparent' ? 'rgba(106,191,138,.3)' : urgencyColor}`,
+        borderRadius: 14,
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        cursor: isOwn && onOpen ? 'pointer' : 'default',
+        transition: 'all .2s',
+        position: 'relative',
+        animationDelay: `${i * 50}ms`,
+      }}
       onClick={isOwn && onOpen ? () => onOpen(client.id) : undefined}
     >
-      {followUp && (
-        <span className={`followup-badge followup-${followUp}`}>
-          {followUp === 'urgent' ? 'Suivi urgent' : 'Suivi recommande'}
-        </span>
-      )}
-      <div className="client-card-top">
-        <div className={`client-avatar ${isNutrition ? 'nutrition-avatar' : 'anissa-avatar'}`}>{getInitial(client.prenom)}</div>
-        <div className="client-card-info">
-          <div className="client-card-name">{client.prenom || 'Sans nom'}</div>
-          <div className="client-card-formula anissa-formula">
-            {isNutrition ? 'Client nutrition' : `${formule.nom || '-'} - ${formule.prix || ''}`}
+      {/* TOP : Avatar + Nom + Menu */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 42, height: 42, borderRadius: '50%',
+          background: 'rgba(106,191,138,.15)',
+          border: '1.5px solid rgba(106,191,138,.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1rem', fontWeight: 700, color: '#8abf9a', flexShrink: 0,
+        }}>
+          {getInitial(client.prenom)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {client.prenom || 'Sans nom'}
           </div>
+          <div style={{ fontSize: '.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+            {consultations.length > 0
+              ? `${consultations.length} consultation${consultations.length > 1 ? 's' : ''} \u00b7 derni\u00e8re ${formatDate(lastConsultation?.date)}`
+              : 'Aucune consultation'}
+          </div>
+        </div>
+
+        {/* Menu ⋮ */}
+        <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => setMenuOpen(m => !m)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: '1.2rem', padding: '4px 8px',
+              borderRadius: 6, lineHeight: 1,
+            }}
+          >{'\u22ee'}</button>
+          {menuOpen && (
+            <div style={{
+              position: 'absolute', right: 0, top: '100%', zIndex: 50,
+              background: '#1e241f', border: '1px solid rgba(255,255,255,.1)',
+              borderRadius: 10, overflow: 'hidden', minWidth: 180,
+              boxShadow: '0 8px 24px rgba(0,0,0,.4)', marginTop: 4,
+            }}>
+              <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onViewHistory(client.id); }}
+                style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
+                  background:'none', border:'none', color:'var(--text)', cursor:'pointer',
+                  fontSize:'.85rem' }}>
+                {'\ud83d\udccb'} Voir l'historique
+              </button>
+              <SendQuestionnaireButton
+                clientId={client.id}
+                clientEmail={client.form?.email}
+                clientPrenom={client.prenom || client.form?.prenom}
+              />
+              {isOwn && (
+                <button onClick={handleDelete}
+                  style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
+                    background:'none', border:'none', color:'#e05252', cursor:'pointer',
+                    fontSize:'.85rem', borderTop:'1px solid rgba(255,255,255,.06)' }}>
+                  {'\ud83d\uddd1'} Supprimer
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="anissa-client-details">
-        <div className="anissa-detail">
-          <span className="anissa-detail-label">Objectif</span>
-          <span className="anissa-detail-value">
-            {isNutrition
-              ? (client.form?.objectif || (client.form?.symptomesObjectifs || []).join(', ') || '-')
-              : (client.form?.objectifPrincipal || '-')}
+      {/* OBJECTIF + STATUT */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {followUp && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: '.72rem', fontWeight: 600, padding: '3px 10px',
+            borderRadius: 20, alignSelf: 'flex-start',
+            background: followUp === 'urgent' ? 'rgba(224,82,82,.15)' : 'rgba(224,154,58,.15)',
+            color: followUp === 'urgent' ? '#e05252' : '#e09a3a',
+            border: `1px solid ${followUp === 'urgent' ? 'rgba(224,82,82,.3)' : 'rgba(224,154,58,.3)'}`,
+          }}>
+            {followUp === 'urgent' ? '\u26a0 Suivi urgent' : '\u25cb Suivi recommand\u00e9'}
           </span>
-        </div>
-        <div className="anissa-detail">
-          <span className="anissa-detail-label">Allergies</span>
-          <span className="anissa-detail-value">{client.form?.allergies || client.form?.alimentsEvites || 'Aucune'}</span>
-        </div>
-        <div className="anissa-detail">
-          <span className="anissa-detail-label">Sommeil</span>
-          <span className="anissa-detail-value">{client.form?.heuresSommeil ? `${client.form.heuresSommeil}h/nuit` : '-'}</span>
-        </div>
-        {lastConsultation && (
-          <div className="anissa-detail">
-            <span className="anissa-detail-label">Derniere consultation</span>
-            <span className="anissa-detail-value">{formatDate(lastConsultation.date)}</span>
+        )}
+        {objectif && (
+          <div style={{ fontSize: '.8rem', color: 'var(--text-muted)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {objectif}
           </div>
         )}
       </div>
 
-      <div className="client-card-bottom anissa-card-bottom">
-        <div className="anissa-card-actions">
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <button
-              className="btn btn-sm btn-anissa-primary"
-              onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
-            >
-              + Consultation
-            </button>
-            {consultations.length > 0 && (
-              <button
-                className="btn btn-sm btn-anissa-secondary"
-                onClick={(e) => { e.stopPropagation(); onViewHistory(client.id); }}
-              >
-                {consultations.length} consultation{consultations.length > 1 ? 's' : ''}
-              </button>
-            )}
-            {isOwn && (
-              <button className="btn btn-xs btn-danger" onClick={handleDelete} style={{ marginLeft: 'auto' }}>x</button>
-            )}
-          </div>
-          <SendQuestionnaireButton clientId={client.id} clientEmail={client.form?.email} clientPrenom={client.prenom || client.form?.prenom} />
-        </div>
-      </div>
+      {/* ACTION PRINCIPALE */}
+      <button
+        className="btn btn-sm btn-anissa-primary"
+        style={{ width: '100%', marginTop: 'auto' }}
+        onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
+      >
+        + Nouvelle consultation
+      </button>
     </div>
   );
 }
 
 export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh }) {
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const close = () => {};
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
 
   const allClients = [...sharedClients, ...ownClients];
 
@@ -190,17 +239,19 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           <span className="stat-number">{consultationsThisMonth}</span>
           <span className="stat-label">Consultations ce mois</span>
         </div>
-        <div className="stat-card anissa-stat">
-          <span className="stat-number">{clientsToRecontact.length}</span>
+        <div className="stat-card anissa-stat" style={clientsToRecontact.length > 0 ? {
+          borderTop: '2px solid #e09a3a',
+          background: 'rgba(224,154,58,.06)',
+        } : {}}>
+          <span className="stat-number" style={clientsToRecontact.length > 0 ? { color: '#e09a3a' } : {}}>
+            {clientsToRecontact.length}
+          </span>
           <span className="stat-label">A recontacter</span>
         </div>
       </div>
 
       <div className="dashboard-header">
         <h2>Mes clients</h2>
-        <span className="dashboard-count">
-          {totalFiltered} client{totalFiltered !== 1 ? 's' : ''}
-        </span>
         <button className="btn btn-sm btn-anissa-primary" style={{ marginLeft: 'auto' }} onClick={onNewClient}>
           + Nouveau client
         </button>
