@@ -346,6 +346,42 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
     return (form?.[field] || '').split(/[,;/]+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 2);
   }
 
+  // Extract only food-prescriptive sections from the plan for forbidden food scanning.
+  // Sections like "Profil", "Analyse", "Principes", "Notes coach" contain contextual info
+  // (e.g. "sensibilité possible aux produits laitiers") that must NOT trigger a hard fail.
+  // Only sections that actually prescribe food to eat should be scanned.
+  const FOOD_SECTION_TYPES = new Set(['plan', 'rotation', 'frigo', 'protocoles', 'ajustements', 'conseils', 'other']);
+  function extractFoodSectionsText(rawPlanText) {
+    const lines = (rawPlanText || '').split('\n');
+    let currentTitle = '';
+    let currentContent = [];
+    const foodChunks = [];
+
+    const flushChunk = () => {
+      const type = classifySection(currentTitle);
+      if (FOOD_SECTION_TYPES.has(type)) {
+        foodChunks.push(currentContent.join('\n'));
+      }
+      currentContent = [];
+    };
+
+    for (const line of lines) {
+      const headerMatch = line.match(/^#{1,3}\s+(.+)/) ||
+        (line.trim() === line.trim().toUpperCase() && line.trim().length > 5 && line.trim().length < 80 && /[A-Z]{3,}/.test(line.trim())
+          ? [null, line.trim()] : null);
+      if (headerMatch) {
+        flushChunk();
+        currentTitle = (headerMatch[1] || '').trim();
+      } else {
+        currentContent.push(line);
+      }
+    }
+    flushChunk();
+    return foodChunks.join('\n').toLowerCase();
+  }
+
+  const foodText = extractFoodSectionsText(planText) + '\n' + supps;
+
   const allergies = extractList('allergies');
   const alimentsEvites = extractList('alimentsEvites');
   const forbidden = [...new Set([...allergies, ...alimentsEvites])];
@@ -353,23 +389,20 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
   // --- AXIS 1: COHERENCE (constraints respected, no contradictions) ---
   let coherence = 10;
 
-  // Hard fail: forbidden foods (allergies/intolerances) present in plan
+  // Hard fail: forbidden foods (allergies/intolerances) present in FOOD sections only.
   // Context-aware: ignore matches inside exclusion phrases (sans X, éviter X, etc.)
   // Context window stops at section boundaries (## headers, ALLCAPS headers) to avoid
-  // an exclusion in one section leaking into a meal section 80 chars later.
-  const EXCLUSION_PREFIX = /(?:sans|éviter|eviter|exclure|exclu|interdit|allergi|intolér|intoler|pas de|aucun|supprim|retir|élimin|eliminer|ne.*pas.*consommer)\b/i;
-  const SECTION_BOUNDARY = /^#{1,3}\s+|\n[A-Z][A-Z\s/]{4,}$/m;
+  // an exclusion in one section leaking into a meal section further down.
+  const EXCLUSION_PREFIX = /(?:sans|éviter|eviter|exclure|exclu|interdit|allergi|intolér|intoler|pas de|aucun|supprim|retir|élimin|eliminer|ne.*pas.*consommer|sensibilit[eé])\b/i;
   const foundForbidden = forbidden.filter(f => {
-    if (!full.includes(f)) return false;
+    if (!foodText.includes(f)) return false;
     // Check every occurrence — only flag if at least one is NOT in exclusion context
     let idx = -1;
-    while ((idx = full.indexOf(f, idx + 1)) !== -1) {
+    while ((idx = foodText.indexOf(f, idx + 1)) !== -1) {
       // Extract context: go back to the last section header or 120 chars, whichever is closer
-      const rawBefore = full.slice(Math.max(0, idx - 120), idx);
+      const rawBefore = foodText.slice(Math.max(0, idx - 120), idx);
       // Cut at last section boundary (## header or ALLCAPS line)
       const lastHeader = rawBefore.lastIndexOf('\n##');
-      const lastNewline = rawBefore.lastIndexOf('\n');
-      // Check if the line at lastNewline is an ALLCAPS header
       let cutAt = -1;
       if (lastHeader >= 0) cutAt = lastHeader;
       // Also check all newlines for ALLCAPS headers
