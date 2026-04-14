@@ -746,6 +746,13 @@ body{
   align-items:stretch;
 }
 
+/* Anissa: liste verticale (1 carte par ligne) */
+.anissa-client-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
 .client-card{
   background:var(--bg-card);
   border:1px solid var(--border);

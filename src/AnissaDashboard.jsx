@@ -76,13 +76,14 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       style={{
         background: 'rgba(255,255,255,.04)',
         border: '1px solid rgba(255,255,255,.08)',
-        borderTop: `3px solid ${urgencyColor === 'transparent' ? 'rgba(106,191,138,.3)' : urgencyColor}`,
+        borderLeft: `3px solid ${urgencyColor === 'transparent' ? 'rgba(106,191,138,.3)' : urgencyColor}`,
         borderRadius: 14,
-        padding: '20px',
-        minHeight: 160,
+        padding: '16px 20px',
+        minHeight: 'auto',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
         cursor: isOwn && onOpen ? 'pointer' : 'default',
         transition: 'all .2s',
         position: 'relative',
@@ -90,31 +91,58 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       }}
       onClick={isOwn && onOpen ? () => onOpen(client.id) : undefined}
     >
-      {/* TOP : Avatar + Nom + Menu */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: '50%',
-          background: 'rgba(106,191,138,.15)',
-          border: '1.5px solid rgba(106,191,138,.3)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1rem', fontWeight: 700, color: '#8abf9a', flexShrink: 0,
-        }}>
-          {getInitial(client.prenom)}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {client.prenom || 'Sans nom'}
-          </div>
-          <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: 2 }}>
-            {consultations.length > 0
-              ? `${consultations.length} consultation${consultations.length > 1 ? 's' : ''} \u00b7 derni\u00e8re ${formatDate(lastConsultation?.date)}`
-              : 'Aucune consultation'}
-          </div>
-        </div>
+      {/* Zone 1 — Avatar */}
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        background: 'rgba(106,191,138,.15)',
+        border: '1.5px solid rgba(106,191,138,.3)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1rem', fontWeight: 700, color: '#8abf9a', flexShrink: 0,
+      }}>
+        {getInitial(client.prenom)}
+      </div>
 
-        {/* Menu ⋮ */}
-        <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      {/* Zone 2 — Infos */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {client.prenom || 'Sans nom'}
+        </div>
+        <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
+          {consultations.length > 0
+            ? `${consultations.length} consultation${consultations.length > 1 ? 's' : ''} \u00b7 derni\u00e8re ${formatDate(lastConsultation?.date)}`
+            : 'Aucune consultation'}
+        </div>
+        {followUp && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: '.72rem', fontWeight: 600, padding: '3px 10px',
+            borderRadius: 20, alignSelf: 'flex-start',
+            background: followUp === 'urgent' ? 'rgba(224,82,82,.15)' : 'rgba(224,154,58,.15)',
+            color: followUp === 'urgent' ? '#e05252' : '#e09a3a',
+            border: `1px solid ${followUp === 'urgent' ? 'rgba(224,82,82,.3)' : 'rgba(224,154,58,.3)'}`,
+          }}>
+            {followUp === 'urgent' ? '\u26a0 Suivi urgent' : '\u25cb Suivi recommand\u00e9'}
+          </span>
+        )}
+        {objectif && (
+          <div style={{ fontSize: '.8rem', color: 'var(--text-muted)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {objectif}
+          </div>
+        )}
+      </div>
+
+      {/* Zone 3 — Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <button
+          className="btn btn-sm btn-anissa-primary"
+          style={{ width: 'auto', padding: '8px 18px', whiteSpace: 'nowrap' }}
+          onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
+        >
+          + Nouvelle consultation
+        </button>
+        <div style={{ position: 'relative' }}>
           <button
             onClick={() => setMenuOpen(m => !m)}
             style={{
@@ -153,37 +181,6 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           )}
         </div>
       </div>
-
-      {/* OBJECTIF + STATUT */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {followUp && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: '.72rem', fontWeight: 600, padding: '3px 10px',
-            borderRadius: 20, alignSelf: 'flex-start',
-            background: followUp === 'urgent' ? 'rgba(224,82,82,.15)' : 'rgba(224,154,58,.15)',
-            color: followUp === 'urgent' ? '#e05252' : '#e09a3a',
-            border: `1px solid ${followUp === 'urgent' ? 'rgba(224,82,82,.3)' : 'rgba(224,154,58,.3)'}`,
-          }}>
-            {followUp === 'urgent' ? '\u26a0 Suivi urgent' : '\u25cb Suivi recommand\u00e9'}
-          </span>
-        )}
-        {objectif && (
-          <div style={{ fontSize: '.8rem', color: 'var(--text-muted)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {objectif}
-          </div>
-        )}
-      </div>
-
-      {/* ACTION PRINCIPALE */}
-      <button
-        className="btn btn-sm btn-anissa-primary"
-        style={{ width: '100%' }}
-        onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
-      >
-        + Nouvelle consultation
-      </button>
     </div>
   );
 }
@@ -314,7 +311,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
                 Clients partages avec Benoit
                 <span className="anissa-section-count">{filteredShared.length}</span>
               </h3>
-              <div className="client-grid">
+              <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
                   <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} />
                 ))}
@@ -325,7 +322,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           {/* Own clients section */}
           {filteredOwn.length > 0 && (
             <div className="anissa-section">
-              <div className="client-grid">
+              <div className="anissa-client-list">
                 {filteredOwn.map((client, i) => (
                   <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} />
                 ))}
