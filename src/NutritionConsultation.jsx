@@ -499,8 +499,7 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
   // --- AXIS 4: CONSTRAINTS (respects client profile) ---
   let constraints = 10;
 
-  // Allergies hard fail already in coherence — double penalty on constraints
-  if (foundForbidden.length > 0) { constraints = 0; }
+  // NOTE: forbidden food constraint check removed (coach manages manually)
 
   // Pathologies addressed
   const pathologies = extractList('pathologies');
