@@ -7,7 +7,7 @@ import NutritionEditor from './NutritionEditor';
 import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
-import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF } from './nutritionPdf';
+import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, extractFridgeDataFromSections, extractMeals, extractSupplements } from './nutritionPdf';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
@@ -566,7 +566,7 @@ function PlanQualityScore({ score, autoCorrected }) {
   return (
     <div style={{ background: 'rgba(124,92,191,.06)', border: '1px solid rgba(124,92,191,.15)', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <strong style={{ fontSize: '.9rem' }}>Score qualite du plan</strong>
+        <strong style={{ fontSize: '.9rem' }}>Score du plan actuel</strong>
         <span style={{ fontSize: '1.1rem', fontWeight: 700, color: getColor(score.normalized) }}>
           {score.normalized}/10
         </span>
@@ -1093,7 +1093,7 @@ function NutritionQualityDashboard() {
   return (
     <div style={{ background: '#F5F2EC', borderRadius: 10, padding: '20px 24px', marginTop: 12, fontFamily: 'Inter, system-ui, sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <strong style={{ fontSize: '.9rem', color: '#1A2E1F' }}>Dashboard qualite IA</strong>
+        <strong style={{ fontSize: '.9rem', color: '#1A2E1F' }}>Historique qualite IA (toutes generations)</strong>
         <span style={{ fontSize: '.7rem', color: '#8a8a7a' }}>{total} generation{total > 1 ? 's' : ''}</span>
       </div>
 
@@ -1847,6 +1847,45 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     date: new Date().toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
     sousTitre: 'Plan nutrition personnalis\u00e9',
   }));
+  // draftTick : incremente a chaque edit dans le panneau editeur (debounced).
+  // Force le panneau apercu a relire editorGetDataRef.current() a chaque tick.
+  const [draftTick, setDraftTick] = useState(0);
+  const draftTickTimer = useRef(null);
+  const [saveToast, setSaveToast] = useState('');
+  const previewBodyRef = useRef(null);
+
+  const scheduleDraftTick = () => {
+    if (draftTickTimer.current) clearTimeout(draftTickTimer.current);
+    draftTickTimer.current = setTimeout(() => setDraftTick(t => t + 1), 400);
+  };
+
+  // Flush le draft de NutritionEditor dans l'etat consultation.
+  // Utilise par : changement de tab editeur hors de 'plan', Sauvegarder, Enregistrer brouillon.
+  const flushEditorDraft = () => {
+    const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+    if (!edited) return false;
+    setConsultation(prev => ({
+      ...prev,
+      nutrition_plan: edited.plan ?? prev.nutrition_plan,
+      supplements: edited.supplements ?? prev.supplements,
+      recipes: edited.recipes ?? prev.recipes,
+    }));
+    return true;
+  };
+
+  // Auto-flush quand on quitte la tab 'plan' (sinon les edits contenteditable sont perdus
+  // quand NutritionEditor est demonte).
+  useEffect(() => {
+    if (editorTab !== 'plan') flushEditorDraft();
+    // Tick : rafraichit l'apercu au switch de tab
+    setDraftTick(t => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorTab, previewTab]);
+
+  const showSaveToast = (msg) => {
+    setSaveToast(msg);
+    setTimeout(() => setSaveToast(''), 1800);
+  };
 
   const updateField = (field, value) => {
     setConsultation(prev => ({ ...prev, [field]: value }));
@@ -2315,6 +2354,20 @@ ${suppText}`;
   };
 
   const handleSave = () => {
+    // Flush le draft courant de l'editeur (contenteditable) pour garantir
+    // que les edits non commit sont bien persistes.
+    const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+    const planToSave = edited?.plan ?? consultation.nutrition_plan;
+    const suppToSave = edited?.supplements ?? consultation.supplements;
+    const recipesToSave = edited?.recipes ?? consultation.recipes;
+    if (edited) {
+      setConsultation(prev => ({
+        ...prev,
+        nutrition_plan: planToSave,
+        supplements: suppToSave,
+        recipes: recipesToSave,
+      }));
+    }
     onSave({
       id: consultationId || undefined,
       clientId,
@@ -2324,9 +2377,9 @@ ${suppText}`;
       bloodTestDone: consultation.blood_test_done,
       dnaTestDone: consultation.dna_test_done,
       nutritionalObservations: consultation.nutritional_observations,
-      nutritionPlan: consultation.nutrition_plan,
-      supplements: consultation.supplements,
-      recipes: consultation.recipes,
+      nutritionPlan: planToSave,
+      supplements: suppToSave,
+      recipes: recipesToSave,
       notesForCoach: consultation.notes_for_coach,
       privateNotes: consultation.private_notes,
       ficheFrigoJson: consultation.fiche_frigo_json || null,
@@ -2783,7 +2836,7 @@ ${suppText}`;
           };
         };
 
-        const doExportPdf = () => {
+        const doExportPdf = async () => {
           setPdfError('');
           const { plan, supplements, recipes } = readEdited();
           const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
@@ -2794,48 +2847,73 @@ ${suppText}`;
             return;
           }
           const sections = structurePlanSections(plan, supplements, { isFollowup });
-          exportConsultationPDF({
-            observations: consultation.observations,
-            nutritionalObservations: consultation.nutritional_observations,
-            bloodTestDone: consultation.blood_test_done,
-            dnaTestDone: consultation.dna_test_done,
-            nutritionPlan: cleanPlanForPDF(plan),
-            supplements: cleanPlanForPDF(supplements),
-            recipes,
-            notesForCoach: consultation.notes_for_coach,
-            date: new Date().toISOString(),
-            isFollowup,
-            followupData: isFollowup ? followupData : null,
-            sections,
-          }, client);
+          try {
+            await exportConsultationPDF({
+              observations: consultation.observations,
+              nutritionalObservations: consultation.nutritional_observations,
+              bloodTestDone: consultation.blood_test_done,
+              dnaTestDone: consultation.dna_test_done,
+              nutritionPlan: cleanPlanForPDF(plan),
+              supplements: cleanPlanForPDF(supplements),
+              recipes,
+              notesForCoach: consultation.notes_for_coach,
+              date: new Date().toISOString(),
+              isFollowup,
+              followupData: isFollowup ? followupData : null,
+              sections,
+            }, client);
+            showSaveToast('PDF exporte');
+          } catch (err) {
+            console.error('PDF export failed', err);
+            setPdfError('Export PDF echoue : ' + (err?.message || 'erreur inconnue'));
+          }
         };
 
-        const doExportPack = () => {
+        const doExportPack = async () => {
+          setPdfError('');
           const { plan, supplements, recipes } = readEdited();
+          const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
+          const fullText = (plan || '') + '\n' + (supplements || '');
+          const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
+          if (!validation.valid) {
+            setPdfError('Export dossier bloque : ' + validation.errors.join(' | '));
+            return;
+          }
           const sections = structurePlanSections(plan, supplements, { isFollowup });
-          exportClientPackPDF({
-            nutritionPlan: cleanPlanForPDF(plan),
-            supplements: cleanPlanForPDF(supplements),
-            recipes,
-            date: new Date().toISOString(),
-            isFollowup,
-            sections,
-          }, client, {
-            sections,
-            coverFields: {
-              prenom: form.prenom || client?.prenom || '',
-              objectif: form.objectifPrincipalNutrition || form.objectifPrincipal || '',
-            },
-          });
+          try {
+            await exportClientPackPDF({
+              nutritionPlan: cleanPlanForPDF(plan),
+              supplements: cleanPlanForPDF(supplements),
+              recipes,
+              date: new Date().toISOString(),
+              isFollowup,
+              sections,
+            }, client, {
+              sections,
+              coverFields: {
+                prenom: form.prenom || client?.prenom || '',
+                objectif: form.objectifPrincipalNutrition || form.objectifPrincipal || '',
+              },
+            });
+            showSaveToast('Dossier client exporte');
+          } catch (err) {
+            console.error('Pack export failed', err);
+            setPdfError('Export dossier echoue : ' + (err?.message || 'erreur inconnue'));
+          }
         };
 
-        const doExportCover = () => {
-          exportCoverPDF({
-            blood_test_done: consultation.blood_test_done,
-            dna_test_done: consultation.dna_test_done,
-            date: new Date().toISOString(),
-            coverFields,
-          }, client);
+        const doExportCover = async () => {
+          try {
+            await exportCoverPDF({
+              blood_test_done: consultation.blood_test_done,
+              dna_test_done: consultation.dna_test_done,
+              date: new Date().toISOString(),
+              coverFields,
+            }, client);
+          } catch (err) {
+            console.error('Cover export failed', err);
+            setPdfError('Export cover echoue : ' + (err?.message || 'erreur inconnue'));
+          }
         };
 
         const renderEditorTab = () => {
@@ -2969,16 +3047,73 @@ ${suppText}`;
             );
           }
           if (previewTab === 'frigo') {
+            const { plan: fPlan, supplements: fSupp } = readEdited();
+            const fSections = structurePlanSections(fPlan, fSupp, { isFollowup });
+            const fromSections = extractFridgeDataFromSections(fSections) || {};
+            const regexMeals = extractMeals(fPlan);
+            const regexSupp = extractSupplements(fSupp || '');
+            const ficheJson = consultation.fiche_frigo_json;
+            const pickArr = (...sources) => sources.find(s => Array.isArray(s) && s.length > 0) || [];
+            const pickStr = (...sources) => sources.find(s => typeof s === 'string' && s.trim()) || '';
+            const data = {
+              breakfast: pickArr(fromSections.breakfast, ficheJson?.repas?.petit_dejeuner, regexMeals.breakfast),
+              lunch: pickArr(fromSections.lunch, ficheJson?.repas?.dejeuner, regexMeals.lunch),
+              dinner: pickArr(fromSections.dinner, ficheJson?.repas?.diner, regexMeals.dinner),
+              snack: pickStr(fromSections.snack, ficheJson?.repas?.collation, regexMeals.snack),
+              toFavor: pickArr(fromSections.toFavor, ficheJson?.a_privilegier, regexMeals.toFavor),
+              toLimit: pickArr(fromSections.toLimit, ficheJson?.a_limiter, regexMeals.toLimit),
+              hydration: pickStr(fromSections.hydration, ficheJson?.hydratation, regexMeals.hydration, form.hydratation),
+              supplements: {
+                morningFasting: pickArr(ficheJson?.supplements?.matin_a_jeun, regexSupp.morningFasting),
+                breakfast: pickArr(ficheJson?.supplements?.petit_dejeuner, regexSupp.breakfast),
+                lunch: pickArr(ficheJson?.supplements?.midi, regexSupp.lunch),
+                dinner: pickArr(ficheJson?.supplements?.soir, regexSupp.dinner),
+                bedtime: pickArr(ficheJson?.supplements?.coucher, regexSupp.bedtime),
+              },
+            };
+            const Section = ({ title, items, color = '#8abf9a' }) => {
+              if (!items || items.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: '.66rem', fontWeight: 700, color, letterSpacing: '.12em', marginBottom: 6, textTransform: 'uppercase' }}>{title}</div>
+                  {items.slice(0, 3).map((item, i) => (
+                    <div key={i} style={{ fontSize: '.82rem', color: '#d4c9a8', paddingLeft: 10, marginBottom: 3, borderLeft: `2px solid ${color}33`, lineHeight: 1.5 }}>{String(item).replace(/\([^)]*\)/g, '').replace(/^[-–•*]\s*/, '').trim()}</div>
+                  ))}
+                </div>
+              );
+            };
+            const TagRow = ({ title, items, color }) => {
+              if (!items || items.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: '.66rem', fontWeight: 700, color, letterSpacing: '.1em', marginBottom: 5, textTransform: 'uppercase' }}>{title}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {items.slice(0, 10).map((it, i) => (
+                      <span key={i} style={{ background: `${color}18`, color, fontSize: '.72rem', padding: '2px 8px', borderRadius: 100 }}>{String(it).replace(/\([^)]*\)/g, '').trim()}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            };
             return (
-              <div style={{ padding: 20, color: '#8a8a7a' }}>
-                <p style={{ fontSize: '.85rem', marginBottom: 12 }}>Utilise le bouton <strong>Fiche frigo</strong> en haut pour ouvrir la vue editable complete (apercu / edition / vue client).</p>
+              <div style={{ padding: 4 }}>
+                <div style={{ background: 'rgba(26,46,31,.22)', border: '1px solid rgba(106,191,138,.18)', borderRadius: 12, padding: 18, marginBottom: 12 }}>
+                  <div style={{ fontSize: '.72rem', color: '#8abf9a', letterSpacing: '.18em', fontWeight: 700, marginBottom: 14 }}>FICHE FRIGO — {(form.prenom || clientName).toUpperCase()}</div>
+                  <Section title="Petit-dejeuner" items={data.breakfast} />
+                  <Section title="Dejeuner" items={data.lunch} />
+                  <Section title="Diner" items={data.dinner} />
+                  {data.snack && <Section title="Collation" items={[data.snack]} color="#c5b07a" />}
+                  {data.hydration && <div style={{ fontSize: '.78rem', color: '#8abf9a', marginBottom: 12 }}>Hydratation : <span style={{ color: '#d4c9a8' }}>{data.hydration}</span></div>}
+                  <TagRow title="A privilegier" items={data.toFavor} color="#8abf9a" />
+                  <TagRow title="A limiter" items={data.toLimit} color="#c5b07a" />
+                </div>
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
                   onClick={() => setShowFrigoModal(true)}
-                  style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                  style={{ width: '100%', padding: '10px 16px', borderRadius: 10, fontSize: '.8rem' }}
                 >
-                  Ouvrir la fiche frigo
+                  Ouvrir l'editeur complet (3 vues)
                 </button>
               </div>
             );
@@ -3072,9 +3207,15 @@ ${suppText}`;
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
-                  onClick={() => setPreviewTab('pdf')}
+                  onClick={() => {
+                    // Le useEffect sur previewTab incremente deja draftTick.
+                    // Pas de flush ici : le ref est lu directement par l'apercu.
+                    setPreviewTab('pdf');
+                    if (previewBodyRef.current) previewBodyRef.current.scrollTop = 0;
+                  }}
                   disabled={!hasPlan}
                   style={{ padding: '10px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                  title="Bascule sur l'apercu PDF avec les edits en cours"
                 >
                   Apercu PDF
                 </button>
@@ -3143,7 +3284,7 @@ ${suppText}`;
                   onClick={() => setShowQualityDash(p => !p)}
                   style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
                 >
-                  {showQualityDash ? 'Masquer dashboard' : 'Dashboard qualite'}
+                  {showQualityDash ? 'Masquer historique IA' : 'Historique qualite IA'}
                 </button>
                 <button
                   type="button"
@@ -3176,6 +3317,20 @@ ${suppText}`;
                   Telecharger dossier client complet
                 </button>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    onClick={() => {
+                      const ok = flushEditorDraft();
+                      setDraftTick(t => t + 1);
+                      showSaveToast(ok ? 'Brouillon enregistre' : 'Aucun changement a enregistrer');
+                    }}
+                    disabled={!hasPlan}
+                    style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}
+                    title="Persiste les edits de l'editeur dans l'etat consultation (sans envoyer au backend)"
+                  >
+                    Enregistrer brouillon
+                  </button>
                   <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Fermer</button>
                   <button type="button" className="btn btn-primary" onClick={handleSave} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Sauvegarder</button>
                 </div>
@@ -3190,8 +3345,12 @@ ${suppText}`;
 
             {/* ─── SPLIT VIEW ─── */}
             <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start' }}>
-              {/* LEFT : Editor (55%) */}
-              <section className="nc-panel nc-panel--editor">
+              {/* LEFT : Editor (55%) — onInput bubbling depuis les contenteditable
+                  declenche un rafraichissement debounced de l'apercu. */}
+              <section
+                className="nc-panel nc-panel--editor"
+                onInput={scheduleDraftTick}
+              >
                 <header className="nc-panel__header">
                   <span className="nc-panel__label">Editeur</span>
                   <Tab active={editorTab === 'plan'} onClick={() => setEditorTab('plan')}>Plan complet</Tab>
@@ -3210,15 +3369,23 @@ ${suppText}`;
                 </div>
               </section>
 
-              {/* RIGHT : Preview (45%) */}
+              {/* RIGHT : Preview (45%) — relit readEdited() a chaque draftTick */}
               <section className="nc-panel nc-panel--preview">
                 <header className="nc-panel__header">
                   <span className="nc-panel__label">Apercu</span>
                   <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
                   <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
                   <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
+                  <button
+                    type="button"
+                    onClick={() => setDraftTick(t => t + 1)}
+                    title="Rafraichir l'apercu depuis l'editeur (sans ecrire l'etat)"
+                    style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#c5b07a', fontSize: '.72rem', padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    &#x21bb; Rafraichir
+                  </button>
                 </header>
-                <div className="nc-panel__body" style={{ padding: 16 }}>
+                <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef} key={`preview-${previewTab}-${draftTick}`}>
                   {renderPreviewTab()}
                 </div>
               </section>
@@ -3268,34 +3435,57 @@ ${suppText}`;
             })()}
 
             {showCoverForm && (
-              <div className="modal-overlay" onClick={() => setShowCoverForm(false)}>
-                <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 24 }}>
-                  <h3 style={{ marginBottom: 16, color: '#d4c9a8' }}>Cover PDF — personnaliser</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="modal-overlay" onClick={() => setShowCoverForm(false)} role="dialog" aria-modal="true">
+                <div className="modal-content" onClick={e => e.stopPropagation()} style={{ padding: 0 }}>
+                  <header style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Prenom client</label>
+                      <h3 style={{ margin: 0, color: '#d4c9a8', fontSize: '1rem', fontWeight: 700 }}>Cover PDF</h3>
+                      <div style={{ fontSize: '.75rem', color: '#8a8a7a', marginTop: 2 }}>Personnaliser la page de garde du plan</div>
+                    </div>
+                    <button type="button" onClick={() => setShowCoverForm(false)} style={{ background: 'none', border: 'none', color: '#8a8a7a', fontSize: '1.3rem', cursor: 'pointer', padding: '0 4px' }} title="Fermer">&times;</button>
+                  </header>
+                  <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div>
+                      <label style={{ fontSize: '.72rem', color: '#8a8a7a', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>Prenom client</label>
                       <input type="text" value={coverFields.prenom} onChange={e => setCoverFields(p => ({ ...p, prenom: e.target.value }))} style={{ width: '100%' }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Objectif principal</label>
+                      <label style={{ fontSize: '.72rem', color: '#8a8a7a', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>Objectif principal</label>
                       <input type="text" value={coverFields.objectif} onChange={e => setCoverFields(p => ({ ...p, objectif: e.target.value }))} style={{ width: '100%' }} />
                     </div>
-                    <div>
-                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Date</label>
-                      <input type="text" value={coverFields.date} onChange={e => setCoverFields(p => ({ ...p, date: e.target.value }))} style={{ width: '100%' }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Sous-titre</label>
-                      <input type="text" value={coverFields.sousTitre} onChange={e => setCoverFields(p => ({ ...p, sousTitre: e.target.value }))} style={{ width: '100%' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 12 }}>
+                      <div>
+                        <label style={{ fontSize: '.72rem', color: '#8a8a7a', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>Date</label>
+                        <input type="text" value={coverFields.date} onChange={e => setCoverFields(p => ({ ...p, date: e.target.value }))} style={{ width: '100%' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '.72rem', color: '#8a8a7a', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>Sous-titre</label>
+                        <input type="text" value={coverFields.sousTitre} onChange={e => setCoverFields(p => ({ ...p, sousTitre: e.target.value }))} style={{ width: '100%' }} />
+                      </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                    <button className="btn btn-sm btn-anissa-primary" onClick={() => { doExportCover(); setShowCoverForm(false); }}>Exporter Cover</button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => setShowCoverForm(false)}>Annuler</button>
-                  </div>
+                  <footer style={{ padding: '14px 22px 18px', borderTop: '1px solid rgba(255,255,255,.06)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button className="btn btn-secondary" onClick={() => setShowCoverForm(false)} style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}>Fermer</button>
+                    <button
+                      className="btn btn-anissa-secondary"
+                      onClick={() => { setPreviewTab('cover'); setShowCoverForm(false); showSaveToast('Cover mise a jour — voir l\'apercu'); }}
+                      style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                    >
+                      Valider
+                    </button>
+                    <button
+                      className="btn btn-anissa-primary"
+                      onClick={() => { doExportCover(); setShowCoverForm(false); showSaveToast('Cover exportee'); }}
+                      style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                    >
+                      Exporter Cover
+                    </button>
+                  </footer>
                 </div>
               </div>
             )}
+
+            {saveToast && <div className="nc-save-toast">{saveToast}</div>}
           </div>
         );
       })()}
