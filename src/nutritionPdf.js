@@ -832,23 +832,109 @@ export async function exportConsultationPDF(consultation, client) {
 
   // ─── PLAN SECTIONS ───
   if (unifiedSections) {
-    // Unified path: same sections as preview, same order
-    const sectionOrder = consultation.isFollowup
-      ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
-      : ['analyse', 'principes', 'plan', 'supplements', 'conseils', 'notes_coach', 'other'];
-    const sorted = [...unifiedSections].sort((a, b) => {
-      const ia = sectionOrder.indexOf(a.type);
-      const ib = sectionOrder.indexOf(b.type);
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    });
-
-    for (const sec of sorted) {
-      if (!sec.content?.trim()) continue;
-      if (isFirstPage) { isFirstPage = false; } else if (y > 200) { doc.addPage(); y = 20; }
+    // Helper: find section by type
+    const findSec = (type) => unifiedSections.find(s => s.type === type);
+    const renderSec = (sec) => {
+      if (!sec?.content?.trim()) return;
       y = addSectionTitle(doc, sec.title, y, margin);
       const tokens = parseNutritionPlan(sec.content);
       y = renderTokens(doc, tokens, margin, y, cw);
-      y += 12;
+      y += 8;
+    };
+    const newPage = () => { doc.addPage(); doc.setFillColor(...BG_PAGE); doc.rect(0, 0, pw, 297, 'F'); y = 22; };
+
+    // ── PAGE 1: COVER ──
+    {
+      const coverY = 80;
+      doc.setDrawColor(200, 198, 190); doc.setLineWidth(0.3); doc.line(pw / 2 - 30, coverY, pw / 2 + 30, coverY);
+      doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GREEN);
+      doc.text('Plan Nutritionnel Personnalise', pw / 2, coverY + 18, { align: 'center' });
+      doc.setFontSize(13); doc.setFont('helvetica', 'normal'); doc.setTextColor(...DARK_TEXT);
+      doc.text(prenom, pw / 2, coverY + 32, { align: 'center' });
+      if (objectif) {
+        doc.setFontSize(10); doc.setTextColor(...GREY_TEXT);
+        const wrappedObj = doc.splitTextToSize(objectif, 120);
+        for (let i = 0; i < Math.min(wrappedObj.length, 2); i++) {
+          doc.text(wrappedObj[i], pw / 2, coverY + 44 + i * 5, { align: 'center' });
+        }
+      }
+      doc.setFontSize(9); doc.setTextColor(...GREY_TEXT);
+      doc.text(dateStr || '', pw / 2, coverY + 60, { align: 'center' });
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GREEN);
+      doc.text('Anissa Deroubaix Nutrition', pw / 2, coverY + 74, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(...GREY_TEXT); doc.setFontSize(7.5);
+      doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, coverY + 80, { align: 'center' });
+      doc.line(pw / 2 - 30, coverY + 90, pw / 2 + 30, coverY + 90);
+    }
+
+    // ── PAGE 2: ANALYSE + STRATEGIE ──
+    newPage();
+    renderSec(findSec('analyse'));
+    renderSec(findSec('principes'));
+
+    // ── PAGE 3: STRUCTURE ALIMENTAIRE ──
+    newPage();
+    renderSec(findSec('plan'));
+
+    // ── PAGE 4: ROTATION + AJUSTEMENTS ──
+    {
+      const rotation = findSec('rotation');
+      const ajustements = findSec('ajustements');
+      if (rotation?.content?.trim() || ajustements?.content?.trim()) {
+        newPage();
+        renderSec(rotation);
+        renderSec(ajustements);
+      }
+    }
+
+    // ── PAGE 5: FICHE FRIGO ──
+    {
+      const frigo = findSec('frigo');
+      if (frigo?.content?.trim()) {
+        newPage();
+        renderSec(frigo);
+      }
+    }
+
+    // ── PAGE 6: PROTOCOLES + RECOMMANDATIONS COACH ──
+    {
+      const protocoles = findSec('protocoles');
+      const coach = findSec('coach');
+      if (protocoles?.content?.trim() || coach?.content?.trim()) {
+        newPage();
+        renderSec(protocoles);
+        renderSec(coach);
+      }
+    }
+
+    // ── PAGE 7: PLAN D'ACTION ──
+    {
+      const action = findSec('action');
+      if (action?.content?.trim()) {
+        newPage();
+        renderSec(action);
+      }
+    }
+
+    // ── SUPPLEMENTS (separate, if present) ──
+    {
+      const supps = findSec('supplements');
+      if (supps?.content?.trim()) {
+        newPage();
+        renderSec(supps);
+      }
+    }
+
+    // ── REMAINING SECTIONS (conseils, notes_coach, other) ──
+    {
+      const remaining = unifiedSections.filter(s =>
+        s.content?.trim() && !['analyse', 'principes', 'plan', 'rotation', 'frigo',
+          'protocoles', 'ajustements', 'coach', 'action', 'supplements'].includes(s.type)
+      );
+      for (const sec of remaining) {
+        if (y > 200) newPage();
+        renderSec(sec);
+      }
     }
   } else {
     // Legacy path: splitPlanIntoClientSections (backward compatibility)
@@ -2292,6 +2378,9 @@ export async function exportCoverPDF(consultation, client) {
 
 // ─────────────────────────────────────────────────────
 // PACK CLIENT COMPLET — single PDF with cover + plan + fiche frigo + guide
+// Architecture: strict, deterministic, no duplication.
+// Each section type appears AT MOST once. Fiche frigo is rendered from the
+// structured 'frigo' section (not re-extracted from the full plan text).
 // ─────────────────────────────────────────────────────
 
 export async function exportClientPackPDF(consultation, client, { sections: unifiedSections, coverFields } = {}) {
@@ -2310,7 +2399,6 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   doc.setFillColor(...BG_PAGE);
   doc.rect(0, 0, pw, ph, 'F');
 
-  // Decorative top line
   let y = 60;
   doc.setDrawColor(200, 198, 190);
   doc.setLineWidth(0.3);
@@ -2358,14 +2446,29 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   doc.setFontSize(7.5);
   doc.text('Document confidentiel — usage personnel uniquement', pw / 2, y, { align: 'center' });
 
-  // ═══════════ PAGES 2+: PLAN NUTRITION ═══════════
+  // ═══════════ PAGES 2+: PLAN SECTIONS (strict order, deduplicated) ═══════════
+  // Canonical order — each type appears at most once.
+  const SECTION_ORDER = consultation.isFollowup
+    ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
+    : ['analyse', 'principes', 'plan', 'rotation', 'protocoles', 'ajustements', 'coach', 'action', 'supplements', 'other'];
+  // NOTE: 'frigo' is intentionally NOT in this list — it gets its own dedicated page below.
+  // NOTE: 'conseils' and 'notes_coach' are excluded from non-followup packs (internal only).
+
   if (unifiedSections && unifiedSections.length > 0) {
-    const sectionOrder = consultation.isFollowup
-      ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
-      : ['analyse', 'principes', 'plan', 'supplements', 'conseils', 'notes_coach', 'other'];
-    const sorted = [...unifiedSections].sort((a, b) => {
-      const ia = sectionOrder.indexOf(a.type);
-      const ib = sectionOrder.indexOf(b.type);
+    // Deduplicate: keep only the FIRST section of each type
+    const seenTypes = new Set();
+    const dedupedSections = [];
+    for (const sec of unifiedSections) {
+      if (sec.type === 'frigo') continue; // handled separately below
+      if (seenTypes.has(sec.type)) continue; // skip duplicates
+      seenTypes.add(sec.type);
+      dedupedSections.push(sec);
+    }
+
+    // Sort by canonical order
+    const sorted = [...dedupedSections].sort((a, b) => {
+      const ia = SECTION_ORDER.indexOf(a.type);
+      const ib = SECTION_ORDER.indexOf(b.type);
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
 
@@ -2379,107 +2482,36 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
       const tokens = parseNutritionPlan(sec.content);
       y = renderTokens(doc, tokens, margin, y, cw);
     }
-  } else if (consultation.nutritionPlan) {
-    // Fallback: legacy split
-    const legSections = splitPlanIntoClientSections(
-      consultation.nutritionPlan, consultation.supplements, consultation.recipes
-    );
-    for (const week of (legSections.weeks || [])) {
-      doc.addPage();
-      doc.setFillColor(...BG_PAGE);
-      doc.rect(0, 0, pw, ph, 'F');
-      y = 20;
-      y = addSectionTitle(doc, week.title, y, margin);
-      const tokens = parseNutritionPlan(week.content);
-      y = renderTokens(doc, tokens, margin, y, cw);
-    }
   }
 
-  // ═══════════ FICHE FRIGO PAGE ═══════════
-  const meals = extractMeals(consultation.nutritionPlan || '');
-  const hasMeals = meals.breakfast.length || meals.lunch.length || meals.dinner.length;
-  if (hasMeals) {
+  // ═══════════ FICHE FRIGO PAGE (single source, no re-extraction) ═══════════
+  // Priority: structured 'frigo' section from unifiedSections → extractFridgeDataFromSections fallback
+  const frigoSection = (unifiedSections || []).find(s => s.type === 'frigo');
+  let frigoRendered = false;
+
+  if (frigoSection && frigoSection.content?.trim()) {
+    // Render the fiche frigo section as a standard content page
     doc.addPage();
     doc.setFillColor(...BG_PAGE);
     doc.rect(0, 0, pw, ph, 'F');
     y = 20;
     y = addSectionTitle(doc, 'Votre Fiche Frigo', y, margin);
+    const tokens = parseNutritionPlan(frigoSection.content);
+    y = renderTokens(doc, tokens, margin, y, cw);
+    frigoRendered = true;
+  }
 
-    const mealBlocks = [
-      { label: 'PETIT-DEJEUNER', items: meals.breakfast },
-      { label: 'DEJEUNER', items: meals.lunch },
-      { label: 'DINER', items: meals.dinner },
-    ];
-
-    for (const block of mealBlocks) {
-      if (!block.items.length) continue;
-      y = ensurePage(doc, y, 20);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...GREEN);
-      doc.text(block.label, margin + 2, y);
-      y += 2;
-      doc.setDrawColor(...GREEN);
-      doc.setLineWidth(0.4);
-      doc.line(margin + 2, y, margin + 28, y);
-      y += 6;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...DARK_TEXT);
-      for (let i = 0; i < Math.min(block.items.length, 3); i++) {
-        const lines = doc.splitTextToSize(block.items[i], cw - 10);
-        for (const l of lines) {
-          y = ensurePage(doc, y);
-          doc.text('—  ' + l, margin + 6, y);
-          y += 4.5;
-        }
-        y += 2;
-      }
-      y += 4;
-    }
-
-    // Collation
-    if (meals.snack) {
-      y = ensurePage(doc, y, 12);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...GREEN);
-      doc.text('COLLATION', margin + 2, y);
-      y += 6;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...DARK_TEXT);
-      doc.text('—  ' + meals.snack, margin + 6, y);
-      y += 8;
-    }
-
-    // A privilegier / A limiter
-    if (meals.toFavor.length) {
-      y = ensurePage(doc, y, 14);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...GREEN);
-      doc.text('A PRIVILEGIER', margin + 2, y);
-      y += 6;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...DARK_TEXT);
-      doc.text(meals.toFavor.slice(0, 10).join(', '), margin + 6, y);
-      y += 8;
-    }
-    if (meals.toLimit.length) {
-      y = ensurePage(doc, y, 14);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(180, 60, 60);
-      doc.text('A LIMITER', margin + 2, y);
-      y += 6;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...DARK_TEXT);
-      doc.text(meals.toLimit.slice(0, 10).join(', '), margin + 6, y);
-      y += 8;
+  if (!frigoRendered && unifiedSections && unifiedSections.length > 0) {
+    // Fallback: extract fridge data from structured sections (not full plan text)
+    const fridgeData = extractFridgeDataFromSections(unifiedSections);
+    if (fridgeData) {
+      doc.addPage();
+      doc.setFillColor(...BG_PAGE);
+      doc.rect(0, 0, pw, ph, 'F');
+      y = 20;
+      y = addSectionTitle(doc, 'Votre Fiche Frigo', y, margin);
+      y = renderFridgeData(doc, fridgeData, margin, y, cw);
+      frigoRendered = true;
     }
   }
 
@@ -2516,7 +2548,6 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
     y += 2;
   }
 
-  // Closing note
   y += 10;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
@@ -2534,4 +2565,87 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
 
   const fileName = `pack-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`;
   doc.save(fileName);
+}
+
+// Helper: render extracted fridge data as formatted PDF content
+function renderFridgeData(doc, meals, margin, startY, cw) {
+  let y = startY;
+
+  const mealBlocks = [
+    { label: 'PETIT-DEJEUNER', items: meals.breakfast },
+    { label: 'DEJEUNER', items: meals.lunch },
+    { label: 'DINER', items: meals.dinner },
+  ];
+
+  for (const block of mealBlocks) {
+    if (!block.items.length) continue;
+    y = ensurePage(doc, y, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREEN);
+    doc.text(block.label, margin + 2, y);
+    y += 2;
+    doc.setDrawColor(...GREEN);
+    doc.setLineWidth(0.4);
+    doc.line(margin + 2, y, margin + 28, y);
+    y += 6;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    for (let i = 0; i < Math.min(block.items.length, 3); i++) {
+      const lines = doc.splitTextToSize(block.items[i], cw - 10);
+      for (const l of lines) {
+        y = ensurePage(doc, y);
+        doc.text('—  ' + l, margin + 6, y);
+        y += 4.5;
+      }
+      y += 2;
+    }
+    y += 4;
+  }
+
+  if (meals.snack) {
+    y = ensurePage(doc, y, 12);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREEN);
+    doc.text('COLLATION', margin + 2, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    doc.text('—  ' + meals.snack, margin + 6, y);
+    y += 8;
+  }
+
+  if (meals.toFavor.length) {
+    y = ensurePage(doc, y, 14);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREEN);
+    doc.text('A PRIVILEGIER', margin + 2, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    doc.text(meals.toFavor.slice(0, 10).join(', '), margin + 6, y);
+    y += 8;
+  }
+
+  if (meals.toLimit.length) {
+    y = ensurePage(doc, y, 14);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(180, 60, 60);
+    doc.text('A LIMITER', margin + 2, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    doc.text(meals.toLimit.slice(0, 10).join(', '), margin + 6, y);
+    y += 8;
+  }
+
+  return y;
 }
