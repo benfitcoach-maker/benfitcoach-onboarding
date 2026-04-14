@@ -4005,7 +4005,7 @@ ${suppText}`;
                     onClick={() => doExportPdf()}
                     style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
                   >
-                    Telecharger PDF
+                    Telecharger le plan nutrition
                   </button>
                 </header>
                 <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef}>
