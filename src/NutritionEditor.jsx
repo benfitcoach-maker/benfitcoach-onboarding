@@ -8,8 +8,8 @@ import MedicalSummary from './MedicalSummary';
 // NOT used during user editing — that's the key architectural change.
 
 function parsePlanToSections(planText, supplementsText, recipesText) {
-  const sections = [];
-  if (!planText && !supplementsText && !recipesText) return sections;
+  const raw = [];
+  if (!planText && !supplementsText && !recipesText) return raw;
 
   const fullText = planText || '';
   const lines = fullText.split('\n');
@@ -18,12 +18,11 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
 
   const flushSection = () => {
     const content = currentContent.join('\n').trim();
-    if (content || currentTitle) {
-      sections.push({
-        id: crypto.randomUUID(),
+    // Only create section if there is actual content (no empty cards)
+    if (content) {
+      raw.push({
         title: currentTitle,
         content,
-        originalContent: content,
       });
     }
     currentContent = [];
@@ -46,6 +45,25 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
     }
   }
   flushSection();
+
+  // ─── Deduplicate: merge sections with identical titles ───
+  const merged = new Map();
+  for (const s of raw) {
+    if (merged.has(s.title)) {
+      const existing = merged.get(s.title);
+      existing.content += '\n\n' + s.content;
+    } else {
+      merged.set(s.title, { ...s });
+    }
+  }
+
+  // Build final sections with IDs
+  const sections = [...merged.values()].map(s => ({
+    id: crypto.randomUUID(),
+    title: s.title,
+    content: s.content,
+    originalContent: s.content,
+  }));
 
   if (supplementsText?.trim()) {
     sections.push({
@@ -255,6 +273,11 @@ function SectionBlock({
           <button type="button" className="ne-move-btn" onClick={() => onMoveDown(section.id)} disabled={!canMoveDown} title="Descendre">&#9660;</button>
         </div>
         <span style={titleStyle}>{section.title}</span>
+        {!isActive && section.content.trim() && (
+          <span style={{ fontSize: '.65rem', color: 'rgba(255,255,255,.25)', padding: '2px 6px', background: 'rgba(255,255,255,.05)', borderRadius: 4, whiteSpace: 'nowrap' }}>
+            {section.content.trim().split('\n').length} lignes
+          </span>
+        )}
         <div style={{ display: 'flex', gap: 4 }}>
           <button type="button" className="ne-action-btn" onClick={() => onReset(section.id)} title="Reinitialiser">&#8634;</button>
           <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
@@ -266,7 +289,7 @@ function SectionBlock({
         {isActive ? (
           <div>
             {/* Simple formatting hints */}
-            <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.3)', marginBottom: 6, display: 'flex', gap: 12 }}>
+            <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.3)', marginBottom: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <span>**gras**</span>
               <span>*italique*</span>
               <span>- liste</span>
@@ -278,6 +301,7 @@ function SectionBlock({
               value={section.content}
               onChange={handleChange}
               className="ne-editor ne-textarea-editor"
+              placeholder="Commencez a ecrire le contenu de cette section..."
               style={{
                 width: '100%',
                 minHeight: 80,
@@ -297,7 +321,13 @@ function SectionBlock({
           </div>
         ) : (
           <div onClick={handleContentClick} style={{ cursor: 'text', minHeight: 40 }}>
-            <PremiumSectionRender content={section.content} />
+            {section.content.trim() ? (
+              <PremiumSectionRender content={section.content} />
+            ) : (
+              <div style={{ color: 'rgba(255,255,255,.2)', fontStyle: 'italic', fontSize: '.8rem', padding: '8px 0' }}>
+                Section vide — cliquez pour editer
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -354,7 +354,40 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
   let coherence = 10;
 
   // Hard fail: forbidden foods (allergies/intolerances) present in plan
-  const foundForbidden = forbidden.filter(f => full.includes(f));
+  // Context-aware: ignore matches inside exclusion phrases (sans X, éviter X, etc.)
+  // Context window stops at section boundaries (## headers, ALLCAPS headers) to avoid
+  // an exclusion in one section leaking into a meal section 80 chars later.
+  const EXCLUSION_PREFIX = /(?:sans|éviter|eviter|exclure|exclu|interdit|allergi|intolér|intoler|pas de|aucun|supprim|retir|élimin|eliminer|ne.*pas.*consommer)\b/i;
+  const SECTION_BOUNDARY = /^#{1,3}\s+|\n[A-Z][A-Z\s/]{4,}$/m;
+  const foundForbidden = forbidden.filter(f => {
+    if (!full.includes(f)) return false;
+    // Check every occurrence — only flag if at least one is NOT in exclusion context
+    let idx = -1;
+    while ((idx = full.indexOf(f, idx + 1)) !== -1) {
+      // Extract context: go back to the last section header or 120 chars, whichever is closer
+      const rawBefore = full.slice(Math.max(0, idx - 120), idx);
+      // Cut at last section boundary (## header or ALLCAPS line)
+      const lastHeader = rawBefore.lastIndexOf('\n##');
+      const lastNewline = rawBefore.lastIndexOf('\n');
+      // Check if the line at lastNewline is an ALLCAPS header
+      let cutAt = -1;
+      if (lastHeader >= 0) cutAt = lastHeader;
+      // Also check all newlines for ALLCAPS headers
+      for (let i = rawBefore.length - 1; i >= 0; i--) {
+        if (rawBefore[i] === '\n') {
+          const lineAfter = rawBefore.slice(i + 1).split('\n')[0].trim();
+          if (lineAfter.length > 5 && lineAfter === lineAfter.toUpperCase() && /[A-Z]{3,}/.test(lineAfter)) {
+            cutAt = Math.max(cutAt, i);
+            break;
+          }
+        }
+      }
+      const before = cutAt >= 0 ? rawBefore.slice(cutAt) : rawBefore;
+      // If there's no exclusion keyword in the preceding context, it's a real violation
+      if (!EXCLUSION_PREFIX.test(before)) return true;
+    }
+    return false; // all occurrences are in exclusion context → not a real violation
+  });
   if (foundForbidden.length > 0) {
     hardFails.push(`Aliments interdits presents : ${foundForbidden.join(', ')}`);
     coherence = 0;
@@ -854,7 +887,7 @@ function cleanPlanForPDF(planText) {
 }
 
 function structurePlanSections(planText, supplementsText, { isFollowup = false } = {}) {
-  const sections = [];
+  const raw = [];
   const text = cleanPlanForPDF(planText);
   const lines = text.split('\n');
 
@@ -865,7 +898,7 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false }
     if (currentTitle || currentContent.length > 0) {
       const content = currentContent.join('\n').trim();
       if (content) {
-        sections.push({ title: currentTitle || 'Introduction', content, type: classifySection(currentTitle) });
+        raw.push({ title: currentTitle || 'Introduction', content, type: classifySection(currentTitle) });
       }
     }
     currentContent = [];
@@ -882,6 +915,21 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false }
     }
   }
   flushSection();
+
+  // Deduplicate: merge sections with identical titles (case-insensitive)
+  const sections = [];
+  const seen = new Map();
+  for (const s of raw) {
+    const key = s.title.toLowerCase();
+    if (seen.has(key)) {
+      const existing = seen.get(key);
+      existing.content += '\n\n' + s.content;
+    } else {
+      const entry = { ...s };
+      sections.push(entry);
+      seen.set(key, entry);
+    }
+  }
 
   // Add supplements as separate section
   if (supplementsText?.trim()) {
@@ -1847,40 +1895,69 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     date: new Date().toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
     sousTitre: 'Plan nutrition personnalis\u00e9',
   }));
-  // draftTick : incremente a chaque edit dans le panneau editeur (debounced).
-  // Force le panneau apercu a relire editorGetDataRef.current() a chaque tick.
-  const [draftTick, setDraftTick] = useState(0);
-  const draftTickTimer = useRef(null);
+  // ─── Draft state (source de verite unique cote parent) ──────────────
+  // L'editeur est controle via un reseed explicite (editorSeed) et pousse
+  // ses modifications en continu via onDraftChange (debounced cote editeur).
+  // L'apercu lit directement ces drafts → re-renders React natifs, pas de ref polling.
+  const initialPlan = initialConsultation?.nutritionPlan || initialConsultation?.nutrition_plan || '';
+  const initialSupp = initialConsultation?.supplements || '';
+  const initialRec = initialConsultation?.recipes || '';
+  const [planDraft, setPlanDraft] = useState(initialPlan);
+  const [supplementsDraft, setSupplementsDraft] = useState(initialSupp);
+  const [recipesDraft, setRecipesDraft] = useState(initialRec);
+  // editorSeed : incremente UNIQUEMENT pour forcer un remount de NutritionEditor
+  // (apres generation IA, template, ou restauration de version). Jamais en reponse
+  // a une edition utilisateur — c'est ce qui evitait la perte de texte.
+  const [editorSeed, setEditorSeed] = useState(0);
+
   const [saveToast, setSaveToast] = useState('');
   const previewBodyRef = useRef(null);
 
-  const scheduleDraftTick = () => {
-    if (draftTickTimer.current) clearTimeout(draftTickTimer.current);
-    draftTickTimer.current = setTimeout(() => setDraftTick(t => t + 1), 400);
+  // Reseed : remplace les drafts + remount l'editeur. A appeler APRES toute
+  // ecriture "autoritaire" du plan (AI gen, template, restore version).
+  const reseedEditor = (plan, supplements, recipes) => {
+    console.log('[NC] reseedEditor CALLED', {
+      planLen: (plan || '').length,
+      suppLen: (supplements || '').length,
+      recLen: (recipes || '').length,
+      stack: new Error().stack?.split('\n').slice(1, 5).join(' → '),
+    });
+    setPlanDraft(plan || '');
+    setSupplementsDraft(supplements || '');
+    setRecipesDraft(recipes || '');
+    setEditorSeed(s => s + 1);
   };
 
-  // Flush le draft de NutritionEditor dans l'etat consultation.
-  // Utilise par : changement de tab editeur hors de 'plan', Sauvegarder, Enregistrer brouillon.
+  // Callback push-based depuis NutritionEditor — maintient les drafts a jour.
+  const handleDraftChange = (plan, supplements, recipes) => {
+    console.log('[NC] handleDraftChange received', {
+      planLen: (plan || '').length,
+      suppLen: (supplements || '').length,
+      recLen: (recipes || '').length,
+      planSample: (plan || '').slice(0, 120),
+      prevPlanDraftLen: planDraft.length,
+    });
+    setPlanDraft(plan);
+    setSupplementsDraft(supplements);
+    setRecipesDraft(recipes);
+  };
+
+  // Flush des drafts -> etat persiste consultation.*
+  // Ne provoque PAS de reseed de l'editeur (drafts === consultation apres ca).
   const flushEditorDraft = () => {
-    const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
-    if (!edited) return false;
-    setConsultation(prev => ({
-      ...prev,
-      nutrition_plan: edited.plan ?? prev.nutrition_plan,
-      supplements: edited.supplements ?? prev.supplements,
-      recipes: edited.recipes ?? prev.recipes,
-    }));
+    setConsultation(prev => {
+      if (prev.nutrition_plan === planDraft && prev.supplements === supplementsDraft && prev.recipes === recipesDraft) {
+        return prev;
+      }
+      return {
+        ...prev,
+        nutrition_plan: planDraft,
+        supplements: supplementsDraft,
+        recipes: recipesDraft,
+      };
+    });
     return true;
   };
-
-  // Auto-flush quand on quitte la tab 'plan' (sinon les edits contenteditable sont perdus
-  // quand NutritionEditor est demonte).
-  useEffect(() => {
-    if (editorTab !== 'plan') flushEditorDraft();
-    // Tick : rafraichit l'apercu au switch de tab
-    setDraftTick(t => t + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorTab, previewTab]);
 
   const showSaveToast = (msg) => {
     setSaveToast(msg);
@@ -2265,6 +2342,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       }
 
       updateField('nutrition_plan', finalPlan);
+      // Reseed l'editeur avec le nouveau plan genere (remount propre).
+      reseedEditor(finalPlan, suppText, consultation.recipes);
 
       // Learning signal: log quality data for prompt improvement
       const wasAutoCorrected = finalPlan !== planText && finalPlan !== (planText + '\n\n---\n\nAUDIT DE COHERENCE :\n' + auditResult);
@@ -2350,24 +2429,23 @@ ${suppText}`;
 
   const handleTemplateSelect = (plan, supp) => {
     setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements: supp }));
+    reseedEditor(plan, supp, consultation.recipes);
     setShowTemplates(false);
   };
 
   const handleSave = () => {
-    // Flush le draft courant de l'editeur (contenteditable) pour garantir
-    // que les edits non commit sont bien persistes.
+    // Safety : lire le DOM via ref au cas ou un keystroke est passe apres
+    // le dernier debounce. Sinon, utiliser les drafts React (source habituelle).
     const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
-    const planToSave = edited?.plan ?? consultation.nutrition_plan;
-    const suppToSave = edited?.supplements ?? consultation.supplements;
-    const recipesToSave = edited?.recipes ?? consultation.recipes;
-    if (edited) {
-      setConsultation(prev => ({
-        ...prev,
-        nutrition_plan: planToSave,
-        supplements: suppToSave,
-        recipes: recipesToSave,
-      }));
-    }
+    const planToSave = edited?.plan ?? planDraft;
+    const suppToSave = edited?.supplements ?? supplementsDraft;
+    const recipesToSave = edited?.recipes ?? recipesDraft;
+    setConsultation(prev => ({
+      ...prev,
+      nutrition_plan: planToSave,
+      supplements: suppToSave,
+      recipes: recipesToSave,
+    }));
     onSave({
       id: consultationId || undefined,
       clientId,
@@ -2460,6 +2538,7 @@ ${suppText}`;
                           recipes: v.recipes || '',
                           fiche_frigo_json: v.ficheFrigoJson || null,
                         }));
+                        reseedEditor(v.nutritionPlan || '', v.supplements || '', v.recipes || '');
                         setPlanVersions(getPlanVersions(clientId));
                         setShowVersions(false);
                       }}
@@ -2822,17 +2901,18 @@ ${suppText}`;
 
       {/* Step: Nutrition Plan — cockpit clinique SaaS */}
       {currentStepType === 'plan' && (() => {
-        const hasPlan = !!consultation.nutrition_plan;
+        const hasPlan = !!(planDraft || consultation.nutrition_plan);
         const clientName = form.prenom || client?.prenom || 'Client';
         const today = new Date().toISOString();
 
-        // Source of truth : edited content from the editor if available
+        // Source de verite unique : les drafts React (push-based depuis l'editeur).
+        // Pour les exports, on fait une lecture ref finale en cas de keystroke non debounced.
         const readEdited = () => {
           const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
           return {
-            plan: edited ? edited.plan : consultation.nutrition_plan,
-            supplements: edited ? edited.supplements : consultation.supplements,
-            recipes: edited ? edited.recipes : consultation.recipes,
+            plan: edited?.plan ?? planDraft,
+            supplements: edited?.supplements ?? supplementsDraft,
+            recipes: edited?.recipes ?? recipesDraft,
           };
         };
 
@@ -2921,15 +3001,20 @@ ${suppText}`;
             if (hasPlan) {
               return (
                 <NutritionEditor
-                  planText={consultation.nutrition_plan}
-                  supplementsText={consultation.supplements}
-                  recipesText={consultation.recipes}
+                  key={`editor-${editorSeed}`}
+                  planText={planDraft}
+                  supplementsText={supplementsDraft}
+                  recipesText={recipesDraft}
                   form={form}
                   client={client}
                   getEditedDataRef={editorGetDataRef}
+                  onDraftChange={handleDraftChange}
                   hideActions
                   onSave={(plan, supplements, recipes) => {
                     setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements, recipes }));
+                    setPlanDraft(plan);
+                    setSupplementsDraft(supplements);
+                    setRecipesDraft(recipes);
                   }}
                   onExportPDF={() => doExportPdf()}
                   onExportCover={() => setShowCoverForm(true)}
@@ -3208,8 +3293,8 @@ ${suppText}`;
                   type="button"
                   className="btn btn-anissa-secondary"
                   onClick={() => {
-                    // Le useEffect sur previewTab incremente deja draftTick.
-                    // Pas de flush ici : le ref est lu directement par l'apercu.
+                    // Push-based : les drafts sont deja a jour via onDraftChange,
+                    // l'apercu re-rend automatiquement quand previewTab change.
                     setPreviewTab('pdf');
                     if (previewBodyRef.current) previewBodyRef.current.scrollTop = 0;
                   }}
@@ -3321,9 +3406,23 @@ ${suppText}`;
                     type="button"
                     className="btn btn-anissa-secondary"
                     onClick={() => {
-                      const ok = flushEditorDraft();
-                      setDraftTick(t => t + 1);
-                      showSaveToast(ok ? 'Brouillon enregistre' : 'Aucun changement a enregistrer');
+                      // Flush final via ref (capture keystroke non debounced) puis persiste
+                      const ref = editorGetDataRef.current ? editorGetDataRef.current() : null;
+                      if (ref) {
+                        setPlanDraft(ref.plan);
+                        setSupplementsDraft(ref.supplements);
+                        setRecipesDraft(ref.recipes);
+                        setConsultation(prev => ({
+                          ...prev,
+                          nutrition_plan: ref.plan,
+                          supplements: ref.supplements,
+                          recipes: ref.recipes,
+                        }));
+                        showSaveToast('Brouillon enregistre');
+                      } else {
+                        flushEditorDraft();
+                        showSaveToast('Brouillon enregistre');
+                      }
                     }}
                     disabled={!hasPlan}
                     style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}
@@ -3345,12 +3444,9 @@ ${suppText}`;
 
             {/* ─── SPLIT VIEW ─── */}
             <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start' }}>
-              {/* LEFT : Editor (55%) — onInput bubbling depuis les contenteditable
-                  declenche un rafraichissement debounced de l'apercu. */}
-              <section
-                className="nc-panel nc-panel--editor"
-                onInput={scheduleDraftTick}
-              >
+              {/* LEFT : Editor — push-based : NutritionEditor notifie le parent
+                  via onDraftChange (debounced cote editeur). Plus de onInput parasite ici. */}
+              <section className="nc-panel nc-panel--editor">
                 <header className="nc-panel__header">
                   <span className="nc-panel__label">Editeur</span>
                   <Tab active={editorTab === 'plan'} onClick={() => setEditorTab('plan')}>Plan complet</Tab>
@@ -3369,23 +3465,15 @@ ${suppText}`;
                 </div>
               </section>
 
-              {/* RIGHT : Preview (45%) — relit readEdited() a chaque draftTick */}
+              {/* RIGHT : Preview — re-render natif React quand les drafts changent */}
               <section className="nc-panel nc-panel--preview">
                 <header className="nc-panel__header">
                   <span className="nc-panel__label">Apercu</span>
                   <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
                   <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
                   <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
-                  <button
-                    type="button"
-                    onClick={() => setDraftTick(t => t + 1)}
-                    title="Rafraichir l'apercu depuis l'editeur (sans ecrire l'etat)"
-                    style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#c5b07a', fontSize: '.72rem', padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    &#x21bb; Rafraichir
-                  </button>
                 </header>
-                <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef} key={`preview-${previewTab}-${draftTick}`}>
+                <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef}>
                   {renderPreviewTab()}
                 </div>
               </section>
