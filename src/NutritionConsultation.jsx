@@ -3492,58 +3492,6 @@ ${suppText}`;
                   {generating ? 'Generation...' : (hasPlan ? 'Regenerer' : 'Generer avec l\'IA')}
                 </button>
 
-                {/* PDF dropdown */}
-                <div style={{ position: 'relative', display: 'inline-block' }} onMouseDown={e => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className="btn btn-anissa-secondary"
-                    onClick={() => setShowPdfMenu(m => !m)}
-                    disabled={!hasPlan}
-                    style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.82rem' }}
-                  >
-                    PDF &#9662;
-                  </button>
-                  {showPdfMenu && (
-                    <div style={{
-                      position: 'absolute', top: '100%', left: 0, zIndex: 50,
-                      background: 'var(--bg-card)', border: '1px solid var(--border)',
-                      borderRadius: 8, overflow: 'hidden', minWidth: 180, marginTop: 4,
-                      boxShadow: '0 8px 24px rgba(0,0,0,.3)'
-                    }}>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
-                        onClick={() => { setPreviewTab('pdf'); if (previewBodyRef.current) previewBodyRef.current.scrollTop = 0; setShowPdfMenu(false); }}>
-                        Apercu PDF
-                      </button>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
-                        onClick={() => { doExportPdf(); setShowPdfMenu(false); }}>
-                        Telecharger PDF
-                      </button>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
-                        onClick={() => { doExportPack(); setShowPdfMenu(false); }}>
-                        Dossier client complet
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => setShowFrigoModal(true)}
-                  disabled={!hasPlan}
-                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.82rem' }}
-                >
-                  Fiche frigo
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => setShowCoverForm(true)}
-                  disabled={!hasPlan}
-                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.82rem' }}
-                >
-                  Cover
-                </button>
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
@@ -4040,11 +3988,28 @@ ${suppText}`;
 
               {/* RIGHT : Preview — re-render natif React quand les drafts changent */}
               <section className="nc-panel nc-panel--preview">
-                <header className="nc-panel__header">
+                <header className="nc-panel__header" style={{ flexWrap: 'wrap', gap: 6 }}>
                   <span className="nc-panel__label">Apercu</span>
                   <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
                   <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
                   <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
+                  <span style={{ flex: 1 }} />
+                  <button
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => doExportPdf()}
+                    style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
+                  >
+                    Telecharger PDF
+                  </button>
+                  <button
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => doExportPack()}
+                    style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
+                  >
+                    Dossier complet
+                  </button>
                 </header>
                 <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef}>
                   {renderPreviewTab()}
