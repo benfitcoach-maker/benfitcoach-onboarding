@@ -69,26 +69,40 @@ body{
 }
 /* Cockpit clinique — la consultation nutrition a besoin d'un split view large */
 .app.app-wide{
-  max-width:min(1440px, calc(100vw - 48px));
-  padding:80px 24px 40px;
-}
-@media(max-width:900px){
-  .app.app-wide{padding:80px 12px 28px}
+  max-width:100vw;
+  padding:0;
+  overflow:hidden;
 }
 
 /* ═══ NUTRITION COCKPIT ═══ */
+.nc-cockpit{
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  padding-top:64px;
+  overflow:hidden;
+  box-sizing:border-box;
+}
 .nc-cockpit-header{
-  top:72px !important;
-  border-top:2px solid rgba(106,191,138,.38) !important;
+  flex-shrink:0;
+  border-top:2px solid rgba(106,191,138,.38);
   box-shadow:0 10px 28px rgba(0,0,0,.24);
+  padding:12px 18px;
+  background:rgba(12,18,15,.95);
+  border-bottom:1px solid rgba(106,191,138,.12);
 }
 .nc-cockpit-split{
-  gap:24px !important;
-  grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) !important;
+  gap:16px;
+  grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);
+  flex:1;
+  display:grid;
+  overflow:hidden;
+  padding:12px 16px 16px;
 }
 @media(max-width:1024px){
   .nc-cockpit-split{
-    grid-template-columns:1fr !important;
+    grid-template-columns:1fr;
+    overflow-y:auto;
   }
 }
 .nc-panel{
@@ -97,9 +111,8 @@ body{
   border-radius:14px;
   overflow:hidden;
   display:flex;flex-direction:column;
-  height:calc(100vh - 260px);
-  position:sticky;
-  top:80px;
+  height:100%;
+  min-height:0;
   box-shadow:0 1px 0 rgba(0,0,0,.2),0 6px 20px rgba(0,0,0,.12);
 }
 .nc-panel--editor{border-top:2px solid rgba(106,191,138,.4)}
@@ -118,8 +131,10 @@ body{
 .nc-panel--editor .nc-panel__label{color:#8abf9a}
 .nc-panel--preview .nc-panel__label{color:#c5b07a}
 .nc-panel__body{
-  padding:6px;overflow-y:auto;flex:1;
-  height:calc(100vh - 320px);
+  padding:6px;
+  overflow-y:auto;
+  flex:1;
+  min-height:0;
   scroll-behavior:smooth;
 }
 .nc-tab{
