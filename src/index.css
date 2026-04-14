@@ -97,7 +97,9 @@ body{
   border-radius:14px;
   overflow:hidden;
   display:flex;flex-direction:column;
-  min-height:600px;
+  height:calc(100vh - 260px);
+  position:sticky;
+  top:80px;
   box-shadow:0 1px 0 rgba(0,0,0,.2),0 6px 20px rgba(0,0,0,.12);
 }
 .nc-panel--editor{border-top:2px solid rgba(106,191,138,.4)}
@@ -116,8 +118,9 @@ body{
 .nc-panel--editor .nc-panel__label{color:#8abf9a}
 .nc-panel--preview .nc-panel__label{color:#c5b07a}
 .nc-panel__body{
-  padding:6px;overflow:auto;flex:1;
-  max-height:calc(100vh - 280px);
+  padding:6px;overflow-y:auto;flex:1;
+  height:calc(100vh - 320px);
+  scroll-behavior:smooth;
 }
 .nc-tab{
   font-family:var(--font-body);
@@ -1599,29 +1602,32 @@ body{
 }
 
 .nutrition-steps{
-  display:flex;gap:4px;
+  display:flex;flex-wrap:wrap;gap:4px;
   margin-bottom:28px;
   background:var(--bg-card);
   border:1px solid var(--border);
   border-radius:var(--radius);
-  overflow-x:auto;overflow-y:hidden;
-  -webkit-overflow-scrolling:touch;
+  overflow:visible;
+  padding:4px;
 }
 .nutrition-step{
-  flex:0 0 auto;padding:12px 8px;min-width:60px;
+  flex:1 1 auto;
+  min-width:100px;
+  padding:10px 8px;
   display:flex;align-items:center;
   justify-content:center;gap:6px;
   font-size:.72rem;font-weight:500;
   cursor:pointer;background:none;
-  border:none;color:var(--text-muted);
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:var(--text-muted);
   font-family:var(--font-body);
   transition:all .25s;
-  border-right:1px solid var(--border);
 }
 .nutrition-step-label{
   white-space:nowrap;
 }
-.nutrition-step:last-child{border-right:none}
+.nutrition-step:last-child{border-right:1px solid var(--border)}
 .nutrition-step:hover{color:var(--text);background:rgba(106,191,138,.03)}
 .nutrition-step.active{
   color:var(--gold);

@@ -1839,6 +1839,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [showAnalysesPreview, setShowAnalysesPreview] = useState(false);
   const [analysesError, setAnalysesError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showPdfMenu, setShowPdfMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const editorGetDataRef = useRef(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -1945,6 +1947,13 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Close dropdown menus on outside click
+  useEffect(() => {
+    const close = () => { setShowPdfMenu(false); setShowMoreMenu(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
   }, []);
 
   // Flush des drafts -> etat persiste consultation.*
@@ -3286,8 +3295,8 @@ ${suppText}`;
                 )}
               </div>
 
-              {/* Row 1 : Generation & PDF principal */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* Row 1 : Actions principales */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <button
                   type="button"
                   className={`btn btn-anissa-primary ${generating ? 'loading-pulse' : ''}`}
@@ -3297,35 +3306,64 @@ ${suppText}`;
                 >
                   {generating ? 'Generation...' : (hasPlan ? 'Regenerer' : 'Generer avec l\'IA')}
                 </button>
+
+                {/* PDF dropdown */}
+                <div style={{ position: 'relative', display: 'inline-block' }} onMouseDown={e => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    onClick={() => setShowPdfMenu(m => !m)}
+                    disabled={!hasPlan}
+                    style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.82rem' }}
+                  >
+                    PDF &#9662;
+                  </button>
+                  {showPdfMenu && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, zIndex: 50,
+                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      borderRadius: 8, overflow: 'hidden', minWidth: 180, marginTop: 4,
+                      boxShadow: '0 8px 24px rgba(0,0,0,.3)'
+                    }}>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
+                        onClick={() => { setPreviewTab('pdf'); if (previewBodyRef.current) previewBodyRef.current.scrollTop = 0; setShowPdfMenu(false); }}>
+                        Apercu PDF
+                      </button>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
+                        onClick={() => { doExportPdf(); setShowPdfMenu(false); }}>
+                        Telecharger PDF
+                      </button>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
+                        onClick={() => { doExportPack(); setShowPdfMenu(false); }}>
+                        Dossier client complet
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
-                  onClick={() => {
-                    // Push-based : les drafts sont deja a jour via onDraftChange,
-                    // l'apercu re-rend automatiquement quand previewTab change.
-                    setPreviewTab('pdf');
-                    if (previewBodyRef.current) previewBodyRef.current.scrollTop = 0;
-                  }}
+                  onClick={() => setShowFrigoModal(true)}
                   disabled={!hasPlan}
-                  style={{ padding: '10px 16px', borderRadius: 10, fontSize: '.82rem' }}
-                  title="Bascule sur l'apercu PDF avec les edits en cours"
+                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.82rem' }}
                 >
-                  Apercu PDF
+                  Fiche frigo
                 </button>
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
-                  onClick={doExportPdf}
+                  onClick={() => setShowCoverForm(true)}
                   disabled={!hasPlan}
-                  style={{ padding: '10px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.82rem' }}
                 >
-                  Telecharger PDF
+                  Cover
                 </button>
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
                   onClick={() => setShowTemplates(true)}
-                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.78rem', marginLeft: 'auto' }}
+                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.78rem' }}
                 >
                   Templates
                 </button>
@@ -3340,119 +3378,70 @@ ${suppText}`;
                     Versions ({planVersions.length})
                   </button>
                 )}
-              </div>
 
-              {/* Row 2 : Exports secondaires */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => setShowFrigoModal(true)}
-                  disabled={!hasPlan}
-                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
-                >
-                  Fiche frigo
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => setShowCoverForm(true)}
-                  disabled={!hasPlan}
-                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
-                >
-                  Cover
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => setShowMedicalSummary(true)}
-                  disabled={!hasPlan}
-                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
-                >
-                  Resume medecin
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => setShowQualityDash(p => !p)}
-                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
-                >
-                  {showQualityDash ? 'Masquer historique IA' : 'Historique qualite IA'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => {
-                    setAnalysesError('');
-                    const symp = detectSymptomsFromForm(form);
-                    const recs = getEnrichedMGDRecommendations(symp);
-                    const val = validateAnalysesPDF(symp, recs);
-                    if (!val.valid) {
-                      setAnalysesError('Export bloque : ' + val.errors.join(' | '));
-                      return;
-                    }
-                    exportAnalysesPDF(recs, symp, clientName, formatDate(today));
-                  }}
-                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
-                >
-                  PDF analyses
-                </button>
-              </div>
-
-              {/* Row 3 : action discrete */}
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', paddingTop: 2 }}>
-                <button
-                  type="button"
-                  onClick={doExportPack}
-                  disabled={!hasPlan}
-                  style={{ background: 'none', border: 'none', color: 'rgba(138,191,154,.65)', fontSize: '.76rem', cursor: hasPlan ? 'pointer' : 'not-allowed', textDecoration: 'underline', padding: 0 }}
-                >
-                  Telecharger dossier client complet
-                </button>
-                <div style={{ display: 'flex', gap: 8 }}>
+                {/* Plus dropdown */}
+                <div style={{ position: 'relative', display: 'inline-block' }} onMouseDown={e => e.stopPropagation()}>
                   <button
                     type="button"
                     className="btn btn-anissa-secondary"
-                    onClick={() => {
-                      // Flush final via ref (capture keystroke non debounced) puis persiste
-                      const ref = editorGetDataRef.current ? editorGetDataRef.current() : null;
-                      if (ref) {
-                        setPlanDraft(ref.plan);
-                        setSupplementsDraft(ref.supplements);
-                        setRecipesDraft(ref.recipes);
-                        setConsultation(prev => ({
-                          ...prev,
-                          nutrition_plan: ref.plan,
-                          supplements: ref.supplements,
-                          recipes: ref.recipes,
-                        }));
-                        showSaveToast('Brouillon enregistre');
-                      } else {
-                        flushEditorDraft();
-                        showSaveToast('Brouillon enregistre');
-                      }
-                    }}
-                    disabled={!hasPlan}
-                    style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}
-                    title="Persiste les edits de l'editeur dans l'etat consultation (sans envoyer au backend)"
+                    onClick={() => setShowMoreMenu(m => !m)}
+                    style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.78rem' }}
                   >
-                    Enregistrer brouillon
+                    Plus &#9662;
                   </button>
-                  <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Fermer</button>
-                  <button type="button" className="btn btn-primary" onClick={handleSave} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Sauvegarder</button>
-                  <span style={{
-                    fontSize: '0.75rem',
-                    color: autoSaveStatus === 'saved' ? '#22c55e'
-                         : autoSaveStatus === 'saving' ? '#f59e0b'
-                         : '#94a3b8',
-                    marginLeft: '0.5rem',
-                    transition: 'color 0.3s',
-                  }}>
-                    {autoSaveStatus === 'saved' && '\u2713 Sauvegard\u00e9'}
-                    {autoSaveStatus === 'saving' && '\u27f3 Auto-save...'}
-                    {autoSaveStatus === 'unsaved' && '\u25cf Non sauvegard\u00e9'}
-                  </span>
+                  {showMoreMenu && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, zIndex: 50,
+                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      borderRadius: 8, overflow: 'hidden', minWidth: 200, marginTop: 4,
+                      boxShadow: '0 8px 24px rgba(0,0,0,.3)'
+                    }}>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
+                        onClick={() => { setShowMedicalSummary(true); setShowMoreMenu(false); }}
+                        disabled={!hasPlan}>
+                        Resume medecin
+                      </button>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
+                        onClick={() => { setShowQualityDash(p => !p); setShowMoreMenu(false); }}>
+                        Historique qualite IA
+                      </button>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
+                        onClick={() => {
+                          setAnalysesError('');
+                          const symp = detectSymptomsFromForm(form);
+                          const recs = getEnrichedMGDRecommendations(symp);
+                          const val = validateAnalysesPDF(symp, recs);
+                          if (!val.valid) {
+                            setAnalysesError('Export bloque : ' + val.errors.join(' | '));
+                            setShowMoreMenu(false);
+                            return;
+                          }
+                          exportAnalysesPDF(recs, symp, clientName, formatDate(today));
+                          setShowMoreMenu(false);
+                        }}>
+                        PDF analyses
+                      </button>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Row 2 : Save actions */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', paddingTop: 2 }}>
+                <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Fermer</button>
+                <button type="button" className="btn btn-primary" onClick={handleSave} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Sauvegarder</button>
+                <span style={{
+                  fontSize: '0.75rem',
+                  color: autoSaveStatus === 'saved' ? '#22c55e'
+                       : autoSaveStatus === 'saving' ? '#f59e0b'
+                       : '#94a3b8',
+                  marginLeft: '0.5rem',
+                  transition: 'color 0.3s',
+                }}>
+                  {autoSaveStatus === 'saved' && '\u2713 Sauvegard\u00e9'}
+                  {autoSaveStatus === 'saving' && '\u27f3 Auto-save...'}
+                  {autoSaveStatus === 'unsaved' && '\u25cf Non sauvegard\u00e9'}
+                </span>
               </div>
 
               {genError && <div className="error-msg" style={{ marginTop: 4 }}>{genError}</div>}
