@@ -3064,17 +3064,21 @@ ${suppText}`;
         };
 
         const doExportPdf = async () => {
+          console.log('[PDF] doExportPdf CALLED');
           setPdfError('');
           const { plan, supplements, recipes } = readEdited();
+          console.log('[PDF] plan length:', plan?.length, 'supplements length:', supplements?.length);
           const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
           const fullText = (plan || '') + '\n' + (supplements || '');
           const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
+          console.log('[PDF] validation:', validation);
           if (!validation.valid) {
+            console.log('[PDF] BLOCKED by validation:', validation.errors);
             setPdfError('Export bloque : ' + validation.errors.join(' | '));
             return;
           }
           const sections = structurePlanSections(plan, supplements, { isFollowup });
-          console.log('[PDF DEBUG] plan length:', plan?.length, 'sections:', sections.length, sections.map(s => ({ title: s.title, type: s.type, contentLen: s.content?.length })));
+          console.log('[PDF DEBUG] sections:', sections.length, sections.map(s => ({ title: s.title, type: s.type, contentLen: s.content?.length })));
           try {
             await exportConsultationPDF({
               observations: consultation.observations,
