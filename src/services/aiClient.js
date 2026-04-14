@@ -127,3 +127,35 @@ Chaque suggestion : max 5 mots, actionnable, sp\u00e9cifique \u00e0 ce client.`;
     return [];
   }
 }
+
+export async function analyzeFullPlan(form, planText, supplementsText) {
+  const context = buildClientContext(form);
+  const wordCount = (planText || '').split(/\s+/).filter(Boolean).length;
+
+  const system = `Tu es Anissa, nutritionniste experte.
+Tu analyses des plans nutritionnels et fournis un feedback structur\u00e9.
+PROFIL CLIENT :
+${context}
+
+R\u00e9ponds UNIQUEMENT en JSON valide, sans markdown, sans explication :
+{
+  "score": <number 0-100>,
+  "strengths": ["point fort 1", "point fort 2"],
+  "issues": ["probl\u00e8me 1", "probl\u00e8me 2"],
+  "quickWins": ["am\u00e9lioration rapide 1", "am\u00e9lioration rapide 2", "am\u00e9lioration rapide 3"],
+  "verdict": "<1 phrase de verdict global>"
+}`;
+
+  const text = await aiRequest(
+    system,
+    `Analyse ce plan (${wordCount} mots) :\n\n${(planText || '').slice(0, 3000)}`,
+    600
+  );
+
+  try {
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}

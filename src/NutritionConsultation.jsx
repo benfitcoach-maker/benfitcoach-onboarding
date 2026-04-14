@@ -8,6 +8,8 @@ import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, extractFridgeDataFromSections, extractMeals, extractSupplements } from './nutritionPdf';
+import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
+import { analyzeFullPlan } from './services/aiClient';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
@@ -1874,6 +1876,11 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [editorSeed, setEditorSeed] = useState(0);
 
   const [saveToast, setSaveToast] = useState('');
+  const [liveScore, setLiveScore] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const scoreDebounceRef = useRef(null);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [analyzingPlan, setAnalyzingPlan] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   // 'saved' | 'unsaved' | 'saving'
   const autoSaveTimerRef = useRef(null);
@@ -1977,6 +1984,23 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     setSaveToast(msg);
     setTimeout(() => setSaveToast(''), 1800);
   };
+
+  // Live score + suggestions (debounced)
+  useEffect(() => {
+    if (!planDraft && !supplementsDraft) return;
+    if (scoreDebounceRef.current) clearTimeout(scoreDebounceRef.current);
+    scoreDebounceRef.current = setTimeout(() => {
+      const score = scorePlanQuality(
+        planDraft,
+        supplementsDraft,
+        { ...form, _weeklyFeedback: weeklyFeedback },
+        { isFollowup, followupWeek }
+      );
+      setLiveScore(score);
+      setSuggestions(buildSuggestions(score, null));
+    }, 1500);
+    return () => clearTimeout(scoreDebounceRef.current);
+  }, [planDraft, supplementsDraft, form, isFollowup, followupWeek, weeklyFeedback]);
 
   const updateField = (field, value) => {
     setConsultation(prev => ({ ...prev, [field]: value }));
@@ -3283,9 +3307,9 @@ ${suppText}`;
                 {hasPlan && (
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <PlanQualityScore
-                      score={scorePlanQuality(
-                        (editorGetDataRef.current ? editorGetDataRef.current().plan : consultation.nutrition_plan),
-                        (editorGetDataRef.current ? editorGetDataRef.current().supplements : consultation.supplements),
+                      score={liveScore || scorePlanQuality(
+                        planDraft,
+                        supplementsDraft,
                         { ...form, _weeklyFeedback: weeklyFeedback },
                         { isFollowup, followupWeek }
                       )}
@@ -3294,6 +3318,61 @@ ${suppText}`;
                   </div>
                 )}
               </div>
+
+              {/* Suggestions panel */}
+              {suggestions.length > 0 && (
+                <div style={{
+                  marginTop: 10,
+                  padding: '10px 14px',
+                  background: 'rgba(255,255,255,.02)',
+                  border: '1px solid rgba(255,255,255,.06)',
+                  borderRadius: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}>
+                  <div style={{
+                    fontSize: '.68rem', fontWeight: 700, color: 'rgba(255,255,255,.3)',
+                    textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 2,
+                  }}>
+                    Suggestions
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {suggestions.map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          showSaveToast(`Ouvre la section concern\u00e9e et clique \u2728 IA \u2192 ${
+                            s.action === 'actionnable' ? 'Rendre actionnable' :
+                            s.action === 'rewrite' ? 'Reformuler pro' :
+                            s.action === 'simplify' ? 'Simplifier' :
+                            s.action === 'adapt' ? 'Adapter au client' : 'Am\u00e9liorer'
+                          }`);
+                        }}
+                        style={{
+                          padding: '5px 12px', borderRadius: 20, fontSize: '.75rem',
+                          background: 'rgba(255,255,255,.04)',
+                          border: '1px solid rgba(255,255,255,.1)',
+                          color: '#b0c4a8', cursor: 'pointer', transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(106,191,138,.1)';
+                          e.currentTarget.style.borderColor = 'rgba(106,191,138,.3)';
+                          e.currentTarget.style.color = '#8abf9a';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,.04)';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)';
+                          e.currentTarget.style.color = '#b0c4a8';
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Row 1 : Actions principales */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -3405,7 +3484,7 @@ ${suppText}`;
                         onClick={() => { setShowQualityDash(p => !p); setShowMoreMenu(false); }}>
                         Historique qualite IA
                       </button>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
                         onClick={() => {
                           setAnalysesError('');
                           const symp = detectSymptomsFromForm(form);
@@ -3420,6 +3499,22 @@ ${suppText}`;
                           setShowMoreMenu(false);
                         }}>
                         PDF analyses
+                      </button>
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
+                        disabled={analyzingPlan || !hasPlan}
+                        onClick={async () => {
+                          setShowMoreMenu(false);
+                          setAnalyzingPlan(true);
+                          try {
+                            const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
+                            if (result) setAiAnalysis(result);
+                          } catch (err) {
+                            console.error('[AI analysis]', err.message);
+                          } finally {
+                            setAnalyzingPlan(false);
+                          }
+                        }}>
+                        {analyzingPlan ? '\u2728 Analyse en cours...' : '\ud83d\udd0d Analyse IA compl\u00e8te'}
                       </button>
                     </div>
                   )}
@@ -3450,6 +3545,59 @@ ${suppText}`;
             </div>
 
             {showQualityDash && <NutritionQualityDashboard />}
+
+            {/* AI Analysis modal */}
+            {aiAnalysis && (
+              <div className="modal-overlay" onClick={() => setAiAnalysis(null)}>
+                <div className="modal-content" onClick={e => e.stopPropagation()}
+                  style={{ maxWidth: 520, padding: 28 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:20 }}>
+                    <strong style={{ fontSize:'1rem', color:'#f0f0e8' }}>{'\ud83d\udd0d'} Analyse IA du plan</strong>
+                    <button onClick={() => setAiAnalysis(null)}
+                      style={{ background:'none', border:'none', color:'#b0c4a8', cursor:'pointer', fontSize:'1.2rem' }}>{'\u2715'}</button>
+                  </div>
+                  <div style={{ textAlign:'center', marginBottom:20 }}>
+                    <div style={{ fontSize:'2.5rem', fontWeight:700,
+                      color: aiAnalysis.score >= 80 ? '#4ade80' : aiAnalysis.score >= 60 ? '#fbbf24' : '#f87171' }}>
+                      {aiAnalysis.score}/100
+                    </div>
+                    <div style={{ fontSize:'.85rem', color:'#b0c4a8', marginTop:4, fontStyle:'italic' }}>
+                      {aiAnalysis.verdict}
+                    </div>
+                  </div>
+                  {aiAnalysis.strengths?.length > 0 && (
+                    <div style={{ marginBottom:14 }}>
+                      <div style={{ fontSize:'.72rem', fontWeight:700, color:'#4ade80',
+                        textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>{'\u2705'} Points forts</div>
+                      {aiAnalysis.strengths.map((s,i) => (
+                        <div key={i} style={{ fontSize:'.82rem', color:'#b0c4a8', padding:'3px 0',
+                          paddingLeft:12, borderLeft:'2px solid rgba(74,222,128,.3)', marginBottom:4 }}>{s}</div>
+                      ))}
+                    </div>
+                  )}
+                  {aiAnalysis.issues?.length > 0 && (
+                    <div style={{ marginBottom:14 }}>
+                      <div style={{ fontSize:'.72rem', fontWeight:700, color:'#fbbf24',
+                        textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>{'\u26a0\ufe0f'} Points d'attention</div>
+                      {aiAnalysis.issues.map((s,i) => (
+                        <div key={i} style={{ fontSize:'.82rem', color:'#b0c4a8', padding:'3px 0',
+                          paddingLeft:12, borderLeft:'2px solid rgba(251,191,36,.3)', marginBottom:4 }}>{s}</div>
+                      ))}
+                    </div>
+                  )}
+                  {aiAnalysis.quickWins?.length > 0 && (
+                    <div>
+                      <div style={{ fontSize:'.72rem', fontWeight:700, color:'#60a5fa',
+                        textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>{'\u26a1'} Am{'\u00e9'}liorations rapides</div>
+                      {aiAnalysis.quickWins.map((s,i) => (
+                        <div key={i} style={{ fontSize:'.82rem', color:'#b0c4a8', padding:'3px 0',
+                          paddingLeft:12, borderLeft:'2px solid rgba(96,165,250,.3)', marginBottom:4 }}>{s}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ─── SPLIT VIEW ─── */}
             <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start' }}>
