@@ -831,13 +831,16 @@ export async function exportConsultationPDF(consultation, client) {
   }
 
   // ─── PLAN SECTIONS ───
+  console.log('[PDF RENDER] unifiedSections:', unifiedSections?.length, unifiedSections?.map(s => ({ t: s.title, type: s.type, len: s.content?.length })));
   if (unifiedSections) {
     // Helper: find section by type
     const findSec = (type) => unifiedSections.find(s => s.type === type);
     const renderSec = (sec) => {
       if (!sec?.content?.trim()) return;
+      console.log('[PDF RENDER] rendering section:', sec.title, 'content length:', sec.content.length);
       y = addSectionTitle(doc, sec.title, y, margin);
       const tokens = parseNutritionPlan(sec.content);
+      console.log('[PDF RENDER] tokens:', tokens.length, tokens.slice(0, 3));
       y = renderTokens(doc, tokens, margin, y, cw);
       y += 8;
     };

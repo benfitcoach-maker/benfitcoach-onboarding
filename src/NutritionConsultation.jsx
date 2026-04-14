@@ -3074,6 +3074,7 @@ ${suppText}`;
             return;
           }
           const sections = structurePlanSections(plan, supplements, { isFollowup });
+          console.log('[PDF DEBUG] plan length:', plan?.length, 'sections:', sections.length, sections.map(s => ({ title: s.title, type: s.type, contentLen: s.content?.length })));
           try {
             await exportConsultationPDF({
               observations: consultation.observations,
