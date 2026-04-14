@@ -2069,7 +2069,15 @@ body{
 .ne-section{
   background:#243a2a;border:1px solid #3a5a3a;border-radius:8px;
   margin-bottom:10px;overflow:hidden;
-  transition:transform .3s ease, border-color .3s ease;
+  transition:transform .25s cubic-bezier(.4,0,.2,1),
+             border-color .2s ease,
+             background .2s ease,
+             opacity .2s ease !important;
+}
+.ne-section--active{
+  background:rgba(26,58,42,.35) !important;
+  border-color:rgba(74,222,128,.35) !important;
+  box-shadow:0 0 0 2px rgba(74,222,128,.07);
 }
 @keyframes neSectionFlash{
   0%,100%{border-color:#3a5a3a}
@@ -2101,11 +2109,8 @@ body{
   display:flex;
   flex-direction:column;
   gap:1px;
-  opacity:0;
-  transition:opacity .2s;
   flex-shrink:0;
 }
-.ne-section:hover .ne-move-buttons{opacity:1}
 .ne-move-btn{
   width:20px;height:13px;
   padding:0;
@@ -2308,6 +2313,26 @@ body{
   box-shadow:0 0 0 2px rgba(106,191,138,.15);
 }
 .ne-add-section-input::placeholder{color:#6a7a6a}
+
+@keyframes neAddSectionIn{
+  from{opacity:0;transform:translateY(-6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+.ne-textarea-editor{
+  font-size:.86rem !important;
+  line-height:1.75 !important;
+  letter-spacing:.01em;
+  padding:10px 2px !important;
+  color:#e0d8c0 !important;
+}
+
+.ne-add-section-btn:hover{
+  background:rgba(106,191,138,.06) !important;
+  border-color:rgba(106,191,138,.5) !important;
+  color:#8abf9a !important;
+}
+
 .ne-bottom-actions{
   display:flex;gap:10px;flex-wrap:wrap;
   margin-top:16px;padding:16px 0;

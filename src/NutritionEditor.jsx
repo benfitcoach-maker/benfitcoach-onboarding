@@ -196,6 +196,7 @@ function SectionBlock({
   isActive,
   onActivate,
 }) {
+  const [hovered, setHovered] = useState(false);
   const textareaRef = useRef(null);
 
   // Auto-focus textarea when section becomes active
@@ -233,16 +234,14 @@ function SectionBlock({
 
   const classNames = [
     'ne-section',
+    isActive ? 'ne-section--active' : '',
     justMoved ? 'ne-section-just-moved' : '',
   ].filter(Boolean).join(' ');
 
   const cardStyle = {
-    background: 'rgba(255,255,255,.03)',
-    border: isActive ? '1.5px solid rgba(74,222,128,.4)' : '1px solid rgba(255,255,255,.06)',
     borderRadius: 10,
     marginBottom: 12,
     overflow: 'hidden',
-    transition: 'border-color .2s',
   };
 
   const headerStyle = {
@@ -256,7 +255,6 @@ function SectionBlock({
   };
 
   const titleStyle = {
-    flex: 1,
     fontSize: '.82rem',
     fontWeight: 700,
     color: '#f0f0e8',
@@ -265,20 +263,31 @@ function SectionBlock({
   };
 
   return (
-    <div className={classNames} style={cardStyle}>
+    <div className={classNames} style={cardStyle} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {/* Header */}
       <div style={headerStyle}>
-        <div className="ne-move-buttons" style={{ display: 'flex', gap: 2 }}>
+        <div className="ne-move-buttons" style={{
+          display: 'flex', flexDirection: 'column', gap: 1,
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity .15s ease',
+          flexShrink: 0,
+        }}>
           <button type="button" className="ne-move-btn" onClick={() => onMoveUp(section.id)} disabled={!canMoveUp} title="Monter">&#9650;</button>
           <button type="button" className="ne-move-btn" onClick={() => onMoveDown(section.id)} disabled={!canMoveDown} title="Descendre">&#9660;</button>
         </div>
         <span style={titleStyle}>{section.title}</span>
+        {/* SLOT IA — Phase 3 : bouton "✨ améliorer" sera ici */}
+        <div style={{ flex: 1 }} />
         {!isActive && section.content.trim() && (
           <span style={{ fontSize: '.65rem', color: 'rgba(255,255,255,.25)', padding: '2px 6px', background: 'rgba(255,255,255,.05)', borderRadius: 4, whiteSpace: 'nowrap' }}>
             {section.content.trim().split('\n').length} lignes
           </span>
         )}
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{
+          display: 'flex', gap: 4,
+          opacity: hovered || isActive ? 1 : 0,
+          transition: 'opacity .2s ease',
+        }}>
           <button type="button" className="ne-action-btn" onClick={() => onReset(section.id)} title="Reinitialiser">&#8634;</button>
           <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
         </div>
@@ -559,26 +568,81 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
       {/* Add section */}
       <div className="ne-add-section">
         {!showAddSection ? (
-          <button type="button" className="btn btn-anissa-secondary ne-add-section-btn" onClick={() => setShowAddSection(true)}>
-            + Ajouter une section
+          <button
+            type="button"
+            className="ne-add-section-btn"
+            onClick={() => setShowAddSection(true)}
+            style={{
+              width: '100%', padding: '10px', background: 'none',
+              border: '1px dashed rgba(106,191,138,.3)', borderRadius: 8,
+              color: 'rgba(106,191,138,.7)', cursor: 'pointer', fontSize: '.82rem',
+              transition: 'all .2s', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: 8,
+            }}
+          >
+            <span style={{ fontSize: '1rem' }}>+</span> Ajouter une section
           </button>
         ) : (
-          <div className="ne-add-section-form">
-            <input
-              type="text"
-              value={newSectionTitle}
-              onChange={e => setNewSectionTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAddSection(); }}
-              placeholder="Titre de la section (ex: Rituel du matin)"
-              className="ne-add-section-input"
-              autoFocus
-            />
-            <button type="button" className="btn btn-sm btn-anissa-primary" onClick={handleAddSection} disabled={!newSectionTitle.trim()}>
-              Ajouter
-            </button>
-            <button type="button" className="btn btn-sm btn-anissa-secondary" onClick={() => { setShowAddSection(false); setNewSectionTitle(''); }}>
-              Annuler
-            </button>
+          <div style={{
+            background: 'rgba(26,46,31,.6)', border: '1px solid rgba(106,191,138,.2)',
+            borderRadius: 10, padding: '14px', display: 'flex',
+            flexDirection: 'column', gap: 10,
+            animation: 'neAddSectionIn .2s ease',
+          }}>
+            {/* Presets rapides */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                'Plan alimentaire', 'Analyse du profil', 'Suppléments',
+                'Recettes', 'Conseils pratiques', 'Libre'
+              ].map(preset => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    setNewSectionTitle(preset);
+                  }}
+                  style={{
+                    padding: '4px 12px', borderRadius: 20, fontSize: '.75rem',
+                    background: newSectionTitle === preset
+                      ? 'rgba(106,191,138,.2)' : 'rgba(255,255,255,.04)',
+                    border: newSectionTitle === preset
+                      ? '1px solid rgba(106,191,138,.5)' : '1px solid rgba(255,255,255,.08)',
+                    color: newSectionTitle === preset ? '#8abf9a' : '#b0c4a8',
+                    cursor: 'pointer', transition: 'all .15s',
+                  }}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+            {/* Input titre custom */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={newSectionTitle}
+                onChange={e => setNewSectionTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddSection(); if (e.key === 'Escape') { setShowAddSection(false); setNewSectionTitle(''); } }}
+                placeholder="Ou saisissez un titre personnalisé..."
+                className="ne-add-section-input"
+                autoFocus
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-anissa-primary"
+                onClick={handleAddSection}
+                disabled={!newSectionTitle.trim()}
+              >
+                Ajouter
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-anissa-secondary"
+                onClick={() => { setShowAddSection(false); setNewSectionTitle(''); }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
       </div>
