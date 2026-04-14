@@ -10,6 +10,7 @@ import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, extractFridgeDataFromSections, extractMeals, extractSupplements } from './nutritionPdf';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan } from './services/aiClient';
+import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
@@ -1883,6 +1884,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [analyzingPlan, setAnalyzingPlan] = useState(false);
   const [improvingAll, setImprovingAll] = useState(false);
   const [globalProposal, setGlobalProposal] = useState(null);
+  const [expertMode, setExpertMode] = useState(false);
+  const [sectionResults, setSectionResults] = useState([]);
+  const [currentOptimizingIdx, setCurrentOptimizingIdx] = useState(0);
+  const [acceptedSections, setAcceptedSections] = useState({});
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   // 'saved' | 'unsaved' | 'saving'
   const autoSaveTimerRef = useRef(null);
@@ -2041,6 +2046,66 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     } finally {
       setImprovingAll(false);
     }
+  };
+
+  const handleExpertMode = async () => {
+    const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+    const currentPlan = edited?.plan ?? planDraft;
+    if (!currentPlan?.trim()) {
+      showSaveToast('Aucun plan \u00e0 optimiser');
+      return;
+    }
+    setExpertMode('loading');
+    setAcceptedSections({});
+    setSectionResults([]);
+
+    const sections = structurePlanSections(currentPlan, supplementsDraft, { isFollowup });
+
+    const results = [];
+    for (let i = 0; i < sections.length; i++) {
+      setCurrentOptimizingIdx(i);
+      const section = sections[i];
+      if (!section.content?.trim()) {
+        results.push({ id: section.id || `s_${i}`, title: section.title,
+          original: '', improved: '', changes: [], skip: true });
+        continue;
+      }
+      try {
+        const { improvedContent, changes } = await optimizeSection(
+          form, section.title, section.content
+        );
+        results.push({
+          id: section.id || `s_${i}`,
+          title: section.title,
+          original: section.content,
+          improved: improvedContent,
+          changes,
+          skip: false,
+        });
+      } catch {
+        results.push({ id: section.id || `s_${i}`, title: section.title,
+          original: section.content, improved: section.content,
+          changes: [], skip: true });
+      }
+      setSectionResults([...results]);
+    }
+    setExpertMode('review');
+  };
+
+  const handleApplyExpertMode = () => {
+    const newPlanParts = sectionResults.map(r => {
+      const accepted = acceptedSections[r.id] !== false;
+      const content = accepted ? r.improved : r.original;
+      if (!content?.trim()) return '';
+      return `${r.title.toUpperCase()}\n${content}`;
+    }).filter(Boolean);
+
+    const newPlan = newPlanParts.join('\n\n');
+    reseedEditor(newPlan, supplementsDraft, recipesDraft);
+    setExpertMode(false);
+    setSectionResults([]);
+    setAcceptedSections({});
+    showSaveToast('\u2705 Plan optimis\u00e9 appliqu\u00e9');
   };
 
   const updateField = (field, value) => {
@@ -3516,6 +3581,22 @@ ${suppText}`;
                       borderRadius: 8, overflow: 'hidden', minWidth: 200, marginTop: 4,
                       boxShadow: '0 8px 24px rgba(0,0,0,.3)'
                     }}>
+                      <button
+                        onClick={() => { setShowMoreMenu(false); handleExpertMode(); }}
+                        disabled={!planDraft?.trim() || expertMode === 'loading'}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '10px 16px', background: 'none', border: 'none',
+                          borderBottom: '1px solid rgba(255,255,255,.06)',
+                          color: !planDraft?.trim() ? 'rgba(255,255,255,.2)' : '#8abf9a',
+                          cursor: !planDraft?.trim() ? 'not-allowed' : 'pointer',
+                          fontSize: '.85rem', fontWeight: 600,
+                        }}
+                        onMouseEnter={e => { if (planDraft?.trim()) e.currentTarget.style.background = 'rgba(106,191,138,.08)'; }}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        {'\u2728'} Mode Expert {'\u2014'} Optimiser le plan
+                      </button>
                       <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
                         onClick={() => { setShowMedicalSummary(true); setShowMoreMenu(false); }}
                         disabled={!hasPlan}>
@@ -3584,6 +3665,154 @@ ${suppText}`;
               {pdfError && <div className="error-msg" style={{ marginTop: 4, background: 'rgba(212,92,76,.08)', padding: '8px 12px', borderRadius: 8, fontSize: '.78rem' }}>{pdfError}</div>}
               {analysesError && <div className="error-msg" style={{ marginTop: 4, background: 'rgba(212,92,76,.08)', padding: '8px 12px', borderRadius: 8, fontSize: '.78rem' }}>{analysesError}</div>}
             </div>
+
+            {/* Expert Mode — Loading */}
+            {expertMode === 'loading' && (
+              <div style={{
+                margin:'8px 0', padding:'16px 18px',
+                background:'rgba(26,46,31,.5)',
+                border:'1px solid rgba(106,191,138,.2)',
+                borderRadius:12,
+                display:'flex', alignItems:'center', gap:12,
+              }}>
+                <span style={{ fontSize:'1.2rem', animation:'neSpin .8s linear infinite',
+                  display:'inline-block' }}>{'\u2728'}</span>
+                <div>
+                  <div style={{ fontSize:'.85rem', fontWeight:600, color:'#8abf9a' }}>
+                    Mode Expert {'\u2014'} Optimisation en cours...
+                  </div>
+                  <div style={{ fontSize:'.75rem', color:'rgba(255,255,255,.4)', marginTop:3 }}>
+                    Section {currentOptimizingIdx + 1} / {sectionResults.length > 0
+                      ? sectionResults.length : '...'}
+                    {sectionResults[currentOptimizingIdx]?.title
+                      ? ` \u2014 ${sectionResults[currentOptimizingIdx].title}` : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpertMode(false)}
+                  style={{ marginLeft:'auto', background:'none', border:'none',
+                    color:'rgba(255,255,255,.3)', cursor:'pointer', fontSize:'.8rem' }}>
+                  Annuler
+                </button>
+              </div>
+            )}
+
+            {/* Expert Mode — Review */}
+            {expertMode === 'review' && sectionResults.length > 0 && (
+              <div style={{
+                margin:'8px 0',
+                background:'rgba(12,20,15,.8)',
+                border:'1px solid rgba(106,191,138,.25)',
+                borderRadius:12,
+                overflow:'hidden',
+                animation:'neSlideIn .2s ease',
+              }}>
+                <div style={{
+                  padding:'14px 18px',
+                  background:'rgba(26,46,31,.5)',
+                  borderBottom:'1px solid rgba(106,191,138,.15)',
+                  display:'flex', alignItems:'center', gap:10,
+                }}>
+                  <span style={{ fontSize:'.88rem', fontWeight:700, color:'#8abf9a', flex:1 }}>
+                    {'\u2728'} Mode Expert {'\u2014'} {sectionResults.filter(r => !r.skip).length} sections optimis{'\u00e9'}es
+                  </span>
+                  <button onClick={() => setExpertMode(false)}
+                    style={{ background:'none', border:'none', color:'rgba(255,255,255,.3)',
+                      cursor:'pointer', fontSize:'.85rem' }}>
+                    {'\u2715'} Fermer
+                  </button>
+                </div>
+
+                <div style={{ maxHeight:360, overflowY:'auto', padding:'10px 0' }}>
+                  {sectionResults.map((r) => {
+                    if (r.skip) return null;
+                    const accepted = acceptedSections[r.id] !== false;
+                    return (
+                      <div key={r.id} style={{
+                        padding:'10px 18px',
+                        borderBottom:'1px solid rgba(255,255,255,.04)',
+                        background: accepted ? 'rgba(106,191,138,.04)' : 'rgba(255,255,255,.02)',
+                      }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                          <button
+                            onClick={() => setAcceptedSections(prev => ({
+                              ...prev, [r.id]: !accepted
+                            }))}
+                            style={{
+                              width:20, height:20, borderRadius:4, border:'none',
+                              background: accepted ? 'rgba(106,191,138,.3)' : 'rgba(255,255,255,.08)',
+                              color: accepted ? '#4ade80' : 'rgba(255,255,255,.3)',
+                              cursor:'pointer', fontSize:'.75rem', display:'flex',
+                              alignItems:'center', justifyContent:'center', flexShrink:0,
+                              transition:'all .15s',
+                            }}>
+                            {accepted ? '\u2713' : '\u25cb'}
+                          </button>
+                          <span style={{ fontSize:'.78rem', fontWeight:700,
+                            color: accepted ? '#8abf9a' : 'rgba(255,255,255,.35)',
+                            textTransform:'uppercase', letterSpacing:'.3px', flex:1 }}>
+                            {r.title}
+                          </span>
+                          {r.changes?.length > 0 && (
+                            <span style={{ fontSize:'.68rem', color:'rgba(106,191,138,.5)',
+                              background:'rgba(106,191,138,.08)', padding:'2px 7px',
+                              borderRadius:10, whiteSpace:'nowrap' }}>
+                              {r.changes.length} am{'\u00e9'}lioration{r.changes.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        {r.changes?.length > 0 && accepted && (
+                          <div style={{ marginLeft:28, marginBottom:6 }}>
+                            {r.changes.map((c, ci) => (
+                              <div key={ci} style={{ fontSize:'.74rem',
+                                color:'rgba(106,191,138,.6)', marginBottom:2 }}>
+                                + {c}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {accepted && r.improved !== r.original && (
+                          <div style={{
+                            marginLeft:28, fontSize:'.75rem', color:'rgba(255,255,255,.3)',
+                            whiteSpace:'pre-wrap', maxHeight:60, overflow:'hidden',
+                            lineHeight:1.4,
+                          }}>
+                            {r.improved.slice(0, 120)}{r.improved.length > 120 ? '...' : ''}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{
+                  padding:'12px 18px',
+                  borderTop:'1px solid rgba(106,191,138,.1)',
+                  display:'flex', gap:10, alignItems:'center',
+                }}>
+                  <button onClick={handleApplyExpertMode} style={{
+                    padding:'8px 20px', borderRadius:8, border:'none',
+                    background:'rgba(106,191,138,.2)', color:'#8abf9a',
+                    cursor:'pointer', fontSize:'.83rem', fontWeight:700,
+                    transition:'all .2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.35)'}
+                  onMouseLeave={e => e.currentTarget.style.background='rgba(106,191,138,.2)'}
+                  >
+                    {'\u2705'} Appliquer les sections coch{'\u00e9'}es
+                  </button>
+                  <span style={{ fontSize:'.75rem', color:'rgba(255,255,255,.25)' }}>
+                    {Object.values(acceptedSections).filter(v => v === false).length} section(s) ignor{'\u00e9'}e(s)
+                  </span>
+                  <button onClick={() => setExpertMode(false)}
+                    style={{ marginLeft:'auto', padding:'8px 16px', borderRadius:8,
+                      border:'1px solid rgba(255,255,255,.08)', background:'none',
+                      color:'rgba(255,255,255,.35)', cursor:'pointer', fontSize:'.8rem' }}>
+                    {'\u274c'} Annuler tout
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Global AI proposal panel */}
             {globalProposal && (
