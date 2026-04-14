@@ -3706,6 +3706,9 @@ ${suppText}`;
                 borderRadius:12,
                 overflow:'hidden',
                 animation:'neSlideIn .2s ease',
+                display:'flex',
+                flexDirection:'column',
+                maxHeight:'calc(100vh - 320px)',
               }}>
                 <div style={{
                   padding:'14px 18px',
@@ -3723,7 +3726,7 @@ ${suppText}`;
                   </button>
                 </div>
 
-                <div style={{ maxHeight:360, overflowY:'auto', padding:'10px 0' }}>
+                <div style={{ flex:1, overflowY:'auto', minHeight:0, padding:'10px 0' }}>
                   {sectionResults.map((r) => {
                     if (r.skip) return null;
                     const accepted = acceptedSections[r.id] !== false;
@@ -3789,6 +3792,7 @@ ${suppText}`;
                   padding:'12px 18px',
                   borderTop:'1px solid rgba(106,191,138,.1)',
                   display:'flex', gap:10, alignItems:'center',
+                  flexShrink:0,
                 }}>
                   <button onClick={handleApplyExpertMode} style={{
                     padding:'8px 20px', borderRadius:8, border:'none',
