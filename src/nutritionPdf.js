@@ -318,10 +318,6 @@ function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr) {
   const pw = doc.internal.pageSize.getWidth();
   const m = 25;
 
-  // ─── Page background ───
-  doc.setFillColor(...BG_PAGE);
-  doc.rect(0, 0, pw, 297, 'F');
-
   // ─── Header ───
   doc.setDrawColor(210, 208, 200);
   doc.setLineWidth(0.2);
