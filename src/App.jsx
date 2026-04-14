@@ -516,7 +516,7 @@ function App() {
     );
 
     return (
-      <div className="app anissa-theme">
+      <div className={`app anissa-theme${page === 'nutritionConsultation' ? ' app-wide' : ''}`}>
         <Toast message={toast.message} visible={toast.visible} />
 
         {/* Header */}

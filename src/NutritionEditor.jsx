@@ -504,7 +504,7 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, hideActions = false }) {
   const [sections, setSections] = useState(() =>
     parsePlanToSections(planText, supplementsText, recipesText)
   );
@@ -739,7 +739,8 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         )}
       </div>
 
-      {/* Action buttons — restructured */}
+      {/* Action buttons — restructured (hidden when parent cockpit provides them) */}
+      {!hideActions && (
       <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Action principale */}
         <div style={{ borderRadius: 14, border: '1px solid rgba(42,157,92,.35)', background: 'rgba(26,58,42,.25)', padding: '16px 18px' }}>
@@ -809,6 +810,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           )}
         </div>
       </div>
+      )}
 
       {showFrigoPreview && (() => {
         const edited = getEditedData();

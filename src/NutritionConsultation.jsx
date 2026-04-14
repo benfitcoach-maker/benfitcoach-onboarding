@@ -4,6 +4,8 @@ import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
 import NutritionEditor from './NutritionEditor';
+import FicheFrigoPreview from './FicheFrigoPreview';
+import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF } from './nutritionPdf';
 import { SmartTextarea } from './KeywordHints';
@@ -896,11 +898,17 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false }
 function classifySection(title) {
   const t = (title || '').toLowerCase();
   if (/profil|analyse|bilan|metabol/i.test(t)) return 'analyse';
-  if (/principe|nutritionnel|approche/i.test(t)) return 'principes';
-  if (/semaine|plan.*alimentaire|menu|repas|lundi|mardi/i.test(t)) return 'plan';
+  if (/strat[eé]gie|principe|nutritionnel|approche/i.test(t)) return 'principes';
+  if (/semaine|structure\s*alimentaire|menu|repas|lundi|mardi/i.test(t)) return 'plan';
+  if (/rotation/i.test(t)) return 'rotation';
+  if (/fiche\s*frigo/i.test(t)) return 'frigo';
+  if (/protocole/i.test(t)) return 'protocoles';
+  if (/ajustement/i.test(t)) return 'ajustements';
+  if (/recommandation.*coach/i.test(t)) return 'coach';
+  if (/plan\s*d.action/i.test(t)) return 'action';
   if (/suppl[eé]ment|compl[eé]ment|tableau horaire/i.test(t)) return 'supplements';
   if (/conseil|pratique|hydratation|astuce|meal.?prep/i.test(t)) return 'conseils';
-  if (/suivi|progression|ajustement|bilan.*semaine/i.test(t)) return 'suivi';
+  if (/suivi|progression|bilan.*semaine/i.test(t)) return 'suivi';
   if (/coach|benoit|note/i.test(t)) return 'notes_coach';
   return 'other';
 }
@@ -1754,10 +1762,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   const totalSteps = stepLabels.length;
 
-  const [step, setStep] = useState(() => {
-    if (initialConsultation?.nutrition_plan) return isFollowup ? 3 : 2;
-    return 1;
-  });
+  // Le cockpit (step "plan") est le point d'entree par defaut — les autres
+  // steps (resume client, suivi, notes) restent accessibles via les pills en haut.
+  const [step, setStep] = useState(() => (isFollowup ? 3 : 2));
   const [consultation, setConsultation] = useState(() => {
     if (initialConsultation) {
       return {
@@ -1827,6 +1834,19 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const editorGetDataRef = useRef(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
   const [showVersions, setShowVersions] = useState(false);
+
+  // ─── Cockpit (split view) ───
+  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp'
+  const [previewTab, setPreviewTab] = useState('pdf'); // 'pdf' | 'frigo' | 'cover'
+  const [showFrigoModal, setShowFrigoModal] = useState(false);
+  const [showMedicalSummary, setShowMedicalSummary] = useState(false);
+  const [showCoverForm, setShowCoverForm] = useState(false);
+  const [coverFields, setCoverFields] = useState(() => ({
+    prenom: form?.prenom || client?.prenom || '',
+    objectif: form?.objectifPrincipalNutrition || form?.objectifPrincipal || '',
+    date: new Date().toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    sousTitre: 'Plan nutrition personnalis\u00e9',
+  }));
 
   const updateField = (field, value) => {
     setConsultation(prev => ({ ...prev, [field]: value }));
@@ -2747,272 +2767,539 @@ ${suppText}`;
 
       {/* Observations step removed — data auto-populated from client questionnaire and used in AI prompt */}
 
-      {/* Step: Nutrition Plan */}
-      {currentStepType === 'plan' && (
-        <div className="nutrition-form-section">
-          <h3>Plan nutrition</h3>
+      {/* Step: Nutrition Plan — cockpit clinique SaaS */}
+      {currentStepType === 'plan' && (() => {
+        const hasPlan = !!consultation.nutrition_plan;
+        const clientName = form.prenom || client?.prenom || 'Client';
+        const today = new Date().toISOString();
 
-          {/* Recap observations */}
-          <div className="nutrition-observations-recap" style={{ background: 'rgba(124,92,191,.08)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: '.85rem', lineHeight: 1.5 }}>
-            <strong style={{ display: 'block', marginBottom: 6 }}>Recap observations :</strong>
-            <div>Observations : {consultation.observations || 'Non renseigne'}</div>
-            <div>Bilan sanguin : {consultation.blood_test_done ? 'Oui' : 'Non'} | ADN : {consultation.dna_test_done ? 'Oui' : 'Non'}</div>
-            {consultation.nutritional_observations && <div>Observations nutritionnelles : {consultation.nutritional_observations}</div>}
-            {isFollowup && followupData.etat_global && (
-              <div style={{ marginTop: 8, borderTop: '1px solid rgba(124,92,191,.15)', paddingTop: 8 }}>
-                <strong>Suivi :</strong> {followupData.etat_global} | Adherence : {followupData.adherence_plan || '-'} | Poids : {followupData.poids_actuel ? `${followupData.poids_actuel} kg` : '-'}
-              </div>
-            )}
-          </div>
+        // Source of truth : edited content from the editor if available
+        const readEdited = () => {
+          const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+          return {
+            plan: edited ? edited.plan : consultation.nutrition_plan,
+            supplements: edited ? edited.supplements : consultation.supplements,
+            recipes: edited ? edited.recipes : consultation.recipes,
+          };
+        };
 
-          <div className="nutrition-plan-actions">
-            <button
-              className={`btn btn-generate-nutrition ${generating ? 'loading-pulse' : ''}`}
-              onClick={handleGenerate}
-              disabled={generating}
-              style={{ flex: 1 }}
-            >
-              {generating ? 'Generation en cours...' : 'Generer avec l\'IA'}
-            </button>
-            <button
-              className="btn btn-anissa-secondary"
-              onClick={() => setShowTemplates(true)}
-              style={{ padding: '14px 24px', fontSize: '.85rem' }}
-            >
-              Templates
-            </button>
-            {planVersions.length > 0 && (
-              <button
-                className="btn btn-anissa-secondary"
-                onClick={() => setShowVersions(true)}
-                style={{ padding: '14px 20px', fontSize: '.85rem' }}
-                title="Historique des versions"
-              >
-                🕐 {planVersions.length}
-              </button>
-            )}
-          </div>
+        const doExportPdf = () => {
+          setPdfError('');
+          const { plan, supplements, recipes } = readEdited();
+          const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
+          const fullText = (plan || '') + '\n' + (supplements || '');
+          const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
+          if (!validation.valid) {
+            setPdfError('Export bloque : ' + validation.errors.join(' | '));
+            return;
+          }
+          const sections = structurePlanSections(plan, supplements, { isFollowup });
+          exportConsultationPDF({
+            observations: consultation.observations,
+            nutritionalObservations: consultation.nutritional_observations,
+            bloodTestDone: consultation.blood_test_done,
+            dnaTestDone: consultation.dna_test_done,
+            nutritionPlan: cleanPlanForPDF(plan),
+            supplements: cleanPlanForPDF(supplements),
+            recipes,
+            notesForCoach: consultation.notes_for_coach,
+            date: new Date().toISOString(),
+            isFollowup,
+            followupData: isFollowup ? followupData : null,
+            sections,
+          }, client);
+        };
 
-          {genError && <div className="error-msg" style={{ marginTop: 12 }}>{genError}</div>}
-          {pdfError && <div className="error-msg" style={{ marginTop: 12, background: 'rgba(212,92,76,.08)', padding: '10px 14px', borderRadius: 8, fontSize: '.82rem' }}>{pdfError}</div>}
+        const doExportPack = () => {
+          const { plan, supplements, recipes } = readEdited();
+          const sections = structurePlanSections(plan, supplements, { isFollowup });
+          exportClientPackPDF({
+            nutritionPlan: cleanPlanForPDF(plan),
+            supplements: cleanPlanForPDF(supplements),
+            recipes,
+            date: new Date().toISOString(),
+            isFollowup,
+            sections,
+          }, client, {
+            sections,
+            coverFields: {
+              prenom: form.prenom || client?.prenom || '',
+              objectif: form.objectifPrincipalNutrition || form.objectifPrincipal || '',
+            },
+          });
+        };
 
-          {consultation.nutrition_plan && !generating && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button
-                className="btn btn-anissa-secondary"
-                style={{ fontSize: '.78rem', padding: '8px 16px' }}
-                onClick={() => setShowPdfPreview(p => !p)}
-              >
-                {showPdfPreview ? 'Masquer apercu PDF' : 'Apercu body PDF'}
-              </button>
-              <button
-                className="btn btn-anissa-secondary"
-                style={{ fontSize: '.78rem', padding: '8px 16px' }}
-                onClick={() => setShowQualityDash(p => !p)}
-              >
-                {showQualityDash ? 'Masquer dashboard' : 'Dashboard qualite'}
-              </button>
-              <button
-                className="btn btn-anissa-secondary"
-                style={{ fontSize: '.78rem', padding: '8px 16px' }}
-                onClick={() => {
-                  setAnalysesError('');
-                  const symp = detectSymptomsFromForm(form);
-                  const recs = getEnrichedMGDRecommendations(symp);
-                  const val = validateAnalysesPDF(symp, recs);
-                  if (!val.valid) {
-                    setAnalysesError(val.errors.join(' | '));
-                    setShowAnalysesPreview(false);
-                    return;
-                  }
-                  setShowAnalysesPreview(p => !p);
-                }}
-              >
-                {showAnalysesPreview ? 'Masquer analyses' : 'Apercu PDF analyses'}
-              </button>
-              <button
-                className="btn btn-anissa-primary"
-                style={{ fontSize: '.78rem', padding: '8px 16px' }}
-                onClick={() => {
-                  setAnalysesError('');
-                  const symp = detectSymptomsFromForm(form);
-                  const recs = getEnrichedMGDRecommendations(symp);
-                  const val = validateAnalysesPDF(symp, recs);
-                  if (!val.valid) {
-                    setAnalysesError('Export bloque : ' + val.errors.join(' | '));
-                    return;
-                  }
-                  const name = form.prenom || client?.prenom || 'Client';
-                  exportAnalysesPDF(recs, symp, name, formatDate(new Date().toISOString()));
-                }}
-              >
-                Exporter PDF analyses
-              </button>
-            </div>
-          )}
+        const doExportCover = () => {
+          exportCoverPDF({
+            blood_test_done: consultation.blood_test_done,
+            dna_test_done: consultation.dna_test_done,
+            date: new Date().toISOString(),
+            coverFields,
+          }, client);
+        };
 
-          {analysesError && <div className="error-msg" style={{ marginTop: 8, background: 'rgba(212,92,76,.08)', padding: '10px 14px', borderRadius: 8, fontSize: '.82rem' }}>{analysesError}</div>}
-
-          {showQualityDash && <NutritionQualityDashboard />}
-
-          {showAnalysesPreview && (() => {
-            const symp = detectSymptomsFromForm(form);
-            const recs = getEnrichedMGDRecommendations(symp);
+        const renderEditorTab = () => {
+          if (editorTab === 'plan') {
+            if (hasPlan) {
+              return (
+                <NutritionEditor
+                  planText={consultation.nutrition_plan}
+                  supplementsText={consultation.supplements}
+                  recipesText={consultation.recipes}
+                  form={form}
+                  client={client}
+                  getEditedDataRef={editorGetDataRef}
+                  hideActions
+                  onSave={(plan, supplements, recipes) => {
+                    setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements, recipes }));
+                  }}
+                  onExportPDF={() => doExportPdf()}
+                  onExportCover={() => setShowCoverForm(true)}
+                  onExportPack={() => doExportPack()}
+                />
+              );
+            }
             return (
-              <AnalysisPdfBody
-                recommendations={recs}
-                symptoms={symp}
-                clientName={form.prenom || client?.prenom || 'Client'}
-                date={formatDate(new Date().toISOString())}
-              />
+              <div style={{ padding: 24, textAlign: 'center', color: '#8a8a7a', background: 'rgba(255,255,255,.02)', border: '1px dashed rgba(255,255,255,.1)', borderRadius: 12 }}>
+                <p style={{ marginBottom: 12, fontSize: '.9rem' }}>Aucun plan genere pour l'instant.</p>
+                <p style={{ fontSize: '.8rem' }}>Utilise le bouton <strong>Regenerer</strong> en haut, ou un template, pour creer le plan initial.</p>
+              </div>
             );
-          })()}
+          }
+          if (editorTab === 'frigo') {
+            const fj = consultation.fiche_frigo_json;
+            return (
+              <div style={{ padding: 16 }}>
+                <p style={{ fontSize: '.82rem', color: '#8a8a7a', marginBottom: 12 }}>
+                  Edite et reorganise la fiche frigo (3 vues : apercu, edition, vue client).
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-anissa-primary"
+                  onClick={() => setShowFrigoModal(true)}
+                  disabled={!hasPlan}
+                  style={{ padding: '10px 18px', borderRadius: 10 }}
+                >
+                  Ouvrir l'editeur fiche frigo
+                </button>
+                {fj ? (
+                  <div style={{ marginTop: 16, background: 'rgba(255,255,255,.03)', borderRadius: 10, padding: '10px 12px', fontSize: '.78rem', color: '#c0b890', lineHeight: 1.55 }}>
+                    <strong style={{ display: 'block', marginBottom: 6, color: '#d4c9a8' }}>Fiche structuree disponible</strong>
+                    <div>Petit-dej : {(fj.repas?.petit_dejeuner || []).length} option(s)</div>
+                    <div>Dejeuner : {(fj.repas?.dejeuner || []).length} option(s)</div>
+                    <div>Diner : {(fj.repas?.diner || []).length} option(s)</div>
+                    <div>A privilegier : {(fj.a_privilegier || []).length} / A limiter : {(fj.a_limiter || []).length}</div>
+                  </div>
+                ) : hasPlan ? (
+                  <div style={{ marginTop: 12, fontSize: '.78rem', color: '#8a7a5a' }}>
+                    Pas de JSON structure — la fiche frigo sera construite depuis le plan texte.
+                  </div>
+                ) : null}
+              </div>
+            );
+          }
+          if (editorTab === 's1s4') {
+            const sections = hasPlan ? structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup }) : [];
+            const weekly = sections.filter(s => /semaine\s*[1-4]|rotation|plan\s*d[ae]?\s*action/i.test(s.title));
+            if (!hasPlan) {
+              return <div style={{ padding: 24, textAlign: 'center', color: '#8a8a7a' }}>Genere d'abord un plan pour visualiser la progression S1-S4.</div>;
+            }
+            if (weekly.length === 0) {
+              return <div style={{ padding: 16, color: '#8a8a7a', fontSize: '.85rem' }}>Aucune section hebdomadaire detectee dans le plan.</div>;
+            }
+            return (
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {weekly.map((s, i) => (
+                  <div key={i} style={{ border: '1px solid rgba(255,255,255,.08)', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,.02)' }}>
+                    <div style={{ fontSize: '.78rem', fontWeight: 700, color: '#8abf9a', letterSpacing: '.04em', marginBottom: 6, textTransform: 'uppercase' }}>{s.title}</div>
+                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '.82rem', color: '#d4c9a8', margin: 0, lineHeight: 1.55 }}>{s.content}</pre>
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          if (editorTab === 'supp') {
+            return (
+              <div style={{ padding: 12 }}>
+                <label style={{ display: 'block', fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6 }}>
+                  Supplements recommandes
+                </label>
+                <textarea
+                  value={consultation.supplements || ''}
+                  onChange={(e) => updateField('supplements', e.target.value)}
+                  placeholder="Protocole supplements + tableau horaire..."
+                  rows={18}
+                  style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '10px 12px', color: '#d4c9a8', fontSize: '.85rem', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.55 }}
+                />
+                <label style={{ display: 'block', fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.4px', marginTop: 14, marginBottom: 6 }}>
+                  Recettes recommandees
+                </label>
+                <textarea
+                  value={consultation.recipes || ''}
+                  onChange={(e) => updateField('recipes', e.target.value)}
+                  placeholder="Recettes specifiques..."
+                  rows={8}
+                  style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '10px 12px', color: '#d4c9a8', fontSize: '.85rem', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.55 }}
+                />
+              </div>
+            );
+          }
+          return null;
+        };
 
-          {showPdfPreview && consultation.nutrition_plan && (() => {
-            // Source of truth: edited content from NutritionEditor, fallback to raw state
-            const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
-            const finalPlan = edited ? edited.plan : consultation.nutrition_plan;
-            const finalSupp = edited ? edited.supplements : consultation.supplements;
-            // structurePlanSections applies cleanPlanForPDF internally — no double-cleaning
+        const renderPreviewTab = () => {
+          if (!hasPlan) {
+            return (
+              <div style={{ padding: 24, textAlign: 'center', color: '#8a8a7a', background: 'rgba(255,255,255,.02)', border: '1px dashed rgba(255,255,255,.1)', borderRadius: 12 }}>
+                <p style={{ fontSize: '.88rem', marginBottom: 8 }}>Aucun apercu disponible.</p>
+                <p style={{ fontSize: '.78rem' }}>Regenere le plan pour voir le rendu PDF, la fiche frigo et la cover.</p>
+              </div>
+            );
+          }
+          if (previewTab === 'pdf') {
+            const { plan, supplements } = readEdited();
             return (
               <NutritionPdfBody
-                sections={structurePlanSections(finalPlan, finalSupp, { isFollowup })}
+                sections={structurePlanSections(plan, supplements, { isFollowup })}
                 isFollowup={isFollowup}
-                clientName={form.prenom || client?.prenom || 'Client'}
-                date={formatDate(new Date().toISOString())}
+                clientName={clientName}
+                date={formatDate(today)}
                 followupWeek={followupWeek}
               />
             );
-          })()}
-
-          {generating && (
-            <div className="loading" style={{ padding: '30px 20px' }}>
-              <div className="loading-spinner" />
-              <p>Claude analyse le profil et genere le plan nutrition...</p>
-            </div>
-          )}
-
-          {consultation.nutrition_plan && (() => {
-            const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
-            const scorePlan = edited ? edited.plan : consultation.nutrition_plan;
-            const scoreSupp = edited ? edited.supplements : consultation.supplements;
+          }
+          if (previewTab === 'frigo') {
             return (
-              <PlanQualityScore
-                score={scorePlanQuality(
-                  scorePlan,
-                  scoreSupp,
-                  { ...form, _weeklyFeedback: weeklyFeedback },
-                  { isFollowup, followupWeek }
-                )}
-                autoCorrected={autoCorrected}
-              />
+              <div style={{ padding: 20, color: '#8a8a7a' }}>
+                <p style={{ fontSize: '.85rem', marginBottom: 12 }}>Utilise le bouton <strong>Fiche frigo</strong> en haut pour ouvrir la vue editable complete (apercu / edition / vue client).</p>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowFrigoModal(true)}
+                  style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                >
+                  Ouvrir la fiche frigo
+                </button>
+              </div>
             );
-          })()}
-
-          {consultation.nutrition_plan ? (
-            <NutritionEditor
-              planText={consultation.nutrition_plan}
-              supplementsText={consultation.supplements}
-              recipesText={consultation.recipes}
-              form={form}
-              client={client}
-              getEditedDataRef={editorGetDataRef}
-              onSave={(plan, supplements, recipes) => {
-                setConsultation(prev => ({
-                  ...prev,
-                  nutrition_plan: plan,
-                  supplements,
-                  recipes,
-                }));
-              }}
-              onExportPDF={(plan, supplements, recipes) => {
-                setPdfError('');
-
-                // Score + validate content (body uniquement)
-                const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
-                const fullText = (plan || '') + '\n' + (supplements || '');
-                const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
-                if (!validation.valid) {
-                  setPdfError('Export bloque : ' + validation.errors.join(' | '));
-                  return;
-                }
-
-                // Same sections as preview — single source of truth
-                const sections = structurePlanSections(plan, supplements, { isFollowup });
-                exportConsultationPDF({
-                  observations: consultation.observations,
-                  nutritionalObservations: consultation.nutritional_observations,
-                  bloodTestDone: consultation.blood_test_done,
-                  dnaTestDone: consultation.dna_test_done,
-                  nutritionPlan: cleanPlanForPDF(plan),
-                  supplements: cleanPlanForPDF(supplements),
-                  recipes,
-                  notesForCoach: consultation.notes_for_coach,
-                  date: new Date().toISOString(),
-                  isFollowup,
-                  followupData: isFollowup ? followupData : null,
-                  sections,
-                }, client);
-              }}
-              onExportCover={(coverFields) => {
-                exportCoverPDF({
-                  blood_test_done: consultation.blood_test_done,
-                  dna_test_done: consultation.dna_test_done,
-                  date: new Date().toISOString(),
-                  coverFields,
-                }, client);
-              }}
-              onExportPack={(plan, supplements, recipes) => {
-                const sections = structurePlanSections(plan, supplements, { isFollowup });
-                exportClientPackPDF({
-                  nutritionPlan: cleanPlanForPDF(plan),
-                  supplements: cleanPlanForPDF(supplements),
-                  recipes,
-                  date: new Date().toISOString(),
-                  isFollowup,
-                  sections,
-                }, client, {
-                  sections,
-                  coverFields: {
-                    prenom: form.prenom || client?.prenom || '',
-                    objectif: form.objectifPrincipalNutrition || form.objectifPrincipal || '',
-                  },
-                });
-              }}
-            />
-          ) : (
-            <>
-              <div className="field full-width" style={{ marginTop: 16 }}>
-                <label>Plan nutrition personnalise</label>
-                <textarea
-                  value={consultation.nutrition_plan}
-                  onChange={(e) => updateField('nutrition_plan', e.target.value)}
-                  placeholder="Le plan sera genere par l'IA, pre-rempli via un template, ou saisi manuellement..."
-                  rows={16}
-                />
+          }
+          if (previewTab === 'cover') {
+            return (
+              <div style={{ padding: 32, minHeight: 420, background: 'linear-gradient(135deg, #0f1a14 0%, #1a2e1f 100%)', borderRadius: 12, border: '1px solid rgba(106,191,138,.18)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: '.72rem', color: 'rgba(106,191,138,.7)', letterSpacing: '.2em', marginBottom: 16 }}>BENFITCOACH</div>
+                <div style={{ fontSize: '2.2rem', fontWeight: 300, color: '#f0f0e8', letterSpacing: '-.02em', marginBottom: 8 }}>{coverFields.prenom || clientName}</div>
+                <div style={{ fontSize: '.95rem', color: '#8abf9a', marginBottom: 28 }}>{coverFields.sousTitre}</div>
+                {coverFields.objectif && (
+                  <div style={{ borderLeft: '2px solid rgba(106,191,138,.4)', paddingLeft: 14, marginBottom: 20 }}>
+                    <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4 }}>Objectif</div>
+                    <div style={{ fontSize: '.95rem', color: '#d4c9a8' }}>{coverFields.objectif}</div>
+                  </div>
+                )}
+                <div style={{ fontSize: '.8rem', color: 'rgba(255,255,255,.5)', marginTop: 'auto' }}>{coverFields.date}</div>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowCoverForm(true)}
+                  style={{ marginTop: 20, alignSelf: 'flex-start', padding: '8px 14px', borderRadius: 10, fontSize: '.78rem' }}
+                >
+                  Personnaliser la cover
+                </button>
               </div>
-              <div className="field full-width" style={{ marginTop: 16 }}>
-                <label>Supplements recommandes</label>
-                <textarea
-                  value={consultation.supplements}
-                  onChange={(e) => updateField('supplements', e.target.value)}
-                  placeholder="Les supplements seront generes par l'IA ou saisissez-les manuellement..."
-                  rows={8}
-                />
+            );
+          }
+          return null;
+        };
+
+        const Tab = ({ active, onClick, children }) => (
+          <button
+            type="button"
+            onClick={onClick}
+            className="nc-tab"
+            style={{
+              background: active ? 'rgba(106,191,138,.18)' : 'transparent',
+              border: `1px solid ${active ? 'rgba(106,191,138,.4)' : 'rgba(255,255,255,.08)'}`,
+              color: active ? '#9dd4b0' : '#8a8a7a',
+              fontSize: '.78rem',
+              fontWeight: 600,
+              letterSpacing: '.02em',
+              padding: '7px 14px',
+              borderRadius: 999,
+              cursor: 'pointer',
+              transition: 'all .15s',
+              whiteSpace: 'nowrap',
+            }}
+          >{children}</button>
+        );
+
+        return (
+          <div className="nc-cockpit" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* ─── HEADER ACTIONS ─── */}
+            <div className="nc-cockpit-header" style={{ position: 'sticky', top: 0, zIndex: 5, background: 'rgba(12,18,15,.92)', backdropFilter: 'blur(10px)', border: '1px solid rgba(106,191,138,.15)', borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Meta line */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '.72rem', color: '#8abf9a', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 600 }}>Plan nutrition</span>
+                  <span style={{ fontSize: '.82rem', color: '#d4c9a8', fontWeight: 500 }}>{clientName}</span>
+                  {isFollowup && <span style={{ fontSize: '.7rem', background: 'rgba(124,92,191,.18)', color: '#b49ce0', padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>Suivi S{followupWeek}/4</span>}
+                  {autoCorrected && <span style={{ fontSize: '.7rem', background: 'rgba(255,200,60,.15)', color: '#e8c560', padding: '2px 8px', borderRadius: 999 }}>Auto-corrige</span>}
+                </div>
+                {hasPlan && (
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <PlanQualityScore
+                      score={scorePlanQuality(
+                        (editorGetDataRef.current ? editorGetDataRef.current().plan : consultation.nutrition_plan),
+                        (editorGetDataRef.current ? editorGetDataRef.current().supplements : consultation.supplements),
+                        { ...form, _weeklyFeedback: weeklyFeedback },
+                        { isFollowup, followupWeek }
+                      )}
+                      autoCorrected={autoCorrected}
+                    />
+                  </div>
+                )}
               </div>
-              <div className="field full-width" style={{ marginTop: 16 }}>
-                <label>Recettes recommandees</label>
-                <textarea
-                  value={consultation.recipes}
-                  onChange={(e) => updateField('recipes', e.target.value)}
-                  placeholder="Recettes specifiques a recommander au client..."
-                  rows={6}
-                />
+
+              {/* Row 1 : Generation & PDF principal */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className={`btn btn-anissa-primary ${generating ? 'loading-pulse' : ''}`}
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  style={{ padding: '10px 18px', borderRadius: 10, fontSize: '.85rem', fontWeight: 600 }}
+                >
+                  {generating ? 'Generation...' : (hasPlan ? 'Regenerer' : 'Generer avec l\'IA')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setPreviewTab('pdf')}
+                  disabled={!hasPlan}
+                  style={{ padding: '10px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                >
+                  Apercu PDF
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={doExportPdf}
+                  disabled={!hasPlan}
+                  style={{ padding: '10px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                >
+                  Telecharger PDF
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowTemplates(true)}
+                  style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.78rem', marginLeft: 'auto' }}
+                >
+                  Templates
+                </button>
+                {planVersions.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    onClick={() => setShowVersions(true)}
+                    style={{ padding: '10px 12px', borderRadius: 10, fontSize: '.78rem' }}
+                    title="Historique des versions"
+                  >
+                    Versions ({planVersions.length})
+                  </button>
+                )}
               </div>
-            </>
-          )}
-        </div>
-      )}
+
+              {/* Row 2 : Exports secondaires */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowFrigoModal(true)}
+                  disabled={!hasPlan}
+                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
+                >
+                  Fiche frigo
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowCoverForm(true)}
+                  disabled={!hasPlan}
+                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
+                >
+                  Cover
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowMedicalSummary(true)}
+                  disabled={!hasPlan}
+                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
+                >
+                  Resume medecin
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowQualityDash(p => !p)}
+                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
+                >
+                  {showQualityDash ? 'Masquer dashboard' : 'Dashboard qualite'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => {
+                    setAnalysesError('');
+                    const symp = detectSymptomsFromForm(form);
+                    const recs = getEnrichedMGDRecommendations(symp);
+                    const val = validateAnalysesPDF(symp, recs);
+                    if (!val.valid) {
+                      setAnalysesError('Export bloque : ' + val.errors.join(' | '));
+                      return;
+                    }
+                    exportAnalysesPDF(recs, symp, clientName, formatDate(today));
+                  }}
+                  style={{ padding: '9px 14px', borderRadius: 10, fontSize: '.8rem' }}
+                >
+                  PDF analyses
+                </button>
+              </div>
+
+              {/* Row 3 : action discrete */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', paddingTop: 2 }}>
+                <button
+                  type="button"
+                  onClick={doExportPack}
+                  disabled={!hasPlan}
+                  style={{ background: 'none', border: 'none', color: 'rgba(138,191,154,.65)', fontSize: '.76rem', cursor: hasPlan ? 'pointer' : 'not-allowed', textDecoration: 'underline', padding: 0 }}
+                >
+                  Telecharger dossier client complet
+                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Fermer</button>
+                  <button type="button" className="btn btn-primary" onClick={handleSave} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Sauvegarder</button>
+                </div>
+              </div>
+
+              {genError && <div className="error-msg" style={{ marginTop: 4 }}>{genError}</div>}
+              {pdfError && <div className="error-msg" style={{ marginTop: 4, background: 'rgba(212,92,76,.08)', padding: '8px 12px', borderRadius: 8, fontSize: '.78rem' }}>{pdfError}</div>}
+              {analysesError && <div className="error-msg" style={{ marginTop: 4, background: 'rgba(212,92,76,.08)', padding: '8px 12px', borderRadius: 8, fontSize: '.78rem' }}>{analysesError}</div>}
+            </div>
+
+            {showQualityDash && <NutritionQualityDashboard />}
+
+            {/* ─── SPLIT VIEW ─── */}
+            <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start' }}>
+              {/* LEFT : Editor (55%) */}
+              <section className="nc-panel nc-panel--editor">
+                <header className="nc-panel__header">
+                  <span className="nc-panel__label">Editeur</span>
+                  <Tab active={editorTab === 'plan'} onClick={() => setEditorTab('plan')}>Plan complet</Tab>
+                  <Tab active={editorTab === 'frigo'} onClick={() => setEditorTab('frigo')}>Fiche frigo</Tab>
+                  <Tab active={editorTab === 's1s4'} onClick={() => setEditorTab('s1s4')}>Plan S1-S4</Tab>
+                  <Tab active={editorTab === 'supp'} onClick={() => setEditorTab('supp')}>Supplements</Tab>
+                </header>
+                <div className="nc-panel__body">
+                  {generating && (
+                    <div className="loading" style={{ padding: '30px 20px' }}>
+                      <div className="loading-spinner" />
+                      <p>Claude analyse le profil et genere le plan nutrition...</p>
+                    </div>
+                  )}
+                  {!generating && renderEditorTab()}
+                </div>
+              </section>
+
+              {/* RIGHT : Preview (45%) */}
+              <section className="nc-panel nc-panel--preview">
+                <header className="nc-panel__header">
+                  <span className="nc-panel__label">Apercu</span>
+                  <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
+                  <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
+                  <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
+                </header>
+                <div className="nc-panel__body" style={{ padding: 16 }}>
+                  {renderPreviewTab()}
+                </div>
+              </section>
+            </div>
+
+            {/* Analyses preview (below split, full width) */}
+            {showAnalysesPreview && (() => {
+              const symp = detectSymptomsFromForm(form);
+              const recs = getEnrichedMGDRecommendations(symp);
+              return (
+                <AnalysisPdfBody
+                  recommendations={recs}
+                  symptoms={symp}
+                  clientName={clientName}
+                  date={formatDate(today)}
+                />
+              );
+            })()}
+
+            {/* ─── Modales (remontees depuis l'editeur) ─── */}
+            {showFrigoModal && (() => {
+              const { plan, supplements, recipes } = readEdited();
+              return (
+                <FicheFrigoPreview
+                  consultation={{
+                    nutritionPlan: plan,
+                    supplements,
+                    ficheFrigoJson: consultation.fiche_frigo_json || null,
+                    date: today,
+                  }}
+                  sections={structurePlanSections(plan, supplements, { isFollowup })}
+                  client={client}
+                  onClose={() => setShowFrigoModal(false)}
+                />
+              );
+            })()}
+
+            {showMedicalSummary && (() => {
+              const { plan, supplements, recipes } = readEdited();
+              return (
+                <MedicalSummary
+                  form={form}
+                  consultation={{ plan, supplements, recipes, bloodTestDone: consultation.blood_test_done, dnaTestDone: consultation.dna_test_done }}
+                  onClose={() => setShowMedicalSummary(false)}
+                />
+              );
+            })()}
+
+            {showCoverForm && (
+              <div className="modal-overlay" onClick={() => setShowCoverForm(false)}>
+                <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 24 }}>
+                  <h3 style={{ marginBottom: 16, color: '#d4c9a8' }}>Cover PDF — personnaliser</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Prenom client</label>
+                      <input type="text" value={coverFields.prenom} onChange={e => setCoverFields(p => ({ ...p, prenom: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Objectif principal</label>
+                      <input type="text" value={coverFields.objectif} onChange={e => setCoverFields(p => ({ ...p, objectif: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Date</label>
+                      <input type="text" value={coverFields.date} onChange={e => setCoverFields(p => ({ ...p, date: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Sous-titre</label>
+                      <input type="text" value={coverFields.sousTitre} onChange={e => setCoverFields(p => ({ ...p, sousTitre: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                    <button className="btn btn-sm btn-anissa-primary" onClick={() => { doExportCover(); setShowCoverForm(false); }}>Exporter Cover</button>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setShowCoverForm(false)}>Annuler</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
 
       {/* Step: Notes for Benoit + Private notes */}
       {currentStepType === 'notes' && (
@@ -3043,19 +3330,14 @@ ${suppText}`;
         </div>
       )}
 
-      {/* Navigation */}
-      <div className="nav-buttons">
-        {step > 1 ? (
-          <button className="btn btn-secondary" onClick={() => setStep(step - 1)}>Precedent</button>
-        ) : (
-          <button className="btn btn-secondary" onClick={onCancel}>Annuler</button>
-        )}
-        {step < totalSteps ? (
-          <button className="btn btn-primary" onClick={() => setStep(step + 1)}>Suivant</button>
-        ) : (
+      {/* Bottom nav retiree — actions remontees dans le cockpit header (step plan)
+          et dans la barre d'etapes en haut (autres steps) */}
+      {currentStepType !== 'plan' && (
+        <div className="nav-buttons" style={{ justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={onCancel}>Fermer</button>
           <button className="btn btn-primary" onClick={handleSave}>Sauvegarder la consultation</button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
