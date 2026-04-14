@@ -31,7 +31,7 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts } from './store';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
@@ -191,9 +191,15 @@ function App() {
     setTimeout(() => setToast({ message: '', visible: false }), 3000);
   }, []);
 
+  // Purge expired drafts on boot (covers !isCloudEnabled case)
+  useEffect(() => {
+    if (authenticated) purgeExpiredDrafts();
+  }, [authenticated]);
+
   // Cloud sync on login
   useEffect(() => {
     if (!authenticated || !isCloudEnabled) return;
+    purgeExpiredDrafts();
     // Toujours rejouer la queue au démarrage, indépendamment de cloudSynced
     retrySyncQueue();
     if (cloudSynced) return;

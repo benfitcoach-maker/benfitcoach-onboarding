@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient } from './store';
+import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft } from './store';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -1872,7 +1872,22 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [editorSeed, setEditorSeed] = useState(0);
 
   const [saveToast, setSaveToast] = useState('');
+  const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
+  // 'saved' | 'unsaved' | 'saving'
+  const autoSaveTimerRef = useRef(null);
+  const isDirtyRef = useRef(false);
   const previewBodyRef = useRef(null);
+
+  // Restore draft on mount if newer than saved consultation
+  useEffect(() => {
+    const draft = loadDraft(clientId, consultationId);
+    if (!draft) return;
+    const consultationDate = new Date(initialConsultation?.createdAt || 0).getTime();
+    if (draft.savedAt > consultationDate) {
+      reseedEditor(draft.plan, draft.supplements, draft.recipes);
+      setAutoSaveStatus('unsaved');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reseed : remplace les drafts + remount l'editeur. A appeler APRES toute
   // ecriture "autoritaire" du plan (AI gen, template, restore version).
@@ -1891,17 +1906,46 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // Callback push-based depuis NutritionEditor — maintient les drafts a jour.
   const handleDraftChange = (plan, supplements, recipes) => {
-    console.log('[NC] handleDraftChange received', {
-      planLen: (plan || '').length,
-      suppLen: (supplements || '').length,
-      recLen: (recipes || '').length,
-      planSample: (plan || '').slice(0, 120),
-      prevPlanDraftLen: planDraft.length,
-    });
     setPlanDraft(plan);
     setSupplementsDraft(supplements);
     setRecipesDraft(recipes);
+    isDirtyRef.current = true;
+    setAutoSaveStatus('unsaved');
+    // Debounce 1s
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      setAutoSaveStatus('saving');
+      saveDraft(clientId, consultationId, { plan, supplements, recipes });
+      setAutoSaveStatus('unsaved');
+    }, 1000);
   };
+
+  // Flush draft to localStorage on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      if (isDirtyRef.current) {
+        const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
+        saveDraft(clientId, consultationId, {
+          plan: edited?.plan ?? planDraft,
+          supplements: edited?.supplements ?? supplementsDraft,
+          recipes: edited?.recipes ?? recipesDraft,
+        });
+      }
+    };
+  }, [clientId, consultationId, planDraft, supplementsDraft, recipesDraft]);
+
+  // Warning before page unload if unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Flush des drafts -> etat persiste consultation.*
   // Ne provoque PAS de reseed de l'editeur (drafts === consultation apres ca).
@@ -2438,6 +2482,9 @@ ${suppText}`;
       followupWeek: isFollowup ? followupWeek : null,
       previousConsultationId: previousConsultation?.id || null,
     });
+    clearDraft(clientId, consultationId);
+    isDirtyRef.current = false;
+    setAutoSaveStatus('saved');
   };
 
   return (
@@ -3393,6 +3440,18 @@ ${suppText}`;
                   </button>
                   <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Fermer</button>
                   <button type="button" className="btn btn-primary" onClick={handleSave} style={{ padding: '7px 14px', borderRadius: 10, fontSize: '.78rem' }}>Sauvegarder</button>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    color: autoSaveStatus === 'saved' ? '#22c55e'
+                         : autoSaveStatus === 'saving' ? '#f59e0b'
+                         : '#94a3b8',
+                    marginLeft: '0.5rem',
+                    transition: 'color 0.3s',
+                  }}>
+                    {autoSaveStatus === 'saved' && '\u2713 Sauvegard\u00e9'}
+                    {autoSaveStatus === 'saving' && '\u27f3 Auto-save...'}
+                    {autoSaveStatus === 'unsaved' && '\u25cf Non sauvegard\u00e9'}
+                  </span>
                 </div>
               </div>
 
@@ -3575,6 +3634,18 @@ ${suppText}`;
         <div className="nav-buttons" style={{ justifyContent: 'flex-end', gap: 8 }}>
           <button className="btn btn-secondary" onClick={onCancel}>Fermer</button>
           <button className="btn btn-primary" onClick={handleSave}>Sauvegarder la consultation</button>
+          <span style={{
+            fontSize: '0.75rem',
+            color: autoSaveStatus === 'saved' ? '#22c55e'
+                 : autoSaveStatus === 'saving' ? '#f59e0b'
+                 : '#94a3b8',
+            marginLeft: '0.5rem',
+            transition: 'color 0.3s',
+          }}>
+            {autoSaveStatus === 'saved' && '\u2713 Sauvegard\u00e9'}
+            {autoSaveStatus === 'saving' && '\u27f3 Auto-save...'}
+            {autoSaveStatus === 'unsaved' && '\u25cf Non sauvegard\u00e9'}
+          </span>
         </div>
       )}
     </div>

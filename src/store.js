@@ -933,3 +933,65 @@ export function syncReminderNotifications(clients) {
 
   writeNotifications(cleaned);
 }
+
+// ─── Draft persistence for nutrition consultations ───
+
+const DRAFT_KEY_PREFIX = 'bfc_draft_';
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 jours
+
+export function getDraftKey(clientId, consultationId) {
+  return `${DRAFT_KEY_PREFIX}${clientId}_${consultationId || 'new'}`;
+}
+
+export function saveDraft(clientId, consultationId, { plan, supplements, recipes }) {
+  if (!clientId) return;
+  const key = getDraftKey(clientId, consultationId);
+  const entry = {
+    plan: plan || '',
+    supplements: supplements || '',
+    recipes: recipes || '',
+    savedAt: Date.now(),
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch (e) {
+    console.warn('[DRAFT] localStorage full:', e.message);
+  }
+}
+
+export function loadDraft(clientId, consultationId) {
+  if (!clientId) return null;
+  try {
+    const raw = localStorage.getItem(getDraftKey(clientId, consultationId));
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    // TTL : ignorer les drafts de plus de 7 jours
+    if (!entry.savedAt || Date.now() - entry.savedAt > DRAFT_TTL_MS) {
+      clearDraft(clientId, consultationId);
+      return null;
+    }
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDraft(clientId, consultationId) {
+  if (!clientId) return;
+  localStorage.removeItem(getDraftKey(clientId, consultationId));
+}
+
+// Nettoyage global des drafts expirés (appeler au boot)
+export function purgeExpiredDrafts() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith(DRAFT_KEY_PREFIX));
+  for (const key of keys) {
+    try {
+      const entry = JSON.parse(localStorage.getItem(key) || '{}');
+      if (!entry.savedAt || Date.now() - entry.savedAt > DRAFT_TTL_MS) {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      localStorage.removeItem(key);
+    }
+  }
+}
