@@ -23,6 +23,31 @@ async function aiRequest(systemPrompt, userMessage, maxTokens = 1500) {
   return data.content?.[0]?.text?.trim() || '';
 }
 
+function postProcess(text) {
+  if (!text) return text;
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/^#{1,4}\s+/gm, '')
+    .replace(/n'h\u00e9sitez pas \u00e0/gi, '')
+    .replace(/il est (important|essentiel|crucial|recommand\u00e9) de/gi, '')
+    .replace(/id\u00e9alement[,]?\s*/gi, '')
+    .replace(/vous pourriez/gi, 'vous pouvez')
+    .replace(/il est conseill\u00e9 de/gi, '')
+    .replace(/en tant qu[e']\s*/gi, '')
+    .replace(/en conclusion[,.]?\s*/gi, '')
+    .replace(/pour r\u00e9sumer[,.]?\s*/gi, '')
+    .replace(/il convient de noter que/gi, '')
+    .replace(/dans le cadre de/gi, 'pour')
+    .replace(/au niveau de/gi, 'sur')
+    .replace(/cette approche/gi, 'elle')
+    .replace(/ce protocole/gi, '')
+    .replace(/il est \u00e0 noter que/gi, '')
+    .replace(/force est de constater que/gi, '')
+    .replace(/en effet[,.]?\s*/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function buildClientContext(form) {
   return [
     form?.prenom       ? `Client : ${form.prenom}` : '',
@@ -47,7 +72,7 @@ const ACTION_PROMPTS = {
   simplify:    'Simplifie ce contenu : phrases courtes, vocabulaire accessible, garde l\'essentiel.',
   actionnable: 'Rends ce contenu ultra-actionnable : \u00e9tapes concr\u00e8tes, quantit\u00e9s pr\u00e9cises, timing clair.',
   adapt:       'Adapte ce contenu au profil exact de ce client : tiens compte de ses contraintes, objectifs et pathologies.',
-  rewrite:     'Reformule ce contenu de fa\u00e7on professionnelle et bienveillante, ton nutritionniste expert.',
+  rewrite:     'Reformule de fa\u00e7on professionnelle et bienveillante, ton nutritionniste expert.',
 };
 
 export async function improveSection(form, sectionTitle, currentContent, action = 'improve') {
@@ -65,13 +90,27 @@ R\u00c8GLES ABSOLUES :
 - M\u00eame format que l'original (listes si listes, paragraphes si paragraphes)
 - Ne rajoute pas de titre ni d'introduction
 - Reste concis \u2014 am\u00e9liore, ne rallonge pas de plus de 30%
-- En fran\u00e7ais, ton professionnel et chaleureux`;
+- En fran\u00e7ais, ton professionnel et chaleureux
 
-  return aiRequest(
+R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
+- JAMAIS de formulations molles : 'id\u00e9alement', 'n'h\u00e9sitez pas', 'il est conseill\u00e9', 'vous pourriez', 'il est important de', 'en effet', 'force est de constater'
+- JAMAIS de markdown : pas de **gras**, pas de # titres
+- JAMAIS de m\u00e9ta-commentaires : pas de 'cette approche', 'ce protocole', 'en conclusion', 'pour r\u00e9sumer'
+- Phrases directes, courtes, actionnables
+- Ton : comme une nutritionniste qui parle \u00e0 son client en face-\u00e0-face
+
+EXEMPLES DE STYLE :
+\u274c "Id\u00e9alement, il est conseill\u00e9 de consommer des l\u00e9gumes verts"
+\u2705 "Consommez 200g de l\u00e9gumes verts \u00e0 chaque repas"
+\u274c "N'h\u00e9sitez pas \u00e0 int\u00e9grer des sources de prot\u00e9ines"
+\u2705 "Ajoutez 25g de prot\u00e9ines \u00e0 chaque repas : poulet, poisson, \u0153ufs ou l\u00e9gumineuses"`;
+
+  const raw = await aiRequest(
     system,
     `Section "${sectionTitle}" :\n\n${currentContent}\n\nInstruction : ${instruction}`,
     1200
   );
+  return postProcess(raw);
 }
 
 export async function generateSection(form, sectionTitle, sectionType = 'libre') {
@@ -96,13 +135,21 @@ R\u00c8GLES :
 - Contenu directement utilisable, sans introduction
 - Format lisible : listes \u00e0 puces pour les conseils, paragraphes pour les analyses
 - Personnalis\u00e9 pour CE client sp\u00e9cifiquement
-- En fran\u00e7ais, professionnel`;
+- En fran\u00e7ais, professionnel
 
-  return aiRequest(
+R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
+- JAMAIS de formulations molles : 'id\u00e9alement', 'n'h\u00e9sitez pas', 'il est conseill\u00e9', 'vous pourriez', 'il est important de'
+- JAMAIS de markdown : pas de **gras**, pas de # titres
+- JAMAIS de m\u00e9ta-commentaires : pas de 'en conclusion', 'pour r\u00e9sumer', 'cette approche'
+- Phrases directes, courtes, actionnables
+- Ton : nutritionniste qui parle en face-\u00e0-face`;
+
+  const raw = await aiRequest(
     system,
     typeInstructions[sectionTitle] || typeInstructions['libre'],
     1500
   );
+  return postProcess(raw);
 }
 
 export async function suggestActions(form, sectionTitle, currentContent) {
@@ -112,7 +159,8 @@ export async function suggestActions(form, sectionTitle, currentContent) {
 Analyse cette section et propose exactement 3 suggestions courtes d'am\u00e9lioration.
 PROFIL CLIENT : ${context}
 R\u00e9ponds UNIQUEMENT avec un JSON : {"suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]}
-Chaque suggestion : max 5 mots, actionnable, sp\u00e9cifique \u00e0 ce client.`;
+Chaque suggestion : max 5 mots, actionnable, sp\u00e9cifique \u00e0 ce client.
+JAMAIS de formulations molles ou de markdown.`;
 
   const text = await aiRequest(
     system,
@@ -144,7 +192,11 @@ R\u00e9ponds UNIQUEMENT en JSON valide, sans markdown, sans explication :
   "issues": ["probl\u00e8me 1", "probl\u00e8me 2"],
   "quickWins": ["am\u00e9lioration rapide 1", "am\u00e9lioration rapide 2", "am\u00e9lioration rapide 3"],
   "verdict": "<1 phrase de verdict global>"
-}`;
+}
+
+R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
+- Dans le verdict et les textes : JAMAIS de formulations molles, markdown ou m\u00e9ta-commentaires
+- Phrases directes et concises`;
 
   const text = await aiRequest(
     system,
