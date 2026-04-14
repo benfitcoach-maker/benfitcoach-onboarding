@@ -4007,14 +4007,6 @@ ${suppText}`;
                   >
                     Telecharger PDF
                   </button>
-                  <button
-                    className="btn btn-anissa-secondary"
-                    disabled={!hasPlan}
-                    onClick={() => doExportPack()}
-                    style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
-                  >
-                    Dossier complet
-                  </button>
                 </header>
                 <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef}>
                   {renderPreviewTab()}
