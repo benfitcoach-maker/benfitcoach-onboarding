@@ -9,34 +9,29 @@ export const supabase = (supabaseUrl && supabaseKey)
 
 export const isCloudEnabled = !!supabase;
 
-// Valid users
 export const USERS = ['Benoit', 'Anissa'];
 
-// Password hashing with SHA-256
-export async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+export const USER_EMAILS = {
+  Benoit: 'benfitcoach.geneve@gmail.com',
+  Anissa: 'anissa.nutri@gmail.com',
+};
+
+export async function signIn(username, password) {
+  if (!supabase) throw new Error('Cloud non disponible');
+  const email = USER_EMAILS[username];
+  if (!email) throw new Error('Utilisateur inconnu');
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data.user;
 }
 
-// Get stored password hash for a specific user
-export async function getStoredPasswordHash(username) {
-  if (!supabase) return null;
-  const key = `password_hash_${username.toLowerCase()}`;
-  const { data } = await supabase
-    .from('app_config')
-    .select('value')
-    .eq('key', key)
-    .single();
-  return data?.value || null;
-}
-
-// Set the password hash for a specific user
-export async function setPasswordHash(username, hash) {
+export async function signOut() {
   if (!supabase) return;
-  const key = `password_hash_${username.toLowerCase()}`;
-  await supabase
-    .from('app_config')
-    .upsert({ key, value: hash });
+  await supabase.auth.signOut();
+}
+
+export async function getCurrentUser() {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }

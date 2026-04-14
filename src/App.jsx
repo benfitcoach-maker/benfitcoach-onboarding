@@ -31,7 +31,7 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications } from './store';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
@@ -193,7 +193,10 @@ function App() {
 
   // Cloud sync on login
   useEffect(() => {
-    if (!authenticated || !isCloudEnabled || cloudSynced) return;
+    if (!authenticated || !isCloudEnabled) return;
+    // Toujours rejouer la queue au démarrage, indépendamment de cloudSynced
+    retrySyncQueue();
+    if (cloudSynced) return;
     setSyncStatus('syncing');
     pullFromCloud().then(result => {
       setCloudSynced(true);
@@ -203,7 +206,6 @@ function App() {
       } else {
         setSyncStatus('offline');
       }
-      retrySyncQueue();
       setTimeout(() => setSyncStatus(''), 4000);
     });
   }, [authenticated, cloudSynced, refreshClients]);
@@ -340,13 +342,7 @@ function App() {
     setResults(prev => {
       const updated = { ...prev, [sectionTitle]: content };
       if (clientId) {
-        const allClients = getClients();
-        const client = allClients.find(c => c.id === clientId);
-        if (client) {
-          client.latestSections = updated;
-          client.updatedAt = new Date().toISOString();
-          localStorage.setItem('bfc_clients', JSON.stringify(allClients));
-        }
+        updateClientSection(clientId, sectionTitle, content);
       }
       return updated;
     });

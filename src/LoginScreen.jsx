@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { hashPassword, getStoredPasswordHash, setPasswordHash, USERS } from './supabaseClient';
+import { useState } from 'react';
+import { signIn, USERS } from './supabaseClient';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69a6ccf52a4f1eb605779f33_logo%20benfitocah.png';
 const BENOIT_AVATAR = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d2ce74b02c89db7a529560_Benfitcoach%20application%20mobile%20coaching%20sportif%20Nyon.png';
@@ -8,74 +8,27 @@ const ANISSA_AVATAR = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa0
 export default function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isFirstSetup, setIsFirstSetup] = useState(false);
-  const [storedHash, setStoredHash] = useState(null);
   const [step, setStep] = useState('select'); // 'select' | 'password'
 
-  const handleSelectUser = async (user) => {
+  const handleSelectUser = (user) => {
     setUsername(user);
     setError('');
-    setLoading(true);
-    try {
-      const hash = await getStoredPasswordHash(user);
-      setStoredHash(hash);
-      setIsFirstSetup(!hash);
-      setStep('password');
-    } catch {
-      setError('Impossible de se connecter a Supabase.');
-    } finally {
-      setLoading(false);
-    }
+    setStep('password');
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
-
-    if (!password.trim()) {
-      setError('Entrez un mot de passe.');
-      return;
-    }
-
-    if (isFirstSetup) {
-      if (password.length < 4) {
-        setError('Le mot de passe doit faire au moins 4 caracteres.');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError('Les mots de passe ne correspondent pas.');
-        return;
-      }
-      setLoading(true);
-      try {
-        const hash = await hashPassword(password);
-        await setPasswordHash(username, hash);
-        sessionStorage.setItem('bfc_auth', 'true');
-        sessionStorage.setItem('bfc_user', username);
-        onLogin(username);
-      } catch {
-        setError('Erreur lors de la creation du mot de passe.');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
     setLoading(true);
+    setError('');
     try {
-      const hash = await hashPassword(password);
-      if (hash === storedHash) {
-        sessionStorage.setItem('bfc_auth', 'true');
-        sessionStorage.setItem('bfc_user', username);
-        onLogin(username);
-      } else {
-        setError('Mot de passe incorrect.');
-      }
-    } catch {
-      setError('Erreur de verification.');
+      await signIn(username, password);
+      sessionStorage.setItem('bfc_auth', 'true');
+      sessionStorage.setItem('bfc_user', username);
+      onLogin(username);
+    } catch (err) {
+      setError('Mot de passe incorrect');
     } finally {
       setLoading(false);
     }
@@ -87,20 +40,6 @@ export default function LoginScreen({ onLogin }) {
     setConfirmPassword('');
     setError('');
   };
-
-  if (loading && step === 'select') {
-    return (
-      <div className="login-screen">
-        <div className="login-card">
-          <img src={LOGO_URL} alt="Benfitcoach" className="login-logo" />
-          <div className="loading">
-            <div className="loading-spinner" />
-            <p>Connexion...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="login-screen">
@@ -137,12 +76,8 @@ export default function LoginScreen({ onLogin }) {
               />
               <span>{username}</span>
             </div>
-            <h2>{isFirstSetup ? 'Creer votre mot de passe' : 'Mot de passe'}</h2>
-            <p className="login-subtitle">
-              {isFirstSetup
-                ? 'Premier acces — choisissez un mot de passe.'
-                : 'Entrez votre mot de passe.'}
-            </p>
+            <h2>Mot de passe</h2>
+            <p className="login-subtitle">Entrez votre mot de passe.</p>
 
             <form onSubmit={handleLogin} className="login-form">
               <div className="field">
@@ -157,23 +92,10 @@ export default function LoginScreen({ onLogin }) {
                 />
               </div>
 
-              {isFirstSetup && (
-                <div className="field">
-                  <label htmlFor="login-pw2">Confirmer le mot de passe</label>
-                  <input
-                    id="login-pw2"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                  />
-                </div>
-              )}
-
               {error && <div className="login-error">{error}</div>}
 
               <button type="submit" className="btn btn-primary login-btn" disabled={loading}>
-                {loading ? 'Chargement...' : isFirstSetup ? 'Creer et entrer' : 'Se connecter'}
+                {loading ? 'Chargement...' : 'Se connecter'}
               </button>
             </form>
           </>

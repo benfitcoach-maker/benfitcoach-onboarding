@@ -1,6 +1,12 @@
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { computeMetrics } from './bodyMetrics';
 
+async function getCurrentOwnerId() {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id || null;
+}
+
 function toNumOrNull(v) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(String(v).replace(',', '.'));
@@ -16,6 +22,7 @@ const STORAGE_KEY = 'bfc_clients';
 const NUTRITION_KEY = 'bfc_nutrition_consultations';
 const SYNC_QUEUE_KEY = 'bfc_sync_queue';
 const NOTIFICATIONS_KEY = 'bfc_notifications';
+const DELETED_IDS_KEY = 'bfc_deleted_ids';
 
 // ─── localStorage helpers (always synchronous) ───
 
@@ -43,6 +50,38 @@ function writeNutritionConsultations(consultations) {
   localStorage.setItem(NUTRITION_KEY, JSON.stringify(consultations));
 }
 
+// ─── Tombstone registry: tracks intentionally deleted client IDs ───
+// Prevents pullFromCloud() from resurrecting deleted clients ("zombie" bug).
+
+function readDeletedIds() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DELETED_IDS_KEY) || '[]');
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const result = new Map();
+    for (const entry of raw) {
+      // Compatibilité avec l'ancien format (simple string)
+      if (typeof entry === 'string') {
+        result.set(entry, Date.now());
+      } else if (entry?.id && entry.deletedAt > cutoff) {
+        result.set(entry.id, entry.deletedAt);
+      }
+    }
+    // Réécrire avec les entrées purgées
+    const toStore = [...result.entries()].map(([id, deletedAt]) => ({ id, deletedAt }));
+    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(toStore));
+    return result;
+  } catch {
+    return new Map();
+  }
+}
+
+function addDeletedId(id) {
+  const entries = readDeletedIds();
+  entries.set(id, Date.now());
+  const toStore = [...entries.entries()].map(([id, deletedAt]) => ({ id, deletedAt }));
+  localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(toStore));
+}
+
 // ─── Sync queue for offline operations ───
 
 function getSyncQueue() {
@@ -65,13 +104,15 @@ function addToSyncQueue(operation) {
 
 // ─── Cloud sync (fire-and-forget after localStorage writes) ───
 
-function cloudSyncClient(client) {
+async function cloudSyncClient(client) {
   if (!isCloudEnabled) return;
+  const ownerId = await getCurrentOwnerId();
   const { history, progression, massageSessions, ...rest } = client;
   const f = rest.form || {};
   const metrics = computeMetrics(f);
   const row = {
     id: rest.id,
+    owner_id: ownerId,
     categorie: rest.categorie || 'online',
     prenom: rest.prenom || '',
     formule: rest.formule || '',
@@ -97,7 +138,7 @@ function cloudSyncClient(client) {
     created_at: rest.createdAt || new Date().toISOString(),
     updated_at: rest.updatedAt || new Date().toISOString(),
   };
-  supabase.from('clients').upsert(row).then(({ error }) => {
+  supabase.from('clients').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
       console.warn('Cloud sync client failed:', error.message);
       addToSyncQueue({ type: 'upsert_client', data: row });
@@ -115,15 +156,17 @@ function cloudDeleteClient(id) {
   });
 }
 
-function cloudSyncGeneration(clientId, gen) {
+async function cloudSyncGeneration(clientId, gen) {
   if (!isCloudEnabled) return;
+  const ownerId = await getCurrentOwnerId();
   const row = {
     id: gen.id,
+    owner_id: ownerId,
     client_id: clientId,
     date: gen.date,
     sections: gen.sections,
   };
-  supabase.from('generations').upsert(row).then(({ error }) => {
+  supabase.from('generations').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
       console.warn('Cloud sync generation failed:', error.message);
       addToSyncQueue({ type: 'upsert_generation', data: row });
@@ -131,16 +174,18 @@ function cloudSyncGeneration(clientId, gen) {
   });
 }
 
-function cloudSyncProgression(clientId, entry) {
+async function cloudSyncProgression(clientId, entry) {
   if (!isCloudEnabled) return;
+  const ownerId = await getCurrentOwnerId();
   const row = {
     id: entry.id,
+    owner_id: ownerId,
     client_id: clientId,
     date: entry.date,
     poids: entry.poids ? Number(entry.poids) : null,
     comment: entry.comment || '',
   };
-  supabase.from('progression').upsert(row).then(({ error }) => {
+  supabase.from('progression').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
       addToSyncQueue({ type: 'upsert_progression', data: row });
     }
@@ -154,10 +199,12 @@ function cloudDeleteProgression(entryId) {
   });
 }
 
-function cloudSyncMassageSession(clientId, session) {
+async function cloudSyncMassageSession(clientId, session) {
   if (!isCloudEnabled) return;
+  const ownerId = await getCurrentOwnerId();
   const row = {
     id: session.id,
+    owner_id: ownerId,
     client_id: clientId,
     date: session.date,
     zones_traitees: session.zonesTraitees || '',
@@ -165,7 +212,7 @@ function cloudSyncMassageSession(clientId, session) {
     observations: session.observations || '',
     recommandations: session.recommandations || '',
   };
-  supabase.from('massage_sessions').upsert(row).then(({ error }) => {
+  supabase.from('massage_sessions').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) addToSyncQueue({ type: 'upsert_massage_session', data: row });
   });
 }
@@ -177,10 +224,12 @@ function cloudDeleteMassageSession(sessionId) {
   });
 }
 
-function cloudSyncNutritionConsultation(consultation) {
+async function cloudSyncNutritionConsultation(consultation) {
   if (!isCloudEnabled) return;
+  const ownerId = await getCurrentOwnerId();
   const row = {
     id: consultation.id,
+    owner_id: ownerId,
     client_id: consultation.clientId,
     consultant_name: consultation.consultantName || 'Anissa',
     date: consultation.date,
@@ -191,6 +240,7 @@ function cloudSyncNutritionConsultation(consultation) {
     nutrition_plan: consultation.nutritionPlan || '',
     supplements: consultation.supplements || '',
     recipes: consultation.recipes || '',
+    fiche_frigo_json: consultation.ficheFrigoJson || null,
     notes_for_coach: consultation.notesForCoach || '',
     private_notes: consultation.privateNotes || '',
     is_followup: consultation.isFollowup || false,
@@ -199,7 +249,7 @@ function cloudSyncNutritionConsultation(consultation) {
     status: consultation.status || 'questionnaire_recu',
     created_at: consultation.createdAt || new Date().toISOString(),
   };
-  supabase.from('nutrition_consultations').upsert(row).then(({ error }) => {
+  supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
       console.warn('Cloud sync nutrition consultation failed:', error.message);
       addToSyncQueue({ type: 'upsert_nutrition_consultation', data: row });
@@ -268,6 +318,7 @@ export async function pullFromCloud() {
       nutritionPlan: n.nutrition_plan || '',
       supplements: n.supplements || '',
       recipes: n.recipes || '',
+      ficheFrigoJson: n.fiche_frigo_json || null,
       notesForCoach: n.notes_for_coach || '',
       privateNotes: n.private_notes || '',
       isFollowup: n.is_followup || false,
@@ -279,9 +330,19 @@ export async function pullFromCloud() {
     // Merge with existing local nutrition consultations
     const existingNutrition = readNutritionConsultations();
     const nutritionMap = {};
+    // Partir du cloud
     for (const n of localNutrition) nutritionMap[n.id] = n;
+    // Merger avec le local : garder le plus récent par createdAt
     for (const n of existingNutrition) {
-      if (!nutritionMap[n.id]) nutritionMap[n.id] = n;
+      if (!nutritionMap[n.id]) {
+        nutritionMap[n.id] = n;
+      } else {
+        const cloudDate = new Date(nutritionMap[n.id].createdAt || 0);
+        const localDate = new Date(n.createdAt || 0);
+        if (localDate > cloudDate) {
+          nutritionMap[n.id] = n;
+        }
+      }
     }
     writeNutritionConsultations(Object.values(nutritionMap));
 
@@ -318,9 +379,11 @@ export async function pullFromCloud() {
     }
 
     const merged = {};
+    const deletedIds = readDeletedIds();
 
-    // All cloud clients
+    // All cloud clients (skip tombstoned IDs — intentionally deleted)
     for (const [id, cloudClient] of Object.entries(cloudMap)) {
+      if (deletedIds.has(id)) continue;
       const local = localMap[id];
       if (!local) {
         merged[id] = cloudClient;
@@ -346,9 +409,9 @@ export async function pullFromCloud() {
       }
     }
 
-    // Local-only clients (not in cloud)
+    // Local-only clients (not in cloud) — skip tombstoned
     for (const [id, local] of Object.entries(localMap)) {
-      if (!cloudMap[id]) {
+      if (!cloudMap[id] && !deletedIds.has(id)) {
         merged[id] = local;
       }
     }
@@ -356,9 +419,9 @@ export async function pullFromCloud() {
     const mergedList = Object.values(merged);
     writeAll(mergedList);
 
-    // Push local-only data to cloud
+    // Push local-only data to cloud (skip tombstoned)
     for (const client of mergedList) {
-      if (!cloudMap[client.id]) {
+      if (!cloudMap[client.id] && !deletedIds.has(client.id)) {
         cloudSyncClient(client);
         for (const gen of (client.history || [])) {
           cloudSyncGeneration(client.id, gen);
@@ -408,28 +471,29 @@ export async function retrySyncQueue() {
     let error = null;
     switch (op.type) {
       case 'upsert_client':
-        ({ error } = await supabase.from('clients').upsert(op.data));
+        ({ error } = await supabase.from('clients').upsert(op.data, { onConflict: 'id' }));
         break;
       case 'delete_client':
         ({ error } = await supabase.from('clients').delete().eq('id', op.data.id));
+        if (!error) addDeletedId(op.data.id);
         break;
       case 'upsert_generation':
-        ({ error } = await supabase.from('generations').upsert(op.data));
+        ({ error } = await supabase.from('generations').upsert(op.data, { onConflict: 'id' }));
         break;
       case 'upsert_progression':
-        ({ error } = await supabase.from('progression').upsert(op.data));
+        ({ error } = await supabase.from('progression').upsert(op.data, { onConflict: 'id' }));
         break;
       case 'delete_progression':
         ({ error } = await supabase.from('progression').delete().eq('id', op.data.id));
         break;
       case 'upsert_massage_session':
-        ({ error } = await supabase.from('massage_sessions').upsert(op.data));
+        ({ error } = await supabase.from('massage_sessions').upsert(op.data, { onConflict: 'id' }));
         break;
       case 'delete_massage_session':
         ({ error } = await supabase.from('massage_sessions').delete().eq('id', op.data.id));
         break;
       case 'upsert_nutrition_consultation':
-        ({ error } = await supabase.from('nutrition_consultations').upsert(op.data));
+        ({ error } = await supabase.from('nutrition_consultations').upsert(op.data, { onConflict: 'id' }));
         break;
     }
     if (error) remaining.push(op);
@@ -489,6 +553,7 @@ export function saveClient(client) {
 }
 
 export function deleteClient(id) {
+  addDeletedId(id);
   writeAll(readAll().filter(c => c.id !== id));
   cloudDeleteClient(id);
 }
@@ -791,7 +856,7 @@ export function getUnreadNotificationCount() {
   return readNotifications().filter(n => !n.read).length;
 }
 
-export function addNotification({ type, clientId, clientName, message }) {
+export async function addNotification({ type, clientId, clientName, message }) {
   const list = readNotifications();
   const notif = {
     id: crypto.randomUUID(),
@@ -806,7 +871,8 @@ export function addNotification({ type, clientId, clientName, message }) {
   writeNotifications(list);
   // Sync to Supabase if available
   if (isCloudEnabled) {
-    supabase.from('notifications').upsert(notif).then(({ error }) => {
+    const ownerId = await getCurrentOwnerId();
+    supabase.from('notifications').upsert({ ...notif, owner_id: ownerId }).then(({ error }) => {
       if (error) console.warn('Notification sync failed:', error.message);
     });
   }
