@@ -1,0 +1,129 @@
+async function aiRequest(systemPrompt, userMessage, maxTokens = 1500) {
+  const apiKey = localStorage.getItem('bfc_api_key') || '';
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['x-fallback-key'] = apiKey;
+
+  const response = await fetch('/api/claude', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Erreur API: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.content?.[0]?.text?.trim() || '';
+}
+
+function buildClientContext(form) {
+  return [
+    form?.prenom       ? `Client : ${form.prenom}` : '',
+    form?.age          ? `\u00c2ge : ${form.age} ans` : '',
+    form?.genre        ? `Genre : ${form.genre}` : '',
+    form?.poids        ? `Poids : ${form.poids} kg` : '',
+    form?.taille       ? `Taille : ${form.taille} cm` : '',
+    form?.objectifPrincipalNutrition
+      ? `Objectif : ${form.objectifPrincipalNutrition}` : '',
+    form?.symptomesObjectifs?.length
+      ? `Sympt\u00f4mes/objectifs : ${form.symptomesObjectifs.join(', ')}` : '',
+    form?.allergies    ? `Allergies : ${form.allergies}` : '',
+    form?.alimentsEvites ? `Aliments \u00e9vit\u00e9s : ${form.alimentsEvites}` : '',
+    form?.pathologies  ? `Pathologies : ${form.pathologies}` : '',
+    form?.digestion    ? `Digestion : ${form.digestion}` : '',
+    form?.heuresSommeil ? `Sommeil : ${form.heuresSommeil}h/nuit` : '',
+  ].filter(Boolean).join('\n');
+}
+
+const ACTION_PROMPTS = {
+  improve:     'Am\u00e9liore ce contenu : rends-le plus pr\u00e9cis, personnalis\u00e9 et actionnable pour ce client.',
+  simplify:    'Simplifie ce contenu : phrases courtes, vocabulaire accessible, garde l\'essentiel.',
+  actionnable: 'Rends ce contenu ultra-actionnable : \u00e9tapes concr\u00e8tes, quantit\u00e9s pr\u00e9cises, timing clair.',
+  adapt:       'Adapte ce contenu au profil exact de ce client : tiens compte de ses contraintes, objectifs et pathologies.',
+  rewrite:     'Reformule ce contenu de fa\u00e7on professionnelle et bienveillante, ton nutritionniste expert.',
+};
+
+export async function improveSection(form, sectionTitle, currentContent, action = 'improve') {
+  const context = buildClientContext(form);
+  const instruction = ACTION_PROMPTS[action] || ACTION_PROMPTS.improve;
+
+  const system = `Tu es Anissa, nutritionniste experte en nutrition fonctionnelle.
+Tu travailles sur un plan nutritionnel personnalis\u00e9.
+
+PROFIL CLIENT :
+${context}
+
+R\u00c8GLES ABSOLUES :
+- R\u00e9ponds UNIQUEMENT avec le contenu am\u00e9lior\u00e9
+- M\u00eame format que l'original (listes si listes, paragraphes si paragraphes)
+- Ne rajoute pas de titre ni d'introduction
+- Reste concis \u2014 am\u00e9liore, ne rallonge pas de plus de 30%
+- En fran\u00e7ais, ton professionnel et chaleureux`;
+
+  return aiRequest(
+    system,
+    `Section "${sectionTitle}" :\n\n${currentContent}\n\nInstruction : ${instruction}`,
+    1200
+  );
+}
+
+export async function generateSection(form, sectionTitle, sectionType = 'libre') {
+  const context = buildClientContext(form);
+
+  const typeInstructions = {
+    'Plan alimentaire':  'G\u00e9n\u00e8re un plan alimentaire type avec petit-d\u00e9jeuner, d\u00e9jeuner, collation, d\u00eener. Quantit\u00e9s pr\u00e9cises, adapt\u00e9 aux contraintes du client.',
+    'Analyse du profil': 'G\u00e9n\u00e8re une analyse du profil nutritionnel : points forts, points d\'attention, recommandations prioritaires.',
+    'Suppl\u00e9ments':       'G\u00e9n\u00e8re des recommandations de suppl\u00e9ments adapt\u00e9es au profil : nom, dosage, moment de prise, justification.',
+    'Recettes':          'G\u00e9n\u00e8re 2-3 recettes simples et rapides adapt\u00e9es aux contraintes du client.',
+    'Conseils pratiques':'G\u00e9n\u00e8re 5-7 conseils pratiques et actionnables pour ce client sp\u00e9cifique.',
+    'libre':             `G\u00e9n\u00e8re un contenu pertinent et personnalis\u00e9 pour la section "${sectionTitle}".`,
+  };
+
+  const system = `Tu es Anissa, nutritionniste experte.
+Tu cr\u00e9es du contenu pour un plan nutritionnel personnalis\u00e9.
+
+PROFIL CLIENT :
+${context}
+
+R\u00c8GLES :
+- Contenu directement utilisable, sans introduction
+- Format lisible : listes \u00e0 puces pour les conseils, paragraphes pour les analyses
+- Personnalis\u00e9 pour CE client sp\u00e9cifiquement
+- En fran\u00e7ais, professionnel`;
+
+  return aiRequest(
+    system,
+    typeInstructions[sectionTitle] || typeInstructions['libre'],
+    1500
+  );
+}
+
+export async function suggestActions(form, sectionTitle, currentContent) {
+  const context = buildClientContext(form);
+
+  const system = `Tu es Anissa, nutritionniste experte.
+Analyse cette section et propose exactement 3 suggestions courtes d'am\u00e9lioration.
+PROFIL CLIENT : ${context}
+R\u00e9ponds UNIQUEMENT avec un JSON : {"suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]}
+Chaque suggestion : max 5 mots, actionnable, sp\u00e9cifique \u00e0 ce client.`;
+
+  const text = await aiRequest(
+    system,
+    `Section "${sectionTitle}" : ${currentContent.slice(0, 500)}`,
+    200
+  );
+
+  try {
+    const parsed = JSON.parse(text);
+    return parsed.suggestions || [];
+  } catch {
+    return [];
+  }
+}

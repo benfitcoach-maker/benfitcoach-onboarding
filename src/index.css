@@ -2319,6 +2319,16 @@ body{
   to{opacity:1;transform:translateY(0)}
 }
 
+@keyframes neSpin{
+  from{transform:rotate(0deg)}
+  to{transform:rotate(360deg)}
+}
+
+@keyframes neSlideIn{
+  from{opacity:0;transform:translateY(-6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
 .ne-textarea-editor{
   font-size:.86rem !important;
   line-height:1.75 !important;

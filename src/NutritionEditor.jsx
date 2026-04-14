@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
+import { improveSection } from './services/aiClient';
 
 // ─── MARKDOWN → SECTIONS PARSER ───
 // Parses raw plan text into structured sections. Used on initial load
@@ -195,8 +196,15 @@ function SectionBlock({
   justMoved,
   isActive,
   onActivate,
+  onImprove,
+  isImproving,
+  aiProposal,
+  onAcceptProposal,
+  onAppendProposal,
+  onRejectProposal,
 }) {
   const [hovered, setHovered] = useState(false);
+  const [showActions, setShowActions] = useState(false);
   const textareaRef = useRef(null);
 
   // Auto-focus textarea when section becomes active
@@ -263,7 +271,7 @@ function SectionBlock({
   };
 
   return (
-    <div className={classNames} style={cardStyle} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+    <div className={classNames} style={cardStyle} onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowActions(false); }}>
       {/* Header */}
       <div style={headerStyle}>
         <div className="ne-move-buttons" style={{
@@ -276,20 +284,88 @@ function SectionBlock({
           <button type="button" className="ne-move-btn" onClick={() => onMoveDown(section.id)} disabled={!canMoveDown} title="Descendre">&#9660;</button>
         </div>
         <span style={titleStyle}>{section.title}</span>
-        {/* SLOT IA — Phase 3 : bouton "✨ améliorer" sera ici */}
         <div style={{ flex: 1 }} />
         {!isActive && section.content.trim() && (
           <span style={{ fontSize: '.65rem', color: 'rgba(255,255,255,.25)', padding: '2px 6px', background: 'rgba(255,255,255,.05)', borderRadius: 4, whiteSpace: 'nowrap' }}>
             {section.content.trim().split('\n').length} lignes
           </span>
         )}
-        <div style={{
-          display: 'flex', gap: 4,
-          opacity: hovered || isActive ? 1 : 0,
-          transition: 'opacity .2s ease',
-        }}>
-          <button type="button" className="ne-action-btn" onClick={() => onReset(section.id)} title="Reinitialiser">&#8634;</button>
-          <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          {/* Bouton ✨ Améliorer */}
+          {!aiProposal && (
+            isImproving ? (
+              <span style={{
+                fontSize:'.7rem', color:'rgba(106,191,138,.7)',
+                display:'flex', alignItems:'center', gap:4,
+                opacity: 1,
+              }}>
+                <span style={{ animation:'neSpin .8s linear infinite', display:'inline-block' }}>{'\u2728'}</span>
+                IA...
+              </span>
+            ) : (
+              <div style={{ position:'relative' }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowActions(a => !a); }}
+                  style={{
+                    background:'none',
+                    border:'1px solid rgba(106,191,138,.25)',
+                    borderRadius:6, padding:'2px 8px',
+                    color:'rgba(106,191,138,.6)', fontSize:'.7rem',
+                    cursor:'pointer', transition:'all .15s',
+                    opacity: hovered || isActive ? 1 : 0,
+                    display:'flex', alignItems:'center', gap:4,
+                  }}
+                  title="Am\u00e9liorer avec l'IA"
+                >
+                  {'\u2728'} IA
+                </button>
+                {showActions && (
+                  <div style={{
+                    position:'absolute', top:'100%', right:0, zIndex:100,
+                    background:'#1a2e1f', border:'1px solid rgba(106,191,138,.2)',
+                    borderRadius:10, overflow:'hidden', minWidth:200,
+                    boxShadow:'0 8px 24px rgba(0,0,0,.5)', marginTop:4,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  >
+                    {[
+                      { key:'improve',     label:'\u2728 Am\u00e9liorer' },
+                      { key:'simplify',    label:'\ud83d\udcdd Simplifier' },
+                      { key:'actionnable', label:'\u26a1 Rendre actionnable' },
+                      { key:'adapt',       label:'\ud83c\udfaf Adapter au client' },
+                      { key:'rewrite',     label:'\ud83d\udcbc Reformuler pro' },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => { setShowActions(false); onImprove(section.id, key); }}
+                        style={{
+                          display:'block', width:'100%', textAlign:'left',
+                          padding:'9px 14px', background:'none', border:'none',
+                          color:'#b0c4a8', cursor:'pointer', fontSize:'.82rem',
+                          transition:'background .15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(106,191,138,.08)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+          {/* Boutons reset/delete */}
+          <div style={{
+            display:'flex', gap:4,
+            opacity: hovered || isActive ? 1 : 0,
+            transition:'opacity .2s',
+          }}>
+            <button type="button" className="ne-action-btn" onClick={() => onReset(section.id)} title="Reinitialiser">&#8634;</button>
+            <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
+          </div>
         </div>
       </div>
 
@@ -340,6 +416,73 @@ function SectionBlock({
           </div>
         )}
       </div>
+
+      {/* AI Proposal panel */}
+      {aiProposal && (
+        <div style={{
+          borderTop:'1px solid rgba(106,191,138,.2)',
+          background:'rgba(26,58,42,.3)',
+          padding:'14px 16px',
+          animation:'neSlideIn .2s ease',
+        }}>
+          <div style={{ fontSize:'.72rem', color:'rgba(106,191,138,.6)',
+            marginBottom:8, fontWeight:600, textTransform:'uppercase',
+            letterSpacing:'.5px' }}>
+            {'\u2728'} Proposition IA
+          </div>
+          <div style={{
+            background:'rgba(0,0,0,.2)', borderRadius:8, padding:'10px 14px',
+            fontSize:'.82rem', lineHeight:1.65, color:'#d4c9a8',
+            whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto',
+            border:'1px solid rgba(106,191,138,.15)',
+          }}>
+            {aiProposal}
+          </div>
+          <div style={{ display:'flex', gap:8, marginTop:10 }}>
+            <button
+              type="button"
+              onClick={() => onAcceptProposal(section.id)}
+              style={{
+                padding:'6px 14px', borderRadius:8, border:'none',
+                background:'rgba(106,191,138,.2)',
+                color:'#8abf9a', cursor:'pointer', fontSize:'.8rem',
+                fontWeight:600, transition:'all .15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.35)'}
+              onMouseLeave={e => e.currentTarget.style.background='rgba(106,191,138,.2)'}
+            >
+              {'\u2705'} Remplacer
+            </button>
+            <button
+              type="button"
+              onClick={() => onAppendProposal(section.id)}
+              style={{
+                padding:'6px 14px', borderRadius:8,
+                border:'1px solid rgba(106,191,138,.25)',
+                background:'none', color:'#b0c4a8', cursor:'pointer',
+                fontSize:'.8rem', transition:'all .15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.08)'}
+              onMouseLeave={e => e.currentTarget.style.background='none'}
+            >
+              {'\u2795'} Ajouter {'\u00e0'} la suite
+            </button>
+            <button
+              type="button"
+              onClick={() => onRejectProposal(section.id)}
+              style={{
+                padding:'6px 14px', borderRadius:8,
+                border:'1px solid rgba(255,255,255,.06)',
+                background:'none', color:'rgba(255,255,255,.35)',
+                cursor:'pointer', fontSize:'.8rem', transition:'all .15s',
+                marginLeft:'auto',
+              }}
+            >
+              {'\u274c'} Annuler
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -518,6 +661,52 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   const handleMoveUp = useCallback((id) => moveSection(id, 'up'), [moveSection]);
   const handleMoveDown = useCallback((id) => moveSection(id, 'down'), [moveSection]);
 
+  // ─── AI Copilot ───
+  const [improvingId, setImprovingId] = useState(null);
+  const [proposals, setProposals] = useState({});
+
+  const handleImprove = useCallback(async (id, action = 'improve') => {
+    const section = sectionsRef.current.find(s => s.id === id);
+    if (!section) return;
+    setImprovingId(id);
+    try {
+      const result = await improveSection(form, section.title, section.content, action);
+      if (result) {
+        setProposals(prev => ({ ...prev, [id]: result }));
+      }
+    } catch (err) {
+      console.error('[IA improve]', err.message);
+    } finally {
+      setImprovingId(null);
+    }
+  }, [form]);
+
+  const handleAcceptProposal = useCallback((id) => {
+    const proposal = proposals[id];
+    if (!proposal) return;
+    setSections(prev => prev.map(s =>
+      s.id === id ? { ...s, content: proposal } : s
+    ));
+    setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
+    setSaved(false);
+  }, [proposals]);
+
+  const handleAppendProposal = useCallback((id) => {
+    const proposal = proposals[id];
+    if (!proposal) return;
+    setSections(prev => prev.map(s =>
+      s.id === id
+        ? { ...s, content: s.content.trimEnd() + '\n\n' + proposal }
+        : s
+    ));
+    setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
+    setSaved(false);
+  }, [proposals]);
+
+  const handleRejectProposal = useCallback((id) => {
+    setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
+  }, []);
+
   const handleSave = () => {
     const d = getEditedData();
     onSave(d.plan, d.supplements, d.recipes);
@@ -562,6 +751,12 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           justMoved={justMovedId === section.id}
           isActive={activeSectionId === section.id}
           onActivate={handleActivateSection}
+          onImprove={handleImprove}
+          isImproving={improvingId === section.id}
+          aiProposal={proposals[section.id] || null}
+          onAcceptProposal={handleAcceptProposal}
+          onAppendProposal={handleAppendProposal}
+          onRejectProposal={handleRejectProposal}
         />
       ))}
 
