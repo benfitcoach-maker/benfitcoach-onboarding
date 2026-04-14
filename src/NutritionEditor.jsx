@@ -1,27 +1,14 @@
-import { useState, useRef, useCallback, useEffect, memo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
 
 // ─── MARKDOWN → SECTIONS PARSER ───
-
-function markdownToHtml(md) {
-  if (!md) return '';
-  return md
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/__([^_]+)__/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/_([^_]+)_/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^[-–•*] (.+)$/gm, '<div class="ne-bullet">— $1</div>')
-    .replace(/\n/g, '<br/>');
-}
+// Parses raw plan text into structured sections. Used on initial load
+// and on authoritative rewrites (AI gen, template, version restore).
+// NOT used during user editing — that's the key architectural change.
 
 function parsePlanToSections(planText, supplementsText, recipesText) {
   const sections = [];
-
   if (!planText && !supplementsText && !recipesText) return sections;
 
   const fullText = planText || '';
@@ -36,7 +23,6 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
         id: crypto.randomUUID(),
         title: currentTitle,
         content,
-        html: markdownToHtml(content),
         originalContent: content,
       });
     }
@@ -45,8 +31,6 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
 
   for (const line of lines) {
     const trimmed = line.trim();
-
-    // Detect section headers
     const headerMatch = trimmed.match(/^#{1,3}\s+(.+)/);
     const isNumberedSection = /^\d+\.\s+[A-Z]/.test(trimmed) && trimmed.length < 80;
     const isWeek = /^(?:#{1,3}\s+)?semaine\s+\d/i.test(trimmed);
@@ -63,24 +47,20 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
   }
   flushSection();
 
-  // Add supplements as separate section
   if (supplementsText?.trim()) {
     sections.push({
       id: crypto.randomUUID(),
       title: 'SUPPLEMENTS RECOMMANDES',
       content: supplementsText.trim(),
-      html: markdownToHtml(supplementsText.trim()),
       originalContent: supplementsText.trim(),
     });
   }
 
-  // Add recipes as separate section
   if (recipesText?.trim()) {
     sections.push({
       id: crypto.randomUUID(),
       title: 'RECETTES RECOMMANDEES',
       content: recipesText.trim(),
-      html: markdownToHtml(recipesText.trim()),
       originalContent: recipesText.trim(),
     });
   }
@@ -88,230 +68,7 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
   return sections;
 }
 
-function htmlToPlaintext(html) {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  // Convert <br> to newlines
-  div.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-  // Convert block elements to newlines
-  div.querySelectorAll('div, p, h2, h3').forEach(el => {
-    el.prepend(document.createTextNode('\n'));
-  });
-  // Convert bullets back
-  div.querySelectorAll('.ne-bullet').forEach(el => {
-    const text = el.textContent.replace(/^— /, '- ');
-    el.replaceWith(document.createTextNode('\n' + text));
-  });
-  // Convert colored text (font or span with color) to markers BEFORE stripping other tags
-  div.querySelectorAll('font[color], span[style*="color"]').forEach(el => {
-    const color = el.getAttribute('color') || el.style.color;
-    if (color) {
-      const hex = colorToHex(color);
-      // Don't wrap default text colors
-      if (hex && hex !== '#312d2d' && hex !== '#f0f0e8') {
-        el.replaceWith(document.createTextNode(`{{color:${hex}}}${el.textContent}{{/color}}`));
-        return;
-      }
-    }
-    el.replaceWith(document.createTextNode(el.textContent));
-  });
-  // Convert font size tags to markers
-  div.querySelectorAll('font[size]').forEach(el => {
-    const size = el.getAttribute('size');
-    const pxMap = { '1': '9', '2': '11', '3': '14', '4': '16', '5': '18', '6': '22', '7': '26' };
-    const px = pxMap[size] || '14';
-    if (px !== '14') {
-      el.replaceWith(document.createTextNode(`{{size:${px}}}${el.textContent}{{/size}}`));
-    } else {
-      el.replaceWith(document.createTextNode(el.textContent));
-    }
-  });
-  // Convert note/alert blocks to markers BEFORE stripping other tags
-  div.querySelectorAll('[data-block-type]').forEach(el => {
-    const type = el.getAttribute('data-block-type');
-    const strongEl = el.querySelector('strong');
-    const prefix = strongEl ? strongEl.textContent : '';
-    // Get remaining text after the strong
-    const clone = el.cloneNode(true);
-    const s = clone.querySelector('strong');
-    if (s) s.remove();
-    const body = clone.textContent.trim();
-    el.replaceWith(document.createTextNode(`\n{{${type}}}${prefix} ${body}{{/${type}}}\n`));
-  });
-  // Also detect note/alert blocks by style (for blocks inserted without data attribute)
-  div.querySelectorAll('div[style*="border-left"]').forEach(el => {
-    const style = el.getAttribute('style') || '';
-    const strongEl = el.querySelector('strong');
-    let type = 'note';
-    if (style.includes('#f87171') || style.includes('rgb(248, 113, 113)')) type = 'alert';
-    const prefix = strongEl ? strongEl.textContent : '';
-    const clone = el.cloneNode(true);
-    const s = clone.querySelector('strong');
-    if (s) s.remove();
-    const body = clone.textContent.trim();
-    el.replaceWith(document.createTextNode(`\n{{${type}}}${prefix} ${body}{{/${type}}}\n`));
-  });
-  // Convert highlighted text to markers
-  div.querySelectorAll('span[style*="background"], mark').forEach(el => {
-    const style = el.getAttribute('style') || '';
-    let hColor = 'yellow';
-    if (style.includes('74, 222, 128') || style.includes('rgba(74')) hColor = 'green';
-    else if (style.includes('248, 113, 113') || style.includes('rgba(248')) hColor = 'red';
-    else if (style.includes('96, 165, 250') || style.includes('rgba(96')) hColor = 'blue';
-    el.replaceWith(document.createTextNode(`{{hl:${hColor}}}${el.textContent}{{/hl}}`));
-  });
-  // Convert colored text (font or span with color) to markers
-  div.querySelectorAll('font[color], span[style*="color"]').forEach(el => {
-    // Skip if already processed (inside a block)
-    if (el.closest('[data-block-type]')) return;
-    const color = el.getAttribute('color') || el.style.color;
-    if (color) {
-      const hex = colorToHex(color);
-      if (hex && hex !== '#312d2d' && hex !== '#f0f0e8') {
-        el.replaceWith(document.createTextNode(`{{color:${hex}}}${el.textContent}{{/color}}`));
-        return;
-      }
-    }
-    el.replaceWith(document.createTextNode(el.textContent));
-  });
-  // Convert strong back to **
-  div.querySelectorAll('strong, b').forEach(el => {
-    el.replaceWith(document.createTextNode(`**${el.textContent}**`));
-  });
-  // Convert em back to *
-  div.querySelectorAll('em, i').forEach(el => {
-    el.replaceWith(document.createTextNode(`*${el.textContent}*`));
-  });
-  return div.textContent.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function colorToHex(color) {
-  if (!color) return null;
-  // Already hex
-  if (color.startsWith('#')) return color.toLowerCase();
-  // rgb(r, g, b)
-  const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-  if (rgbMatch) {
-    const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
-    const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
-    const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
-    return `#${r}${g}${b}`;
-  }
-  return color;
-}
-
-
-// ─── PALETTES ───
-
-const COLOR_PALETTE = [
-  { hex: '#f0f0e8', label: 'Blanc' },
-  { hex: '#1a2e1f', label: 'Vert fonce' },
-  { hex: '#4ade80', label: 'Vert clair' },
-  { hex: '#f87171', label: 'Rouge' },
-  { hex: '#fbbf24', label: 'Orange' },
-  { hex: '#60a5fa', label: 'Bleu' },
-  { hex: '#a78bfa', label: 'Violet' },
-  { hex: '#888888', label: 'Gris' },
-];
-
-const HIGHLIGHT_PALETTE = [
-  { css: 'rgba(251,191,36,0.3)', label: 'Jaune' },
-  { css: 'rgba(74,222,128,0.2)', label: 'Vert' },
-  { css: 'rgba(248,113,113,0.2)', label: 'Rouge' },
-  { css: 'rgba(96,165,250,0.2)', label: 'Bleu' },
-];
-
-// ─── SWATCH POPUP (reused for color & highlight) ───
-
-function SwatchPopup({ items, onSelect, onClose, styleKey }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onClose]);
-
-  return (
-    <div className="ne-color-popup" ref={ref}>
-      {items.map(c => (
-        <button
-          key={c[styleKey]}
-          type="button"
-          className="ne-color-swatch"
-          style={{ background: c[styleKey] }}
-          title={c.label}
-          onClick={() => onSelect(c[styleKey])}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── NOTE / ALERT HTML BLOCKS ───
-
-const NOTE_HTML = '<div data-block-type="note" style="border-left:3px solid #4ade80;padding:8px 12px;margin:8px 0;background:rgba(74,222,128,0.05);border-radius:4px;" contenteditable="true"><strong style="color:#4ade80;">Note d\'Anissa :</strong> <span>Ecrivez votre note ici...</span></div>';
-const ALERT_HTML = '<div data-block-type="alert" style="border-left:3px solid #f87171;padding:8px 12px;margin:8px 0;background:rgba(248,113,113,0.05);border-radius:4px;" contenteditable="true"><strong style="color:#f87171;">Important :</strong> <span>Ecrivez votre alerte ici...</span></div>';
-
-// ─── FONT SIZE OPTIONS ───
-
-const SIZE_OPTIONS = [
-  { label: 'Petit', px: 9, cmd: '1' },
-  { label: 'Normal', px: 14, cmd: '3' },
-  { label: 'Grand', px: 18, cmd: '5' },
-  { label: 'Tres grand', px: 22, cmd: '6' },
-];
-
-// ─── SYMBOLS ───
-
-const SYMBOLS = [
-  { char: '\u2713', label: 'Valide' },
-  { char: '\u2717', label: 'A eviter' },
-  { char: '\u26A0', label: 'Attention' },
-  { char: '\u2605', label: 'Important' },
-  { char: '\u2192', label: 'Fleche' },
-  { char: '\u2022', label: 'Point' },
-  { char: '\u2665', label: 'Sante' },
-  { char: '\u2295', label: 'Ajouter' },
-];
-
-// ─── GENERIC DROPDOWN POPUP ───
-
-function DropdownPopup({ children, onClose }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onClose]);
-  return <div className="ne-color-popup" ref={ref}>{children}</div>;
-}
-
-// ─── MINI TOOLBAR (simplified for preview-first editor) ───
-
-function MiniToolbar({ editorRef }) {
-  const exec = (cmd, val) => {
-    document.execCommand(cmd, false, val || null);
-    editorRef.current?.focus();
-  };
-
-  return (
-    <div className="ne-toolbar" style={{ padding: '4px 8px', gap: 4 }}>
-      <button type="button" className="ne-tool-btn" onClick={() => exec('bold')} title="Gras"><strong>B</strong></button>
-      <button type="button" className="ne-tool-btn ne-tool-note" onClick={() => {
-        editorRef.current?.focus();
-        document.execCommand('insertHTML', false, '<br/>' + NOTE_HTML + '<br/>');
-      }} title="Note d'Anissa">Note</button>
-      <button type="button" className="ne-tool-btn ne-tool-alert" onClick={() => {
-        editorRef.current?.focus();
-        document.execCommand('insertHTML', false, '<br/>' + ALERT_HTML + '<br/>');
-      }} title="Alerte">!</button>
-      <button type="button" className="ne-tool-btn" onClick={() => exec('undo')} title="Annuler">&#8617;</button>
-    </div>
-  );
-}
-
-
-// ─── PREMIUM SECTION RENDER (read-only, like PDF body) ───
+// ─── PREMIUM SECTION RENDER (read-only preview, renders markdown as styled HTML) ───
 
 function PremiumSectionRender({ content }) {
   const lines = (content || '').split('\n');
@@ -332,7 +89,7 @@ function PremiumSectionRender({ content }) {
           return (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
               <span style={{ color: '#4ade80', fontWeight: 700, flexShrink: 0 }}>-</span>
-              <span>{trimmed.replace(/^[-–•]\s+/, '')}</span>
+              <span>{renderInlineFormatting(trimmed.replace(/^[-–•]\s+/, ''))}</span>
             </div>
           );
         }
@@ -343,17 +100,17 @@ function PremiumSectionRender({ content }) {
           return (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
               <span style={{ fontWeight: 700, minWidth: 18, flexShrink: 0 }}>{num}.</span>
-              <span>{trimmed.replace(/^\d+[.)]\s+/, '')}</span>
+              <span>{renderInlineFormatting(trimmed.replace(/^\d+[.)]\s+/, ''))}</span>
             </div>
           );
         }
 
-        // Bold inline
+        // Bold line
         if (/^\*\*[^*]+\*\*/.test(trimmed)) {
           return <div key={i} style={{ fontWeight: 600, marginBottom: 2 }}>{trimmed.replace(/\*\*/g, '')}</div>;
         }
 
-        // Note/alert blocks
+        // Note block
         if (/^\{\{note\}\}/.test(trimmed)) {
           return <div key={i} style={{ borderLeft: '3px solid #4ade80', padding: '6px 10px', margin: '4px 0', background: 'rgba(74,222,128,0.05)', borderRadius: 4, fontSize: '.8rem' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
         }
@@ -361,21 +118,58 @@ function PremiumSectionRender({ content }) {
           return <div key={i} style={{ borderLeft: '3px solid #f87171', padding: '6px 10px', margin: '4px 0', background: 'rgba(248,113,113,0.05)', borderRadius: 4, fontSize: '.8rem', color: '#f87171' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
         }
 
-        return <div key={i} style={{ marginBottom: 2 }}>{trimmed}</div>;
+        return <div key={i} style={{ marginBottom: 2 }}>{renderInlineFormatting(trimmed)}</div>;
       })}
     </div>
   );
 }
 
+// Render inline **bold** and *italic* in preview
+function renderInlineFormatting(text) {
+  if (!text) return text;
+  // Split on **bold** and *italic* markers
+  const parts = [];
+  let remaining = text;
+  let key = 0;
+  while (remaining.length > 0) {
+    // Bold
+    const boldMatch = remaining.match(/\*\*([^*]+)\*\*/);
+    // Italic
+    const italicMatch = remaining.match(/\*([^*]+)\*/);
 
-// ─── SECTION BLOCK COMPONENT (preview-first) ───
+    const match = boldMatch && italicMatch
+      ? (boldMatch.index <= italicMatch.index ? boldMatch : italicMatch)
+      : boldMatch || italicMatch;
+
+    if (!match) {
+      parts.push(remaining);
+      break;
+    }
+
+    if (match.index > 0) {
+      parts.push(remaining.slice(0, match.index));
+    }
+
+    const isBold = match[0].startsWith('**');
+    if (isBold) {
+      parts.push(<strong key={key++} style={{ color: '#f0f0e8' }}>{match[1]}</strong>);
+    } else {
+      parts.push(<em key={key++}>{match[1]}</em>);
+    }
+
+    remaining = remaining.slice(match.index + match[0].length);
+  }
+  return parts.length === 1 && typeof parts[0] === 'string' ? parts[0] : parts;
+}
+
+
+// ─── SECTION BLOCK (controlled textarea, single source of truth) ───
 
 function SectionBlock({
   section,
-  onContentRead,
+  onContentChange,
   onDelete,
   onReset,
-  resetCounter,
   onMoveUp,
   onMoveDown,
   canMoveUp,
@@ -384,46 +178,37 @@ function SectionBlock({
   isActive,
   onActivate,
 }) {
-  const editorRef = useRef(null);
-  const sectionRef = useRef(null);
-  const [localContent, setLocalContent] = useState(section.content);
+  const textareaRef = useRef(null);
 
-  // Sync local content when reset
+  // Auto-focus textarea when section becomes active
   useEffect(() => {
-    setLocalContent(section.content);
-  }, [resetCounter]);
-
-  // Read current content
-  const readContent = useCallback(() => {
-    if (isActive && editorRef.current) {
-      const html = editorRef.current.innerHTML;
-      const text = htmlToPlaintext(html);
-      return { text, html };
-    }
-    return { text: localContent, html: markdownToHtml(localContent) };
-  }, [isActive, localContent]);
-
-  // Expose read function to parent
-  useEffect(() => {
-    onContentRead(section.id, readContent);
-  }, [section.id, readContent, onContentRead]);
-
-  // Auto-save when leaving active state
-  useEffect(() => {
-    if (!isActive && editorRef.current) {
-      const text = htmlToPlaintext(editorRef.current.innerHTML);
-      setLocalContent(text);
+    if (isActive && textareaRef.current) {
+      textareaRef.current.focus();
+      // Place cursor at end
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
     }
   }, [isActive]);
 
-  // Focus editor when becoming active
-  useEffect(() => {
-    if (isActive && editorRef.current) {
-      editorRef.current.focus();
-    }
-  }, [isActive]);
+  // Auto-resize textarea to fit content
+  const autoResize = useCallback((el) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(80, el.scrollHeight) + 'px';
+  }, []);
 
-  // Click on preview → activate this section
+  // Resize on mount/activation
+  useEffect(() => {
+    if (isActive && textareaRef.current) {
+      autoResize(textareaRef.current);
+    }
+  }, [isActive, autoResize]);
+
+  const handleChange = (e) => {
+    onContentChange(section.id, e.target.value);
+    autoResize(e.target);
+  };
+
   const handleContentClick = () => {
     if (!isActive) onActivate(section.id);
   };
@@ -433,7 +218,6 @@ function SectionBlock({
     justMoved ? 'ne-section-just-moved' : '',
   ].filter(Boolean).join(' ');
 
-  // Premium card style
   const cardStyle = {
     background: 'rgba(255,255,255,.03)',
     border: isActive ? '1.5px solid rgba(74,222,128,.4)' : '1px solid rgba(255,255,255,.06)',
@@ -463,8 +247,8 @@ function SectionBlock({
   };
 
   return (
-    <div className={classNames} style={cardStyle} ref={sectionRef}>
-      {/* Header: locked title + action buttons */}
+    <div className={classNames} style={cardStyle}>
+      {/* Header */}
       <div style={headerStyle}>
         <div className="ne-move-buttons" style={{ display: 'flex', gap: 2 }}>
           <button type="button" className="ne-move-btn" onClick={() => onMoveUp(section.id)} disabled={!canMoveUp} title="Monter">&#9650;</button>
@@ -477,23 +261,43 @@ function SectionBlock({
         </div>
       </div>
 
-      {/* Body: click-to-edit */}
+      {/* Body: textarea when active, premium render when inactive */}
       <div style={{ padding: '12px 16px' }}>
         {isActive ? (
-          <>
-            <MiniToolbar editorRef={editorRef} />
-            <div
-              ref={editorRef}
-              className="ne-editor"
-              contentEditable
-              dangerouslySetInnerHTML={{ __html: markdownToHtml(localContent) }}
-              suppressContentEditableWarning
-              style={{ minHeight: 80, padding: '8px 0' }}
+          <div>
+            {/* Simple formatting hints */}
+            <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.3)', marginBottom: 6, display: 'flex', gap: 12 }}>
+              <span>**gras**</span>
+              <span>*italique*</span>
+              <span>- liste</span>
+              <span>{'{{note}}...{{/note}}'}</span>
+              <span>{'{{alert}}...{{/alert}}'}</span>
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={section.content}
+              onChange={handleChange}
+              className="ne-editor ne-textarea-editor"
+              style={{
+                width: '100%',
+                minHeight: 80,
+                padding: '8px 0',
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: '#d4c9a8',
+                fontSize: '.83rem',
+                lineHeight: 1.65,
+                fontFamily: 'inherit',
+                resize: 'none',
+                overflow: 'hidden',
+              }}
+              spellCheck={false}
             />
-          </>
+          </div>
         ) : (
           <div onClick={handleContentClick} style={{ cursor: 'text', minHeight: 40 }}>
-            <PremiumSectionRender content={localContent} />
+            <PremiumSectionRender content={section.content} />
           </div>
         )}
       </div>
@@ -504,14 +308,15 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, hideActions = false }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, onDraftChange, hideActions = false }) {
+  // sections[] is THE single source of truth for all content.
+  // Each section.content is plain text/markdown, directly edited via controlled textarea.
   const [sections, setSections] = useState(() =>
     parsePlanToSections(planText, supplementsText, recipesText)
   );
   const [saved, setSaved] = useState(false);
   const [showFrigoPreview, setShowFrigoPreview] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
-  const [resetCounter, setResetCounter] = useState(0);
   const [showAddSection, setShowAddSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -520,22 +325,23 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     prenom: form?.prenom || client?.prenom || '',
     objectif: form?.objectifPrincipalNutrition || form?.objectifPrincipal || '',
     date: new Date().toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-    sousTitre: 'Plan nutrition personnalis\u00e9',
+    sousTitre: 'Plan nutrition personnalisé',
   });
   const [justMovedId, setJustMovedId] = useState(null);
   const [activeSectionId, setActiveSectionId] = useState(null);
   const editorContainerRef = useRef(null);
 
-  // Store content-reading functions from each SectionBlock
-  const contentReadersRef = useRef({});
+  // Refs that always point to the latest values — used for unmount flush
+  const sectionsRef = useRef(sections);
+  const onDraftChangeRef = useRef(onDraftChange);
+  useEffect(() => { sectionsRef.current = sections; }, [sections]);
+  useEffect(() => { onDraftChangeRef.current = onDraftChange; }, [onDraftChange]);
 
-  // Deactivate section when clicking outside any section
+  // ─── Click outside → deactivate section ───
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!activeSectionId) return;
-      // Don't deactivate if clicking inside the editor container (toolbar buttons, etc.)
       if (editorContainerRef.current && editorContainerRef.current.contains(e.target)) {
-        // But do deactivate if the click is on a non-section area (buttons bar, profile, etc.)
         const sectionEl = e.target.closest('.ne-section');
         if (!sectionEl) setActiveSectionId(null);
       } else {
@@ -550,44 +356,75 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     setActiveSectionId(id);
   }, []);
 
-  // Re-parse when AI generates new content
-  useEffect(() => {
-    const newSections = parsePlanToSections(planText, supplementsText, recipesText);
-    if (newSections.length > 0) {
-      setSections(newSections);
-      setResetCounter(c => c + 1);
-    }
-  }, [planText, supplementsText, recipesText]);
-
-  // Register a content reader for a section
-  const handleContentRead = useCallback((id, readFn) => {
-    contentReadersRef.current[id] = readFn;
+  // ─── Build edited data from sections (pure function) ───
+  const buildEditedData = useCallback((sectionsList) => {
+    const suppSection = sectionsList.find(s => /suppl[eé]ments?/i.test(s.title));
+    const recSection = sectionsList.find(s => /recettes?/i.test(s.title));
+    const planSections = sectionsList.filter(s => s !== suppSection && s !== recSection);
+    return {
+      plan: planSections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n'),
+      supplements: suppSection?.content || '',
+      recipes: recSection?.content || '',
+    };
   }, []);
 
-  // Read current content from all sections via their refs
-  const readAllSections = useCallback(() => {
-    return sections.map(s => {
-      const reader = contentReadersRef.current[s.id];
-      if (reader) {
-        const { text, html } = reader();
-        return { ...s, content: text, html };
-      }
-      return s;
-    });
-  }, [sections]);
+  const getEditedData = useCallback(() => {
+    return buildEditedData(sections);
+  }, [sections, buildEditedData]);
 
+  // ─── Content change handler (called by SectionBlock on every keystroke) ───
+  const draftDebounceRef = useRef(null);
+
+  const handleContentChange = useCallback((id, newContent) => {
+    setSections(prev => {
+      const next = prev.map(s =>
+        s.id === id ? { ...s, content: newContent } : s
+      );
+      // Keep ref in sync immediately so unmount flush always has latest data
+      sectionsRef.current = next;
+      return next;
+    });
+
+    // Debounced push to parent for preview sync
+    if (onDraftChangeRef.current) {
+      if (draftDebounceRef.current) clearTimeout(draftDebounceRef.current);
+      draftDebounceRef.current = setTimeout(() => {
+        const data = buildEditedData(sectionsRef.current);
+        onDraftChangeRef.current(data.plan, data.supplements, data.recipes);
+      }, 300);
+    }
+  }, [buildEditedData]);
+
+  // Expose getEditedData to parent via ref callback
+  useEffect(() => {
+    if (getEditedDataRef) getEditedDataRef.current = getEditedData;
+  }, [getEditedData, getEditedDataRef]);
+
+  // Flush debounce on unmount — uses refs to always read latest state
+  useEffect(() => {
+    return () => {
+      if (draftDebounceRef.current) {
+        clearTimeout(draftDebounceRef.current);
+      }
+      // Always flush latest sections to parent on unmount
+      if (onDraftChangeRef.current) {
+        const data = buildEditedData(sectionsRef.current);
+        onDraftChangeRef.current(data.plan, data.supplements, data.recipes);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Section operations ───
   const handleDelete = useCallback((id) => {
     setSections(prev => prev.filter(s => s.id !== id));
-    delete contentReadersRef.current[id];
     setSaved(false);
   }, []);
 
   const handleReset = useCallback((id) => {
-    setActiveSectionId(null);
     setSections(prev => prev.map(s =>
-      s.id === id ? { ...s, content: s.originalContent, html: markdownToHtml(s.originalContent) } : s
+      s.id === id ? { ...s, content: s.originalContent } : s
     ));
-    setResetCounter(c => c + 1);
     setSaved(false);
   }, []);
 
@@ -595,74 +432,52 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     if (!confirm('Reinitialiser tout le contenu au plan original de l\'IA ?')) return;
     setActiveSectionId(null);
     setSections(parsePlanToSections(planText, supplementsText, recipesText));
-    setResetCounter(c => c + 1);
     setSaved(false);
   };
 
   const handleAddSection = () => {
     const title = newSectionTitle.trim();
     if (!title) return;
-    // Snapshot current edited state so we don't lose user edits when re-rendering
-    const currentEdited = readAllSections();
     const newSection = {
       id: crypto.randomUUID(),
       title: title.toUpperCase(),
       content: '',
-      html: '',
       originalContent: '',
     };
-    // Insert before the "Notes" section if present, otherwise at the end
-    const notesIdx = currentEdited.findIndex(s => /^notes?\b/i.test(s.title));
-    const next = [...currentEdited];
-    if (notesIdx >= 0) {
-      next.splice(notesIdx, 0, newSection);
-    } else {
-      next.push(newSection);
-    }
-    setSections(next);
+    setSections(prev => {
+      const notesIdx = prev.findIndex(s => /^notes?\b/i.test(s.title));
+      const next = [...prev];
+      if (notesIdx >= 0) {
+        next.splice(notesIdx, 0, newSection);
+      } else {
+        next.push(newSection);
+      }
+      return next;
+    });
     setNewSectionTitle('');
     setShowAddSection(false);
     setSaved(false);
   };
 
-  // ─── Reorder sections via up/down buttons ───
   const moveSection = useCallback((id, direction) => {
-    // Snapshot current edited content from the DOM so nothing gets lost
-    const current = readAllSections();
-    const idx = current.findIndex(s => s.id === id);
-    if (idx === -1) return;
-    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= current.length) return;
-    const next = [...current];
-    [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-    setSections(next);
+    setSections(prev => {
+      const idx = prev.findIndex(s => s.id === id);
+      if (idx === -1) return prev;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
     setSaved(false);
-    // Flash animation on the moved section
     setJustMovedId(id);
     setTimeout(() => {
       setJustMovedId(prev => (prev === id ? null : prev));
     }, 1000);
-  }, [readAllSections]);
+  }, []);
 
   const handleMoveUp = useCallback((id) => moveSection(id, 'up'), [moveSection]);
   const handleMoveDown = useCallback((id) => moveSection(id, 'down'), [moveSection]);
-
-  const getEditedData = useCallback(() => {
-    const current = readAllSections();
-    const suppSection = current.find(s => /suppl[eé]ments?/i.test(s.title));
-    const recSection = current.find(s => /recettes?/i.test(s.title));
-    const planSections = current.filter(s => s !== suppSection && s !== recSection);
-    return {
-      plan: planSections.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n'),
-      supplements: suppSection?.content || '',
-      recipes: recSection?.content || '',
-    };
-  }, [readAllSections]);
-
-  // Expose getEditedData to parent via ref callback
-  useEffect(() => {
-    if (getEditedDataRef) getEditedDataRef.current = getEditedData;
-  }, [getEditedData, getEditedDataRef]);
 
   const handleSave = () => {
     const d = getEditedData();
@@ -671,7 +486,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     setTimeout(() => setSaved(false), 3000);
   };
 
-  // Profile summary (read-only)
+  // Profile summary
   const profileLines = [
     form?.age ? `Age : ${form.age} ans` : '',
     form?.genre || '',
@@ -698,10 +513,9 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         <SectionBlock
           key={section.id}
           section={section}
-          onContentRead={handleContentRead}
+          onContentChange={handleContentChange}
           onDelete={handleDelete}
           onReset={handleReset}
-          resetCounter={resetCounter}
           onMoveUp={handleMoveUp}
           onMoveDown={handleMoveDown}
           canMoveUp={idx > 0}
@@ -739,10 +553,9 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         )}
       </div>
 
-      {/* Action buttons — restructured (hidden when parent cockpit provides them) */}
+      {/* Action buttons (hidden when parent cockpit provides them) */}
       {!hideActions && (
       <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Action principale */}
         <div style={{ borderRadius: 14, border: '1px solid rgba(42,157,92,.35)', background: 'rgba(26,58,42,.25)', padding: '16px 18px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div className="ne-actions-responsive" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -760,7 +573,6 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           </div>
         </div>
 
-        {/* Actions secondaires */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           <button type="button" className="btn btn-anissa-secondary" style={{ borderRadius: 12, padding: '10px 16px', fontSize: '.84rem' }} onClick={() => {
             const d = getEditedData();
@@ -776,7 +588,6 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           </button>
         </div>
 
-        {/* Outils avances */}
         <div style={{ borderRadius: 14, border: '1px solid rgba(255,255,255,.08)', background: 'rgba(255,255,255,.03)' }}>
           <button type="button" onClick={() => setShowAdvanced(v => !v)} style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
             <div>
