@@ -81,7 +81,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
         padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 10,
         cursor: isOwn && onOpen ? 'pointer' : 'default',
         transition: 'all .2s',
         position: 'relative',
@@ -178,7 +178,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       {/* ACTION PRINCIPALE */}
       <button
         className="btn btn-sm btn-anissa-primary"
-        style={{ width: '100%', marginTop: 'auto' }}
+        style={{ width: '100%' }}
         onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
       >
         + Nouvelle consultation
@@ -324,10 +324,6 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           {/* Own clients section */}
           {filteredOwn.length > 0 && (
             <div className="anissa-section">
-              <h3 className="anissa-section-title">
-                Mes clients
-                <span className="anissa-section-count">{filteredOwn.length}</span>
-              </h3>
               <div className="client-grid">
                 {filteredOwn.map((client, i) => (
                   <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} />
