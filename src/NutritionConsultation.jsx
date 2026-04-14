@@ -1881,6 +1881,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const scoreDebounceRef = useRef(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [analyzingPlan, setAnalyzingPlan] = useState(false);
+  const [improvingAll, setImprovingAll] = useState(false);
+  const [globalProposal, setGlobalProposal] = useState(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   // 'saved' | 'unsaved' | 'saving'
   const autoSaveTimerRef = useRef(null);
@@ -2001,6 +2003,45 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }, 1500);
     return () => clearTimeout(scoreDebounceRef.current);
   }, [planDraft, supplementsDraft, form, isFollowup, followupWeek, weeklyFeedback]);
+
+  const handleImproveFromAnalysis = async (instruction, targetHint) => {
+    setAiAnalysis(null);
+    await new Promise(r => setTimeout(r, 150));
+    showSaveToast(`\u2728 IA en cours \u2014 ${instruction}`);
+    try {
+      const { improveSection } = await import('./services/aiClient');
+      const result = await improveSection(
+        form,
+        targetHint || 'Plan complet',
+        planDraft,
+        'adapt'
+      );
+      if (result) {
+        setGlobalProposal({ text: result, instruction });
+      }
+    } catch (err) {
+      showSaveToast('Erreur IA \u2014 r\u00e9essayez');
+    }
+  };
+
+  const handleImproveAll = async () => {
+    setImprovingAll(true);
+    setAiAnalysis(null);
+    try {
+      const { improveSection } = await import('./services/aiClient');
+      const result = await improveSection(
+        form,
+        'Plan nutritionnel complet',
+        planDraft,
+        'improve'
+      );
+      if (result) setGlobalProposal({ text: result, instruction: 'Plan am\u00e9lior\u00e9' });
+    } catch (err) {
+      showSaveToast('Erreur IA \u2014 r\u00e9essayez');
+    } finally {
+      setImprovingAll(false);
+    }
+  };
 
   const updateField = (field, value) => {
     setConsultation(prev => ({ ...prev, [field]: value }));
@@ -3544,57 +3585,199 @@ ${suppText}`;
               {analysesError && <div className="error-msg" style={{ marginTop: 4, background: 'rgba(212,92,76,.08)', padding: '8px 12px', borderRadius: 8, fontSize: '.78rem' }}>{analysesError}</div>}
             </div>
 
+            {/* Global AI proposal panel */}
+            {globalProposal && (
+              <div style={{
+                margin: '8px 0',
+                padding: '14px 18px',
+                background: 'rgba(26,58,42,.4)',
+                border: '1px solid rgba(106,191,138,.25)',
+                borderRadius: 12,
+                animation: 'neSlideIn .2s ease',
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                  <span style={{ fontSize:'.72rem', fontWeight:700, color:'rgba(106,191,138,.7)',
+                    textTransform:'uppercase', letterSpacing:'.4px' }}>
+                    {'\u2728'} Proposition IA {'\u2014'} {globalProposal.instruction}
+                  </span>
+                  <span style={{ fontSize:'.7rem', color:'rgba(255,255,255,.3)', marginLeft:'auto' }}>
+                    Pr{'\u00e9'}visualisation {'\u2014'} non appliqu{'\u00e9'}
+                  </span>
+                </div>
+                <div style={{
+                  background:'rgba(0,0,0,.25)', borderRadius:8, padding:'12px 14px',
+                  fontSize:'.8rem', lineHeight:1.65, color:'#d4c9a8',
+                  whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto',
+                  border:'1px solid rgba(255,255,255,.06)',
+                }}>
+                  {globalProposal.text.slice(0, 600)}{globalProposal.text.length > 600 ? '...' : ''}
+                </div>
+                <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                  <button
+                    onClick={() => {
+                      reseedEditor(globalProposal.text, supplementsDraft, recipesDraft);
+                      setGlobalProposal(null);
+                      showSaveToast('Plan mis \u00e0 jour');
+                    }}
+                    style={{
+                      padding:'6px 16px', borderRadius:8, border:'none',
+                      background:'rgba(106,191,138,.2)', color:'#8abf9a',
+                      cursor:'pointer', fontSize:'.8rem', fontWeight:600,
+                    }}>
+                    {'\u2705'} Appliquer au plan
+                  </button>
+                  <button
+                    onClick={() => setGlobalProposal(null)}
+                    style={{
+                      padding:'6px 16px', borderRadius:8,
+                      border:'1px solid rgba(255,255,255,.08)',
+                      background:'none', color:'rgba(255,255,255,.35)',
+                      cursor:'pointer', fontSize:'.8rem',
+                    }}>
+                    {'\u274c'} Ignorer
+                  </button>
+                </div>
+              </div>
+            )}
+
             {showQualityDash && <NutritionQualityDashboard />}
 
             {/* AI Analysis modal */}
             {aiAnalysis && (
               <div className="modal-overlay" onClick={() => setAiAnalysis(null)}>
                 <div className="modal-content" onClick={e => e.stopPropagation()}
-                  style={{ maxWidth: 520, padding: 28 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:20 }}>
-                    <strong style={{ fontSize:'1rem', color:'#f0f0e8' }}>{'\ud83d\udd0d'} Analyse IA du plan</strong>
+                  style={{ maxWidth: 520, padding: 0 }}>
+
+                  {/* Header */}
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                    padding:'18px 20px', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+                    <strong style={{ fontSize:'.95rem', color:'#f0f0e8' }}>{'\ud83d\udd0d'} Analyse IA du plan</strong>
                     <button onClick={() => setAiAnalysis(null)}
-                      style={{ background:'none', border:'none', color:'#b0c4a8', cursor:'pointer', fontSize:'1.2rem' }}>{'\u2715'}</button>
+                      style={{ background:'none', border:'none', color:'#b0c4a8',
+                        cursor:'pointer', fontSize:'1.2rem' }}>{'\u2715'}</button>
                   </div>
-                  <div style={{ textAlign:'center', marginBottom:20 }}>
-                    <div style={{ fontSize:'2.5rem', fontWeight:700,
-                      color: aiAnalysis.score >= 80 ? '#4ade80' : aiAnalysis.score >= 60 ? '#fbbf24' : '#f87171' }}>
-                      {aiAnalysis.score}/100
+
+                  <div style={{ padding:'18px 20px', display:'flex', flexDirection:'column', gap:16 }}>
+
+                    {/* Score + verdict */}
+                    <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+                      <div style={{ fontSize:'2rem', fontWeight:800, minWidth:70,
+                        color: aiAnalysis.score >= 80 ? '#4ade80'
+                             : aiAnalysis.score >= 60 ? '#fbbf24' : '#f87171' }}>
+                        {aiAnalysis.score}/100
+                      </div>
+                      <div style={{ fontSize:'.82rem', color:'#b0c4a8', lineHeight:1.5,
+                        fontStyle:'italic', flex:1 }}>
+                        {aiAnalysis.verdict}
+                      </div>
                     </div>
-                    <div style={{ fontSize:'.85rem', color:'#b0c4a8', marginTop:4, fontStyle:'italic' }}>
-                      {aiAnalysis.verdict}
-                    </div>
+
+                    {/* Points forts */}
+                    {aiAnalysis.strengths?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize:'.68rem', fontWeight:700, color:'#4ade80',
+                          textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>
+                          {'\u2705'} Points forts
+                        </div>
+                        {aiAnalysis.strengths.slice(0, 3).map((s, i) => (
+                          <div key={i} style={{ fontSize:'.8rem', color:'#b0c4a8',
+                            paddingLeft:10, borderLeft:'2px solid rgba(74,222,128,.25)',
+                            marginBottom:5, lineHeight:1.4 }}>{s}</div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Points d'attention avec bouton Appliquer */}
+                    {aiAnalysis.issues?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize:'.68rem', fontWeight:700, color:'#fbbf24',
+                          textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>
+                          {'\u26a0\ufe0f'} {'\u00c0'} corriger
+                        </div>
+                        {aiAnalysis.issues.slice(0, 4).map((issue, i) => (
+                          <div key={i} style={{
+                            display:'flex', alignItems:'flex-start', gap:10,
+                            padding:'7px 10px', marginBottom:5, borderRadius:8,
+                            background:'rgba(251,191,36,.05)',
+                            border:'1px solid rgba(251,191,36,.1)',
+                          }}>
+                            <span style={{ fontSize:'.79rem', color:'#b0c4a8',
+                              flex:1, lineHeight:1.4 }}>{issue}</span>
+                            <button
+                              onClick={() => handleImproveFromAnalysis(issue, null)}
+                              style={{
+                                padding:'3px 10px', borderRadius:6, border:'none',
+                                background:'rgba(251,191,36,.15)', color:'#fbbf24',
+                                cursor:'pointer', fontSize:'.72rem', fontWeight:600,
+                                whiteSpace:'nowrap', flexShrink:0, transition:'all .15s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background='rgba(251,191,36,.28)'}
+                              onMouseLeave={e => e.currentTarget.style.background='rgba(251,191,36,.15)'}
+                            >
+                              Appliquer
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Quick wins avec bouton Appliquer */}
+                    {aiAnalysis.quickWins?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize:'.68rem', fontWeight:700, color:'#60a5fa',
+                          textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>
+                          {'\u26a1'} Am{'\u00e9'}liorations rapides
+                        </div>
+                        {aiAnalysis.quickWins.map((win, i) => (
+                          <div key={i} style={{
+                            display:'flex', alignItems:'flex-start', gap:10,
+                            padding:'7px 10px', marginBottom:5, borderRadius:8,
+                            background:'rgba(96,165,250,.05)',
+                            border:'1px solid rgba(96,165,250,.1)',
+                          }}>
+                            <span style={{ fontSize:'.79rem', color:'#b0c4a8',
+                              flex:1, lineHeight:1.4 }}>{win}</span>
+                            <button
+                              onClick={() => handleImproveFromAnalysis(win, null)}
+                              style={{
+                                padding:'3px 10px', borderRadius:6, border:'none',
+                                background:'rgba(96,165,250,.15)', color:'#60a5fa',
+                                cursor:'pointer', fontSize:'.72rem', fontWeight:600,
+                                whiteSpace:'nowrap', flexShrink:0, transition:'all .15s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background='rgba(96,165,250,.28)'}
+                              onMouseLeave={e => e.currentTarget.style.background='rgba(96,165,250,.15)'}
+                            >
+                              Appliquer
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Bouton Améliorer tout */}
+                    <button
+                      onClick={handleImproveAll}
+                      disabled={improvingAll}
+                      style={{
+                        width:'100%', padding:'10px', borderRadius:10,
+                        border:'1px solid rgba(106,191,138,.3)',
+                        background: improvingAll ? 'rgba(106,191,138,.08)' : 'rgba(106,191,138,.12)',
+                        color: improvingAll ? 'rgba(106,191,138,.5)' : '#8abf9a',
+                        cursor: improvingAll ? 'not-allowed' : 'pointer',
+                        fontSize:'.85rem', fontWeight:600, transition:'all .2s',
+                        display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                      }}
+                      onMouseEnter={e => { if (!improvingAll) e.currentTarget.style.background='rgba(106,191,138,.2)'; }}
+                      onMouseLeave={e => { if (!improvingAll) e.currentTarget.style.background='rgba(106,191,138,.12)'; }}
+                    >
+                      {improvingAll
+                        ? <><span style={{animation:'neSpin .8s linear infinite',display:'inline-block'}}>{'\u2728'}</span> Analyse en cours...</>
+                        : '\u2728 Am\u00e9liorer tout le plan'
+                      }
+                    </button>
+
                   </div>
-                  {aiAnalysis.strengths?.length > 0 && (
-                    <div style={{ marginBottom:14 }}>
-                      <div style={{ fontSize:'.72rem', fontWeight:700, color:'#4ade80',
-                        textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>{'\u2705'} Points forts</div>
-                      {aiAnalysis.strengths.map((s,i) => (
-                        <div key={i} style={{ fontSize:'.82rem', color:'#b0c4a8', padding:'3px 0',
-                          paddingLeft:12, borderLeft:'2px solid rgba(74,222,128,.3)', marginBottom:4 }}>{s}</div>
-                      ))}
-                    </div>
-                  )}
-                  {aiAnalysis.issues?.length > 0 && (
-                    <div style={{ marginBottom:14 }}>
-                      <div style={{ fontSize:'.72rem', fontWeight:700, color:'#fbbf24',
-                        textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>{'\u26a0\ufe0f'} Points d'attention</div>
-                      {aiAnalysis.issues.map((s,i) => (
-                        <div key={i} style={{ fontSize:'.82rem', color:'#b0c4a8', padding:'3px 0',
-                          paddingLeft:12, borderLeft:'2px solid rgba(251,191,36,.3)', marginBottom:4 }}>{s}</div>
-                      ))}
-                    </div>
-                  )}
-                  {aiAnalysis.quickWins?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize:'.72rem', fontWeight:700, color:'#60a5fa',
-                        textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>{'\u26a1'} Am{'\u00e9'}liorations rapides</div>
-                      {aiAnalysis.quickWins.map((s,i) => (
-                        <div key={i} style={{ fontSize:'.82rem', color:'#b0c4a8', padding:'3px 0',
-                          paddingLeft:12, borderLeft:'2px solid rgba(96,165,250,.3)', marginBottom:4 }}>{s}</div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
