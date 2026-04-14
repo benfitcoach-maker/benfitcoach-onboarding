@@ -78,10 +78,11 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
         border: '1px solid rgba(255,255,255,.08)',
         borderTop: `3px solid ${urgencyColor === 'transparent' ? 'rgba(106,191,138,.3)' : urgencyColor}`,
         borderRadius: 14,
-        padding: '16px',
+        padding: '20px',
+        minHeight: 160,
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 14,
         cursor: isOwn && onOpen ? 'pointer' : 'default',
         transition: 'all .2s',
         position: 'relative',
@@ -92,7 +93,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       {/* TOP : Avatar + Nom + Menu */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{
-          width: 42, height: 42, borderRadius: '50%',
+          width: 48, height: 48, borderRadius: '50%',
           background: 'rgba(106,191,138,.15)',
           border: '1.5px solid rgba(106,191,138,.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -101,11 +102,11 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           {getInitial(client.prenom)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text)',
+          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {client.prenom || 'Sans nom'}
           </div>
-          <div style={{ fontSize: '.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+          <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: 2 }}>
             {consultations.length > 0
               ? `${consultations.length} consultation${consultations.length > 1 ? 's' : ''} \u00b7 derni\u00e8re ${formatDate(lastConsultation?.date)}`
               : 'Aucune consultation'}
