@@ -1780,6 +1780,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [step, setStep] = useState(() => (isFollowup ? 3 : 2));
   const [consultation, setConsultation] = useState(() => {
     if (initialConsultation) {
+      console.log('[MGD RESTORE] initialConsultation:', {
+        mgdRecommendation: initialConsultation?.mgdRecommendation,
+        mgd_recommendation: initialConsultation?.mgd_recommendation,
+        bloodTestDone: initialConsultation?.bloodTestDone,
+        dnaTestDone: initialConsultation?.dnaTestDone,
+      });
       return {
         observations: initialConsultation.observations || '',
         blood_test_done: initialConsultation.bloodTestDone || initialConsultation.blood_test_done || false,
