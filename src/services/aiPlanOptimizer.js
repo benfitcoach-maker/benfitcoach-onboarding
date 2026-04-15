@@ -288,6 +288,24 @@ export async function adaptPlanForReturn(form, lastPlan, diagnostic) {
     ? `Ce qui n'a pas fonctionné : ${diagnostic.whatFailed.join(', ')}`
     : '';
 
+  const weightContext = diagnostic.weightAnalysis
+    ? [
+        `Poids de départ : ${diagnostic.weightAnalysis.start} kg`,
+        `Poids actuel estimé : ${diagnostic.weightAnalysis.end} kg`,
+        diagnostic.weightAnalysis.totalLoss !== 0
+          ? `Évolution : ${diagnostic.weightAnalysis.totalLoss > 0
+              ? `-${diagnostic.weightAnalysis.totalLoss} kg perdu`
+              : `+${Math.abs(diagnostic.weightAnalysis.totalLoss)} kg repris`}`
+          : '',
+        diagnostic.weightAnalysis.hasRebound
+          ? `Reprise après plateau : +${diagnostic.weightAnalysis.reboundFromTrough} kg`
+          : '',
+        diagnostic.weightAnalysis.isStagnant
+          ? 'Stagnation pondérale observée sur plusieurs mesures'
+          : '',
+      ].filter(Boolean).join('\n')
+    : '';
+
   const system = `Tu es Anissa, nutritionniste experte.
 Tu crées un plan de reprise pour un client qui revient après ${diagnostic.daysSinceLastConsult} jours d'absence.
 
@@ -298,6 +316,8 @@ HISTORIQUE :
 ${whatWorkedText}
 ${whatFailedText}
 Recommandation : ${diagnostic.recommendation}
+${weightContext ? `\nCOURBE POIDS :\n${weightContext}` : ''}
+${diagnostic.cycleContext ? `\nCONTEXTE CYCLES : ${diagnostic.cycleContext}` : ''}
 
 DIRECTIVE PRINCIPALE :
 ${directive}

@@ -1,14 +1,19 @@
 import { getNutritionConsultations } from '../store';
 
-const RETURN_THRESHOLD_DAYS = 90;
+function getReturnThreshold(consultationCount) {
+  if (consultationCount >= 5) return 60;
+  if (consultationCount >= 3) return 75;
+  return 90;
+}
 
 // Détecte si un client est en mode "reprise"
 export function isReturnClient(client) {
   const consultations = getNutritionConsultations(client.id);
   if (!consultations.length) return false;
+  const threshold = getReturnThreshold(consultations.length);
   const lastDate = new Date(consultations[0].createdAt || consultations[0].date);
   const diffDays = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
-  return diffDays > RETURN_THRESHOLD_DAYS;
+  return diffDays > threshold;
 }
 
 // Retourne le nombre de jours depuis la dernière consultation
@@ -44,6 +49,35 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
         end: last,
         diff: Math.round(diff * 10) / 10,
         direction: diff < -1 ? 'loss' : diff > 1 ? 'gain' : 'stable',
+      };
+    }
+  }
+
+  // Analyse détaillée de la courbe poids
+  let weightAnalysis = null;
+  if (progression.length >= 2) {
+    const weights = progression
+      .map(p => ({ date: p.date, kg: Number(p.poids) }))
+      .filter(p => !isNaN(p.kg));
+
+    if (weights.length >= 2) {
+      const start = weights[0].kg;
+      const end = weights[weights.length - 1].kg;
+      const peak = Math.max(...weights.map(w => w.kg));
+      const trough = Math.min(...weights.map(w => w.kg));
+      const totalLoss = start - end;
+      const reboundFromTrough = end - trough;
+
+      weightAnalysis = {
+        start,
+        end,
+        totalLoss: Math.round(totalLoss * 10) / 10,
+        peak,
+        trough,
+        reboundFromTrough: Math.round(reboundFromTrough * 10) / 10,
+        hasRebound: reboundFromTrough > 1.5,
+        isStagnant: Math.abs(totalLoss) < 0.5 && weights.length > 3,
+        measureCount: weights.length,
       };
     }
   }
@@ -102,13 +136,24 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
   let returnProfile = 'standard';
   if (whatFailed.includes('Adhérence insuffisante au plan précédent') ||
       whatFailed.includes('Plan jugé trop complexe à suivre')) {
-    returnProfile = 'simplify'; // simplifier fortement
+    returnProfile = 'simplify';
   } else if (weightTrend?.direction === 'stable' && consultations.length > 1) {
-    returnProfile = 'recalibrate'; // changer de stratégie
+    returnProfile = 'recalibrate';
   } else if (weightTrend?.direction === 'loss' && lastReview?.progress !== 'yes') {
-    returnProfile = 'stabilize'; // stabilisation + relance
+    returnProfile = 'stabilize';
   } else if (lastReview?.adherence === '100' && lastReview?.progress === 'none') {
-    returnProfile = 'metabolic'; // ajustement métabolique
+    returnProfile = 'metabolic';
+  }
+
+  // Affiner le profil avec la courbe poids réelle
+  if (weightAnalysis) {
+    if (weightAnalysis.hasRebound && weightAnalysis.reboundFromTrough > 3) {
+      returnProfile = 'stabilize';
+    } else if (weightAnalysis.isStagnant && consultations.length > 2) {
+      returnProfile = 'recalibrate';
+    } else if (weightAnalysis.totalLoss > 3 && weightAnalysis.hasRebound) {
+      returnProfile = 'stabilize';
+    }
   }
 
   // Recommandation principale
@@ -120,6 +165,17 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
     standard:    'Reprise progressive avec les acquis du cycle précédent.',
   };
 
+  // Contexte cycles
+  const cycleCount = consultations.length;
+  let cycleContext = '';
+  if (cycleCount === 1) {
+    cycleContext = 'Premier retour — repartir sur des bases solides.';
+  } else if (cycleCount === 2) {
+    cycleContext = 'Deuxième cycle — identifier ce qui a vraiment bloqué.';
+  } else if (cycleCount >= 3) {
+    cycleContext = `${cycleCount} cycles au compteur — plan expert, éviter la répétition.`;
+  }
+
   return {
     lastGoal,
     daysSinceLastConsult: days,
@@ -129,11 +185,13 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
       label: c.label || 'Plan généré',
     })),
     weightTrend,
+    weightAnalysis,
     whatWorked,
     whatFailed,
     probableCauses,
     returnProfile,
     recommendation: recommendations[returnProfile],
     lastConsultation,
+    cycleContext,
   };
 }
