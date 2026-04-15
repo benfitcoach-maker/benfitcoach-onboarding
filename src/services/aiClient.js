@@ -211,3 +211,72 @@ R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
     return null;
   }
 }
+
+export async function analyzeCycleReview(form, review) {
+  const context = [
+    form?.prenom         ? `Client : ${form.prenom}` : '',
+    form?.age            ? `\u00c2ge : ${form.age} ans` : '',
+    form?.objectifPrincipalNutrition
+                         ? `Objectif : ${form.objectifPrincipalNutrition}` : '',
+    form?.allergies      ? `Allergies : ${form.allergies}` : '',
+    form?.pathologies    ? `Pathologies : ${form.pathologies}` : '',
+  ].filter(Boolean).join('\n');
+
+  const adherenceLabel = {
+    '100': 'Tous les jours',
+    '75': '75% du temps',
+    '50': '50% du temps',
+    '<50': 'Moins de 50%',
+  }[review.adherence] || review.adherence;
+
+  const reviewSummary = [
+    `Adh\u00e9rence : ${adherenceLabel}`,
+    `\u00c9carts : ${review.cheats === 'none' ? 'Aucun' : review.cheats === 'occasional' ? 'Occasionnels' : 'Fr\u00e9quents'}`,
+    `Progression : ${review.progress === 'yes' ? 'Oui' : review.progress === 'little' ? 'Un peu' : 'Pas encore'}`,
+    `\u00c9nergie : ${review.energy === 'high' ? 'Meilleure' : review.energy === 'normal' ? 'Stable' : 'Moins bonne'}`,
+    `Digestion : ${review.digestion === 'good' ? 'Bonne' : review.digestion === 'average' ? 'Moyenne' : 'Difficile'}`,
+    `Difficult\u00e9 plan : ${review.difficulty === 'easy' ? 'Facile' : review.difficulty === 'ok' ? 'Correct' : 'Trop difficile'}`,
+    `Organisation : ${review.organisation === 'simple' ? 'Simple' : review.organisation === 'medium' ? 'G\u00e9rable' : 'Compliqu\u00e9e'}`,
+    `Probl\u00e8me principal : ${review.main_issue || 'Non pr\u00e9cis\u00e9'}`,
+    review.main_issue_text ? `Commentaire : ${review.main_issue_text}` : '',
+  ].filter(Boolean).join('\n');
+
+  const system = `Tu es Anissa, nutritionniste experte.
+Tu analyses le bilan 4 semaines d'une cliente et tu pr\u00e9pares les recommandations pour le prochain cycle.
+
+PROFIL CLIENT :
+${context}
+
+R\u00c8GLES D'\u00c9CRITURE :
+- Phrases courtes et directes
+- Pas de gras, pas de titres markdown
+- Pas de "Il est important de", "N'h\u00e9sitez pas", "Id\u00e9alement"
+- Ton de nutritionniste expert qui parle \u00e0 une coll\u00e8gue coach
+- R\u00e9ponds UNIQUEMENT en JSON valide sans markdown
+
+Format de r\u00e9ponse :
+{
+  "diagnostic": "1-2 phrases max \u2014 ce qui ressort principalement",
+  "cause_dominante": "la cause principale du r\u00e9sultat (positif ou n\u00e9gatif)",
+  "scores": {
+    "adherence": <0-10>,
+    "resultats": <0-10>,
+    "bien_etre": <0-10>
+  },
+  "recommandations": ["recommandation 1", "recommandation 2", "recommandation 3"],
+  "prochain_cycle": "1 phrase \u2014 priorit\u00e9 pour le prochain cycle"
+}`;
+
+  const text = await aiRequest(
+    system,
+    `Bilan 4 semaines :\n${reviewSummary}`,
+    800
+  );
+
+  try {
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}

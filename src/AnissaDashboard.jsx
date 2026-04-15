@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews } from './store';
 import { getCurrentUser } from './supabaseClient';
+import CycleReviewPanel from './CycleReviewPanel';
 
 function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
   const handleSend = (e) => {
@@ -49,9 +50,10 @@ function getFollowUpStatus(clientId) {
   return null;
 }
 
-function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh }) {
+function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('loading');
+  const [latestReview, setLatestReview] = useState(null);
   const consultations = getNutritionConsultations(client.id);
   const followUp = getFollowUpStatus(client.id);
   const lastConsultation = consultations[0];
@@ -60,6 +62,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
     getCycleReviews(client.id).then(reviews => {
       if (!reviews.length) { setReviewStatus('not_sent'); return; }
       const latest = reviews[0];
+      setLatestReview(latest);
       setReviewStatus(latest.status);
     });
   }, [client.id]);
@@ -221,11 +224,24 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
 
               {/* Badge statut bilan */}
-              {reviewStatus === 'submitted' && (
-                <div style={{ padding:'8px 14px', fontSize:'.78rem',
-                  color:'#4ade80', display:'flex', alignItems:'center', gap:6 }}>
-                  🟢 Bilan reçu
-                </div>
+              {reviewStatus === 'submitted' && latestReview && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onViewReview(latestReview, client);
+                  }}
+                  style={{
+                    display:'block', width:'100%', textAlign:'left',
+                    padding:'10px 16px', background:'none', border:'none',
+                    color:'#4ade80', cursor:'pointer', fontSize:'.85rem',
+                    transition:'background .15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(74,222,128,.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background='none'}
+                >
+                  {'\ud83d\udfe2'} Bilan re\u00e7u — Voir le d\u00e9tail
+                </button>
               )}
               {reviewStatus === 'sent' && (
                 <div style={{ padding:'8px 14px', fontSize:'.78rem',
@@ -267,6 +283,8 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
 
 export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh }) {
   const [search, setSearch] = useState('');
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [selectedReviewClient, setSelectedReviewClient] = useState(null);
 
   useEffect(() => {
     const close = () => {};
@@ -393,7 +411,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               </h3>
               <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} />
                 ))}
               </div>
             </div>
@@ -404,7 +422,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             <div className="anissa-section">
               <div className="anissa-client-list">
                 {filteredOwn.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} />
                 ))}
               </div>
             </div>
@@ -416,6 +434,15 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             </div>
           )}
         </>
+      )}
+
+      {selectedReview && (
+        <CycleReviewPanel
+          review={selectedReview}
+          client={selectedReviewClient}
+          onClose={() => { setSelectedReview(null); setSelectedReviewClient(null); }}
+          onOpenConsultation={onConsultation}
+        />
       )}
     </div>
   );
