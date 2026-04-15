@@ -166,6 +166,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
             color:'#4ade80',
             border:'1px solid rgba(74,222,128,.2)',
             marginBottom: 4,
+            pointerEvents: 'none',
           }}>
             ✓ Bilan reçu
           </span>
@@ -189,7 +190,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
         </button>
         <div style={{ position: 'relative' }}>
           <button
-            onClick={() => setMenuOpen(m => !m)}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--text-muted)', fontSize: '1.2rem', padding: '4px 8px',
