@@ -2298,10 +2298,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     const mgdSymptoms = detectSymptomsFromForm(form);
     const mgdRec = consultation.mgd_recommendation || 'none';
     const mgdRecLabel = mgdRec === 'advanced'
-      ? 'Bilan avanc\u00e9 recommand\u00e9 (sanguin + ADN)'
+      ? 'Bilan avancé recommandé (sanguin + ADN)'
       : mgdRec === 'blood'
-      ? 'Bilan sanguin recommand\u00e9'
-      : 'Aucun test biologique recommand\u00e9';
+      ? 'Bilan sanguin recommandé'
+      : 'Aucun test biologique recommandé';
     parts.push('');
     parts.push(buildClinicalSummary(form, {
       mgdSymptoms,
@@ -2593,7 +2593,7 @@ ${suppText}`;
 
   const handleSave = () => {
     if (!consultation.mgd_recommendation) {
-      showSaveToast('S\u00e9lectionnez une recommandation biologique avant de sauvegarder');
+      showSaveToast('Sélectionnez une recommandation biologique avant de sauvegarder');
       return;
     }
 
@@ -2957,9 +2957,9 @@ ${suppText}`;
               fatigue: 'Fatigue', digestion: 'Digestion', bloating: 'Ballonnements',
               stress: 'Stress', sleep: 'Sommeil', cravings: 'Fringales sucre',
               inflammation: 'Inflammation', skin_hair: 'Peau / Cheveux',
-              weight_gain: 'Surpoids', metabolic: 'M\u00e9tabolisme',
-              female_hormones: 'Hormones f\u00e9minines', pms_cycle: 'SPM / Cycle',
-              thyroid: 'Thyro\u00efde', performance: 'Performance',
+              weight_gain: 'Surpoids', metabolic: 'Métabolisme',
+              female_hormones: 'Hormones féminines', pms_cycle: 'SPM / Cycle',
+              thyroid: 'Thyroïde', performance: 'Performance',
             };
             return (
               <div style={{
@@ -2975,7 +2975,7 @@ ${suppText}`;
                   textTransform: 'uppercase', letterSpacing: '.4px',
                   marginBottom: 8,
                 }}>
-                  Sympt\u00f4mes d\u00e9tect\u00e9s — suggestions automatiques
+                  Symptômes détectés — suggestions automatiques
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {symp.map(s => (
@@ -2990,7 +2990,7 @@ ${suppText}`;
                   ))}
                 </div>
                 <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.25)', marginTop: 6 }}>
-                  Ces suggestions sont bas\u00e9es sur le profil client. La d\u00e9cision finale reste la v\u00f4tre.
+                  Ces suggestions sont basées sur le profil client. La décision finale reste la vôtre.
                 </div>
               </div>
             );
@@ -3021,13 +3021,13 @@ ${suppText}`;
                 },
                 {
                   value: 'blood',
-                  label: 'Bilan sanguin recommand\u00e9',
-                  desc: 'Om\u00e9ga-3 \u00b7 Glyc\u00e9mie / Insuline \u00b7 CRP \u00b7 Vitamine D',
+                  label: 'Bilan sanguin recommandé',
+                  desc: 'Oméga-3 · Glycémie / Insuline · CRP · Vitamine D',
                   color: '#8abf9a',
                 },
                 {
                   value: 'advanced',
-                  label: 'Bilan avanc\u00e9 recommand\u00e9',
+                  label: 'Bilan avancé recommandé',
                   desc: 'Bilan sanguin complet + Test ADN nutritionnel',
                   color: '#c5b07a',
                 },
