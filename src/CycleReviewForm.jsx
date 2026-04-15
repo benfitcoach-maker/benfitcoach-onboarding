@@ -160,7 +160,6 @@ export default function CycleReviewForm({ token }) {
       <div className="q-container">
         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <img src={ANISSA_LOGO} alt="Anissa" style={{ height: 48, marginBottom: 20 }} />
-          <div style={{ fontSize: '2rem', marginBottom: 12 }}>✅</div>
           <h2 style={{ color: '#8abf9a', marginBottom: 8 }}>Bilan envoyé !</h2>
           <p style={{ color: '#b0c4a8', fontSize: '.88rem', lineHeight: 1.6 }}>
             Merci {clientName}. Anissa va analyser ton bilan
@@ -178,7 +177,7 @@ export default function CycleReviewForm({ token }) {
         <img src={ANISSA_LOGO} alt="Anissa" className="q-logo" />
         <h1 className="q-title">Bilan 4 semaines</h1>
         {clientName && (
-          <p className="q-subtitle">Bonjour {clientName} 👋</p>
+          <p className="q-subtitle">Bonjour {clientName}</p>
         )}
       </div>
 
