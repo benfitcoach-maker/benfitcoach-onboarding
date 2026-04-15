@@ -2598,6 +2598,7 @@ ${suppText}`;
     const recipesToSave = edited?.recipes ?? recipesDraft;
 
     const mgdRec = consultation.mgd_recommendation || 'none';
+    console.log('[MGD] mgd_recommendation at save:', consultation.mgd_recommendation, '→ mgdRec:', mgdRec);
     const bloodTestDone = mgdRec === 'blood' || mgdRec === 'advanced';
     const dnaTestDone = mgdRec === 'advanced';
 

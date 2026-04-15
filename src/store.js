@@ -716,12 +716,15 @@ export function deleteMassageSession(clientId, sessionId) {
 // ─── Nutrition Consultations ───
 
 export function getNutritionConsultations(clientId) {
-  return readNutritionConsultations()
+  const consultations = readNutritionConsultations()
     .filter(n => n.clientId === clientId)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
+  console.log('[STORE] loaded consultations mgd:', consultations.map(c => ({ id: c.id, mgd: c.mgdRecommendation })));
+  return consultations;
 }
 
 export function saveNutritionConsultation(consultation) {
+  console.log('[STORE] saving mgdRecommendation:', consultation.mgdRecommendation);
   const consultations = readNutritionConsultations();
   const entry = {
     id: consultation.id || crypto.randomUUID(),
