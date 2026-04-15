@@ -3279,9 +3279,20 @@ ${suppText}`;
                       <button
                         type="button"
                         onClick={() => {
-                          const btn = document.querySelector('.btn-generate, [class*="btn-generate"]');
-                          if (btn) { btn.scrollIntoView({ behavior: 'smooth' }); btn.focus(); }
-                          showSaveToast('Cliquez sur Régénérer pour intégrer les priorités MGD au plan');
+                          setStep(2);
+                          setTimeout(() => {
+                            const btns = document.querySelectorAll('button');
+                            const regenBtn = Array.from(btns).find(b =>
+                              b.textContent?.includes('Régénérer') ||
+                              b.textContent?.includes('Regenerer') ||
+                              b.textContent?.includes('Generer')
+                            );
+                            if (regenBtn && !regenBtn.disabled) {
+                              regenBtn.click();
+                            } else {
+                              showSaveToast('Allez dans "Plan nutrition" et cliquez Régénérer');
+                            }
+                          }, 300);
                         }}
                         style={{
                           width: '100%', marginTop: 12, padding: '9px',
