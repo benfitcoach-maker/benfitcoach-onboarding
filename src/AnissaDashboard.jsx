@@ -158,16 +158,18 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           </span>
         )}
         {reviewStatus === 'submitted' && (
-          <span style={{
-            display:'inline-flex', alignItems:'center', gap:4,
-            fontSize:'.7rem', fontWeight:600, padding:'2px 8px',
-            borderRadius:20, alignSelf:'flex-start',
-            background:'rgba(74,222,128,.1)',
-            color:'#4ade80',
-            border:'1px solid rgba(74,222,128,.2)',
-            marginBottom: 4,
-            pointerEvents: 'none',
-          }}>
+          <span
+            onClick={e => e.stopPropagation()}
+            style={{
+              display:'inline-flex', alignItems:'center', gap:4,
+              fontSize:'.7rem', fontWeight:600, padding:'2px 8px',
+              borderRadius:20, alignSelf:'flex-start',
+              background:'rgba(74,222,128,.1)',
+              color:'#4ade80',
+              border:'1px solid rgba(74,222,128,.2)',
+              marginBottom: 4,
+              cursor: 'default',
+            }}>
             ✓ Bilan reçu
           </span>
         )}
