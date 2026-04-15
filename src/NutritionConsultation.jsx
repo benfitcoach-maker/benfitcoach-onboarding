@@ -2296,6 +2296,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
     // Clinical summary (orientation for AI)
     const mgdSymptoms = detectSymptomsFromForm(form);
+    const mgdRec = consultation.mgd_recommendation || 'none';
+    const mgdRecLabel = mgdRec === 'advanced'
+      ? 'Bilan avanc\u00e9 recommand\u00e9 (sanguin + ADN)'
+      : mgdRec === 'blood'
+      ? 'Bilan sanguin recommand\u00e9'
+      : 'Aucun test biologique recommand\u00e9';
     parts.push('');
     parts.push(buildClinicalSummary(form, {
       mgdSymptoms,
@@ -2303,6 +2309,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       isFollowup,
       followupWeek,
     }));
+    parts.push(`Recommandation biologique Anissa : ${mgdRecLabel}`);
 
     parts.push('');
     parts.push(`Genere un plan nutrition personnalise COURT et PREMIUM. Format compact : synthese, regles, 2 trames de journees types (semaine 1), rotations et substitutions (semaines 2-4), fiche frigo, ajustements entrainement, suivi. PAS de menus detailles jour par jour. Lisible en 3 minutes.`);
@@ -2942,6 +2949,52 @@ ${suppText}`;
               }</div>
             </div>
           </div>
+
+          {(() => {
+            const symp = detectSymptomsFromForm(form);
+            if (!symp.length) return null;
+            const sympLabels = {
+              fatigue: 'Fatigue', digestion: 'Digestion', bloating: 'Ballonnements',
+              stress: 'Stress', sleep: 'Sommeil', cravings: 'Fringales sucre',
+              inflammation: 'Inflammation', skin_hair: 'Peau / Cheveux',
+              weight_gain: 'Surpoids', metabolic: 'M\u00e9tabolisme',
+              female_hormones: 'Hormones f\u00e9minines', pms_cycle: 'SPM / Cycle',
+              thyroid: 'Thyro\u00efde', performance: 'Performance',
+            };
+            return (
+              <div style={{
+                marginTop: 16, marginBottom: 8,
+                padding: '10px 14px',
+                background: 'rgba(106,191,138,.05)',
+                border: '1px solid rgba(106,191,138,.15)',
+                borderRadius: 10,
+              }}>
+                <div style={{
+                  fontSize: '.68rem', fontWeight: 700,
+                  color: 'rgba(106,191,138,.6)',
+                  textTransform: 'uppercase', letterSpacing: '.4px',
+                  marginBottom: 8,
+                }}>
+                  Sympt\u00f4mes d\u00e9tect\u00e9s — suggestions automatiques
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {symp.map(s => (
+                    <span key={s} style={{
+                      padding: '2px 8px', borderRadius: 20,
+                      background: 'rgba(106,191,138,.1)',
+                      border: '1px solid rgba(106,191,138,.2)',
+                      fontSize: '.72rem', color: '#8abf9a',
+                    }}>
+                      {sympLabels[s] || s}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.25)', marginTop: 6 }}>
+                  Ces suggestions sont bas\u00e9es sur le profil client. La d\u00e9cision finale reste la v\u00f4tre.
+                </div>
+              </div>
+            );
+          })()}
 
           <div style={{
             marginTop: 16,
@@ -3657,6 +3710,7 @@ ${suppText}`;
                         onClick={() => { setShowQualityDash(p => !p); setShowMoreMenu(false); }}>
                         Historique qualite IA
                       </button>
+                      {consultation.mgd_recommendation && consultation.mgd_recommendation !== 'none' && (
                       <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
                         onClick={() => {
                           setAnalysesError('');
@@ -3673,6 +3727,7 @@ ${suppText}`;
                         }}>
                         PDF analyses
                       </button>
+                      )}
                       <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
                         disabled={analyzingPlan || !hasPlan}
                         onClick={async () => {
