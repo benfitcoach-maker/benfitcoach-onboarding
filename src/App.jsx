@@ -38,6 +38,7 @@ import { getT } from './translations';
 import InterviewPanel from './InterviewPanel';
 import { applyInterviewNotesToForm } from './interviewTemplates';
 import QuestionnaireClient from './QuestionnaireClient';
+import CycleReviewForm from './CycleReviewForm';
 import Decouverte from './Decouverte';
 
 // Per-category short-label key map for the step navigator in the form header.
@@ -88,8 +89,18 @@ function getQuestionnaireClientId() {
   return match ? match[1] : null;
 }
 
+// Public cycle review route — no auth required
+function getCycleReviewToken() {
+  const match = window.location.pathname.match(/^\/review\/([a-f0-9-]+)$/i);
+  return match ? match[1] : null;
+}
+
 function App() {
   // Public routes — no auth required
+  const cycleReviewToken = getCycleReviewToken();
+  if (cycleReviewToken) {
+    return <CycleReviewForm token={cycleReviewToken} />;
+  }
   const questionnaireClientId = getQuestionnaireClientId();
   if (questionnaireClientId) {
     return <QuestionnaireClient clientId={questionnaireClientId} />;

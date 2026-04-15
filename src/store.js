@@ -995,3 +995,37 @@ export function purgeExpiredDrafts() {
     }
   }
 }
+
+// ─── Cycle Reviews ───
+
+export async function createCycleReview(clientId, consultationId, ownerId) {
+  if (!isCloudEnabled) return null;
+  const token = crypto.randomUUID();
+  const { data, error } = await supabase
+    .from('cycle_reviews')
+    .insert({
+      token,
+      client_id: clientId,
+      consultation_id: consultationId || null,
+      owner_id: ownerId,
+      status: 'sent',
+    })
+    .select('token')
+    .single();
+  if (error) {
+    console.warn('createCycleReview failed:', error.message);
+    return null;
+  }
+  return data.token;
+}
+
+export async function getCycleReviews(clientId) {
+  if (!isCloudEnabled) return [];
+  const { data, error } = await supabase
+    .from('cycle_reviews')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data || [];
+}

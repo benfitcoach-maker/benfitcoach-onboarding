@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
-import { getNutritionConsultations, deleteClient } from './store';
+import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews } from './store';
+import { getCurrentUser } from './supabaseClient';
 
 function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
   const handleSend = (e) => {
@@ -50,9 +51,18 @@ function getFollowUpStatus(clientId) {
 
 function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState('loading');
   const consultations = getNutritionConsultations(client.id);
   const followUp = getFollowUpStatus(client.id);
   const lastConsultation = consultations[0];
+
+  useEffect(() => {
+    getCycleReviews(client.id).then(reviews => {
+      if (!reviews.length) { setReviewStatus('not_sent'); return; }
+      const latest = reviews[0];
+      setReviewStatus(latest.status);
+    });
+  }, [client.id]);
   const objectif = client.form?.objectif
     || (client.form?.symptomesObjectifs || []).slice(0, 2).join(', ')
     || client.form?.objectifPrincipal
@@ -65,6 +75,28 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
       deleteClient(client.id);
       onRefresh();
     }
+  };
+
+  const handleSendReview = async (e) => {
+    e.stopPropagation();
+    const user = await getCurrentUser();
+    const token = await createCycleReview(client.id, null, user?.id);
+    if (!token) { alert('Erreur lors de la création du bilan'); return; }
+    const url = `${window.location.origin}/review/${token}`;
+    const prenom = client.prenom || '';
+    const subject = 'Ton bilan 4 semaines — Anissa Deroubaix';
+    const body =
+      `Bonjour ${prenom},\n\n` +
+      `4 semaines se sont écoulées depuis ton plan nutrition.\n` +
+      `Merci de remplir ce bilan rapide (2 minutes) :\n\n` +
+      `➜ ${url}\n\n` +
+      `Cela m'aidera à ajuster ton plan pour la suite.`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm` +
+      `&to=${encodeURIComponent(client.form?.email || '')}` +
+      `&su=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
+    setReviewStatus('sent');
   };
 
   const urgencyColor = followUp === 'urgent'
@@ -125,6 +157,19 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
             {followUp === 'urgent' ? '\u26a0 Suivi urgent' : '\u25cb Suivi recommand\u00e9'}
           </span>
         )}
+        {reviewStatus === 'submitted' && (
+          <span style={{
+            display:'inline-flex', alignItems:'center', gap:4,
+            fontSize:'.7rem', fontWeight:600, padding:'2px 8px',
+            borderRadius:20, alignSelf:'flex-start',
+            background:'rgba(74,222,128,.1)',
+            color:'#4ade80',
+            border:'1px solid rgba(74,222,128,.2)',
+            marginBottom: 4,
+          }}>
+            ✓ Bilan reçu
+          </span>
+        )}
         {objectif && (
           <div style={{ fontSize: '.8rem', color: 'var(--text-muted)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -169,6 +214,38 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 clientEmail={client.form?.email}
                 clientPrenom={client.prenom || client.form?.prenom}
               />
+              {/* Séparateur */}
+              <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
+
+              {/* Badge statut bilan */}
+              {reviewStatus === 'submitted' && (
+                <div style={{ padding:'8px 14px', fontSize:'.78rem',
+                  color:'#4ade80', display:'flex', alignItems:'center', gap:6 }}>
+                  🟢 Bilan reçu
+                </div>
+              )}
+              {reviewStatus === 'sent' && (
+                <div style={{ padding:'8px 14px', fontSize:'.78rem',
+                  color:'#fbbf24', display:'flex', alignItems:'center', gap:6 }}>
+                  🟡 Bilan en attente
+                </div>
+              )}
+              {(reviewStatus === 'not_sent' || reviewStatus === 'loading') && (
+                <button
+                  onClick={handleSendReview}
+                  style={{
+                    display:'block', width:'100%', textAlign:'left',
+                    padding:'10px 16px', background:'none', border:'none',
+                    color:'var(--text)', cursor:'pointer', fontSize:'.85rem',
+                    transition:'background .15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background='none'}
+                >
+                  📋 Envoyer bilan 4 semaines
+                </button>
+              )}
+
               {isOwn && (
                 <button onClick={handleDelete}
                   style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
