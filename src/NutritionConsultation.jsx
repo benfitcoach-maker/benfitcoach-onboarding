@@ -1778,6 +1778,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // Le cockpit (step "plan") est le point d'entree par defaut — les autres
   // steps (resume client, suivi, notes) restent accessibles via les pills en haut.
   const [step, setStep] = useState(() => (isFollowup ? 3 : 2));
+  console.log('[MGD DEBUG] component mount, initialConsultation:', initialConsultation ? 'EXISTS' : 'NULL', initialConsultation?.id, initialConsultation?.mgdRecommendation);
   const [consultation, setConsultation] = useState(() => {
     if (initialConsultation) {
       console.log('[MGD RESTORE] initialConsultation:', {
