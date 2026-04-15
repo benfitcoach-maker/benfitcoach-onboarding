@@ -2963,10 +2963,11 @@ ${suppText}`;
             };
             return (
               <div style={{
-                marginTop: 16, marginBottom: 8,
-                padding: '10px 14px',
-                background: 'rgba(106,191,138,.05)',
-                border: '1px solid rgba(106,191,138,.15)',
+                marginTop: 20,
+                padding: '12px 16px',
+                background: 'rgba(106,191,138,.06)',
+                border: '1px solid rgba(106,191,138,.2)',
+                borderLeft: '3px solid rgba(106,191,138,.5)',
                 borderRadius: 10,
               }}>
                 <div style={{
@@ -2997,19 +2998,20 @@ ${suppText}`;
           })()}
 
           <div style={{
-            marginTop: 16,
-            padding: '14px 16px',
-            background: 'rgba(255,255,255,.03)',
-            border: '1px solid rgba(255,255,255,.07)',
-            borderRadius: 10,
+            marginTop: 12,
+            padding: '16px',
+            background: 'rgba(255,255,255,.04)',
+            border: '1px solid rgba(255,255,255,.1)',
+            borderRadius: 12,
           }}>
             <div style={{
-              fontSize: '.72rem', fontWeight: 700,
-              color: 'rgba(255,255,255,.4)',
-              textTransform: 'uppercase', letterSpacing: '.4px',
-              marginBottom: 12,
+              fontSize: '.75rem', fontWeight: 700,
+              color: '#c5b07a',
+              textTransform: 'uppercase', letterSpacing: '.5px',
+              marginBottom: 14,
+              display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              Recommandation bilan MGD
+              ⚕️ Recommandation bilan MGD
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
@@ -3089,9 +3091,22 @@ ${suppText}`;
 
           {/* Lab results input (shown when blood test is done) */}
           {(consultation.mgd_recommendation === 'blood' || consultation.mgd_recommendation === 'advanced') && (
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ fontSize: '.85rem', color: '#d4c9a8', marginBottom: 10 }}>Resultats biologiques</h4>
-              <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>Saisissez les valeurs disponibles. Les champs vides sont ignores.</p>
+            <div style={{
+              marginTop: 16,
+              padding: '16px',
+              background: 'rgba(255,255,255,.03)',
+              border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: 12,
+            }}>
+              <div style={{
+                fontSize: '.75rem', fontWeight: 700,
+                color: '#c5b07a',
+                textTransform: 'uppercase', letterSpacing: '.5px',
+                marginBottom: 12,
+              }}>
+                🔬 Résultats biologiques
+              </div>
+              <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>Saisissez les valeurs disponibles. Les champs vides sont ignorés.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 {LAB_MARKERS_UI.map(({ key, label, unit }) => (
                   <div key={key} className="field" style={{ marginBottom: 0 }}>
