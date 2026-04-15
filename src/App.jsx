@@ -31,7 +31,9 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews } from './store';
+import { buildReturnDiagnostic } from './services/returnDiagnostic';
+import { adaptPlanForReturn } from './services/aiPlanOptimizer';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
@@ -543,6 +545,48 @@ function App() {
     showToast('Plan adapté — vérifiez et sauvegardez');
   };
 
+  const handleReturnPlan = async (client) => {
+    showToast('Génération du plan de reprise...');
+    try {
+      const cycleReviews = await getCycleReviews(client.id);
+      const diagnostic = buildReturnDiagnostic(client, cycleReviews);
+      const consultations = getNutritionConsultations(client.id);
+      const lastPlan = consultations[0]?.nutritionPlan || '';
+      const adaptedPlan = await adaptPlanForReturn(
+        client.form || {},
+        lastPlan,
+        diagnostic
+      );
+      if (!adaptedPlan) {
+        showToast('Erreur lors de la génération — réessayez');
+        return;
+      }
+      const labelMap = {
+        simplify:    'Reprise — Simplification',
+        recalibrate: 'Reprise — Recalibrage',
+        stabilize:   'Reprise — Stabilisation',
+        metabolic:   'Reprise — Ajustement métabolique',
+        standard:    'Plan de reprise',
+      };
+      const prefilledConsultation = {
+        clientId: client.id,
+        nutritionPlan: adaptedPlan,
+        createdAt: new Date().toISOString(),
+        status: 'a_valider',
+        label: labelMap[diagnostic.returnProfile] || 'Plan de reprise',
+        consultantName: 'Anissa',
+      };
+      setClientId(client.id);
+      setEditingConsultation(prefilledConsultation);
+      setPage('nutritionConsultation');
+      setMobileMenu(false);
+      showToast('Plan de reprise généré — vérifiez et sauvegardez');
+    } catch (err) {
+      showToast('Erreur lors de la génération — réessayez');
+      console.error('[RETURN PLAN]', err);
+    }
+  };
+
   // ─── ANISSA'S INTERFACE ───
   if (isAnissa) {
     const allAnissaClients = [...sharedClients, ...anissaOwnClients];
@@ -686,6 +730,7 @@ function App() {
             onOpenClient={handleAnissaOpenClient}
             onRefresh={refreshClients}
             onAdaptPlan={handleAdaptPlan}
+            onReturnPlan={handleReturnPlan}
           />
         )}
 
