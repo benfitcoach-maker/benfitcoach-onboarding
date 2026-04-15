@@ -1778,15 +1778,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // Le cockpit (step "plan") est le point d'entree par defaut — les autres
   // steps (resume client, suivi, notes) restent accessibles via les pills en haut.
   const [step, setStep] = useState(() => (isFollowup ? 3 : 2));
-  console.log('[MGD DEBUG] component mount, initialConsultation:', initialConsultation ? 'EXISTS' : 'NULL', initialConsultation?.id, initialConsultation?.mgdRecommendation);
   const [consultation, setConsultation] = useState(() => {
     if (initialConsultation) {
-      console.log('[MGD RESTORE] initialConsultation:', {
-        mgdRecommendation: initialConsultation?.mgdRecommendation,
-        mgd_recommendation: initialConsultation?.mgd_recommendation,
-        bloodTestDone: initialConsultation?.bloodTestDone,
-        dnaTestDone: initialConsultation?.dnaTestDone,
-      });
       return {
         observations: initialConsultation.observations || '',
         blood_test_done: initialConsultation.bloodTestDone || initialConsultation.blood_test_done || false,
@@ -2605,7 +2598,6 @@ ${suppText}`;
     const recipesToSave = edited?.recipes ?? recipesDraft;
 
     const mgdRec = consultation.mgd_recommendation || 'none';
-    console.log('[MGD] mgd_recommendation at save:', consultation.mgd_recommendation, '→ mgdRec:', mgdRec);
     const bloodTestDone = mgdRec === 'blood' || mgdRec === 'advanced';
     const dnaTestDone = mgdRec === 'advanced';
 
