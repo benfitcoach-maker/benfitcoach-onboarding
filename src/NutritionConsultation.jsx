@@ -3436,6 +3436,14 @@ ${suppText}`;
             return;
           }
           const sections = structurePlanSections(plan, supplements, { isFollowup });
+          const labDataForPdf = consultation.lab_results || {};
+          const hasLabForPdf = Object.values(labDataForPdf).some(v => v !== '' && v != null);
+          const correlationForPdf = hasLabForPdf
+            ? buildMGDCorrelation(
+                detectSymptomsFromForm(form),
+                analyzeLabResults(labDataForPdf).signals || []
+              )
+            : null;
           try {
             await exportClientPackPDF({
               nutritionPlan: cleanPlanForPDF(plan),
@@ -3444,12 +3452,16 @@ ${suppText}`;
               date: new Date().toISOString(),
               isFollowup,
               sections,
+              mgdRecommendation: consultation.mgd_recommendation || 'none',
+              bloodTestDone: consultation.mgd_recommendation === 'blood' || consultation.mgd_recommendation === 'advanced',
+              dnaTestDone: consultation.mgd_recommendation === 'advanced',
             }, client, {
               sections,
               coverFields: {
                 prenom: form.prenom || client?.prenom || '',
                 objectif: form.objectifPrincipalNutrition || form.objectifPrincipal || '',
               },
+              mgdCorrelation: correlationForPdf,
             });
             showSaveToast('Dossier client exporte');
           } catch (err) {

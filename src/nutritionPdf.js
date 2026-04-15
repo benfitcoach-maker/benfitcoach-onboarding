@@ -2325,7 +2325,7 @@ export async function exportCoverPDF(consultation, client) {
 // structured 'frigo' section (not re-extracted from the full plan text).
 // ─────────────────────────────────────────────────────
 
-export async function exportClientPackPDF(consultation, client, { sections: unifiedSections, coverFields } = {}) {
+export async function exportClientPackPDF(consultation, client, { sections: unifiedSections, coverFields, mgdCorrelation } = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
@@ -2483,6 +2483,27 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
     doc.setFontSize(7.5);
     doc.text(mgdDetail, margin, y);
     y += 10;
+
+    // Synthèse clinique si corrélation disponible
+    if (mgdCorrelation?.clinicalSummary) {
+      const cs = mgdCorrelation.clinicalSummary;
+      y += 4;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(60, 60, 50);
+      const priorityText = `Priorité : ${cs.mainIssue} — confirmé par ${cs.confirmedBy}`;
+      const priorityLines = doc.splitTextToSize(priorityText, pw - margin * 2);
+      doc.text(priorityLines, margin, y);
+      y += priorityLines.length * 4.5 + 3;
+      if (cs.topAction) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 80, 40);
+        const actionLines = doc.splitTextToSize(`→ ${cs.topAction}`, pw - margin * 2);
+        doc.text(actionLines, margin, y);
+        y += actionLines.length * 4.5 + 4;
+      }
+    }
   }
 
   // ═══════════ GUIDE DE DÉMARRAGE (last page) ═══════════
