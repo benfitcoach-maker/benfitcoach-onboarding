@@ -147,3 +147,102 @@ export async function optimizeAllSections(form, sections, analysisIssues = []) {
   }
   return results;
 }
+
+export async function adaptPlanFromReview(form, currentPlan, review, analysis) {
+  const context = [
+    form?.prenom         ? `Client : ${form.prenom}` : '',
+    form?.age            ? `Âge : ${form.age} ans` : '',
+    form?.genre          ? `Genre : ${form.genre}` : '',
+    form?.poids          ? `Poids : ${form.poids} kg` : '',
+    form?.objectifPrincipalNutrition
+                         ? `Objectif : ${form.objectifPrincipalNutrition}` : '',
+    form?.symptomesObjectifs?.length
+                         ? `Symptômes : ${form.symptomesObjectifs.join(', ')}` : '',
+    form?.allergies      ? `Allergies : ${form.allergies}` : '',
+    form?.alimentsEvites ? `Aliments évités : ${form.alimentsEvites}` : '',
+    form?.pathologies    ? `Pathologies : ${form.pathologies}` : '',
+  ].filter(Boolean).join('\n');
+
+  // Construire les directives depuis le bilan
+  const directives = [];
+
+  // Adhérence faible → simplifier
+  if (review.adherence === '<50' || review.adherence === '50') {
+    directives.push('SIMPLIFIER : réduire le nombre de préparations, privilégier des repas rapides (<15 min)');
+  }
+
+  // Motivation / monotonie → varier
+  if (review.main_issue === 'motivation' || review.main_issue === 'taste') {
+    directives.push('VARIER : introduire 2-3 nouvelles recettes, rotation des sources de protéines et légumes');
+  }
+
+  // Faim → revoir satiété
+  if (review.main_issue === 'hunger') {
+    directives.push('SATIÉTÉ : augmenter les fibres et protéines aux repas, ajouter une collation protéinée');
+  }
+
+  // Organisation compliquée → simplifier structure
+  if (review.organisation === 'complex' || review.difficulty === 'hard') {
+    directives.push('SIMPLIFIER STRUCTURE : réduire à 3 repas principaux, limiter les préparations spéciales');
+  }
+
+  // Énergie basse → ajuster glucides/timing
+  if (review.energy === 'low') {
+    directives.push('ÉNERGIE : revoir le timing des glucides complexes, ajouter une collation l\'après-midi');
+  }
+
+  // Digestion difficile → alléger
+  if (review.digestion === 'bad') {
+    directives.push('DIGESTION : réduire les aliments fermentescibles, privilégier les cuissons douces');
+  }
+
+  // Stagnation → recalibrer
+  if (review.progress === 'none') {
+    directives.push('RECALIBRER : revoir les portions, introduire un déficit calorique progressif si perte de poids visée');
+  }
+
+  // Intégrer les recommandations IA si disponibles
+  if (analysis?.recommandations?.length > 0) {
+    directives.push(...analysis.recommandations.map(r => `APPLIQUER : ${r}`));
+  }
+
+  const directivesText = directives.length > 0
+    ? directives.join('\n')
+    : 'Améliorer globalement la qualité et la personnalisation du plan';
+
+  const system = `Tu es Anissa, nutritionniste experte.
+Tu adaptes un plan nutritionnel existant sur la base du bilan 4 semaines du client.
+
+PROFIL CLIENT :
+${context}
+
+DIRECTIVES D'ADAPTATION (basées sur le bilan) :
+${directivesText}
+
+RÈGLES D'ÉCRITURE ABSOLUES — STYLE ANISSA :
+- Garder la structure existante (mêmes titres de sections)
+- Appliquer les directives section par section
+- Pas de **gras**, pas de # titres markdown
+- Pas de "idéalement", "n'hésitez pas", "il est conseillé", "il est important de"
+- Pas de "cette approche", "ce protocole", "en conclusion", "pour résumer"
+- Pas de listes à 3 éléments parfaitement parallèles (signe d'IA)
+- Phrases courtes et directes. Quantités précises.
+- Utilise "tu" ou "vous" selon le ton du plan existant, jamais les deux
+- Varie la longueur des phrases
+- Retourner UNIQUEMENT le plan adapté, sans introduction ni explication
+
+EXEMPLE DE STYLE ATTENDU :
+❌ "Il est recommandé d'augmenter progressivement l'apport en protéines pour optimiser la satiété."
+✅ "Ajouter 30g de protéines au déjeuner. Œuf, poulet, sardines — au choix."
+
+❌ "Cette approche permettra de réduire la monotonie alimentaire tout en maintenant l'équilibre nutritionnel."
+✅ "Changer au moins 2 recettes par semaine. La routine tue la motivation."`;
+
+  const text = await aiRequest(
+    system,
+    `Plan actuel à adapter :\n\n${(currentPlan || '').slice(0, 4000)}\n\nAdapte ce plan selon les directives.`,
+    3000
+  );
+
+  return postProcess(text);
+}

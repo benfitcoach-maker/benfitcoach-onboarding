@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { analyzeCycleReview } from './services/aiClient';
+import { adaptPlanFromReview } from './services/aiPlanOptimizer';
 
 const ADHERENCE_LABELS = {
   '100': '✅ Tous les jours',
@@ -65,10 +66,12 @@ function ScoreBar({ label, value }) {
   );
 }
 
-export default function CycleReviewPanel({ review, client, onClose, onOpenConsultation }) {
+export default function CycleReviewPanel({ review, client, onClose, onOpenConsultation, onAdaptPlan }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState('');
+  const [adapting, setAdapting] = useState(false);
+  const [adaptedPlan, setAdaptedPlan] = useState(null);
 
   const handleAnalyze = async () => {
     setAnalyzing(true);
@@ -81,6 +84,26 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
       setError('Erreur IA — réessayez');
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const handleAdaptPlan = async () => {
+    setAdapting(true);
+    try {
+      const currentPlan = client?.latestPlan || '';
+      const result = await adaptPlanFromReview(
+        client?.form || {},
+        currentPlan,
+        review,
+        analysis
+      );
+      if (result) {
+        setAdaptedPlan(result);
+      }
+    } catch (err) {
+      setError('Erreur lors de l\'adaptation — réessayez');
+    } finally {
+      setAdapting(false);
     }
   };
 
@@ -280,6 +303,87 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
                   color:'#8abf9a', lineHeight:1.5,
                 }}>
                   🎯 {analysis.prochain_cycle}
+                </div>
+              )}
+
+              {/* Bouton Adapter le plan */}
+              {!adaptedPlan && (
+                <button
+                  onClick={handleAdaptPlan}
+                  disabled={adapting}
+                  style={{
+                    width:'100%', marginTop:12, padding:'10px',
+                    borderRadius:8, border:'1px solid rgba(197,176,122,.3)',
+                    background: adapting ? 'rgba(197,176,122,.06)' : 'rgba(197,176,122,.12)',
+                    color: adapting ? 'rgba(197,176,122,.4)' : '#c5b07a',
+                    cursor: adapting ? 'not-allowed' : 'pointer',
+                    fontSize:'.83rem', fontWeight:600,
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                    transition:'all .2s',
+                  }}
+                  onMouseEnter={e => { if (!adapting) e.currentTarget.style.background='rgba(197,176,122,.22)'; }}
+                  onMouseLeave={e => { if (!adapting) e.currentTarget.style.background='rgba(197,176,122,.12)'; }}
+                >
+                  {adapting
+                    ? <><span style={{ animation:'neSpin .8s linear infinite', display:'inline-block' }}>⚙️</span> Adaptation en cours...</>
+                    : '⚙️ Adapter automatiquement le plan'
+                  }
+                </button>
+              )}
+
+              {/* Plan adapté — aperçu + confirmation */}
+              {adaptedPlan && (
+                <div style={{
+                  marginTop:12,
+                  padding:'12px 14px',
+                  background:'rgba(197,176,122,.06)',
+                  border:'1px solid rgba(197,176,122,.25)',
+                  borderRadius:10,
+                  animation:'neSlideIn .2s ease',
+                }}>
+                  <div style={{ fontSize:'.7rem', fontWeight:700,
+                    color:'rgba(197,176,122,.7)', textTransform:'uppercase',
+                    letterSpacing:'.4px', marginBottom:8 }}>
+                    ⚙️ Plan adapté — Aperçu
+                  </div>
+                  <div style={{
+                    fontSize:'.75rem', color:'#b0c4a8', lineHeight:1.55,
+                    whiteSpace:'pre-wrap', maxHeight:120, overflowY:'auto',
+                    background:'rgba(0,0,0,.2)', borderRadius:6,
+                    padding:'8px 10px', marginBottom:10,
+                    border:'1px solid rgba(255,255,255,.05)',
+                  }}>
+                    {adaptedPlan.slice(0, 400)}{adaptedPlan.length > 400 ? '...' : ''}
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button
+                      onClick={() => {
+                        onAdaptPlan(adaptedPlan);
+                        onClose();
+                      }}
+                      style={{
+                        flex:1, padding:'8px', borderRadius:7, border:'none',
+                        background:'rgba(197,176,122,.25)', color:'#c5b07a',
+                        cursor:'pointer', fontSize:'.8rem', fontWeight:700,
+                        transition:'all .15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background='rgba(197,176,122,.4)'}
+                      onMouseLeave={e => e.currentTarget.style.background='rgba(197,176,122,.25)'}
+                    >
+                      ✅ Ouvrir dans l'éditeur
+                    </button>
+                    <button
+                      onClick={() => setAdaptedPlan(null)}
+                      style={{
+                        padding:'8px 14px', borderRadius:7,
+                        border:'1px solid rgba(255,255,255,.08)',
+                        background:'none', color:'rgba(255,255,255,.3)',
+                        cursor:'pointer', fontSize:'.8rem',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -514,6 +514,30 @@ function App() {
     setMobileMenu(false);
   };
 
+  const handleAdaptPlan = (client, adaptedPlan) => {
+    const consultations = getNutritionConsultations(client.id);
+    const lastConsultation = consultations[0] || null;
+    const prefilledConsultation = lastConsultation
+      ? {
+          ...lastConsultation,
+          id: undefined,
+          nutritionPlan: adaptedPlan,
+          createdAt: new Date().toISOString(),
+          status: 'a_valider',
+        }
+      : {
+          clientId: client.id,
+          nutritionPlan: adaptedPlan,
+          createdAt: new Date().toISOString(),
+          status: 'a_valider',
+        };
+    setClientId(client.id);
+    setEditingConsultation(prefilledConsultation);
+    setPage('nutritionConsultation');
+    setMobileMenu(false);
+    showToast('Plan adapté — vérifiez et sauvegardez');
+  };
+
   // ─── ANISSA'S INTERFACE ───
   if (isAnissa) {
     const allAnissaClients = [...sharedClients, ...anissaOwnClients];
@@ -656,6 +680,7 @@ function App() {
             onNewClient={handleAnissaNewClient}
             onOpenClient={handleAnissaOpenClient}
             onRefresh={refreshClients}
+            onAdaptPlan={handleAdaptPlan}
           />
         )}
 

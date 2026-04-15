@@ -281,7 +281,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   );
 }
 
-export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh }) {
+export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan }) {
   const [search, setSearch] = useState('');
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedReviewClient, setSelectedReviewClient] = useState(null);
@@ -442,6 +442,11 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           client={selectedReviewClient}
           onClose={() => { setSelectedReview(null); setSelectedReviewClient(null); }}
           onOpenConsultation={onConsultation}
+          onAdaptPlan={(adaptedPlan) => {
+            if (onAdaptPlan) onAdaptPlan(selectedReviewClient, adaptedPlan);
+            setSelectedReview(null);
+            setSelectedReviewClient(null);
+          }}
         />
       )}
     </div>
