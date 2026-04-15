@@ -134,7 +134,18 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
 
   // Déterminer le profil de reprise
   let returnProfile = 'standard';
-  if (whatFailed.includes('Adhérence insuffisante au plan précédent') ||
+
+  // Ajustement métabolique — conditions élargies (priorité)
+  const hasMultipleConsultations = consultations.length >= 2;
+  const hasGoodAdherence = lastReview?.adherence === '100'
+    || lastReview?.adherence === '75';
+  const hasStagnation = weightAnalysis?.isStagnant
+    || lastReview?.progress === 'none'
+    || lastReview?.progress === 'little';
+
+  if (hasMultipleConsultations && hasGoodAdherence && hasStagnation) {
+    returnProfile = 'metabolic';
+  } else if (whatFailed.includes('Adhérence insuffisante au plan précédent') ||
       whatFailed.includes('Plan jugé trop complexe à suivre')) {
     returnProfile = 'simplify';
   } else if (weightTrend?.direction === 'stable' && consultations.length > 1) {
@@ -176,6 +187,8 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
     cycleContext = `${cycleCount} cycles au compteur — plan expert, éviter la répétition.`;
   }
 
+  const favoriteIngredients = extractFavoriteIngredients(consultations);
+
   return {
     lastGoal,
     daysSinceLastConsult: days,
@@ -193,5 +206,43 @@ export function buildReturnDiagnostic(client, cycleReviews = []) {
     recommendation: recommendations[returnProfile],
     lastConsultation,
     cycleContext,
+    favoriteIngredients,
   };
+}
+
+export function extractFavoriteIngredients(consultations) {
+  const proteinRegex = /poulet|saumon|thon|sardine|oeuf|oeufs|boeuf|dinde|tofu|lentilles|pois\s*chiche/gi;
+  const veggieRegex = /courgette|brocoli|épinard|épinards|carotte|poivron|concombre|avocat|patate\s*douce/gi;
+
+  const proteinCount = {};
+  const veggieCount = {};
+
+  for (const c of consultations.slice(0, 3)) {
+    const plan = (c.nutritionPlan || c.nutrition_plan || '').toLowerCase();
+    if (!plan) continue;
+
+    const proteins = plan.match(proteinRegex) || [];
+    const veggies = plan.match(veggieRegex) || [];
+
+    for (const p of proteins) {
+      const key = p.trim();
+      proteinCount[key] = (proteinCount[key] || 0) + 1;
+    }
+    for (const v of veggies) {
+      const key = v.trim();
+      veggieCount[key] = (veggieCount[key] || 0) + 1;
+    }
+  }
+
+  const favoriteProteins = Object.entries(proteinCount)
+    .filter(([, count]) => count >= 2)
+    .map(([name]) => name)
+    .slice(0, 4);
+
+  const favoriteVeggies = Object.entries(veggieCount)
+    .filter(([, count]) => count >= 2)
+    .map(([name]) => name)
+    .slice(0, 4);
+
+  return { favoriteProteins, favoriteVeggies };
 }

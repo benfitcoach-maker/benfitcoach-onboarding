@@ -306,6 +306,21 @@ export async function adaptPlanForReturn(form, lastPlan, diagnostic) {
       ].filter(Boolean).join('\n')
     : '';
 
+  const ingredientContext = (() => {
+    const fi = diagnostic.favoriteIngredients;
+    if (!fi) return '';
+    const parts = [];
+    if (fi.favoriteProteins?.length > 0) {
+      parts.push(`Protéines appréciées : ${fi.favoriteProteins.join(', ')}`);
+    }
+    if (fi.favoriteVeggies?.length > 0) {
+      parts.push(`Légumes appréciés : ${fi.favoriteVeggies.join(', ')}`);
+    }
+    return parts.length > 0
+      ? `ALIMENTS À CONSERVER (appréciés sur les cycles précédents) :\n${parts.join('\n')}\nPrivilégier ces aliments dans le plan de reprise.`
+      : '';
+  })();
+
   const system = `Tu es Anissa, nutritionniste experte.
 Tu crées un plan de reprise pour un client qui revient après ${diagnostic.daysSinceLastConsult} jours d'absence.
 
@@ -318,6 +333,7 @@ ${whatFailedText}
 Recommandation : ${diagnostic.recommendation}
 ${weightContext ? `\nCOURBE POIDS :\n${weightContext}` : ''}
 ${diagnostic.cycleContext ? `\nCONTEXTE CYCLES : ${diagnostic.cycleContext}` : ''}
+${ingredientContext ? `\n${ingredientContext}` : ''}
 
 DIRECTIVE PRINCIPALE :
 ${directive}
