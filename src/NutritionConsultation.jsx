@@ -3191,33 +3191,71 @@ ${suppText}`;
                       🔗 Corrélations symptômes ↔ biologie
                     </div>
 
-                    {/* Corrélations confirmées */}
-                    {correlation.correlations.map((c, i) => (
-                      <div key={i} style={{
-                        marginBottom: 8, padding: '7px 10px',
-                        background: 'rgba(255,255,255,.03)',
-                        borderRadius: 7,
-                        borderLeft: '2px solid rgba(197,176,122,.4)',
+                    {/* Résumé clinique — en haut, lecture rapide */}
+                    {correlation.clinicalSummary && (
+                      <div style={{
+                        marginBottom: 12, padding: '10px 12px',
+                        background: correlation.hasCritical
+                          ? 'rgba(248,113,113,.1)' : 'rgba(197,176,122,.08)',
+                        borderRadius: 8,
+                        borderLeft: `3px solid ${correlation.hasCritical ? '#f87171' : '#c5b07a'}`,
                       }}>
-                        <div style={{ fontSize: '.8rem', fontWeight: 600, color: '#e0d8c0' }}>
-                          {c.symptomLabel}
-                          <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.35)',
-                            fontWeight: 400, marginLeft: 6 }}>
-                            confirmé biologiquement
-                          </span>
+                        <div style={{ fontSize: '.8rem', fontWeight: 700, color: '#f0f0e8', marginBottom: 3 }}>
+                          {correlation.hasCritical ? '⚠️' : '📋'} {correlation.clinicalSummary.mainIssue}
                         </div>
-                        <div style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)', marginTop: 2 }}>
-                          {c.confirmedBy.map(b => b.label).join(' · ')}
+                        <div style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.5)' }}>
+                          Confirmé par : {correlation.clinicalSummary.confirmedBy}
                         </div>
+                        {correlation.clinicalSummary.topAction && (
+                          <div style={{ fontSize: '.75rem', color: '#8abf9a', marginTop: 4, fontStyle: 'italic' }}>
+                            → {correlation.clinicalSummary.topAction.slice(0, 80)}
+                            {correlation.clinicalSummary.topAction.length > 80 ? '...' : ''}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                    )}
 
-                    {/* Alertes prioritaires */}
+                    {/* Corrélations priorisées */}
+                    {correlation.correlations.map((c, i) => {
+                      const priorityColors = {
+                        high:   { bg: 'rgba(248,113,113,.06)', border: 'rgba(248,113,113,.3)', badge: '#f87171', label: 'Priorité haute' },
+                        medium: { bg: 'rgba(251,191,36,.05)',  border: 'rgba(251,191,36,.25)', badge: '#fbbf24', label: 'Priorité moyenne' },
+                        watch:  { bg: 'rgba(255,255,255,.03)', border: 'rgba(255,255,255,.08)', badge: '#94a3b8', label: 'Surveillance' },
+                      };
+                      const pc = priorityColors[c.priority] || priorityColors.watch;
+                      return (
+                        <div key={i} style={{
+                          marginBottom: 6, padding: '7px 10px',
+                          background: pc.bg, borderRadius: 7,
+                          border: `1px solid ${pc.border}`,
+                          display: 'flex', alignItems: 'flex-start', gap: 8,
+                        }}>
+                          <span style={{
+                            fontSize: '.6rem', fontWeight: 700, padding: '2px 6px',
+                            borderRadius: 10, background: pc.border, color: pc.badge,
+                            whiteSpace: 'nowrap', flexShrink: 0, marginTop: 1,
+                          }}>
+                            {pc.label}
+                          </span>
+                          <div>
+                            <div style={{ fontSize: '.8rem', fontWeight: 600, color: '#e0d8c0' }}>
+                              {c.symptomLabel}
+                            </div>
+                            <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.35)', marginTop: 1 }}>
+                              {c.confirmedBy.map(b => b.label).join(' · ')}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Actions prioritaires */}
                     {correlation.alerts.length > 0 && (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 10, paddingTop: 10,
+                        borderTop: '1px solid rgba(255,255,255,.06)' }}>
                         <div style={{ fontSize: '.68rem', fontWeight: 700,
                           color: '#f87171', textTransform: 'uppercase',
-                          letterSpacing: '.3px', marginBottom: 6 }}>
+                          letterSpacing: '.3px', marginBottom: 8 }}>
                           ⚡ Actions prioritaires
                         </div>
                         {correlation.alerts.slice(0, 3).map((a, i) => (
@@ -3225,10 +3263,10 @@ ${suppText}`;
                             fontSize: '.75rem', color: '#b0c4a8',
                             paddingLeft: 10,
                             borderLeft: '2px solid rgba(248,113,113,.3)',
-                            marginBottom: 5, lineHeight: 1.4,
+                            marginBottom: 6, lineHeight: 1.5,
                           }}>
                             <strong style={{ color: '#f87171' }}>{a.label}</strong>
-                            <span style={{ color: 'rgba(255,255,255,.4)', marginLeft: 6 }}>
+                            <span style={{ color: 'rgba(255,255,255,.35)', marginLeft: 6 }}>
                               — {a.action}
                             </span>
                           </div>
@@ -3236,14 +3274,36 @@ ${suppText}`;
                       </div>
                     )}
 
+                    {/* CTA — Régénérer avec MGD */}
+                    {correlation.hasCorrelations && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const btn = document.querySelector('.btn-generate, [class*="btn-generate"]');
+                          if (btn) { btn.scrollIntoView({ behavior: 'smooth' }); btn.focus(); }
+                          showSaveToast('Cliquez sur Régénérer pour intégrer les priorités MGD au plan');
+                        }}
+                        style={{
+                          width: '100%', marginTop: 12, padding: '9px',
+                          borderRadius: 8, border: '1px solid rgba(106,191,138,.25)',
+                          background: 'rgba(106,191,138,.08)', color: '#8abf9a',
+                          cursor: 'pointer', fontSize: '.8rem', fontWeight: 600,
+                          transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background='rgba(106,191,138,.18)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background='rgba(106,191,138,.08)'; }}
+                      >
+                        ✨ Régénérer le plan avec les priorités MGD
+                      </button>
+                    )}
+
                     {/* Signaux sans symptôme déclaré */}
                     {correlation.uncorrelatedSignals.length > 0 && (
                       <div style={{
-                        marginTop: 8, fontSize: '.72rem',
-                        color: 'rgba(255,255,255,.3)', fontStyle: 'italic',
+                        marginTop: 8, fontSize: '.7rem',
+                        color: 'rgba(255,255,255,.25)', fontStyle: 'italic',
                       }}>
-                        Signaux détectés sans symptôme déclaré —
-                        à explorer lors du prochain RDV.
+                        Signaux détectés sans symptôme déclaré — à explorer au prochain RDV.
                       </div>
                     )}
                   </div>
