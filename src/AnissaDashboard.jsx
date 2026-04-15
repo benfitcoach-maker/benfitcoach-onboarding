@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
-import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews } from './store';
+import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations } from './store';
 import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
 
@@ -285,6 +285,8 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   const [search, setSearch] = useState('');
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedReviewClient, setSelectedReviewClient] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   useEffect(() => {
     const close = () => {};
@@ -348,7 +350,27 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
 
       <div className="dashboard-header">
         <h2>Mes clients</h2>
-        <button className="btn btn-sm btn-anissa-primary" style={{ marginLeft: 'auto' }} onClick={onNewClient}>
+        <button
+          onClick={async () => {
+            setSyncing(true);
+            setSyncResult(null);
+            const res = await forceSyncAllConsultations();
+            setSyncing(false);
+            setSyncResult(res);
+            setTimeout(() => setSyncResult(null), 3000);
+          }}
+          disabled={syncing}
+          style={{
+            marginLeft:'auto', padding:'6px 12px', borderRadius:8,
+            border:'1px solid rgba(255,255,255,.1)', background:'none',
+            color: syncing ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.5)',
+            cursor: syncing ? 'not-allowed' : 'pointer',
+            fontSize:'.75rem', marginRight:8,
+          }}
+        >
+          {syncing ? 'Sync...' : syncResult ? `${syncResult.synced} synced` : 'Sync cloud'}
+        </button>
+        <button className="btn btn-sm btn-anissa-primary" onClick={onNewClient}>
           + Nouveau client
         </button>
       </div>

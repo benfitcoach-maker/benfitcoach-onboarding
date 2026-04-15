@@ -257,6 +257,17 @@ async function cloudSyncNutritionConsultation(consultation) {
   });
 }
 
+export async function forceSyncAllConsultations() {
+  if (!isCloudEnabled) return { synced: 0, errors: 0 };
+  const consultations = readNutritionConsultations();
+  let synced = 0, errors = 0;
+  for (const c of consultations) {
+    await cloudSyncNutritionConsultation(c);
+    synced++;
+  }
+  return { synced, errors };
+}
+
 // ─── Full cloud pull (on login / app start) ───
 
 export async function pullFromCloud() {
