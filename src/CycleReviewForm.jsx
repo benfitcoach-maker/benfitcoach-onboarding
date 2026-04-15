@@ -21,23 +21,16 @@ const MAIN_ISSUE_OPTIONS = [
   { value: 'other',      label: 'Autre' },
 ];
 
-// Réutilisation exacte du pattern BtnGroup de QuestionnaireClient
 function BtnGroup({ value, onChange, options, columns = 2 }) {
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: `repeat(${columns}, 1fr)`,
-      gap: 8,
-    }}>
+    <div className="q-btn-group" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
       {options.map(opt => (
         <button
           key={opt.value}
           type="button"
-          className={`q-checkbox-btn ${value === opt.value ? 'q-checkbox-active' : ''}`}
+          className={`q-btn-option ${value === opt.value ? 'q-btn-active' : ''}`}
           onClick={() => onChange(opt.value)}
-          style={{ textAlign: 'center', padding: '12px 8px' }}
         >
-          <span className="q-check-mark">{value === opt.value ? '✓' : ''}</span>
           {opt.label}
         </button>
       ))}
@@ -65,6 +58,16 @@ export default function CycleReviewForm({ token }) {
     main_issue: '',
     main_issue_text: '',
   });
+
+  // Force light background
+  useEffect(() => {
+    document.body.style.background = '#f5f2eb';
+    document.body.style.color = '#1A2E1F';
+    return () => {
+      document.body.style.background = '';
+      document.body.style.color = '';
+    };
+  }, []);
 
   // Charger le bilan via token
   useEffect(() => {
@@ -133,7 +136,7 @@ export default function CycleReviewForm({ token }) {
   if (loading) {
     return (
       <div className="q-container">
-        <div className="q-card" style={{ textAlign: 'center', padding: 40 }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ color: '#8abf9a', fontSize: '.9rem' }}>Chargement...</div>
         </div>
       </div>
@@ -144,7 +147,7 @@ export default function CycleReviewForm({ token }) {
   if (error && !reviewId) {
     return (
       <div className="q-container">
-        <div className="q-card" style={{ textAlign: 'center', padding: 40 }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ color: '#f87171', fontSize: '.9rem' }}>{error}</div>
         </div>
       </div>
@@ -155,7 +158,7 @@ export default function CycleReviewForm({ token }) {
   if (submitted) {
     return (
       <div className="q-container">
-        <div className="q-card" style={{ textAlign: 'center', padding: 48 }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <img src={ANISSA_LOGO} alt="Anissa" style={{ height: 48, marginBottom: 20 }} />
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>✅</div>
           <h2 style={{ color: '#8abf9a', marginBottom: 8 }}>Bilan envoyé !</h2>
@@ -170,201 +173,199 @@ export default function CycleReviewForm({ token }) {
 
   return (
     <div className="q-container">
-      <div className="q-card">
-        {/* Header */}
-        <div className="q-header">
-          <img src={ANISSA_LOGO} alt="Anissa" className="q-logo" />
-          <h1 className="q-title">Bilan 4 semaines</h1>
-          {clientName && (
-            <p className="q-subtitle">Bonjour {clientName} 👋</p>
+      {/* Header */}
+      <div className="q-header">
+        <img src={ANISSA_LOGO} alt="Anissa" className="q-logo" />
+        <h1 className="q-title">Bilan 4 semaines</h1>
+        {clientName && (
+          <p className="q-subtitle">Bonjour {clientName} 👋</p>
+        )}
+      </div>
+
+      {/* Progress */}
+      <div className="q-progress-bar">
+        <div className="q-progress-fill" style={{ width: `${progressPct}%` }} />
+      </div>
+      <div className="q-progress-labels">
+        {SECTIONS.map(s => (
+          <span
+            key={s.id}
+            className={`q-progress-label ${section === s.id ? 'q-progress-label-active' : ''} ${s.id < section ? 'q-progress-label-done' : ''}`}
+            onClick={() => s.id < section && setSection(s.id)}
+          >
+            {s.label}
+          </span>
+        ))}
+      </div>
+
+      {error && <div className="q-error-banner">{error}</div>}
+
+      {/* Section 1 — Adhérence */}
+      {section === 1 && (
+        <div className="q-section">
+          <h2 className="q-section-title">Adhérence au plan</h2>
+          <div className="q-field">
+            <label className="q-label">Combien de jours as-tu suivi le plan ?</label>
+            <BtnGroup
+              value={form.adherence}
+              onChange={v => update('adherence', v)}
+              options={[
+                { value: '100', label: 'Tous les jours' },
+                { value: '75',  label: 'La plupart (75%)' },
+                { value: '50',  label: 'La moitié (50%)' },
+                { value: '<50', label: 'Moins de la moitié' },
+              ]}
+              columns={2}
+            />
+          </div>
+          <div className="q-field">
+            <label className="q-label">Écarts alimentaires ?</label>
+            <BtnGroup
+              value={form.cheats}
+              onChange={v => update('cheats', v)}
+              options={[
+                { value: 'none',       label: 'Aucun' },
+                { value: 'occasional', label: 'Occasionnels' },
+                { value: 'frequent',   label: 'Fréquents' },
+              ]}
+              columns={3}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Section 2 — Résultats */}
+      {section === 2 && (
+        <div className="q-section">
+          <h2 className="q-section-title">Tes résultats</h2>
+          <div className="q-field">
+            <label className="q-label">Tu avances vers ton objectif ?</label>
+            <BtnGroup
+              value={form.progress}
+              onChange={v => update('progress', v)}
+              options={[
+                { value: 'yes',    label: 'Oui clairement' },
+                { value: 'little', label: 'Un peu' },
+                { value: 'none',   label: 'Pas encore' },
+              ]}
+              columns={3}
+            />
+          </div>
+          <div className="q-field">
+            <label className="q-label">Ton énergie ces 4 semaines ?</label>
+            <BtnGroup
+              value={form.energy}
+              onChange={v => update('energy', v)}
+              options={[
+                { value: 'high',   label: 'Meilleure' },
+                { value: 'normal', label: 'Stable' },
+                { value: 'low',    label: 'Moins bonne' },
+              ]}
+              columns={3}
+            />
+          </div>
+          <div className="q-field">
+            <label className="q-label">Ta digestion ?</label>
+            <BtnGroup
+              value={form.digestion}
+              onChange={v => update('digestion', v)}
+              options={[
+                { value: 'good',    label: 'Bonne' },
+                { value: 'average', label: 'Moyenne' },
+                { value: 'bad',     label: 'Difficile' },
+              ]}
+              columns={3}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Section 3 — Ressenti */}
+      {section === 3 && (
+        <div className="q-section">
+          <h2 className="q-section-title">Ton ressenti</h2>
+          <div className="q-field">
+            <label className="q-label">Le plan était...</label>
+            <BtnGroup
+              value={form.difficulty}
+              onChange={v => update('difficulty', v)}
+              options={[
+                { value: 'easy', label: 'Facile à suivre' },
+                { value: 'ok',   label: 'Correct' },
+                { value: 'hard', label: 'Trop difficile' },
+              ]}
+              columns={3}
+            />
+          </div>
+          <div className="q-field">
+            <label className="q-label">L'organisation des repas ?</label>
+            <BtnGroup
+              value={form.organisation}
+              onChange={v => update('organisation', v)}
+              options={[
+                { value: 'simple',  label: 'Simple' },
+                { value: 'medium',  label: 'Gérable' },
+                { value: 'complex', label: 'Compliquée' },
+              ]}
+              columns={3}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Section 4 — Bilan */}
+      {section === 4 && (
+        <div className="q-section">
+          <h2 className="q-section-title">Ce qui a été difficile</h2>
+          <div className="q-field">
+            <label className="q-label">Problème principal ?</label>
+            <BtnGroup
+              value={form.main_issue}
+              onChange={v => update('main_issue', v)}
+              options={MAIN_ISSUE_OPTIONS}
+              columns={2}
+            />
+          </div>
+          {form.main_issue === 'other' && (
+            <div className="q-field">
+              <label className="q-label">Précise (optionnel)</label>
+              <input
+                className="q-input"
+                maxLength={80}
+                value={form.main_issue_text}
+                onChange={e => update('main_issue_text', e.target.value)}
+                placeholder="En quelques mots..."
+              />
+            </div>
           )}
         </div>
+      )}
 
-        {/* Progress */}
-        <div className="q-progress-bar">
-          <div className="q-progress-fill" style={{ width: `${progressPct}%` }} />
-        </div>
-        <div className="q-progress-labels">
-          {SECTIONS.map(s => (
-            <span
-              key={s.id}
-              className={`q-progress-label ${section === s.id ? 'q-progress-label-active' : ''} ${s.id < section ? 'q-progress-label-done' : ''}`}
-              onClick={() => s.id < section && setSection(s.id)}
-            >
-              {s.label}
-            </span>
-          ))}
-        </div>
-
-        {error && <div className="q-error-banner">{error}</div>}
-
-        {/* Section 1 — Adhérence */}
-        {section === 1 && (
-          <div className="q-section">
-            <h2 className="q-section-title">Adhérence au plan</h2>
-            <div className="q-field">
-              <label className="q-label">Combien de jours as-tu suivi le plan ?</label>
-              <BtnGroup
-                value={form.adherence}
-                onChange={v => update('adherence', v)}
-                options={[
-                  { value: '100', label: 'Tous les jours' },
-                  { value: '75',  label: 'La plupart (75%)' },
-                  { value: '50',  label: 'La moitié (50%)' },
-                  { value: '<50', label: 'Moins de la moitié' },
-                ]}
-                columns={2}
-              />
-            </div>
-            <div className="q-field">
-              <label className="q-label">Écarts alimentaires ?</label>
-              <BtnGroup
-                value={form.cheats}
-                onChange={v => update('cheats', v)}
-                options={[
-                  { value: 'none',       label: 'Aucun' },
-                  { value: 'occasional', label: 'Occasionnels' },
-                  { value: 'frequent',   label: 'Fréquents' },
-                ]}
-                columns={3}
-              />
-            </div>
-          </div>
+      {/* Navigation */}
+      <div className="q-nav">
+        {section > 1 && (
+          <button className="q-btn-prev" onClick={() => setSection(s => s - 1)}>
+            Précédent
+          </button>
         )}
-
-        {/* Section 2 — Résultats */}
-        {section === 2 && (
-          <div className="q-section">
-            <h2 className="q-section-title">Tes résultats</h2>
-            <div className="q-field">
-              <label className="q-label">Tu avances vers ton objectif ?</label>
-              <BtnGroup
-                value={form.progress}
-                onChange={v => update('progress', v)}
-                options={[
-                  { value: 'yes',    label: 'Oui clairement' },
-                  { value: 'little', label: 'Un peu' },
-                  { value: 'none',   label: 'Pas encore' },
-                ]}
-                columns={3}
-              />
-            </div>
-            <div className="q-field">
-              <label className="q-label">Ton énergie ces 4 semaines ?</label>
-              <BtnGroup
-                value={form.energy}
-                onChange={v => update('energy', v)}
-                options={[
-                  { value: 'high',   label: 'Meilleure' },
-                  { value: 'normal', label: 'Stable' },
-                  { value: 'low',    label: 'Moins bonne' },
-                ]}
-                columns={3}
-              />
-            </div>
-            <div className="q-field">
-              <label className="q-label">Ta digestion ?</label>
-              <BtnGroup
-                value={form.digestion}
-                onChange={v => update('digestion', v)}
-                options={[
-                  { value: 'good',    label: 'Bonne' },
-                  { value: 'average', label: 'Moyenne' },
-                  { value: 'bad',     label: 'Difficile' },
-                ]}
-                columns={3}
-              />
-            </div>
-          </div>
+        <div className="q-nav-spacer" />
+        {section < SECTIONS.length ? (
+          <button
+            className="q-btn-next"
+            onClick={() => setSection(s => s + 1)}
+            disabled={!form[['adherence','progress','difficulty','main_issue'][section-1]]}
+          >
+            Suivant
+          </button>
+        ) : (
+          <button
+            className="q-btn-submit"
+            onClick={handleSubmit}
+            disabled={submitting || !form.main_issue}
+          >
+            {submitting ? 'Envoi...' : 'Envoyer mon bilan'}
+          </button>
         )}
-
-        {/* Section 3 — Ressenti */}
-        {section === 3 && (
-          <div className="q-section">
-            <h2 className="q-section-title">Ton ressenti</h2>
-            <div className="q-field">
-              <label className="q-label">Le plan était...</label>
-              <BtnGroup
-                value={form.difficulty}
-                onChange={v => update('difficulty', v)}
-                options={[
-                  { value: 'easy', label: 'Facile à suivre' },
-                  { value: 'ok',   label: 'Correct' },
-                  { value: 'hard', label: 'Trop difficile' },
-                ]}
-                columns={3}
-              />
-            </div>
-            <div className="q-field">
-              <label className="q-label">L'organisation des repas ?</label>
-              <BtnGroup
-                value={form.organisation}
-                onChange={v => update('organisation', v)}
-                options={[
-                  { value: 'simple',  label: 'Simple' },
-                  { value: 'medium',  label: 'Gérable' },
-                  { value: 'complex', label: 'Compliquée' },
-                ]}
-                columns={3}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Section 4 — Bilan */}
-        {section === 4 && (
-          <div className="q-section">
-            <h2 className="q-section-title">Ce qui a été difficile</h2>
-            <div className="q-field">
-              <label className="q-label">Problème principal ?</label>
-              <BtnGroup
-                value={form.main_issue}
-                onChange={v => update('main_issue', v)}
-                options={MAIN_ISSUE_OPTIONS}
-                columns={2}
-              />
-            </div>
-            {form.main_issue === 'other' && (
-              <div className="q-field">
-                <label className="q-label">Précise (optionnel)</label>
-                <input
-                  className="q-input"
-                  maxLength={80}
-                  value={form.main_issue_text}
-                  onChange={e => update('main_issue_text', e.target.value)}
-                  placeholder="En quelques mots..."
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Navigation */}
-        <div className="q-nav">
-          {section > 1 && (
-            <button className="q-btn-prev" onClick={() => setSection(s => s - 1)}>
-              Précédent
-            </button>
-          )}
-          <div className="q-nav-spacer" />
-          {section < SECTIONS.length ? (
-            <button
-              className="q-btn-next"
-              onClick={() => setSection(s => s + 1)}
-              disabled={!form[['adherence','progress','difficulty','main_issue'][section-1]]}
-            >
-              Suivant
-            </button>
-          ) : (
-            <button
-              className="q-btn-submit"
-              onClick={handleSubmit}
-              disabled={submitting || !form.main_issue}
-            >
-              {submitting ? 'Envoi...' : 'Envoyer mon bilan'}
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
