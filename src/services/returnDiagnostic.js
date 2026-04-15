@@ -1,6 +1,6 @@
 import { getNutritionConsultations } from '../store';
 
-const RETURN_THRESHOLD_DAYS = 90;
+const RETURN_THRESHOLD_DAYS = 1; // TODO: remettre à 90 après test
 
 // Détecte si un client est en mode "reprise"
 export function isReturnClient(client) {
