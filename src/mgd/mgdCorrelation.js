@@ -77,6 +77,7 @@ export function buildMGDCorrelation(symptoms = [], labSignals = []) {
   const alerts = [];
   const recommendations = new Set();
 
+  const alertSignalsSeen = new Set();
   for (const symptom of symptoms) {
     const relatedSignals = SYMPTOM_BIOMARKER_MAP[symptom] || [];
     const confirmedSignals = relatedSignals.filter(s => labSignals.includes(s));
@@ -92,9 +93,10 @@ export function buildMGDCorrelation(symptoms = [], labSignals = []) {
         })),
       });
 
-      // Alertes pour signaux sévères
+      // Alertes pour signaux sévères (dédupliquées)
       for (const s of confirmedSignals) {
-        if (SIGNAL_LABELS[s]?.severity === 'high') {
+        if (SIGNAL_LABELS[s]?.severity === 'high' && !alertSignalsSeen.has(s)) {
+          alertSignalsSeen.add(s);
           alerts.push({
             signal: s,
             label: SIGNAL_LABELS[s].label,
