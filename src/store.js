@@ -246,6 +246,7 @@ async function cloudSyncNutritionConsultation(consultation) {
     is_followup: consultation.isFollowup || false,
     followup_data: consultation.followupData || null,
     previous_consultation_id: consultation.previousConsultationId || null,
+    mgd_recommendation: consultation.mgdRecommendation || 'none',
     status: consultation.status || 'questionnaire_recu',
     created_at: consultation.createdAt || new Date().toISOString(),
   };
@@ -282,6 +283,7 @@ export async function forceSyncAllConsultations() {
       is_followup: c.isFollowup || false,
       followup_data: c.followupData || null,
       previous_consultation_id: c.previousConsultationId || null,
+      mgd_recommendation: c.mgdRecommendation || 'none',
       status: c.status || 'questionnaire_recu',
       label: c.label || null,
       created_at: c.createdAt || new Date().toISOString(),
@@ -364,6 +366,7 @@ export async function pullFromCloud() {
       isFollowup: n.is_followup || false,
       followupData: n.followup_data || null,
       previousConsultationId: n.previous_consultation_id || null,
+      mgdRecommendation: n.mgd_recommendation || 'none',
       status: n.status || 'questionnaire_recu',
       createdAt: n.created_at,
     }));
@@ -738,6 +741,7 @@ export function saveNutritionConsultation(consultation) {
     isFollowup: consultation.isFollowup || false,
     followupData: consultation.followupData || null,
     previousConsultationId: consultation.previousConsultationId || null,
+    mgdRecommendation: consultation.mgdRecommendation || 'none',
     status: consultation.status || 'questionnaire_recu',
     createdAt: consultation.createdAt || new Date().toISOString(),
   };

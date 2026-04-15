@@ -4,7 +4,29 @@
       "Bash(vercel:*)",
       "Bash(npm install:*)",
       "Bash(git config:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(curl:*)",
+      "Bash(wc:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vercel:*)",
+      "Bash(where vercel:*)",
+      "Bash(npm i:*)",
+      "Bash(npx eslint:*)",
+      "WebSearch",
+      "WebFetch(domain:www.canva.dev)",
+      "Read(//tmp/**)",
+      "Bash(file /tmp/anissa-logo.png)",
+      "WebFetch(domain:www.anissanutrition.ch)",
+      "Bash(node -e \"import\\('./src/nutritionPdf.js'\\).then\\(\\(\\)=>console.log\\('OK'\\)\\).catch\\(e=>{console.error\\('ERR',e.message\\);process.exit\\(1\\)}\\)\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(grep -n \"anissa\\\\|logo\\\\|color\\\\|#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgb\" /c/Users/benoi/OneDrive/Desktop/benfitcoach-onboarding/src/index.css)",
+      "Bash(node -e ':*)",
+      "Bash(git commit:*)",
+      "Bash(node:*)",
+      "Bash(git checkout:*)",
+      "Bash(awk 'NR==3302,NR==3552' src/NutritionConsultation.jsx)"
     ]
   }
 }

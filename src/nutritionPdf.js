@@ -2024,6 +2024,9 @@ export async function exportCoverPDF(consultation, client) {
   // Type de bilan dérivé des flags de consultation (supporte snake_case et camelCase)
   const blood = !!consultation?.blood_test_done || !!consultation?.bloodTestDone;
   const dna   = !!consultation?.dna_test_done   || !!consultation?.dnaTestDone;
+  const mgdRec = consultation?.mgdRecommendation
+    || consultation?.mgd_recommendation
+    || (blood && dna ? 'advanced' : blood ? 'blood' : 'none');
   let typeBilan = 'Bilan Nutritionnel';
   if (blood && dna) typeBilan = 'Bilan Nutritionnel, Sanguin & ADN';
   else if (blood)   typeBilan = 'Bilan Nutritionnel & Sanguin';
@@ -2437,6 +2440,49 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
       y = renderFridgeData(doc, fridgeData, margin, y, cw);
       frigoRendered = true;
     }
+  }
+
+  // ═══════════ RECOMMANDATIONS BIOLOGIQUES MGD ═══════════
+  if (mgdRec && mgdRec !== 'none') {
+    doc.addPage();
+    doc.setFillColor(...BG_PAGE);
+    doc.rect(0, 0, pw, ph, 'F');
+    y = 20;
+
+    // Titre section
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(106, 191, 138);
+    doc.text('RECOMMANDATIONS BIOLOGIQUES', margin, y);
+    y += 6;
+
+    // Ligne séparatrice
+    doc.setDrawColor(106, 191, 138);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, pw - margin, y);
+    y += 6;
+
+    // Contenu
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(60, 60, 50);
+
+    const mgdText = mgdRec === 'advanced'
+      ? 'Un bilan avanc\u00e9 (sanguin + ADN) est recommand\u00e9 pour affiner la personnalisation de votre protocole nutritionnel.'
+      : 'Un bilan sanguin est recommand\u00e9 afin d\'optimiser votre accompagnement nutritionnel.';
+
+    const mgdDetail = mgdRec === 'advanced'
+      ? 'Bilan sanguin complet \u00b7 Test ADN nutritionnel \u00b7 Laboratoire MGD'
+      : 'Om\u00e9ga-3 \u00b7 Glyc\u00e9mie / Insuline \u00b7 CRP \u00b7 Vitamine D \u00b7 Laboratoire MGD';
+
+    const mgdLines = doc.splitTextToSize(mgdText, pw - margin * 2);
+    doc.text(mgdLines, margin, y);
+    y += mgdLines.length * 5 + 3;
+
+    doc.setTextColor(120, 100, 60);
+    doc.setFontSize(7.5);
+    doc.text(mgdDetail, margin, y);
+    y += 10;
   }
 
   // ═══════════ GUIDE DE DÉMARRAGE (last page) ═══════════

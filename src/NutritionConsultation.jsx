@@ -1676,7 +1676,7 @@ const PIPELINE_STATUSES = [
 function suggestStatus(consultation) {
   const c = consultation || {};
   if (c.nutrition_plan && c.nutrition_plan.trim()) return 'a_valider';
-  if (c.blood_test_done && (!c.lab_results || Object.values(c.lab_results || {}).every(v => !v))) return 'attente_analyses';
+  if ((c.mgd_recommendation === 'blood' || c.mgd_recommendation === 'advanced') && (!c.lab_results || Object.values(c.lab_results || {}).every(v => !v))) return 'attente_analyses';
   if (c.lab_results && Object.values(c.lab_results || {}).some(v => v)) return 'dossier_complet';
   return null;
 }
@@ -1685,6 +1685,7 @@ const INITIAL_CONSULTATION = {
   observations: '',
   blood_test_done: false,
   dna_test_done: false,
+  mgd_recommendation: 'none',
   nutritional_observations: '',
   nutrition_plan: '',
   supplements: '',
@@ -1783,6 +1784,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         observations: initialConsultation.observations || '',
         blood_test_done: initialConsultation.bloodTestDone || initialConsultation.blood_test_done || false,
         dna_test_done: initialConsultation.dnaTestDone || initialConsultation.dna_test_done || false,
+        mgd_recommendation: initialConsultation.mgdRecommendation
+          || initialConsultation.mgd_recommendation
+          || (initialConsultation.bloodTestDone || initialConsultation.blood_test_done
+              ? (initialConsultation.dnaTestDone || initialConsultation.dna_test_done
+                  ? 'advanced' : 'blood')
+              : 'none'),
         nutritional_observations: initialConsultation.nutritionalObservations || initialConsultation.nutritional_observations || '',
         nutrition_plan: initialConsultation.nutritionPlan || initialConsultation.nutrition_plan || '',
         supplements: initialConsultation.supplements || '',
@@ -2578,12 +2585,22 @@ ${suppText}`;
   };
 
   const handleSave = () => {
+    if (!consultation.mgd_recommendation) {
+      showSaveToast('S\u00e9lectionnez une recommandation biologique avant de sauvegarder');
+      return;
+    }
+
     // Safety : lire le DOM via ref au cas ou un keystroke est passe apres
     // le dernier debounce. Sinon, utiliser les drafts React (source habituelle).
     const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
     const planToSave = edited?.plan ?? planDraft;
     const suppToSave = edited?.supplements ?? supplementsDraft;
     const recipesToSave = edited?.recipes ?? recipesDraft;
+
+    const mgdRec = consultation.mgd_recommendation || 'none';
+    const bloodTestDone = mgdRec === 'blood' || mgdRec === 'advanced';
+    const dnaTestDone = mgdRec === 'advanced';
+
     setConsultation(prev => ({
       ...prev,
       nutrition_plan: planToSave,
@@ -2596,8 +2613,9 @@ ${suppText}`;
       consultantName: 'Anissa',
       date: initialConsultation?.date || new Date().toISOString(),
       observations: consultation.observations,
-      bloodTestDone: consultation.blood_test_done,
-      dnaTestDone: consultation.dna_test_done,
+      bloodTestDone,
+      dnaTestDone,
+      mgdRecommendation: mgdRec,
       nutritionalObservations: consultation.nutritional_observations,
       nutritionPlan: planToSave,
       supplements: suppToSave,
@@ -2925,19 +2943,99 @@ ${suppText}`;
             </div>
           </div>
 
-          <div className="nutrition-checkboxes" style={{ marginTop: 16 }}>
-            <label className="nutrition-checkbox">
-              <input type="checkbox" checked={consultation.blood_test_done} onChange={(e) => updateField('blood_test_done', e.target.checked)} />
-              <span>Bilan sanguin effectue</span>
-            </label>
-            <label className="nutrition-checkbox">
-              <input type="checkbox" checked={consultation.dna_test_done} onChange={(e) => updateField('dna_test_done', e.target.checked)} />
-              <span>Analyse ADN effectuee</span>
-            </label>
+          <div style={{
+            marginTop: 16,
+            padding: '14px 16px',
+            background: 'rgba(255,255,255,.03)',
+            border: '1px solid rgba(255,255,255,.07)',
+            borderRadius: 10,
+          }}>
+            <div style={{
+              fontSize: '.72rem', fontWeight: 700,
+              color: 'rgba(255,255,255,.4)',
+              textTransform: 'uppercase', letterSpacing: '.4px',
+              marginBottom: 12,
+            }}>
+              Recommandation bilan MGD
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                {
+                  value: 'none',
+                  label: 'Aucun test pour le moment',
+                  desc: '',
+                  color: 'rgba(255,255,255,.3)',
+                },
+                {
+                  value: 'blood',
+                  label: 'Bilan sanguin recommand\u00e9',
+                  desc: 'Om\u00e9ga-3 \u00b7 Glyc\u00e9mie / Insuline \u00b7 CRP \u00b7 Vitamine D',
+                  color: '#8abf9a',
+                },
+                {
+                  value: 'advanced',
+                  label: 'Bilan avanc\u00e9 recommand\u00e9',
+                  desc: 'Bilan sanguin complet + Test ADN nutritionnel',
+                  color: '#c5b07a',
+                },
+              ].map(opt => {
+                const selected = consultation.mgd_recommendation === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    onClick={() => updateField('mgd_recommendation', opt.value)}
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                      background: selected ? 'rgba(255,255,255,.05)' : 'none',
+                      border: selected
+                        ? `1px solid ${opt.color}`
+                        : '1px solid rgba(255,255,255,.05)',
+                      transition: 'all .15s',
+                    }}
+                  >
+                    {/* Radio visuel */}
+                    <div style={{
+                      width: 16, height: 16, borderRadius: '50%',
+                      border: `2px solid ${selected ? opt.color : 'rgba(255,255,255,.2)'}`,
+                      background: selected ? opt.color : 'none',
+                      flexShrink: 0, marginTop: 2,
+                      transition: 'all .15s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {selected && (
+                        <div style={{
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: '#1a2e1f',
+                        }} />
+                      )}
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: '.83rem', fontWeight: 600,
+                        color: selected ? opt.color : 'rgba(255,255,255,.5)',
+                        transition: 'color .15s',
+                      }}>
+                        {opt.label}
+                      </div>
+                      {opt.desc && (
+                        <div style={{
+                          fontSize: '.72rem',
+                          color: selected ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.2)',
+                          marginTop: 2,
+                        }}>
+                          {opt.desc}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           </div>
 
           {/* Lab results input (shown when blood test is done) */}
-          {consultation.blood_test_done && (
+          {(consultation.mgd_recommendation === 'blood' || consultation.mgd_recommendation === 'advanced') && (
             <div style={{ marginTop: 16 }}>
               <h4 style={{ fontSize: '.85rem', color: '#d4c9a8', marginBottom: 10 }}>Resultats biologiques</h4>
               <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>Saisissez les valeurs disponibles. Les champs vides sont ignores.</p>
