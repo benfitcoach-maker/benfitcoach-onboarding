@@ -15,6 +15,7 @@ import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
 import { analyzeLabResults } from './labInterpretationEngine';
+import { buildMGDCorrelation, formatCorrelationForPrompt } from './mgd/mgdCorrelation';
 
 // ─── PROMPT MODULES (composition conditionnelle) ───
 
@@ -2311,6 +2312,14 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }));
     parts.push(`Recommandation biologique Anissa : ${mgdRecLabel}`);
 
+    if (hasLabData) {
+      const labAnalysis2 = analyzeLabResults(labData);
+      const mgdSymptoms2 = detectSymptomsFromForm(form);
+      const correlation = buildMGDCorrelation(mgdSymptoms2, labAnalysis2.signals || []);
+      const correlationText = formatCorrelationForPrompt(correlation);
+      if (correlationText) parts.push(correlationText);
+    }
+
     parts.push('');
     parts.push(`Genere un plan nutrition personnalise COURT et PREMIUM. Format compact : synthese, regles, 2 trames de journees types (semaine 1), rotations et substitutions (semaines 2-4), fiche frigo, ajustements entrainement, suivi. PAS de menus detailles jour par jour. Lisible en 3 minutes.`);
     if (hasLabData) {
@@ -3148,6 +3157,95 @@ ${suppText}`;
                         {adj.caution && <div style={{ color: '#d45c4c', fontSize: '.72rem', marginTop: 2 }}>{adj.caution}</div>}
                       </div>
                     ))}
+                  </div>
+                );
+              })()}
+
+              {/* Corrélations symptômes ↔ biologie */}
+              {(() => {
+                const labData = consultation.lab_results || {};
+                const hasData = Object.values(labData).some(v => v !== '' && v != null);
+                if (!hasData) return null;
+                const labAnalysis = analyzeLabResults(labData);
+                if (!labAnalysis.signals?.length) return null;
+                const symptoms = detectSymptomsFromForm(form);
+                const correlation = buildMGDCorrelation(symptoms, labAnalysis.signals);
+                if (!correlation.hasCorrelations && !correlation.uncorrelatedSignals.length) return null;
+
+                return (
+                  <div style={{
+                    marginTop: 12,
+                    padding: '12px 14px',
+                    background: correlation.hasCritical
+                      ? 'rgba(248,113,113,.06)' : 'rgba(197,176,122,.05)',
+                    border: `1px solid ${correlation.hasCritical
+                      ? 'rgba(248,113,113,.2)' : 'rgba(197,176,122,.15)'}`,
+                    borderRadius: 10,
+                  }}>
+                    <div style={{
+                      fontSize: '.72rem', fontWeight: 700,
+                      color: correlation.hasCritical ? '#f87171' : '#c5b07a',
+                      textTransform: 'uppercase', letterSpacing: '.4px',
+                      marginBottom: 10,
+                    }}>
+                      🔗 Corrélations symptômes ↔ biologie
+                    </div>
+
+                    {/* Corrélations confirmées */}
+                    {correlation.correlations.map((c, i) => (
+                      <div key={i} style={{
+                        marginBottom: 8, padding: '7px 10px',
+                        background: 'rgba(255,255,255,.03)',
+                        borderRadius: 7,
+                        borderLeft: '2px solid rgba(197,176,122,.4)',
+                      }}>
+                        <div style={{ fontSize: '.8rem', fontWeight: 600, color: '#e0d8c0' }}>
+                          {c.symptomLabel}
+                          <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.35)',
+                            fontWeight: 400, marginLeft: 6 }}>
+                            confirmé biologiquement
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)', marginTop: 2 }}>
+                          {c.confirmedBy.map(b => b.label).join(' · ')}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Alertes prioritaires */}
+                    {correlation.alerts.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: '.68rem', fontWeight: 700,
+                          color: '#f87171', textTransform: 'uppercase',
+                          letterSpacing: '.3px', marginBottom: 6 }}>
+                          ⚡ Actions prioritaires
+                        </div>
+                        {correlation.alerts.slice(0, 3).map((a, i) => (
+                          <div key={i} style={{
+                            fontSize: '.75rem', color: '#b0c4a8',
+                            paddingLeft: 10,
+                            borderLeft: '2px solid rgba(248,113,113,.3)',
+                            marginBottom: 5, lineHeight: 1.4,
+                          }}>
+                            <strong style={{ color: '#f87171' }}>{a.label}</strong>
+                            <span style={{ color: 'rgba(255,255,255,.4)', marginLeft: 6 }}>
+                              — {a.action}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Signaux sans symptôme déclaré */}
+                    {correlation.uncorrelatedSignals.length > 0 && (
+                      <div style={{
+                        marginTop: 8, fontSize: '.72rem',
+                        color: 'rgba(255,255,255,.3)', fontStyle: 'italic',
+                      }}>
+                        Signaux détectés sans symptôme déclaré —
+                        à explorer lors du prochain RDV.
+                      </div>
+                    )}
                   </div>
                 );
               })()}
