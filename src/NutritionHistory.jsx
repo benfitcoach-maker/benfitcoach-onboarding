@@ -210,10 +210,18 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
                   <div className="history-item-header" onClick={() => toggle(c.id)}>
                     <span className="history-date">{formatDate(c.date)}</span>
                     <span className="history-sections">
-                      {c.isFollowup && <span className="followup-tag">Suivi</span>}
+                      {(() => {
+                        const type = c.label
+                          ? c.label
+                          : c.isFollowup
+                            ? 'Suivi'
+                            : consultations.indexOf(c) === consultations.length - 1
+                              ? 'Consultation initiale'
+                              : 'Consultation';
+                        return <span style={{ color: c.label ? '#c5b07a' : c.isFollowup ? '#fbbf24' : '#8abf9a' }}>{type}</span>;
+                      })()}
                       {c.bloodTestDone && '  Bilan sanguin'}
                       {c.dnaTestDone && '  ADN'}
-                      {c.nutritionPlan ? ` - ${c.label || 'Plan genere'}` : ''}
                     </span>
                     <div className="history-item-actions">
                       {isAnissa && (
