@@ -259,11 +259,40 @@ async function cloudSyncNutritionConsultation(consultation) {
 
 export async function forceSyncAllConsultations() {
   if (!isCloudEnabled) return { synced: 0, errors: 0 };
+  const ownerId = await getCurrentOwnerId();
   const consultations = readNutritionConsultations();
   let synced = 0, errors = 0;
   for (const c of consultations) {
-    await cloudSyncNutritionConsultation(c);
-    synced++;
+    const row = {
+      id: c.id,
+      owner_id: ownerId,
+      client_id: c.clientId,
+      consultant_name: c.consultantName || 'Anissa',
+      date: c.date,
+      observations: c.observations || '',
+      blood_test_done: c.bloodTestDone || false,
+      dna_test_done: c.dnaTestDone || false,
+      nutritional_observations: c.nutritionalObservations || '',
+      nutrition_plan: c.nutritionPlan || '',
+      supplements: c.supplements || '',
+      recipes: c.recipes || '',
+      fiche_frigo_json: c.ficheFrigoJson || null,
+      notes_for_coach: c.notesForCoach || '',
+      private_notes: c.privateNotes || '',
+      is_followup: c.isFollowup || false,
+      followup_data: c.followupData || null,
+      previous_consultation_id: c.previousConsultationId || null,
+      status: c.status || 'questionnaire_recu',
+      label: c.label || null,
+      created_at: c.createdAt || new Date().toISOString(),
+    };
+    const { error } = await supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.error('Sync failed:', c.id, error.message);
+      errors++;
+    } else {
+      synced++;
+    }
   }
   return { synced, errors };
 }
