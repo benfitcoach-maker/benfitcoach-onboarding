@@ -68,6 +68,20 @@ const SIGNAL_ACTIONS = {
   low_magnesium:                 'Légumes verts, amandes, graines de courge, chocolat noir 70%+.',
 };
 
+function computePriority(symptom, confirmedSignals) {
+  const highSeveritySignals = confirmedSignals.filter(s =>
+    SIGNAL_LABELS[s]?.severity === 'high'
+  );
+  if (highSeveritySignals.length >= 1) return 'high';
+
+  const mediumSignals = confirmedSignals.filter(s =>
+    SIGNAL_LABELS[s]?.severity === 'medium'
+  );
+  if (mediumSignals.length >= 1) return 'medium';
+
+  return 'watch';
+}
+
 /**
  * Fonction principale — croise symptômes + résultats biologiques
  * Ne fait PAS de diagnostic médical — signaux nutritionnels uniquement
@@ -86,6 +100,7 @@ export function buildMGDCorrelation(symptoms = [], labSignals = []) {
       correlations.push({
         symptom,
         symptomLabel: SYMPTOM_LABELS[symptom] || symptom,
+        priority: computePriority(symptom, confirmedSignals),
         confirmedBy: confirmedSignals.map(s => ({
           signal: s,
           label: SIGNAL_LABELS[s]?.label || s,
@@ -113,6 +128,21 @@ export function buildMGDCorrelation(symptoms = [], labSignals = []) {
     !correlations.some(c => c.confirmedBy.some(b => b.signal === s))
   );
 
+  // Trier par priorité
+  const priorityOrder = { high: 0, medium: 1, watch: 2 };
+  correlations.sort((a, b) =>
+    (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2)
+  );
+
+  // Résumé clinique — problème principal + lien + priorité
+  const topCorrelation = correlations[0] || null;
+  const clinicalSummary = topCorrelation ? {
+    mainIssue: topCorrelation.symptomLabel,
+    confirmedBy: topCorrelation.confirmedBy.map(b => b.label).join(', '),
+    priority: topCorrelation.priority,
+    topAction: alerts[0]?.action || '',
+  } : null;
+
   return {
     correlations,           // symptôme confirmé par biomarqueur
     alerts,                 // signaux sévères avec action
@@ -120,6 +150,7 @@ export function buildMGDCorrelation(symptoms = [], labSignals = []) {
     uncorrelatedSignals,    // signaux bio sans symptôme déclaré (à signaler)
     hasCorrelations: correlations.length > 0,
     hasCritical: alerts.some(a => SIGNAL_LABELS[a.signal]?.severity === 'high'),
+    clinicalSummary,        // résumé prioritaire pour affichage rapide
   };
 }
 
