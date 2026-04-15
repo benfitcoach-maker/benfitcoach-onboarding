@@ -2,46 +2,46 @@ import { useState } from 'react';
 import { analyzeCycleReview } from './services/aiClient';
 
 const ADHERENCE_LABELS = {
-  '100': '\u2705 Tous les jours',
-  '75':  '\ud83d\udfe1 75% du temps',
-  '50':  '\ud83d\udfe0 50% du temps',
-  '<50': '\ud83d\udd34 Moins de 50%',
+  '100': '✅ Tous les jours',
+  '75':  '🟡 75% du temps',
+  '50':  '🟠 50% du temps',
+  '<50': '🔴 Moins de 50%',
 };
 const CHEATS_LABELS = {
-  none:       '\u2705 Aucun',
-  occasional: '\ud83d\udfe1 Occasionnels',
-  frequent:   '\ud83d\udd34 Fr\u00e9quents',
+  none:       '✅ Aucun',
+  occasional: '🟡 Occasionnels',
+  frequent:   '🔴 Fréquents',
 };
 const PROGRESS_LABELS = {
-  yes:    '\u2705 Oui clairement',
-  little: '\ud83d\udfe1 Un peu',
-  none:   '\ud83d\udd34 Pas encore',
+  yes:    '✅ Oui clairement',
+  little: '🟡 Un peu',
+  none:   '🔴 Pas encore',
 };
 const ENERGY_LABELS = {
-  high:   '\u26a1 Meilleure',
-  normal: '\u27a1\ufe0f Stable',
-  low:    '\ud83d\udd0b Moins bonne',
+  high:   '⚡ Meilleure',
+  normal: '➡️ Stable',
+  low:    '🔋 Moins bonne',
 };
 const DIGESTION_LABELS = {
-  good:    '\u2705 Bonne',
-  average: '\ud83d\udfe1 Moyenne',
-  bad:     '\ud83d\udd34 Difficile',
+  good:    '✅ Bonne',
+  average: '🟡 Moyenne',
+  bad:     '🔴 Difficile',
 };
 const DIFFICULTY_LABELS = {
-  easy: '\u2705 Facile \u00e0 suivre',
-  ok:   '\ud83d\udfe1 Correct',
-  hard: '\ud83d\udd34 Trop difficile',
+  easy: '✅ Facile à suivre',
+  ok:   '🟡 Correct',
+  hard: '🔴 Trop difficile',
 };
 const ORGANISATION_LABELS = {
-  simple:  '\u2705 Simple',
-  medium:  '\ud83d\udfe1 G\u00e9rable',
-  complex: '\ud83d\udd34 Compliqu\u00e9e',
+  simple:  '✅ Simple',
+  medium:  '🟡 Gérable',
+  complex: '🔴 Compliquée',
 };
 const ISSUE_LABELS = {
   time:       'Manque de temps',
-  taste:      'Aliments pas appr\u00e9ci\u00e9s',
+  taste:      'Aliments pas appréciés',
   hunger:     'Faim entre les repas',
-  cost:       'Co\u00fbt alimentaire',
+  cost:       'Coût alimentaire',
   social:     'Social / restaurants',
   motivation: 'Motivation',
   complexity: 'Plan trop complexe',
@@ -76,9 +76,9 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
     try {
       const result = await analyzeCycleReview(client?.form || {}, review);
       if (result) setAnalysis(result);
-      else setError('Analyse \u00e9chou\u00e9e \u2014 r\u00e9essayez');
+      else setError('Analyse échouée — réessayez');
     } catch {
-      setError('Erreur IA \u2014 r\u00e9essayez');
+      setError('Erreur IA — réessayez');
     } finally {
       setAnalyzing(false);
     }
@@ -128,29 +128,29 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
           <button onClick={onClose} style={{
             background:'none', border:'none', color:'rgba(255,255,255,.4)',
             cursor:'pointer', fontSize:'1.2rem', padding:'4px 8px',
-          }}>{'\u2715'}</button>
+          }}>✕</button>
         </div>
 
         {/* Scrollable content */}
         <div style={{ overflowY:'auto', flex:1, padding:'16px 20px' }}>
 
-          {/* VUE 1 — R\u00e9sum\u00e9 */}
+          {/* Résumé */}
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:'.68rem', fontWeight:700,
               color:'rgba(106,191,138,.6)', textTransform:'uppercase',
               letterSpacing:'.4px', marginBottom:12 }}>
-              R\u00e9sum\u00e9 du bilan
+              Résumé du bilan
             </div>
 
             {[
-              { label:'Adh\u00e9rence', value: ADHERENCE_LABELS[review.adherence] },
-              { label:'\u00c9carts',    value: CHEATS_LABELS[review.cheats] },
+              { label:'Adhérence', value: ADHERENCE_LABELS[review.adherence] },
+              { label:'Écarts',    value: CHEATS_LABELS[review.cheats] },
               { label:'Progression', value: PROGRESS_LABELS[review.progress] },
-              { label:'\u00c9nergie',   value: ENERGY_LABELS[review.energy] },
+              { label:'Énergie',   value: ENERGY_LABELS[review.energy] },
               { label:'Digestion', value: DIGESTION_LABELS[review.digestion] },
-              { label:'Difficult\u00e9 plan', value: DIFFICULTY_LABELS[review.difficulty] },
+              { label:'Difficulté plan', value: DIFFICULTY_LABELS[review.difficulty] },
               { label:'Organisation',    value: ORGANISATION_LABELS[review.organisation] },
-              { label:'Probl\u00e8me principal', value: ISSUE_LABELS[review.main_issue] || review.main_issue },
+              { label:'Problème principal', value: ISSUE_LABELS[review.main_issue] || review.main_issue },
             ].filter(r => r.value).map(row => (
               <div key={row.label} style={{
                 display:'flex', justifyContent:'space-between',
@@ -176,7 +176,7 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
             )}
           </div>
 
-          {/* VUE 2 — Analyse IA */}
+          {/* Analyse IA */}
           {!analysis && (
             <button
               onClick={handleAnalyze}
@@ -197,8 +197,8 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
               onMouseLeave={e => { if (!analyzing) e.currentTarget.style.background='rgba(106,191,138,.12)'; }}
             >
               {analyzing
-                ? <><span style={{ animation:'neSpin .8s linear infinite', display:'inline-block' }}>{'\u2728'}</span> Analyse en cours...</>
-                : '\u2728 Analyser avec l\'IA'
+                ? <><span style={{ animation:'neSpin .8s linear infinite', display:'inline-block' }}>✨</span> Analyse en cours...</>
+                : '✨ Analyser avec l\'IA'
               }
             </button>
           )}
@@ -220,7 +220,7 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
               <div style={{ fontSize:'.68rem', fontWeight:700,
                 color:'rgba(106,191,138,.6)', textTransform:'uppercase',
                 letterSpacing:'.4px', marginBottom:12 }}>
-                {'\u2728'} Analyse IA
+                ✨ Analyse IA
               </div>
 
               {/* Diagnostic */}
@@ -234,7 +234,7 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
               {analysis.cause_dominante && (
                 <div style={{ fontSize:'.78rem', color:'#fbbf24',
                   marginBottom:14, display:'flex', gap:6, alignItems:'flex-start' }}>
-                  <span>{'\u26a0\ufe0f'}</span>
+                  <span>⚠️</span>
                   <span>{analysis.cause_dominante}</span>
                 </div>
               )}
@@ -243,9 +243,9 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
               {analysis.scores && (
                 <div style={{ marginBottom:14,
                   paddingBottom:14, borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                  <ScoreBar label="Adh\u00e9rence" value={analysis.scores.adherence} />
-                  <ScoreBar label="R\u00e9sultats" value={analysis.scores.resultats} />
-                  <ScoreBar label="Bien-\u00eatre" value={analysis.scores.bien_etre} />
+                  <ScoreBar label="Adhérence" value={analysis.scores.adherence} />
+                  <ScoreBar label="Résultats" value={analysis.scores.resultats} />
+                  <ScoreBar label="Bien-être" value={analysis.scores.bien_etre} />
                 </div>
               )}
 
@@ -255,7 +255,7 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
                   <div style={{ fontSize:'.72rem', fontWeight:700,
                     color:'rgba(96,165,250,.7)', textTransform:'uppercase',
                     letterSpacing:'.4px', marginBottom:8 }}>
-                    {'\u26a1'} Pour le prochain cycle
+                    ⚡ Pour le prochain cycle
                   </div>
                   {analysis.recommandations.map((r, i) => (
                     <div key={i} style={{
@@ -279,7 +279,7 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
                   borderRadius:8, fontSize:'.8rem',
                   color:'#8abf9a', lineHeight:1.5,
                 }}>
-                  {'\ud83c\udfaf'} {analysis.prochain_cycle}
+                  🎯 {analysis.prochain_cycle}
                 </div>
               )}
 
@@ -297,7 +297,7 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
                   onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.35)'}
                   onMouseLeave={e => e.currentTarget.style.background='rgba(106,191,138,.2)'}
                 >
-                  + Pr\u00e9parer la prochaine consultation
+                  + Préparer la prochaine consultation
                 </button>
               )}
             </div>

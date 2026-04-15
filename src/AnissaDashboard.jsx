@@ -240,7 +240,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                   onMouseEnter={e => e.currentTarget.style.background='rgba(74,222,128,.08)'}
                   onMouseLeave={e => e.currentTarget.style.background='none'}
                 >
-                  {'\ud83d\udfe2'} Bilan re\u00e7u — Voir le d\u00e9tail
+                  🟢 Bilan reçu — Voir le détail
                 </button>
               )}
               {reviewStatus === 'sent' && (
