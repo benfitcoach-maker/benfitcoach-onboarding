@@ -246,3 +246,79 @@ EXEMPLE DE STYLE ATTENDU :
 
   return postProcess(text);
 }
+
+export async function adaptPlanForReturn(form, lastPlan, diagnostic) {
+  const context = [
+    form?.prenom         ? `Client : ${form.prenom}` : '',
+    form?.age            ? `Âge : ${form.age} ans` : '',
+    form?.poids          ? `Poids actuel : ${form.poids} kg` : '',
+    form?.objectifPrincipalNutrition
+                         ? `Objectif : ${form.objectifPrincipalNutrition}` : '',
+    form?.allergies      ? `Allergies : ${form.allergies}` : '',
+    form?.pathologies    ? `Pathologies : ${form.pathologies}` : '',
+  ].filter(Boolean).join('\n');
+
+  const profileDirectives = {
+    simplify:
+      'REPRISE APRÈS ABANDON : plan ultra-simple. 3 repas max, 0 préparation complexe. ' +
+      '1 seul objectif prioritaire. Recettes rapides (<15 min). Pas de suppléments complexes au départ.',
+    recalibrate:
+      'REPRISE APRÈS STAGNATION : changer complètement la stratégie. ' +
+      'Revoir la répartition des macros. Introduire un jour de charge si perte de poids. ' +
+      'Nouvelles recettes, nouveau timing des repas.',
+    stabilize:
+      'REPRISE APRÈS PERTE DE POIDS : phase de stabilisation 2 semaines. ' +
+      'Augmenter légèrement les glucides complexes. Maintenir les acquis. ' +
+      'Réintroduire progressivement les aliments restreints.',
+    metabolic:
+      'AJUSTEMENT MÉTABOLIQUE : recalibrer les apports. ' +
+      'Probable adaptation — réduire le déficit, augmenter la variété. ' +
+      'Introduire des cycles caloriques sur la semaine.',
+    standard:
+      'REPRISE STANDARD : partir des acquis du cycle précédent. ' +
+      'Garder ce qui fonctionnait, améliorer ce qui bloquait.',
+  };
+
+  const directive = profileDirectives[diagnostic.returnProfile] || profileDirectives.standard;
+
+  const whatWorkedText = diagnostic.whatWorked.length > 0
+    ? `Ce qui a fonctionné : ${diagnostic.whatWorked.join(', ')}`
+    : '';
+  const whatFailedText = diagnostic.whatFailed.length > 0
+    ? `Ce qui n'a pas fonctionné : ${diagnostic.whatFailed.join(', ')}`
+    : '';
+
+  const system = `Tu es Anissa, nutritionniste experte.
+Tu crées un plan de reprise pour un client qui revient après ${diagnostic.daysSinceLastConsult} jours d'absence.
+
+PROFIL CLIENT :
+${context}
+
+HISTORIQUE :
+${whatWorkedText}
+${whatFailedText}
+Recommandation : ${diagnostic.recommendation}
+
+DIRECTIVE PRINCIPALE :
+${directive}
+
+RÈGLES D'ÉCRITURE ABSOLUES :
+- Pas de **gras**, pas de # titres markdown
+- Pas de "idéalement", "n'hésitez pas", "il est conseillé"
+- Phrases directes et courtes. Quantités précises.
+- Varie la longueur des phrases — certaines très courtes
+
+EXEMPLE :
+❌ "Il est recommandé d'augmenter progressivement les protéines."
+✅ "Ajouter 30g de protéines au déjeuner. Œuf, poulet ou sardines."`;
+
+  const text = await aiRequest(
+    system,
+    lastPlan?.trim()
+      ? `Plan précédent (adapter pour la reprise) :\n\n${lastPlan.slice(0, 3000)}`
+      : `Créer un plan de reprise complet pour ${form?.prenom || 'ce client'}.`,
+    3000
+  );
+
+  return postProcess(text);
+}

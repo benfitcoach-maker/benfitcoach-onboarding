@@ -3,6 +3,7 @@ import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations } from './store';
 import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
+import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 
 function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
   const handleSend = (e) => {
@@ -50,13 +51,15 @@ function getFollowUpStatus(clientId) {
   return null;
 }
 
-function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview }) {
+function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview, onReturnPlan }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('loading');
   const [latestReview, setLatestReview] = useState(null);
   const consultations = getNutritionConsultations(client.id);
   const followUp = getFollowUpStatus(client.id);
   const lastConsultation = consultations[0];
+  const isReturn = isReturnClient(client);
+  const daysSince = isReturn ? daysSinceLastConsultation(client) : null;
 
   useEffect(() => {
     getCycleReviews(client.id).then(reviews => {
@@ -176,6 +179,19 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
             ✓ Bilan reçu
           </span>
         )}
+        {isReturn && (
+          <span style={{
+            display:'inline-flex', alignItems:'center', gap:4,
+            fontSize:'.7rem', fontWeight:600, padding:'2px 8px',
+            borderRadius:20, alignSelf:'flex-start',
+            background:'rgba(96,165,250,.1)',
+            color:'#60a5fa',
+            border:'1px solid rgba(96,165,250,.2)',
+            marginBottom:4,
+          }}>
+            🔁 Reprise — {daysSince}j
+          </span>
+        )}
         {objectif && (
           <div style={{ fontSize: '.8rem', color: 'var(--text-muted)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -222,6 +238,28 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               />
               {/* Séparateur */}
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
+
+              {/* Plan de reprise */}
+              {isReturn && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onReturnPlan(client);
+                  }}
+                  style={{
+                    display:'block', width:'100%', textAlign:'left',
+                    padding:'10px 16px', background:'none', border:'none',
+                    color:'#60a5fa', cursor:'pointer', fontSize:'.85rem',
+                    transition:'background .15s',
+                    borderBottom:'1px solid rgba(255,255,255,.06)',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(96,165,250,.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background='none'}
+                >
+                  🔁 Générer plan de reprise
+                </button>
+              )}
 
               {/* Badge statut bilan */}
               {reviewStatus === 'submitted' && latestReview && (
@@ -281,7 +319,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   );
 }
 
-export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan }) {
+export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan, onReturnPlan }) {
   const [search, setSearch] = useState('');
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedReviewClient, setSelectedReviewClient] = useState(null);
@@ -433,7 +471,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               </h3>
               <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} />
                 ))}
               </div>
             </div>
@@ -444,7 +482,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             <div className="anissa-section">
               <div className="anissa-client-list">
                 {filteredOwn.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} />
                 ))}
               </div>
             </div>
