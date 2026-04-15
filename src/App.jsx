@@ -517,6 +517,7 @@ function App() {
   const handleAdaptPlan = (client, adaptedPlan) => {
     const consultations = getNutritionConsultations(client.id);
     const lastConsultation = consultations[0] || null;
+    const weekLabel = `Adaptation bilan 4 semaines`;
     const prefilledConsultation = lastConsultation
       ? {
           ...lastConsultation,
@@ -524,12 +525,16 @@ function App() {
           nutritionPlan: adaptedPlan,
           createdAt: new Date().toISOString(),
           status: 'a_valider',
+          label: weekLabel,
+          consultantName: 'Anissa',
         }
       : {
           clientId: client.id,
           nutritionPlan: adaptedPlan,
           createdAt: new Date().toISOString(),
           status: 'a_valider',
+          label: weekLabel,
+          consultantName: 'Anissa',
         };
     setClientId(client.id);
     setEditingConsultation(prefilledConsultation);

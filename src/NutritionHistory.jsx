@@ -213,7 +213,7 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
                       {c.isFollowup && <span className="followup-tag">Suivi</span>}
                       {c.bloodTestDone && '  Bilan sanguin'}
                       {c.dnaTestDone && '  ADN'}
-                      {c.nutritionPlan ? ' - Plan genere' : ''}
+                      {c.nutritionPlan ? ` - ${c.label || 'Plan genere'}` : ''}
                     </span>
                     <div className="history-item-actions">
                       {isAnissa && (
