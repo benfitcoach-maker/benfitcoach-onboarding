@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { analyzeCycleReview } from './services/aiClient';
 import { adaptPlanFromReview } from './services/aiPlanOptimizer';
+import { getNutritionConsultations } from './store';
 
 const ADHERENCE_LABELS = {
   '100': '✅ Tous les jours',
@@ -89,17 +90,28 @@ export default function CycleReviewPanel({ review, client, onClose, onOpenConsul
 
   const handleAdaptPlan = async () => {
     setAdapting(true);
+    setError('');
     try {
-      const currentPlan = client?.latestPlan || '';
+      const consultations = getNutritionConsultations(client?.id);
+      const lastConsultation = consultations?.[0];
+      const currentPlan = lastConsultation?.nutritionPlan
+        || lastConsultation?.nutrition_plan
+        || '';
+
+      if (!currentPlan.trim()) {
+        setError('Aucun plan trouvé pour ce client. Créez d\'abord une consultation.');
+        setAdapting(false);
+        return;
+      }
+
       const result = await adaptPlanFromReview(
         client?.form || {},
         currentPlan,
         review,
         analysis
       );
-      if (result) {
-        setAdaptedPlan(result);
-      }
+      if (result) setAdaptedPlan(result);
+      else setError('Adaptation échouée — réessayez');
     } catch (err) {
       setError('Erreur lors de l\'adaptation — réessayez');
     } finally {
