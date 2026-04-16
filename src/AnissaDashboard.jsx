@@ -4,6 +4,7 @@ import { getNutritionConsultations, deleteClient, createCycleReview, getCycleRev
 import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
+import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS } from './services/packSystem';
 
 function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
   const handleSend = (e) => {
@@ -51,7 +52,7 @@ function getFollowUpStatus(clientId) {
   return null;
 }
 
-function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview, onReturnPlan }) {
+function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview, onReturnPlan, onSendPackReview }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('loading');
   const [latestReview, setLatestReview] = useState(null);
@@ -60,6 +61,10 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   const lastConsultation = consultations[0];
   const isReturn = isReturnClient(client);
   const daysSince = isReturn ? daysSinceLastConsultation(client) : null;
+  const packDef = client.packType ? PACK_DEFINITIONS[client.packType] : null;
+  const isFollowupPack = client.packType?.startsWith('suivi');
+  const nextStep = isFollowupPack ? getNextPendingStep(client) : null;
+  const completion = isFollowupPack ? getPackCompletion(client) : null;
 
   useEffect(() => {
     getCycleReviews(client.id).then(reviews => {
@@ -192,6 +197,43 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
             🔁 Reprise — {daysSince}j
           </span>
         )}
+        {isFollowupPack && packDef && (
+          <div style={{
+            marginTop: 6,
+            padding: '8px 12px',
+            background: 'rgba(197,176,122,.06)',
+            border: '1px solid rgba(197,176,122,.15)',
+            borderRadius: 8,
+            fontSize: '.75rem',
+          }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: nextStep ? 6 : 0,
+            }}>
+              <span style={{ color: '#c5b07a', fontWeight: 600 }}>
+                {packDef.label}
+              </span>
+              {completion && (
+                <span style={{ color: 'rgba(255,255,255,.4)' }}>
+                  {completion.done}/{completion.total} étapes
+                </span>
+              )}
+            </div>
+            {nextStep && (
+              <div style={{
+                fontSize: '.72rem',
+                color: nextStep.isLate
+                  ? '#f87171' : nextStep.isDueSoon
+                  ? '#fbbf24' : 'rgba(255,255,255,.35)',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <span>{nextStep.isLate ? '⚠️' : '→'}</span>
+                {nextStep.label}
+                {nextStep.isLate && ' (en retard)'}
+              </div>
+            )}
+          </div>
+        )}
         {objectif && (
           <div style={{ fontSize: '.8rem', color: 'var(--text-muted)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -303,6 +345,26 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 </button>
               )}
 
+              {isFollowupPack && nextStep?.type === 'review' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    if (onSendPackReview) onSendPackReview(client, nextStep);
+                  }}
+                  style={{
+                    display:'block', width:'100%', textAlign:'left',
+                    padding:'10px 16px', background:'none', border:'none',
+                    color:'#c5b07a', cursor:'pointer', fontSize:'.85rem',
+                    transition:'background .15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(197,176,122,.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background='none'}
+                >
+                  📋 Envoyer {nextStep.label}
+                </button>
+              )}
+
               {isOwn && (
                 <button onClick={handleDelete}
                   style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
@@ -319,7 +381,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   );
 }
 
-export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan, onReturnPlan }) {
+export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan, onReturnPlan, onSendPackReview }) {
   const [search, setSearch] = useState('');
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedReviewClient, setSelectedReviewClient] = useState(null);
@@ -471,7 +533,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               </h3>
               <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
                 ))}
               </div>
             </div>
@@ -482,7 +544,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             <div className="anissa-section">
               <div className="anissa-client-list">
                 {filteredOwn.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
                 ))}
               </div>
             </div>
