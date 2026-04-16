@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft } from './store';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
@@ -1917,6 +1917,24 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [showPdfMenu, setShowPdfMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [mgdOpen, setMgdOpen] = useState(false);
+
+  // Memoize MGD correlation computations (expensive, re-run only when lab data or form changes)
+  const hasLabData = useMemo(() => {
+    const labData = consultation.lab_results || {};
+    return Object.values(labData).some(v => v !== '' && v != null);
+  }, [consultation.lab_results]);
+
+  const labAnalysisMemo = useMemo(
+    () => hasLabData ? analyzeLabResults(consultation.lab_results || {}) : null,
+    [consultation.lab_results, hasLabData]
+  );
+
+  const mgdCorrelationMemo = useMemo(() => {
+    if (!hasLabData || !labAnalysisMemo?.signals?.length) return null;
+    const symptoms = detectSymptomsFromForm(form);
+    return buildMGDCorrelation(symptoms, labAnalysisMemo.signals);
+  }, [consultation.lab_results, form, hasLabData, labAnalysisMemo]);
+
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const editorGetDataRef = useRef(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -2668,6 +2686,7 @@ ${suppText}`;
         }
       } catch (ficheErr) {
         console.warn('Fiche frigo generation echouee (non bloquant)', ficheErr);
+        showSaveToast('Fiche frigo non générée — le plan est sauvegardé sans elle');
       }
 
     } catch (err) {
@@ -2767,6 +2786,12 @@ ${suppText}`;
             <div className="ci-header">
               <span className="ci-icon">🕐</span>
               <h3>Historique des versions du plan</h3>
+            </div>
+            <div style={{
+              fontSize: '.7rem', color: 'rgba(255,255,255,.3)',
+              fontStyle: 'italic', marginBottom: 8,
+            }}>
+              Sauvegardées localement · Non synchronisées entre appareils
             </div>
             <p className="ci-intro">
               {planVersions.length} version{planVersions.length > 1 ? 's' : ''} sauvegardee{planVersions.length > 1 ? 's' : ''} localement
@@ -3265,11 +3290,9 @@ ${suppText}`;
 
               {/* Live interpretation preview */}
               {(() => {
-                const labData = consultation.lab_results || {};
-                const hasData = Object.values(labData).some(v => v !== '' && v != null);
-                if (!hasData) return null;
-                const analysis = analyzeLabResults(labData);
-                if (analysis.signals.length === 0) return (
+                if (!hasLabData) return null;
+                const analysis = labAnalysisMemo;
+                if (!analysis || analysis.signals.length === 0) return (
                   <div style={{ marginTop: 10, fontSize: '.78rem', color: '#2a9d5c' }}>Tous les marqueurs saisis sont dans les normes fonctionnelles.</div>
                 );
                 return (
@@ -3288,13 +3311,8 @@ ${suppText}`;
 
               {/* Corrélations symptômes ↔ biologie */}
               {(() => {
-                const labData = consultation.lab_results || {};
-                const hasData = Object.values(labData).some(v => v !== '' && v != null);
-                if (!hasData) return null;
-                const labAnalysis = analyzeLabResults(labData);
-                if (!labAnalysis.signals?.length) return null;
-                const symptoms = detectSymptomsFromForm(form);
-                const correlation = buildMGDCorrelation(symptoms, labAnalysis.signals);
+                const correlation = mgdCorrelationMemo;
+                if (!correlation) return null;
                 if (!correlation.hasCorrelations && !correlation.uncorrelatedSignals.length) return null;
 
                 return (
