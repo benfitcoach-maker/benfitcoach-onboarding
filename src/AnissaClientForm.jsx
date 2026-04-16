@@ -46,7 +46,14 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
   };
 
   const handleQuickCreate = () => {
-    if (!form.prenom.trim() || !form.email.trim()) return;
+    if (!form.prenom.trim()) {
+      alert('Le prénom est obligatoire');
+      return;
+    }
+    if (!form.email.trim()) {
+      alert('L\'email est obligatoire pour envoyer le questionnaire');
+      return;
+    }
     if (onSaveQuick) {
       onSaveQuick(form, packType);
     } else {
