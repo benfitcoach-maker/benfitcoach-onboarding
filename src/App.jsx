@@ -31,7 +31,7 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud } from './store';
 import { buildReturnDiagnostic } from './services/returnDiagnostic';
 import { adaptPlanForReturn } from './services/aiPlanOptimizer';
 import { supabase, isCloudEnabled } from './supabaseClient';
@@ -209,6 +209,18 @@ function App() {
     if (authenticated) purgeExpiredDrafts();
   }, [authenticated]);
 
+  // Load API key from cloud on login if localStorage is empty
+  useEffect(() => {
+    if (!authenticated || !isCloudEnabled) return;
+    if (apiKey) return;
+    loadApiKeyFromCloud().then(key => {
+      if (key) {
+        setApiKey(key);
+        localStorage.setItem('bfc_api_key', key);
+      }
+    });
+  }, [authenticated]);
+
   // Cloud sync on login
   useEffect(() => {
     if (!authenticated || !isCloudEnabled) return;
@@ -265,6 +277,7 @@ function App() {
     const key = e.target.value;
     setApiKey(key);
     localStorage.setItem('bfc_api_key', key);
+    if (key.trim()) saveApiKeyToCloud(key.trim());
   };
 
   const openClient = (id) => {

@@ -259,6 +259,23 @@ async function cloudSyncNutritionConsultation(consultation) {
   });
 }
 
+export async function saveApiKeyToCloud(apiKey) {
+  if (!isCloudEnabled || !apiKey) return;
+  await supabase
+    .from('app_config')
+    .upsert({ key: 'anthropic_api_key', value: apiKey });
+}
+
+export async function loadApiKeyFromCloud() {
+  if (!isCloudEnabled) return null;
+  const { data } = await supabase
+    .from('app_config')
+    .select('value')
+    .eq('key', 'anthropic_api_key')
+    .single();
+  return data?.value || null;
+}
+
 export async function forceSyncAllConsultations() {
   if (!isCloudEnabled) return { synced: 0, errors: 0 };
   const ownerId = await getCurrentOwnerId();
