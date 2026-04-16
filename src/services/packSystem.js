@@ -112,9 +112,18 @@ export function buildPackFollowupSchedule(client) {
   const pack = PACK_DEFINITIONS[packType];
   if (!pack || pack.steps.length === 0) return [];
 
-  const startedAt = client.packStartedAt
-    ? new Date(client.packStartedAt)
-    : new Date(client.createdAt || Date.now());
+  // Règle : pack_started_at = première consultation réelle
+  // Fallback : pack_started_at stocké → sinon createdAt
+  const resolveStartDate = (c) => {
+    if (c.packStartedAt) {
+      const stored = new Date(c.packStartedAt);
+      const created = new Date(c.createdAt || Date.now());
+      // packStartedAt valide = même jour ou postérieur à createdAt
+      if (stored >= created) return stored;
+    }
+    return new Date(c.createdAt || Date.now());
+  };
+  const startedAt = resolveStartDate(client);
 
   const packSchedule = client.packSchedule || [];
 
@@ -146,10 +155,27 @@ export function buildPackFollowupSchedule(client) {
 
 /**
  * Retourne la prochaine étape à traiter pour un client.
+ * Une seule étape active = première non done, triée par weekOffset.
  */
 export function getNextPendingStep(client) {
   const steps = buildPackFollowupSchedule(client);
-  return steps.find(s => s.status !== 'done') || null;
+  return steps
+    .filter(s => s.status !== 'done')
+    .sort((a, b) => a.weekOffset - b.weekOffset)[0] || null;
+}
+
+/**
+ * Détermine si le bouton "Envoyer bilan" doit s'afficher pour une étape.
+ * Conditions : type review, pas déjà envoyée, due dans <= 7 jours ou en retard.
+ */
+export function canSendPackReview(step) {
+  if (!step) return false;
+  if (step.type !== 'review') return false;
+  if (step.status === 'sent' || step.status === 'done') return false;
+  const now = new Date();
+  const due = new Date(step.dueDate);
+  const daysUntilDue = (due - now) / (1000 * 60 * 60 * 24);
+  return daysUntilDue <= 7;
 }
 
 /**

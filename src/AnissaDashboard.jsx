@@ -4,7 +4,7 @@ import { getNutritionConsultations, deleteClient, createCycleReview, getCycleRev
 import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
-import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS } from './services/packSystem';
+import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
 
 function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
   const handleSend = (e) => {
@@ -345,7 +345,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 </button>
               )}
 
-              {isFollowupPack && nextStep?.type === 'review' && (
+              {isFollowupPack && canSendPackReview(nextStep) && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

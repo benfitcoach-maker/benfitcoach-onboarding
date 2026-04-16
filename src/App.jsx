@@ -470,6 +470,16 @@ function App() {
 
   const handleSaveConsultation = (consultation) => {
     saveNutritionConsultation(consultation);
+    // Règle : mettre à jour pack_started_at à la première consultation
+    // d'un pack suivi si pas encore défini
+    const currentClient = getClient(consultation.clientId || clientId);
+    if (currentClient?.packType?.startsWith('suivi') &&
+        !currentClient.packStartedAt) {
+      saveClient({
+        ...currentClient,
+        packStartedAt: new Date().toISOString(),
+      });
+    }
     showToast('Consultation sauvegardee avec succes');
     setTimeout(() => {
       setPage('dashboard');
