@@ -1980,12 +1980,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // Reseed : remplace les drafts + remount l'editeur. A appeler APRES toute
   // ecriture "autoritaire" du plan (AI gen, template, restore version).
   const reseedEditor = (plan, supplements, recipes) => {
-    console.log('[NC] reseedEditor CALLED', {
-      planLen: (plan || '').length,
-      suppLen: (supplements || '').length,
-      recLen: (recipes || '').length,
-      stack: new Error().stack?.split('\n').slice(1, 5).join(' → '),
-    });
     setPlanDraft(plan || '');
     setSupplementsDraft(supplements || '');
     setRecipesDraft(recipes || '');
@@ -3370,18 +3364,8 @@ ${suppText}`;
                         onClick={() => {
                           setStep(2);
                           setTimeout(() => {
-                            const btns = document.querySelectorAll('button');
-                            const regenBtn = Array.from(btns).find(b =>
-                              b.textContent?.includes('Régénérer') ||
-                              b.textContent?.includes('Regenerer') ||
-                              b.textContent?.includes('Generer')
-                            );
-                            if (regenBtn && !regenBtn.disabled) {
-                              regenBtn.click();
-                            } else {
-                              showSaveToast('Allez dans "Plan nutrition" et cliquez Régénérer');
-                            }
-                          }, 300);
+                            handleGenerate();
+                          }, 150);
                         }}
                         style={{
                           width: '100%', marginTop: 12, padding: '9px',
