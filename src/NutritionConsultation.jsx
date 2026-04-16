@@ -1729,6 +1729,67 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function buildRecommendedBloodTests(form) {
+  const tests = new Set();
+  const f = form || {};
+
+  if (f.energieJournee && Number(f.energieJournee) <= 2) {
+    tests.add('Ferritine');
+    tests.add('Vitamine D');
+    tests.add('TSH');
+  }
+
+  if (f.frequenceBallonnements && Number(f.frequenceBallonnements) <= 2) {
+    tests.add('CRP ultrasensible');
+  }
+
+  if (f.fringalesSucre && /oui|souvent|regulier/i.test(f.fringalesSucre)) {
+    tests.add('Glycémie à jeun');
+    tests.add('Insuline à jeun');
+  }
+
+  const obj = (f.objectifPrincipalNutrition || '').toLowerCase();
+  if (/poids|perte|metabol/.test(obj)) {
+    tests.add('Glycémie à jeun');
+    tests.add('Insuline à jeun');
+    tests.add('TSH');
+  }
+
+  if (f.douleursInflammations && f.douleursInflammations.trim()) {
+    tests.add('CRP ultrasensible');
+    tests.add('Ferritine');
+  }
+
+  if (f.niveauStressActuel && Number(f.niveauStressActuel) >= 7) {
+    tests.add('TSH');
+  }
+
+  if (f.emotional_shock === 'Oui') {
+    tests.add('Cortisol (matin)');
+    tests.add('Magnésium');
+  }
+
+  if (f.pathologies && /thyro[iï]d|hashimoto/i.test(f.pathologies)) {
+    tests.add('TSH');
+    tests.add('T3 libre');
+    tests.add('T4 libre');
+  }
+
+  if (f.spm && /oui|fort/i.test(f.spm)) {
+    tests.add('Ferritine');
+    tests.add('Vitamine D');
+  }
+
+  if (tests.size === 0) {
+    tests.add('Vitamine D');
+    tests.add('Ferritine');
+    tests.add('TSH');
+    tests.add('CRP ultrasensible');
+  }
+
+  return [...tests].slice(0, 6).join('\n');
+}
+
 export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation }) {
   const [client, setClient] = useState(() => getClient(clientId));
   const form = client?.form || {};
@@ -3324,6 +3385,87 @@ ${suppText}`;
                   </div>
                 );
               })()}
+
+              {/* Analyses recommandées MGD */}
+              <div style={{
+                marginTop: 16,
+                padding: '16px',
+                background: 'rgba(255,255,255,.03)',
+                border: '1px solid rgba(255,255,255,.08)',
+                borderRadius: 12,
+              }}>
+                <div style={{
+                  fontSize: '.75rem', fontWeight: 700,
+                  color: '#c5b07a', textTransform: 'uppercase',
+                  letterSpacing: '.5px', marginBottom: 12,
+                  display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <span>📝 Analyses recommandées (MGD)</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const generated = buildRecommendedBloodTests(form);
+                        setConsultation(prev => ({
+                          ...prev,
+                          mgd_recommended_tests_text: generated,
+                        }));
+                      }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6,
+                        border: '1px solid rgba(197,176,122,.3)',
+                        background: 'rgba(197,176,122,.1)',
+                        color: '#c5b07a', cursor: 'pointer',
+                        fontSize: '.72rem', fontWeight: 600,
+                      }}
+                    >
+                      ✨ Générer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConsultation(prev => ({
+                        ...prev,
+                        mgd_recommended_tests_text: '',
+                      }))}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6,
+                        border: '1px solid rgba(255,255,255,.08)',
+                        background: 'none',
+                        color: 'rgba(255,255,255,.3)', cursor: 'pointer',
+                        fontSize: '.72rem',
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={consultation.mgd_recommended_tests_text || ''}
+                  onChange={e => setConsultation(prev => ({
+                    ...prev,
+                    mgd_recommended_tests_text: e.target.value,
+                  }))}
+                  placeholder="Cliquez sur Générer pour obtenir les analyses recommandées, ou saisissez manuellement..."
+                  style={{
+                    width: '100%', minHeight: 100,
+                    background: 'rgba(0,0,0,.2)',
+                    border: '1px solid rgba(255,255,255,.08)',
+                    borderRadius: 8, padding: '10px 12px',
+                    color: '#d4c9a8', fontSize: '.82rem',
+                    lineHeight: 1.7, fontFamily: 'inherit',
+                    resize: 'vertical', outline: 'none',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(197,176,122,.4)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,.08)'; }}
+                />
+                <div style={{
+                  fontSize: '.7rem', color: 'rgba(255,255,255,.2)',
+                  marginTop: 6,
+                }}>
+                  Basé sur le profil client. Modifiable librement.
+                </div>
+              </div>
             </div>
           )}
         </div>
