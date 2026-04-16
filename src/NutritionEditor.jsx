@@ -938,30 +938,190 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
 
       {/* Cover PDF form modal */}
       {showCoverForm && (
-        <div className="modal-overlay" onClick={() => setShowCoverForm(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 24 }}>
-            <h3 style={{ marginBottom: 16, color: '#d4c9a8' }}>Cover PDF — personnaliser</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div
+          onClick={() => setShowCoverForm(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 480,
+              background: '#1a2e1f',
+              border: '1px solid rgba(197,176,122,.25)',
+              borderRadius: 16,
+              overflow: 'hidden',
+              boxShadow: '0 20px 60px rgba(0,0,0,.5)',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '18px 22px',
+              borderBottom: '1px solid rgba(197,176,122,.15)',
+              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12,
+              background: 'rgba(197,176,122,.04)',
+            }}>
               <div>
-                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Prenom client</label>
-                <input type="text" value={coverFields.prenom} onChange={e => setCoverFields(p => ({ ...p, prenom: e.target.value }))} style={{ width: '100%' }} />
+                <div style={{ fontSize: '.95rem', fontWeight: 700, color: '#c5b07a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  📄 Cover PDF
+                </div>
+                <div style={{ fontSize: '.78rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>
+                  Personnaliser la page de garde du plan
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCoverForm(false)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'rgba(255,255,255,.4)', fontSize: '1.3rem',
+                  padding: 0, lineHeight: 1, width: 26, height: 26,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 6, transition: 'all .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.08)'; e.currentTarget.style.color = '#c5b07a'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,.4)'; }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{
+                  fontSize: '.68rem', fontWeight: 700,
+                  color: '#c5b07a', textTransform: 'uppercase', letterSpacing: '.5px',
+                  display: 'block', marginBottom: 6,
+                }}>Prénom client</label>
+                <input
+                  type="text"
+                  value={coverFields.prenom}
+                  onChange={e => setCoverFields(p => ({ ...p, prenom: e.target.value }))}
+                  style={{
+                    width: '100%', padding: '10px 12px',
+                    background: 'rgba(0,0,0,.25)',
+                    border: '1px solid rgba(255,255,255,.08)',
+                    borderRadius: 8, color: '#f0f0e8',
+                    fontSize: '.85rem', outline: 'none',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(197,176,122,.4)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,.08)'; }}
+                />
               </div>
               <div>
-                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Objectif principal</label>
-                <input type="text" value={coverFields.objectif} onChange={e => setCoverFields(p => ({ ...p, objectif: e.target.value }))} style={{ width: '100%' }} />
+                <label style={{
+                  fontSize: '.68rem', fontWeight: 700,
+                  color: '#c5b07a', textTransform: 'uppercase', letterSpacing: '.5px',
+                  display: 'block', marginBottom: 6,
+                }}>Objectif principal</label>
+                <input
+                  type="text"
+                  value={coverFields.objectif}
+                  onChange={e => setCoverFields(p => ({ ...p, objectif: e.target.value }))}
+                  style={{
+                    width: '100%', padding: '10px 12px',
+                    background: 'rgba(0,0,0,.25)',
+                    border: '1px solid rgba(255,255,255,.08)',
+                    borderRadius: 8, color: '#f0f0e8',
+                    fontSize: '.85rem', outline: 'none',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(197,176,122,.4)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,.08)'; }}
+                />
               </div>
-              <div>
-                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Date</label>
-                <input type="text" value={coverFields.date} onChange={e => setCoverFields(p => ({ ...p, date: e.target.value }))} style={{ width: '100%' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '.8rem', color: '#8a8a7a', display: 'block', marginBottom: 4 }}>Sous-titre</label>
-                <input type="text" value={coverFields.sousTitre} onChange={e => setCoverFields(p => ({ ...p, sousTitre: e.target.value }))} style={{ width: '100%' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{
+                    fontSize: '.68rem', fontWeight: 700,
+                    color: '#c5b07a', textTransform: 'uppercase', letterSpacing: '.5px',
+                    display: 'block', marginBottom: 6,
+                  }}>Date</label>
+                  <input
+                    type="text"
+                    value={coverFields.date}
+                    onChange={e => setCoverFields(p => ({ ...p, date: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '10px 12px',
+                      background: 'rgba(0,0,0,.25)',
+                      border: '1px solid rgba(255,255,255,.08)',
+                      borderRadius: 8, color: '#f0f0e8',
+                      fontSize: '.85rem', outline: 'none',
+                      transition: 'border-color .15s',
+                    }}
+                    onFocus={e => { e.target.style.borderColor = 'rgba(197,176,122,.4)'; }}
+                    onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,.08)'; }}
+                  />
+                </div>
+                <div>
+                  <label style={{
+                    fontSize: '.68rem', fontWeight: 700,
+                    color: '#c5b07a', textTransform: 'uppercase', letterSpacing: '.5px',
+                    display: 'block', marginBottom: 6,
+                  }}>Sous-titre</label>
+                  <input
+                    type="text"
+                    value={coverFields.sousTitre}
+                    onChange={e => setCoverFields(p => ({ ...p, sousTitre: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '10px 12px',
+                      background: 'rgba(0,0,0,.25)',
+                      border: '1px solid rgba(255,255,255,.08)',
+                      borderRadius: 8, color: '#f0f0e8',
+                      fontSize: '.85rem', outline: 'none',
+                      transition: 'border-color .15s',
+                    }}
+                    onFocus={e => { e.target.style.borderColor = 'rgba(197,176,122,.4)'; }}
+                    onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,.08)'; }}
+                  />
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button className="btn btn-sm btn-anissa-primary" onClick={() => { onExportCover(coverFields); setShowCoverForm(false); }}>Exporter Cover</button>
-              <button className="btn btn-sm btn-secondary" onClick={() => setShowCoverForm(false)}>Annuler</button>
+
+            {/* Footer */}
+            <div style={{
+              padding: '14px 22px',
+              borderTop: '1px solid rgba(255,255,255,.06)',
+              background: 'rgba(0,0,0,.15)',
+              display: 'flex', justifyContent: 'flex-end', gap: 8,
+            }}>
+              <button
+                type="button"
+                onClick={() => setShowCoverForm(false)}
+                style={{
+                  padding: '9px 18px', borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,.12)',
+                  background: 'none', color: 'rgba(255,255,255,.55)',
+                  fontSize: '.82rem', fontWeight: 500, cursor: 'pointer',
+                  transition: 'all .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.05)'; e.currentTarget.style.color = '#f0f0e8'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,.55)'; }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => { onExportCover(coverFields); setShowCoverForm(false); }}
+                style={{
+                  padding: '9px 18px', borderRadius: 8,
+                  border: '1px solid rgba(106,191,138,.4)',
+                  background: 'rgba(106,191,138,.15)', color: '#8abf9a',
+                  fontSize: '.82rem', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all .15s',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(106,191,138,.25)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(106,191,138,.15)'; }}
+              >
+                ✨ Exporter Cover
+              </button>
             </div>
           </div>
         </div>
