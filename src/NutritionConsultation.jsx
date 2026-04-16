@@ -2348,6 +2348,35 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       if (labSection) parts.push(labSection);
     }
 
+    // Inject MGD recommended tests text if present
+    const mgdTestsText = consultation.mgd_recommended_tests_text?.trim();
+    if (mgdTestsText) {
+      parts.push('');
+      parts.push('--- ANALYSES RECOMMANDÉES (MGD) ---');
+      parts.push(mgdTestsText);
+    }
+
+    // Inject MGD correlations if lab data exists
+    if (hasLabData && labAnalysis?.signals?.length > 0) {
+      const mgdSymptomsForCorr = detectSymptomsFromForm(form);
+      const correlation = buildMGDCorrelation(mgdSymptomsForCorr, labAnalysis.signals);
+      const corrText = formatCorrelationForPrompt(correlation);
+      if (corrText) {
+        parts.push('');
+        parts.push(corrText);
+      }
+    }
+
+    // Inject emotional shock context if present
+    if (form.emotional_shock === 'Oui') {
+      parts.push('');
+      parts.push('CONTEXTE ÉMOTIONNEL : Choc émotionnel déclaré.');
+      if (form.emotional_shock_details?.trim()) {
+        parts.push(`Détails : ${form.emotional_shock_details.trim()}`);
+      }
+      parts.push('Tenir compte de l\'axe stress/cortisol dans le plan. Privilégier aliments adaptogènes et anti-inflammatoires.');
+    }
+
     // Pre-RDV summary (priorities + axes, also shown in UI)
     const preRdv = buildPreRdvSummary(form);
     if (preRdv.hasData) {
@@ -2376,18 +2405,13 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }));
     parts.push(`Recommandation biologique Anissa : ${mgdRecLabel}`);
 
-    if (hasLabData) {
-      const labAnalysis2 = analyzeLabResults(labData);
-      const mgdSymptoms2 = detectSymptomsFromForm(form);
-      const correlation = buildMGDCorrelation(mgdSymptoms2, labAnalysis2.signals || []);
-      const correlationText = formatCorrelationForPrompt(correlation);
-      if (correlationText) parts.push(correlationText);
-    }
-
     parts.push('');
     parts.push(`Genere un plan nutrition personnalise COURT et PREMIUM. Format compact : synthese, regles, 2 trames de journees types (semaine 1), rotations et substitutions (semaines 2-4), fiche frigo, ajustements entrainement, suivi. PAS de menus detailles jour par jour. Lisible en 3 minutes.`);
     if (hasLabData) {
-      parts.push('Integre les adaptations basees sur les resultats biologiques dans le plan si pertinent.');
+      parts.push('IMPORTANT : Intégrer impérativement les adaptations biologiques dans le plan :');
+      parts.push('- Adapter les aliments aux signaux détectés');
+      parts.push('- Inclure les suppléments pertinents avec dosages');
+      parts.push('- Mentionner les priorités nutritionnelles issues des résultats');
     }
 
     return parts.join('\n');
