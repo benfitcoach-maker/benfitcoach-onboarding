@@ -1003,6 +1003,13 @@ export function syncReminderNotifications(clients) {
   writeNotifications(cleaned);
 }
 
+// ─── Pack follow-up notifications (stub, wire up later) ───
+export function syncPackNotifications(clients) {
+  // Placeholder — pack-based notifications will use buildPackFollowupSchedule
+  // from services/packSystem.js. Currently no-op.
+  return { clients };
+}
+
 // ─── Draft persistence for nutrition consultations ───
 
 const DRAFT_KEY_PREFIX = 'bfc_draft_';

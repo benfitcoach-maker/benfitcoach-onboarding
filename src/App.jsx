@@ -31,7 +31,8 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud, syncPackNotifications } from './store';
+import { PACK_DEFINITIONS } from './services/packSystem';
 import { buildReturnDiagnostic } from './services/returnDiagnostic';
 import { adaptPlanForReturn } from './services/aiPlanOptimizer';
 import { supabase, isCloudEnabled } from './supabaseClient';
@@ -513,6 +514,9 @@ function App() {
       formule: 'nutrition',
       langue: 'FR',
       createdBy: 'anissa',
+      packType: formData.packType || 'oneshot_180',
+      packStartedAt: new Date().toISOString(),
+      packSchedule: [],
     });
     refreshClients();
     showToast('Client cree avec succes');
@@ -760,6 +764,9 @@ function App() {
                 langue: 'FR',
                 createdBy: 'anissa',
                 status: 'questionnaire_envoye',
+                packType: formData.packType || 'oneshot_180',
+                packStartedAt: new Date().toISOString(),
+                packSchedule: [],
               });
               refreshClients();
               // Open Gmail with questionnaire link

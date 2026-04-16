@@ -111,6 +111,26 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
               </div>
             </div>
 
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Pack nutritionnel</label>
+              <select
+                value={form.packType || 'oneshot_180'}
+                onChange={e => updateField('packType', e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <optgroup label="Bilan individuel">
+                  <option value="oneshot_180">Bilan Nutritionnel — 180 CHF</option>
+                  <option value="oneshot_280">Bilan Sanguin — 280 CHF</option>
+                  <option value="oneshot_750">Nutrition ADN — 750 CHF</option>
+                </optgroup>
+                <optgroup label="Programmes de suivi">
+                  <option value="suivi_3m">Suivi Essentiel 3 mois — 490 CHF</option>
+                  <option value="suivi_6m">Suivi Complet 6 mois — 850 CHF</option>
+                  <option value="suivi_adn">Suivi ADN & Longévité — 1490 CHF</option>
+                </optgroup>
+              </select>
+            </div>
+
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button
                 className="btn btn-anissa-primary"
