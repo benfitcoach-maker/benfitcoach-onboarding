@@ -137,6 +137,9 @@ async function cloudSyncClient(client) {
     created_by: rest.createdBy || 'benoit',
     created_at: rest.createdAt || new Date().toISOString(),
     updated_at: rest.updatedAt || new Date().toISOString(),
+    pack_type: rest.packType || null,
+    pack_started_at: rest.packStartedAt || null,
+    pack_schedule: rest.packSchedule || null,
   };
   supabase.from('clients').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
@@ -431,6 +434,9 @@ export async function pullFromCloud() {
         createdBy: c.created_by || 'benoit',
         createdAt: c.created_at,
         updatedAt: c.updated_at,
+        packType: c.pack_type || null,
+        packStartedAt: c.pack_started_at || null,
+        packSchedule: c.pack_schedule || null,
         history,
         progression,
         massageSessions,
