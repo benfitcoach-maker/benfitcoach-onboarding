@@ -564,9 +564,10 @@ function PlanQualityScore({ score, autoCorrected }) {
   return (
     <div style={{ background: 'rgba(124,92,191,.06)', border: '1px solid rgba(124,92,191,.15)', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <strong style={{ fontSize: '.9rem' }}>Score du plan actuel</strong>
-        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: getColor(score.normalized) }}>
-          {score.normalized}/10
+        <strong style={{ fontSize: '.9rem' }}>Vérification du plan</strong>
+        <span style={{ fontSize: '.82rem', fontWeight: 600,
+          color: 'rgba(255,255,255,.4)' }}>
+          Qualité : {score.normalized}/10
         </span>
       </div>
 
@@ -1833,8 +1834,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // Steps differ based on followup status
   const stepLabels = isFollowup
-    ? ['Resume client', 'Suivi & Progression', 'Plan nutrition', 'Notes pour Benoit']
-    : ['Resume client', 'Plan nutrition', 'Notes pour Benoit'];
+    ? ['Resume client', 'Suivi & Progression', 'Plan nutrition', 'Notes internes']
+    : ['Resume client', 'Plan nutrition', 'Notes internes'];
 
   const totalSteps = stepLabels.length;
 
@@ -1910,12 +1911,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [autoCorrected, setAutoCorrected] = useState(false);
   const [pdfError, setPdfError] = useState('');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
-  const [showQualityDash, setShowQualityDash] = useState(false);
   const [showAnalysesPreview, setShowAnalysesPreview] = useState(false);
   const [analysesError, setAnalysesError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [showPdfMenu, setShowPdfMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [mgdOpen, setMgdOpen] = useState(false);
   const [pendingAlerts, setPendingAlerts] = useState(null);
   const editorGetDataRef = useRef(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
@@ -3042,6 +3043,47 @@ ${suppText}`;
             </div>
           </div>
 
+          <div style={{
+            marginTop: 20,
+            border: '1px solid rgba(197,176,122,.2)',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}>
+            <button
+              type="button"
+              onClick={() => setMgdOpen(o => !o)}
+              style={{
+                width: '100%', padding: '14px 16px',
+                background: mgdOpen
+                  ? 'rgba(197,176,122,.1)' : 'rgba(197,176,122,.04)',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'space-between', gap: 10,
+                transition: 'background .2s',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '.85rem', fontWeight: 700, color: '#c5b07a' }}>
+                  🧬 Analyse biologique (MGD)
+                </span>
+                {consultation.mgd_recommendation && consultation.mgd_recommendation !== 'none' && (
+                  <span style={{
+                    fontSize: '.68rem', padding: '2px 7px', borderRadius: 10,
+                    background: 'rgba(197,176,122,.15)',
+                    color: '#c5b07a', border: '1px solid rgba(197,176,122,.3)',
+                  }}>
+                    {consultation.mgd_recommendation === 'advanced' ? 'Bilan avancé' : 'Bilan sanguin'}
+                  </span>
+                )}
+              </div>
+              <span style={{ color: '#c5b07a', fontSize: '.8rem', transition: 'transform .2s',
+                transform: mgdOpen ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>
+                ▾
+              </span>
+            </button>
+
+            {mgdOpen && (
+              <div style={{ padding: '16px', borderTop: '1px solid rgba(197,176,122,.1)' }}>
           {(() => {
             const symp = detectSymptomsFromForm(form);
             if (!symp.length) return null;
@@ -3476,6 +3518,9 @@ ${suppText}`;
               </div>
             </div>
           )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -4056,10 +4101,6 @@ ${suppText}`;
                         disabled={!hasPlan}>
                         Resume medecin
                       </button>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
-                        onClick={() => { setShowQualityDash(p => !p); setShowMoreMenu(false); }}>
-                        Historique qualite IA
-                      </button>
                       {consultation.mgd_recommendation && consultation.mgd_recommendation !== 'none' && (
                       <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
                         onClick={() => {
@@ -4328,8 +4369,6 @@ ${suppText}`;
                 </div>
               </div>
             )}
-
-            {showQualityDash && <NutritionQualityDashboard />}
 
             {/* AI Analysis modal */}
             {aiAnalysis && (
@@ -4620,7 +4659,7 @@ ${suppText}`;
       {/* Step: Notes for Benoit + Private notes */}
       {currentStepType === 'notes' && (
         <div className="nutrition-form-section">
-          <h3>Notes pour Benoit</h3>
+          <h3>Notes internes</h3>
           <div className="field full-width">
             <label>Recommandations a transmettre au coach</label>
             <SmartTextarea
