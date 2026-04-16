@@ -53,6 +53,8 @@ function QuestionnaireClient({ clientId }) {
     niveauStressActuel: '',
     objectifPrincipalNutrition: [],
     pourquoiMaintenant: '',
+    emotional_shock: '',
+    emotional_shock_details: '',
     pretProtocole: '',
   });
 
@@ -104,6 +106,8 @@ function QuestionnaireClient({ clientId }) {
               : f.objectifPrincipalNutrition)
             : [],
           pourquoiMaintenant: f.pourquoiMaintenant || '',
+          emotional_shock: f.emotional_shock || '',
+          emotional_shock_details: f.emotional_shock_details || '',
           pretProtocole: f.pretProtocole || '',
         }));
       });
@@ -164,6 +168,8 @@ function QuestionnaireClient({ clientId }) {
       heuresSommeil: normalizedSleep,
       frequenceBallonnements: form.frequenceBallonnements,
       pourquoiMaintenant: form.pourquoiMaintenant,
+      emotional_shock: form.emotional_shock,
+      emotional_shock_details: form.emotional_shock_details,
       pretProtocole: form.pretProtocole,
       // Derived field (approximation, only set if not already filled by Anissa)
       difficultesEndormissement: derivedEndormissement,
@@ -482,6 +488,41 @@ function QuestionnaireClient({ clientId }) {
                 { value: 'Peut-etre', label: 'Peut-\u00eatre' },
               ]} columns={3} />
             </div>
+            <div className="q-field">
+              <label className="q-label">
+                As-tu vécu un choc émotionnel marquant ces dernières années ?
+              </label>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                {['Oui', 'Non', 'Préfère ne pas répondre'].map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={`q-btn-option ${form.emotional_shock === opt ? 'q-btn-active' : ''}`}
+                    onClick={() => update('emotional_shock', opt)}
+                    style={{ textAlign:'center', padding:'12px 8px' }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {form.emotional_shock === 'Oui' && (
+              <div className="q-field">
+                <label className="q-label">
+                  Peux-tu préciser ? (facultatif)
+                </label>
+                <textarea
+                  className="q-textarea"
+                  rows={2}
+                  value={form.emotional_shock_details}
+                  onChange={e => update('emotional_shock_details', e.target.value)}
+                  placeholder="Deuil, séparation, accident, burnout..."
+                  maxLength={200}
+                />
+              </div>
+            )}
+
             <div className="q-field">
               <label className="q-label">Pourquoi maintenant ? (optionnel)</label>
               <textarea className="q-textarea" rows={3} value={form.pourquoiMaintenant} onChange={e => update('pourquoiMaintenant', e.target.value)} placeholder="Qu'est-ce qui vous motive a consulter aujourd'hui ?" />
