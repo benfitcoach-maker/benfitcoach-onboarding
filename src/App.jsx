@@ -793,7 +793,7 @@ function App() {
         {page === 'anissaNewClient' && (
           <AnissaClientForm
             onSave={handleAnissaSaveClient}
-            onSaveQuick={(formData) => {
+            onSaveQuick={(formData, packType) => {
               const client = saveClient({
                 categorie: 'nutrition',
                 form: formData,
@@ -802,7 +802,7 @@ function App() {
                 langue: 'FR',
                 createdBy: 'anissa',
                 status: 'questionnaire_envoye',
-                packType: formData.packType || 'oneshot_180',
+                packType: packType || 'oneshot_180',
                 packStartedAt: new Date().toISOString(),
                 packSchedule: [],
               });

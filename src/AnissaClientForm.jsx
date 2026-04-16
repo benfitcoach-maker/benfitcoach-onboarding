@@ -21,6 +21,7 @@ const CONSOMMATION_REGULIERE_OPTIONS = [
 
 export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initialForm, clientId }) {
   const [form, setForm] = useState(initialForm || NUTRITION_INITIAL_FORM);
+  const [packType, setPackType] = useState('oneshot_180');
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState(clientId ? 'full' : 'quick'); // quick = creation rapide, full = anamnese complete
   const totalSteps = 8;
@@ -47,7 +48,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
   const handleQuickCreate = () => {
     if (!form.prenom.trim() || !form.email.trim()) return;
     if (onSaveQuick) {
-      onSaveQuick(form);
+      onSaveQuick(form, packType);
     } else {
       onSave(form);
     }
@@ -111,11 +112,11 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
               </div>
             </div>
 
-            <div className="field" style={{ marginTop: 12 }}>
-              <label>Pack nutritionnel</label>
+            <div className="field" style={{ gridColumn: '1/-1' }}>
+              <label>PACK NUTRITIONNEL</label>
               <select
-                value={form.packType || 'oneshot_180'}
-                onChange={e => updateField('packType', e.target.value)}
+                value={packType}
+                onChange={e => setPackType(e.target.value)}
                 style={{ width: '100%' }}
               >
                 <optgroup label="Bilan individuel">
