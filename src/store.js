@@ -248,6 +248,7 @@ async function cloudSyncNutritionConsultation(consultation) {
     followup_data: consultation.followupData || null,
     previous_consultation_id: consultation.previousConsultationId || null,
     mgd_recommendation: consultation.mgdRecommendation || 'none',
+    mgd_recommended_tests_text: consultation.mgdRecommendedTestsText || '',
     status: consultation.status || 'questionnaire_recu',
     created_at: consultation.createdAt || new Date().toISOString(),
   };
@@ -303,6 +304,7 @@ export async function forceSyncAllConsultations() {
       followup_data: c.followupData || null,
       previous_consultation_id: c.previousConsultationId || null,
       mgd_recommendation: c.mgdRecommendation || 'none',
+      mgd_recommended_tests_text: c.mgdRecommendedTestsText || '',
       status: c.status || 'questionnaire_recu',
       label: c.label || null,
       created_at: c.createdAt || new Date().toISOString(),
@@ -387,6 +389,7 @@ export async function pullFromCloud() {
       followupData: n.followup_data || null,
       previousConsultationId: n.previous_consultation_id || null,
       mgdRecommendation: n.mgd_recommendation || 'none',
+      mgdRecommendedTestsText: n.mgd_recommended_tests_text || '',
       status: n.status || 'questionnaire_recu',
       createdAt: n.created_at,
     }));
@@ -763,6 +766,7 @@ export function saveNutritionConsultation(consultation) {
     followupData: consultation.followupData || null,
     previousConsultationId: consultation.previousConsultationId || null,
     mgdRecommendation: consultation.mgdRecommendation || 'none',
+    mgdRecommendedTestsText: consultation.mgdRecommendedTestsText || '',
     status: consultation.status || 'questionnaire_recu',
     createdAt: consultation.createdAt || new Date().toISOString(),
   };

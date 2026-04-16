@@ -1687,6 +1687,7 @@ const INITIAL_CONSULTATION = {
   blood_test_done: false,
   dna_test_done: false,
   mgd_recommendation: 'none',
+  mgd_recommended_tests_text: '',
   nutritional_observations: '',
   nutrition_plan: '',
   supplements: '',
@@ -1791,6 +1792,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
               ? (initialConsultation.dnaTestDone || initialConsultation.dna_test_done
                   ? 'advanced' : 'blood')
               : 'none'),
+        mgd_recommended_tests_text: initialConsultation.mgdRecommendedTestsText
+          || initialConsultation.mgd_recommended_tests_text || '',
         nutritional_observations: initialConsultation.nutritionalObservations || initialConsultation.nutritional_observations || '',
         nutrition_plan: initialConsultation.nutritionPlan || initialConsultation.nutrition_plan || '',
         supplements: initialConsultation.supplements || '',
@@ -2632,6 +2635,7 @@ ${suppText}`;
       bloodTestDone,
       dnaTestDone,
       mgdRecommendation: mgdRec,
+      mgdRecommendedTestsText: consultation.mgd_recommended_tests_text || '',
       nutritionalObservations: consultation.nutritional_observations,
       nutritionPlan: planToSave,
       supplements: suppToSave,
