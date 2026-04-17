@@ -225,6 +225,28 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               )}
             </div>
 
+            {/* Progress bar */}
+            {completion && completion.total > 0 && (
+              <div style={{
+                width: '100%',
+                height: 2,
+                background: 'rgba(255,255,255,.06)',
+                borderRadius: 2,
+                marginBottom: 10,
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${completion.percent}%`,
+                  background: completion.percent === 100
+                    ? '#22c55e'
+                    : 'linear-gradient(90deg, #22c55e, #c5b07a)',
+                  borderRadius: 2,
+                  transition: 'width .4s ease',
+                }} />
+              </div>
+            )}
+
             {/* Timeline horizontale */}
             {packSteps.length > 0 && (
               <div style={{ marginBottom: 8 }}>
@@ -258,6 +280,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                             ? '2px solid rgba(34,197,94,.3)'
                             : '2px solid rgba(255,255,255,.1)',
                           flexShrink: 0, transition: 'all .2s',
+                          boxShadow: isActive ? '0 0 6px rgba(197,176,122,.6)' : 'none',
                           boxSizing: 'border-box',
                         }} />
                         {idx < packSteps.length - 1 && (
@@ -275,7 +298,11 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 </div>
 
                 {/* Labels S4, S8... */}
-                <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
                   {packSteps.map((step, idx) => {
                     const isActive = nextStep?.stepNumber === step.stepNumber;
                     const isDone = step.status === 'done';
@@ -286,10 +313,12 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                       : 'rgba(255,255,255,.2)';
                     return (
                       <div key={step.stepNumber} style={{
-                        flex: idx < packSteps.length - 1 ? 1 : 'none',
                         fontSize: '.62rem', color: labelColor,
                         fontWeight: isActive ? 700 : 400,
-                        textAlign: 'left', whiteSpace: 'nowrap',
+                        textAlign: idx === 0 ? 'left'
+                          : idx === packSteps.length - 1 ? 'right'
+                          : 'center',
+                        whiteSpace: 'nowrap',
                       }}>
                         S{step.weekOffset}
                       </div>
@@ -305,15 +334,18 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 fontSize: '.7rem',
                 color: nextStep.isLate ? '#f87171'
                      : nextStep.isDueSoon ? '#fbbf24'
-                     : 'rgba(255,255,255,.3)',
+                     : 'rgba(255,255,255,.5)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
                 marginTop: 2,
               }}>
                 <span>{nextStep.isLate ? '⚠️' : '→'}</span>
-                {nextStep.label}
-                {nextStep.isLate && ' (en retard)'}
+                {nextStep.type === 'review' && !nextStep.isLate
+                  ? `${nextStep.label} à envoyer`
+                  : nextStep.isLate
+                  ? `${nextStep.label} — en retard`
+                  : nextStep.label}
               </div>
             )}
           </div>
