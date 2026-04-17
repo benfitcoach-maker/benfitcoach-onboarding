@@ -62,6 +62,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   const isReturn = isReturnClient(client);
   const daysSince = isReturn ? daysSinceLastConsultation(client) : null;
   const [sending, setSending] = useState(false);
+  const [hoveredStep, setHoveredStep] = useState(null);
   const packDef = client.packType ? PACK_DEFINITIONS[client.packType] : null;
   const isFollowupPack = !!client.packType?.startsWith('suivi');
   const nextStep = isFollowupPack ? getNextPendingStep(client) : null;
@@ -267,11 +268,73 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                       : 'rgba(255,255,255,.15)';
                     const dotSize = isActive ? 12 : 8;
                     return (
-                      <div key={step.stepNumber} style={{
-                        display: 'flex', alignItems: 'center',
-                        flex: idx < packSteps.length - 1 ? 1 : 'none',
-                      }}>
-                        <div style={{
+                      <div
+                        key={step.stepNumber}
+                        style={{
+                          display: 'flex', alignItems: 'center',
+                          flex: idx < packSteps.length - 1 ? 1 : 'none',
+                          position: 'relative',
+                        }}
+                        onMouseEnter={() => setHoveredStep(step.stepNumber)}
+                        onMouseLeave={() => setHoveredStep(null)}
+                      >
+                        {hoveredStep === step.stepNumber && (
+                          <div
+                            className="pack-step-tooltip"
+                            style={{
+                              position: 'absolute',
+                              bottom: '100%',
+                              left: idx === packSteps.length - 1 ? 'auto' : '50%',
+                              right: idx === packSteps.length - 1 ? 0 : 'auto',
+                              transform: idx === 0 ? 'translateX(0)'
+                                : idx === packSteps.length - 1 ? 'translateX(0)'
+                                : 'translateX(-50%)',
+                              marginBottom: 8,
+                              background: 'rgba(20,32,22,.97)',
+                              border: '1px solid rgba(197,176,122,.2)',
+                              borderRadius: 8,
+                              padding: '7px 10px',
+                              whiteSpace: 'nowrap',
+                              zIndex: 10,
+                              pointerEvents: 'none',
+                              minWidth: 160,
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '.72rem', fontWeight: 600,
+                              color: '#c5b07a', marginBottom: 3,
+                            }}>
+                              {step.label}
+                            </div>
+                            <div style={{
+                              fontSize: '.68rem',
+                              color: step.status === 'done' ? '#22c55e'
+                                : step.isLate ? '#f87171'
+                                : step.status === 'sent' ? '#fbbf24'
+                                : 'rgba(255,255,255,.4)',
+                            }}>
+                              {step.status === 'done' ? '✓ Complété'
+                                : step.status === 'sent' ? '⏳ Envoyé'
+                                : step.isLate ? '⚠️ En retard'
+                                : step.isDueSoon ? '→ À envoyer cette semaine'
+                                : '○ À venir'}
+                            </div>
+                            {step.dueDate && step.status !== 'done' && (
+                              <div style={{
+                                fontSize: '.65rem',
+                                color: 'rgba(255,255,255,.25)',
+                                marginTop: 3,
+                              }}>
+                                {new Date(step.dueDate).toLocaleDateString('fr-CH', {
+                                  day: 'numeric', month: 'short'
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div
+                          className={isActive ? 'pack-dot-active' : undefined}
+                          style={{
                           width: dotSize, height: dotSize,
                           borderRadius: '50%', background: dotColor,
                           border: isActive
@@ -547,6 +610,23 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
 
   return (
     <div className="dashboard anissa-dashboard">
+      <style>{`
+        @keyframes packDotPulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.25); opacity: .85; }
+        }
+        .pack-dot-active {
+          animation: packDotPulse 2.2s ease-in-out infinite;
+        }
+        .pack-step-tooltip {
+          display: block;
+        }
+        @media (max-width: 768px) {
+          .pack-step-tooltip {
+            display: none !important;
+          }
+        }
+      `}</style>
       {/* Stats */}
       <div className="stats-row stats-row-4">
         <div className="stat-card anissa-stat">
