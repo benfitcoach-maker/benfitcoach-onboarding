@@ -140,6 +140,7 @@ async function cloudSyncClient(client) {
     pack_type: rest.packType || null,
     pack_started_at: rest.packStartedAt || null,
     pack_schedule: rest.packSchedule || null,
+    pack_started_at_confirmed: rest.packStartedAtConfirmed ?? false,
   };
   supabase.from('clients').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
@@ -437,6 +438,7 @@ export async function pullFromCloud() {
         packType: c.pack_type || null,
         packStartedAt: c.pack_started_at || null,
         packSchedule: c.pack_schedule || null,
+        packStartedAtConfirmed: c.pack_started_at_confirmed ?? false,
         history,
         progression,
         massageSessions,
@@ -1007,6 +1009,47 @@ export function syncReminderNotifications(clients) {
   }
 
   writeNotifications(cleaned);
+}
+
+// ─── Pack step completion sync from cycle_reviews ───
+export async function syncCompletedStepsFromReviews() {
+  if (!isCloudEnabled) return;
+
+  const { data: submittedReviews, error } = await supabase
+    .from('cycle_reviews')
+    .select('client_id, step_number, submitted_at')
+    .eq('status', 'submitted')
+    .not('step_number', 'is', null);
+
+  if (error || !submittedReviews?.length) return;
+
+  for (const review of submittedReviews) {
+    if (!review.client_id || !review.step_number) continue;
+
+    const client = readAll().find(c => c.id === review.client_id);
+    if (!client?.packType?.startsWith('suivi')) continue;
+
+    const schedule = client.packSchedule || [];
+    const existing = schedule.find(s => s.stepNumber === review.step_number);
+
+    // Ne rien faire si step inconnu — pas de push incomplet
+    if (!existing) continue;
+
+    // Ne rien faire si déjà done
+    if (existing.status === 'done') continue;
+
+    const updatedSchedule = schedule.map(s =>
+      s.stepNumber === review.step_number
+        ? {
+            ...s,
+            status: 'done',
+            completedAt: review.submitted_at || new Date().toISOString(),
+          }
+        : s
+    );
+
+    saveClient({ ...client, packSchedule: updatedSchedule });
+  }
 }
 
 // ─── Pack follow-up notifications (stub, wire up later) ───

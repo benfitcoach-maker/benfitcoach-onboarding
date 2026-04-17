@@ -41,7 +41,7 @@ import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
-import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud, syncPackNotifications } from './store';
+import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud, syncPackNotifications, syncCompletedStepsFromReviews } from './store';
 import { PACK_DEFINITIONS, updateStepStatus, canSendPackReview } from './services/packSystem';
 import { buildReturnDiagnostic } from './services/returnDiagnostic';
 import { adaptPlanForReturn } from './services/aiPlanOptimizer';
@@ -159,7 +159,11 @@ function App() {
   const loadNotifications = async () => {
     // Sync local reminder notifications
     if (currentUser === 'Anissa') {
-      syncReminderNotifications([...getSharedClients(), ...getAnissaOwnClients()]);
+      const anissaClients = [...getSharedClients(), ...getAnissaOwnClients()];
+      syncReminderNotifications(anissaClients);
+      syncCompletedStepsFromReviews().then(() => {
+        syncPackNotifications(anissaClients);
+      });
     }
 
     // Fetch from Supabase
@@ -480,15 +484,21 @@ function App() {
 
   const handleSaveConsultation = (consultation) => {
     saveNutritionConsultation(consultation);
-    // Règle : mettre à jour pack_started_at à la première consultation
-    // d'un pack suivi si pas encore défini
-    const currentClient = getClient(consultation.clientId || clientId);
-    if (currentClient?.packType?.startsWith('suivi') &&
-        !currentClient.packStartedAt) {
-      saveClient({
-        ...currentClient,
-        packStartedAt: new Date().toISOString(),
-      });
+    // Règle : confirmer packStartedAt à la première consultation sauvegardée
+    // d'un pack suivi (flag packStartedAtConfirmed garantit idempotence)
+    const savedClientId = consultation.clientId;
+    if (savedClientId) {
+      const freshClient = getClient(savedClientId);
+      if (
+        freshClient?.packType?.startsWith('suivi') &&
+        freshClient.packStartedAtConfirmed !== true
+      ) {
+        saveClient({
+          ...freshClient,
+          packStartedAt: new Date().toISOString(),
+          packStartedAtConfirmed: true,
+        });
+      }
     }
     showToast('Consultation sauvegardee avec succes');
     setTimeout(() => {
@@ -536,6 +546,7 @@ function App() {
       createdBy: 'anissa',
       packType: formData.packType || 'oneshot_180',
       packStartedAt: new Date().toISOString(),
+      packStartedAtConfirmed: false,
       packSchedule: [],
     });
     refreshClients();
@@ -845,6 +856,7 @@ function App() {
                 status: 'questionnaire_envoye',
                 packType: packType || 'oneshot_180',
                 packStartedAt: new Date().toISOString(),
+                packStartedAtConfirmed: false,
                 packSchedule: [],
               });
               refreshClients();
