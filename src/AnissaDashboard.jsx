@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FORMULES, CATEGORIES } from './formSteps';
-import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations } from './store';
+import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations, saveClient } from './store';
 import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
@@ -61,10 +61,12 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   const lastConsultation = consultations[0];
   const isReturn = isReturnClient(client);
   const daysSince = isReturn ? daysSinceLastConsultation(client) : null;
+  const [sending, setSending] = useState(false);
   const packDef = client.packType ? PACK_DEFINITIONS[client.packType] : null;
-  const isFollowupPack = client.packType?.startsWith('suivi');
+  const isFollowupPack = !!client.packType?.startsWith('suivi');
   const nextStep = isFollowupPack ? getNextPendingStep(client) : null;
   const completion = isFollowupPack ? getPackCompletion(client) : null;
+  const showSendBtn = canSendPackReview(nextStep);
 
   useEffect(() => {
     getCycleReviews(client.id).then(reviews => {
@@ -345,23 +347,31 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 </button>
               )}
 
-              {isFollowupPack && canSendPackReview(nextStep) && (
+              {isOwn && showSendBtn && (
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
+                    if (sending) return;
                     setMenuOpen(false);
-                    if (onSendPackReview) onSendPackReview(client, nextStep);
+                    setSending(true);
+                    try {
+                      await onSendPackReview?.(client, nextStep);
+                    } finally {
+                      setSending(false);
+                    }
                   }}
+                  disabled={sending}
                   style={{
                     display:'block', width:'100%', textAlign:'left',
                     padding:'10px 16px', background:'none', border:'none',
-                    color:'#c5b07a', cursor:'pointer', fontSize:'.85rem',
-                    transition:'background .15s',
+                    color: sending ? 'rgba(197,176,122,.4)' : '#c5b07a',
+                    cursor: sending ? 'not-allowed' : 'pointer',
+                    fontSize:'.85rem', transition:'background .15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(197,176,122,.08)'}
+                  onMouseEnter={e => { if (!sending) e.currentTarget.style.background='rgba(197,176,122,.08)'; }}
                   onMouseLeave={e => e.currentTarget.style.background='none'}
                 >
-                  📋 Envoyer {nextStep.label}
+                  {sending ? '⏳ Envoi...' : `📋 Envoyer ${nextStep.label}`}
                 </button>
               )}
 

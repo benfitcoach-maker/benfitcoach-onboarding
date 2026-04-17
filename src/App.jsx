@@ -32,7 +32,7 @@ import SupplementsLibrary from './SupplementsLibrary';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
 import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud, syncPackNotifications } from './store';
-import { PACK_DEFINITIONS, updateStepStatus } from './services/packSystem';
+import { PACK_DEFINITIONS, updateStepStatus, canSendPackReview } from './services/packSystem';
 import { buildReturnDiagnostic } from './services/returnDiagnostic';
 import { adaptPlanForReturn } from './services/aiPlanOptimizer';
 import { supabase, isCloudEnabled } from './supabaseClient';
@@ -615,15 +615,26 @@ function App() {
   };
 
   const handleSendPackReview = async (client, step) => {
+    // Protection : vérification finale avant envoi
+    if (!canSendPackReview(step)) return;
+    // Protection : vérifier que l'étape n'est pas déjà 'sent' ou 'done'
+    const currentSchedule = client.packSchedule || [];
+    const existingStep = currentSchedule.find(s => s.stepNumber === step.stepNumber);
+    if (existingStep?.status === 'sent' || existingStep?.status === 'done') {
+      showToast('Ce questionnaire a déjà été envoyé');
+      return;
+    }
+
     try {
       const token = crypto.randomUUID();
+      const reviewId = crypto.randomUUID();
       let ownerId = null;
       try {
         const { data: { user } } = await supabase.auth.getUser();
         ownerId = user?.id || null;
       } catch {}
       const review = {
-        id: crypto.randomUUID(),
+        id: reviewId,
         token,
         client_id: client.id,
         consultation_id: null,
@@ -634,19 +645,21 @@ function App() {
         created_at: new Date().toISOString(),
       };
       if (isCloudEnabled) {
-        await supabase.from('cycle_reviews').upsert(review);
+        const { error } = await supabase.from('cycle_reviews').insert(review);
+        if (error) throw error;
       }
       const updatedSchedule = updateStepStatus(client, step.stepNumber, {
         status: 'sent',
+        reviewId,
         notifiedAt: new Date().toISOString(),
       });
       saveClient({ ...client, packSchedule: updatedSchedule });
       refreshClients();
       const link = `${window.location.origin}/review/${token}`;
       try { await navigator.clipboard.writeText(link); } catch {}
-      showToast(`Lien copié : ${step.label}`);
+      showToast(`Lien copié — ${step.label}`);
     } catch (err) {
-      showToast('Erreur lors de l\'envoi — réessayez');
+      showToast('Erreur lors de la création du questionnaire');
       console.error('[PACK REVIEW]', err);
     }
   };
