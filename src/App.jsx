@@ -6,6 +6,16 @@ import {
   FORMULES, CATEGORIES, PRESENTIEL_PACKS, NUTRITION_INITIAL_FORM,
 } from './formSteps';
 
+function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 function ensureCustomRate(form, categorie) {
   if (form.customRate) return form;
   const key = form.formule || (categorie === 'massage' ? 'massage' : null);
@@ -626,8 +636,8 @@ function App() {
     }
 
     try {
-      const token = crypto.randomUUID();
-      const reviewId = crypto.randomUUID();
+      const token = generateId();
+      const reviewId = generateId();
       let ownerId = null;
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -648,19 +658,27 @@ function App() {
         const { error } = await supabase.from('cycle_reviews').insert(review);
         if (error) throw error;
       }
-      const updatedSchedule = updateStepStatus(client, step.stepNumber, {
-        status: 'sent',
-        reviewId,
-        notifiedAt: new Date().toISOString(),
+      // Relire le client courant pour éviter un overwrite stale
+      const freshClient = getClient(client.id);
+      const updatedSchedule = updateStepStatus(
+        freshClient || client,
+        step.stepNumber,
+        {
+          status: 'sent',
+          reviewId,
+          notifiedAt: new Date().toISOString(),
+        }
+      );
+      saveClient({
+        ...(freshClient || client),
+        packSchedule: updatedSchedule,
       });
-      saveClient({ ...client, packSchedule: updatedSchedule });
       refreshClients();
       const link = `${window.location.origin}/review/${token}`;
       try { await navigator.clipboard.writeText(link); } catch {}
       showToast(`Lien copié — ${step.label}`);
     } catch (err) {
-      showToast('Erreur lors de la création du questionnaire');
-      console.error('[PACK REVIEW]', err);
+      showToast('Erreur lors de la création du questionnaire — réessayez');
     }
   };
 

@@ -371,7 +371,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                   onMouseEnter={e => { if (!sending) e.currentTarget.style.background='rgba(197,176,122,.08)'; }}
                   onMouseLeave={e => e.currentTarget.style.background='none'}
                 >
-                  {sending ? '⏳ Envoi...' : `📋 Envoyer ${nextStep.label}`}
+                  {sending ? '⏳ Envoi...' : '📋 Envoyer le bilan'}
                 </button>
               )}
 
