@@ -201,33 +201,140 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
         )}
         {isFollowupPack && packDef && (
           <div style={{
-            marginTop: 6,
-            padding: '8px 12px',
+            margin: '10px 0 4px',
+            padding: '10px 12px',
             background: 'rgba(197,176,122,.06)',
             border: '1px solid rgba(197,176,122,.15)',
             borderRadius: 8,
-            fontSize: '.75rem',
           }}>
+            {/* Header : label + compteur */}
             <div style={{
-              display: 'flex', justifyContent: 'space-between',
-              alignItems: 'center', marginBottom: nextStep ? 6 : 0,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 10,
             }}>
-              <span style={{ color: '#c5b07a', fontWeight: 600 }}>
+              <span style={{ color: '#c5b07a', fontWeight: 600, fontSize: '.75rem' }}>
                 {packDef.label}
               </span>
               {completion && (
-                <span style={{ color: 'rgba(255,255,255,.4)' }}>
+                <span style={{ color: 'rgba(255,255,255,.3)', fontSize: '.68rem' }}>
                   {completion.done}/{completion.total} étapes
                 </span>
               )}
             </div>
+
+            {/* Timeline horizontale */}
+            {(() => {
+              const steps = buildPackFollowupSchedule(client);
+              if (!steps.length) return null;
+
+              return (
+                <div style={{ marginBottom: 8 }}>
+                  {/* Ligne avec points */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0,
+                    marginBottom: 5,
+                  }}>
+                    {steps.map((step, idx) => {
+                      const isActive = nextStep?.stepNumber === step.stepNumber;
+                      const isDone = step.status === 'done';
+                      const isLate = step.isLate;
+
+                      const dotColor = isDone ? '#22c55e'
+                        : isLate ? '#f87171'
+                        : isActive ? '#c5b07a'
+                        : 'rgba(255,255,255,.15)';
+
+                      const dotSize = isActive ? 12 : 8;
+
+                      return (
+                        <div
+                          key={step.stepNumber}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            flex: idx < steps.length - 1 ? 1 : 'none',
+                          }}
+                        >
+                          <div style={{
+                            width: dotSize,
+                            height: dotSize,
+                            borderRadius: '50%',
+                            background: dotColor,
+                            border: isActive
+                              ? '2px solid rgba(197,176,122,.4)'
+                              : isDone
+                              ? '2px solid rgba(34,197,94,.3)'
+                              : '2px solid rgba(255,255,255,.1)',
+                            flexShrink: 0,
+                            transition: 'all .2s',
+                            boxSizing: 'border-box',
+                          }} />
+                          {idx < steps.length - 1 && (
+                            <div style={{
+                              flex: 1,
+                              height: 1.5,
+                              background: isDone
+                                ? 'rgba(34,197,94,.4)'
+                                : 'rgba(255,255,255,.08)',
+                              margin: '0 2px',
+                            }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Labels S4, S8... */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}>
+                    {steps.map((step, idx) => {
+                      const isActive = nextStep?.stepNumber === step.stepNumber;
+                      const isDone = step.status === 'done';
+                      const isLate = step.isLate;
+
+                      const labelColor = isDone ? 'rgba(34,197,94,.7)'
+                        : isLate ? '#f87171'
+                        : isActive ? '#c5b07a'
+                        : 'rgba(255,255,255,.2)';
+
+                      return (
+                        <div
+                          key={step.stepNumber}
+                          style={{
+                            flex: idx < steps.length - 1 ? 1 : 'none',
+                            fontSize: '.62rem',
+                            color: labelColor,
+                            fontWeight: isActive ? 700 : 400,
+                            textAlign: 'left',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          S{step.weekOffset}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Prochaine étape texte */}
             {nextStep && (
               <div style={{
-                fontSize: '.72rem',
-                color: nextStep.isLate
-                  ? '#f87171' : nextStep.isDueSoon
-                  ? '#fbbf24' : 'rgba(255,255,255,.35)',
-                display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: '.7rem',
+                color: nextStep.isLate ? '#f87171'
+                     : nextStep.isDueSoon ? '#fbbf24'
+                     : 'rgba(255,255,255,.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 2,
               }}>
                 <span>{nextStep.isLate ? '⚠️' : '→'}</span>
                 {nextStep.label}
