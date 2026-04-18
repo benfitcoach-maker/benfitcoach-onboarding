@@ -32,9 +32,11 @@ body{
   line-height:1.6;
   min-height:100vh;
   -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
 }
 
-#root{min-height:100vh}
+html{overflow-x:hidden}
+#root{min-height:100vh;overflow-x:hidden}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--gold-dark);border-radius:10px}
