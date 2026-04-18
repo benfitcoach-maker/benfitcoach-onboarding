@@ -25,3 +25,13 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Windows
+desktop.ini
+Thumbs.db
+
+# macOS
+.DS_Store
+
+# Capacitor iOS (généré sur Mac par `npx cap add ios`)
+ios/

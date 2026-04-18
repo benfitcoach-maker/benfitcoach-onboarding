@@ -173,6 +173,9 @@ function QuestionnaireClient({ clientId }) {
       pretProtocole: form.pretProtocole,
       // Derived field (approximation, only set if not already filled by Anissa)
       difficultesEndormissement: derivedEndormissement,
+      // V13 : marquage questionnaire rempli par le client (remplissage à distance)
+      benoitQuestionnaireFilledAt: new Date().toISOString(),
+      benoitQuestionnaireFilledBy: 'client',
     };
 
     try {

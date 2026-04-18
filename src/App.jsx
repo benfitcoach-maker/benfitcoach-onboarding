@@ -24,10 +24,12 @@ function ensureCustomRate(form, categorie) {
   return form;
 }
 import StepForm from './StepForm';
+import BenoitPaymentsPanel from './BenoitPaymentsPanel';
 import MassageForm from './MassageForm';
 import MassageSessionPanel from './MassageSessionPanel';
 import ResultCards from './ResultCards';
 import Dashboard from './Dashboard';
+import SharedCalendar from './SharedCalendar';
 import AnissaDashboard from './AnissaDashboard';
 import AnissaClientForm from './AnissaClientForm';
 import NutritionConsultation from './NutritionConsultation';
@@ -45,6 +47,7 @@ import { getClients, getClient, saveClient, addGeneration, exportAllData, import
 import { PACK_DEFINITIONS, updateStepStatus, canSendPackReview } from './services/packSystem';
 import { buildReturnDiagnostic } from './services/returnDiagnostic';
 import { adaptPlanForReturn } from './services/aiPlanOptimizer';
+import { listSharedEvents, buildAgendaAlerts } from './services/sharedEvents';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import ReminderPanel, { getReminderCount } from './ReminderPanel';
 import { getT } from './translations';
@@ -154,6 +157,8 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notifCount, setNotifCount] = useState(0);
+  // V39 : événements agenda partagés (pour alimenter les rappels cloche côté Anissa)
+  const [agendaEvents, setAgendaEvents] = useState([]);
 
   // Load notifications from Supabase + sync local reminders
   const loadNotifications = async () => {
@@ -202,6 +207,24 @@ function App() {
     loadNotifications();
     const interval = setInterval(loadNotifications, 10000);
     return () => clearInterval(interval);
+  }, [currentUser]);
+
+  // V39 : charge les événements agenda des 2 prochains jours pour alimenter les rappels Anissa
+  useEffect(() => {
+    if (currentUser !== 'Anissa') return; // côté Benoit, Dashboard gère déjà
+    const load = async () => {
+      const from = new Date();
+      const to = new Date(); to.setDate(to.getDate() + 2);
+      try {
+        const { data } = await listSharedEvents(from.toISOString(), to.toISOString());
+        setAgendaEvents(data || []);
+      } catch {
+        setAgendaEvents([]);
+      }
+    };
+    load();
+    const iv = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(iv);
   }, [currentUser]);
   const [interviewOpen, setInterviewOpen] = useState(false);
   const [interviewNotes, setInterviewNotes] = useState(null);
@@ -334,10 +357,14 @@ function App() {
   };
 
   const handleSave = () => {
+    // V16 : pack custom — normaliser le label "Sur mesure" au save
+    const normalizedForm = (categorie === 'presentiel' && form?.pack === 'custom')
+      ? { ...form, benoitPackLabel: (form.benoitPackLabel || '').trim() || 'Sur mesure' }
+      : form;
     const client = saveClient({
       id: clientId,
       categorie,
-      form,
+      form: normalizedForm,
       prenom: form.prenom,
       formule: categorie === 'massage' ? 'massage' : (categorie === 'presentiel' ? 'presentiel' : form.formule),
       langue: form.langue || 'FR',
@@ -351,10 +378,14 @@ function App() {
   };
 
   const handleSaveNoRedirect = () => {
+    // V16 : pack custom — normaliser le label "Sur mesure" au save
+    const normalizedForm = (categorie === 'presentiel' && form?.pack === 'custom')
+      ? { ...form, benoitPackLabel: (form.benoitPackLabel || '').trim() || 'Sur mesure' }
+      : form;
     const client = saveClient({
       id: clientId,
       categorie,
-      form,
+      form: normalizedForm,
       prenom: form.prenom,
       formule: categorie === 'massage' ? 'massage' : (categorie === 'presentiel' ? 'presentiel' : form.formule),
       langue: form.langue || 'FR',
@@ -702,6 +733,7 @@ function App() {
       <>
         <button className={`btn-nav ${page === 'dashboard' ? 'btn-nav-active' : ''}`} onClick={goToDashboard}>Dashboard</button>
         <button className={`btn-nav ${page === 'anissaNewClient' ? 'btn-nav-active' : ''}`} onClick={handleAnissaNewClient}>+ Nouveau client</button>
+        <button className={`btn-nav ${page === 'sharedCalendar' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('sharedCalendar'); setMobileMenu(false); }}>📅 Agenda</button>
         <button className={`btn-nav ${page === 'anissaChiffres' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('anissaChiffres'); setMobileMenu(false); }}>Chiffres</button>
         <button className={`btn-nav ${page === 'anissaSupplements' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('anissaSupplements'); setMobileMenu(false); }}>Complements</button>
       </>
@@ -724,7 +756,11 @@ function App() {
             <div className="reminder-bell-wrapper" style={{ position: 'relative' }}>
               <button className="reminder-bell" onClick={() => setShowNotifications(prev => !prev)} title="Notifications">
                 &#128276;
-                {notifCount > 0 && <span className="reminder-badge" style={{ background: '#f87171' }}>{notifCount}</span>}
+                {(() => {
+                  const agendaCount = buildAgendaAlerts(agendaEvents).length;
+                  const total = (notifCount || 0) + agendaCount;
+                  return total > 0 ? <span className="reminder-badge" style={{ background: '#f87171' }}>{total}</span> : null;
+                })()}
               </button>
               {showNotifications && (() => {
                 const notifs = notifications.slice(0, 20);
@@ -744,7 +780,33 @@ function App() {
                       </div>
                     </div>
                     <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-                      {notifs.length === 0 ? (
+                      {/* V39 : rappels agenda (injectés en haut, tag bleu, clic → ouvre l'agenda partagé) */}
+                      {(() => {
+                        const agenda = buildAgendaAlerts(agendaEvents);
+                        if (agenda.length === 0) return null;
+                        return agenda.map((a, idx) => (
+                          <div
+                            key={`agenda-${a.type}-${idx}`}
+                            onClick={() => { setShowNotifications(false); setPage('sharedCalendar'); setMobileMenu(false); }}
+                            style={{
+                              padding: '10px 14px',
+                              borderBottom: '1px solid rgba(255,255,255,.05)',
+                              cursor: 'pointer',
+                              background: 'rgba(106,182,240,.06)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{
+                                fontSize: '.65rem', fontWeight: 600, color: '#6ab6f0',
+                                background: 'rgba(106,182,240,.18)', padding: '1px 6px',
+                                borderRadius: 4, flexShrink: 0,
+                              }}>Agenda</span>
+                              <span style={{ fontSize: '.8rem', color: '#f0f0e8', fontWeight: 600 }}>{a.message}</span>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                      {notifs.length === 0 && buildAgendaAlerts(agendaEvents).length === 0 ? (
                         <div style={{ padding: 20, textAlign: 'center', color: '#8a8a7a', fontSize: '.8rem' }}>Aucune notification</div>
                       ) : notifs.map(n => {
                         const tag = TAG_STYLES[n.type] || { label: 'Info', color: '#8a8a7a' };
@@ -927,6 +989,15 @@ function App() {
           <AnissaChiffres />
         )}
 
+        {/* V31 : Agenda partagé (côté Anissa) */}
+        {page === 'sharedCalendar' && (
+          <SharedCalendar
+            currentUser="anissa"
+            onBack={goToDashboard}
+            onOpenClient={handleAnissaOpenClient}
+          />
+        )}
+
         {/* Bibliotheque Complements */}
         {page === 'anissaSupplements' && (
           <SupplementsLibrary />
@@ -941,6 +1012,7 @@ function App() {
     <>
       <button className={`btn-nav ${page === 'dashboard' ? 'btn-nav-active' : ''}`} onClick={goToDashboard}>Dashboard</button>
       <button className={`btn-nav ${page === 'newCategory' ? 'btn-nav-active' : ''}`} onClick={() => newClient()}>+ Nouveau client</button>
+      <button className={`btn-nav ${page === 'sharedCalendar' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('sharedCalendar'); setMobileMenu(false); }}>📅 Agenda</button>
       <button className={`btn-nav ${page === 'templates' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('templates'); setMobileMenu(false); }}>Messages</button>
       <button className={`btn-nav ${page === 'business' ? 'btn-nav-active' : ''}`} onClick={() => { setPage('business'); setMobileMenu(false); }}>Chiffres</button>
     </>
@@ -1004,7 +1076,7 @@ function App() {
 
       {/* Dashboard */}
       {page === 'dashboard' && (
-        <Dashboard clients={getBenoitClients()} onOpen={openClient} onNew={newClient} onHistory={openHistory} onRefresh={refreshClients} />
+        <Dashboard clients={getBenoitClients()} onOpen={openClient} onNew={newClient} onHistory={openHistory} onRefresh={refreshClients} onNutrition={handleViewNutritionHistory} onOpenCalendar={() => { setPage('sharedCalendar'); setMobileMenu(false); }} />
       )}
 
       {/* Category Selection for new client */}
@@ -1046,6 +1118,15 @@ function App() {
       {/* Business Dashboard */}
       {page === 'business' && (
         <BusinessDashboard />
+      )}
+
+      {/* V31 : Agenda partagé (côté Benoit) */}
+      {page === 'sharedCalendar' && (
+        <SharedCalendar
+          currentUser="benoit"
+          onBack={goToDashboard}
+          onOpenClient={openClient}
+        />
       )}
 
       {/* Nutrition History (Benoit viewing Anissa's notes) */}
@@ -1119,6 +1200,9 @@ function App() {
                     Progression
                   </button>
                 )}
+                <button className={`edit-tab ${editTab === 'payments' ? 'edit-tab-active' : ''}`} onClick={() => setEditTab('payments')}>
+                  Paiements
+                </button>
               </div>
 
               {/* Nutrition notes from Anissa (read-only section for Benoit) */}
@@ -1169,6 +1253,8 @@ function App() {
             <MassageSessionPanel clientId={clientId} onRefresh={forceUpdate} />
           ) : editTab === 'progression' && clientId && !isMassage ? (
             <ProgressionPanel clientId={clientId} onRefresh={forceUpdate} />
+          ) : editTab === 'payments' && clientId ? (
+            <BenoitPaymentsPanel clientId={clientId} onRefresh={forceUpdate} />
           ) : (
             <>
               {!isMassage && (

@@ -1,5 +1,6 @@
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { computeMetrics } from './bodyMetrics';
+import { getPackCompletion, buildPackFollowupSchedule } from './services/packSystem';
 
 async function getCurrentOwnerId() {
   if (!supabase) return null;
@@ -1057,6 +1058,194 @@ export function syncPackNotifications(clients) {
   // Placeholder — pack-based notifications will use buildPackFollowupSchedule
   // from services/packSystem.js. Currently no-op.
   return { clients };
+}
+
+// ─── Benoit dashboard notifications (packs, inactivité) ───
+// Architecture alignée sur syncReminderNotifications :
+//   - 100% localStorage (aucun appel Supabase ici)
+//   - utilise les helpers existants (packSystem + data client en mémoire)
+//   - ID stable par (type, clientId) → idempotent, pas de doublons
+//   - préserve le read state avant régénération
+//
+// Règles métier V1 (seulement ce qui est calculable avec le modèle actuel) :
+//   - benoit_pack_almost_done : pack de suivi actif, complétion >= 75 % mais < 100 %
+//   - benoit_pack_completed   : pack de suivi avec toutes les étapes à l'état done
+//   - benoit_client_inactive  : pack actif, aucune activité (progression, consultation
+//                               nutrition, séance massage, step done) depuis 14 jours
+//
+// Règles écartées pour V1 (pas calculables sans entités dédiées) :
+//   - "programme PT manquant" → aucune notion de program_tracker / training program
+//     dans le modèle actuel (pas de table, pas de champ client).
+//   - "sessionsRemaining / sessionsUsed" → les packs suivi sont step-based (packSchedule),
+//     pas session-count-based. La progression est donc exprimée en % de steps done.
+const BENOIT_NOTIF_TYPES = [
+  'benoit_pack_almost_done',
+  'benoit_pack_completed',
+  'benoit_client_inactive',
+];
+const BENOIT_INACTIVE_DAYS = 14;
+const BENOIT_ALMOST_DONE_PERCENT = 75;
+
+function resolveLastActivityDate(client) {
+  const candidates = [];
+  if (Array.isArray(client.progression)) {
+    for (const p of client.progression) {
+      if (p?.date) candidates.push(new Date(p.date));
+    }
+  }
+  if (Array.isArray(client.massageSessions)) {
+    for (const s of client.massageSessions) {
+      if (s?.date) candidates.push(new Date(s.date));
+    }
+  }
+  const consults = readNutritionConsultations().filter(n => n.clientId === client.id);
+  for (const c of consults) {
+    if (c?.date) candidates.push(new Date(c.date));
+  }
+  if (Array.isArray(client.packSchedule)) {
+    for (const step of client.packSchedule) {
+      if (step?.status === 'done' && step?.completedAt) {
+        candidates.push(new Date(step.completedAt));
+      }
+    }
+  }
+  // Historique séances Benoit V3 : priorité benoitLastSessionAt, fallback dernière de benoitSessionDates
+  if (client.form?.benoitLastSessionAt) {
+    candidates.push(new Date(client.form.benoitLastSessionAt));
+  } else if (Array.isArray(client.form?.benoitSessionDates) && client.form.benoitSessionDates.length > 0) {
+    const lastDate = client.form.benoitSessionDates[client.form.benoitSessionDates.length - 1];
+    if (lastDate) candidates.push(new Date(lastDate));
+  }
+  const valid = candidates.filter(d => !isNaN(d.getTime()));
+  if (valid.length === 0) return null;
+  return new Date(Math.max(...valid.map(d => d.getTime())));
+}
+
+export function syncBenoitNotifications(clients) {
+  if (!Array.isArray(clients)) return;
+  const list = readNotifications();
+
+  // Préserver le read state existant avant régénération
+  const readState = {};
+  for (const n of list) {
+    if (BENOIT_NOTIF_TYPES.includes(n.type)) readState[n.id] = n.read;
+  }
+
+  // Nettoyer les notifications Benoit avant de recalculer
+  const cleaned = list.filter(n => !BENOIT_NOTIF_TYPES.includes(n.type));
+  const now = new Date();
+  const inactiveCutoffMs = BENOIT_INACTIVE_DAYS * 24 * 60 * 60 * 1000;
+
+  for (const c of clients) {
+    if (!c || !c.id) continue;
+    // Ne cible que les clients Benoit (pas les clients Anissa-only)
+    if ((c.createdBy || 'benoit') === 'anissa') continue;
+
+    const prenom = c.prenom || c.form?.prenom || 'Client';
+    const packType = c.packType || null;
+    const isSuiviPack = typeof packType === 'string' && packType.startsWith('suivi');
+
+    // ─── Priorité V2 : si le compteur séances client.form.benoitSessionsTotal
+    // est défini (> 0), on utilise cette logique en premier. Sinon fallback
+    // sur la logique packSchedule / getPackCompletion() pré-existante.
+    const rawSessionsTotal = Number(c.form?.benoitSessionsTotal);
+    const rawSessionsDone = Number(c.form?.benoitSessionsDone);
+    const hasSessionCounter = Number.isFinite(rawSessionsTotal) && rawSessionsTotal > 0;
+
+    if (hasSessionCounter) {
+      const sTotal = rawSessionsTotal;
+      const sDone = Number.isFinite(rawSessionsDone) && rawSessionsDone > 0 ? rawSessionsDone : 0;
+      const sRemaining = sTotal - sDone;
+
+      // ── 1. pack_completed (via séances) ── prioritaire sur almost_done
+      if (sDone >= sTotal) {
+        const id = `benoit_pack_completed-${c.id}`;
+        cleaned.push({
+          id,
+          type: 'benoit_pack_completed',
+          clientId: c.id,
+          clientName: prenom,
+          message: `Pack terminé : ${prenom} (${sDone}/${sTotal} séances)`,
+          date: new Date().toISOString(),
+          read: readState[id] || false,
+        });
+      }
+      // ── 2. pack_almost_done (via séances) ── remaining <= 2
+      else if (sRemaining <= 2 && sDone < sTotal) {
+        const id = `benoit_pack_almost_done-${c.id}`;
+        cleaned.push({
+          id,
+          type: 'benoit_pack_almost_done',
+          clientId: c.id,
+          clientName: prenom,
+          message: `Pack presque terminé : ${prenom} (${sRemaining} séance${sRemaining > 1 ? 's' : ''} restante${sRemaining > 1 ? 's' : ''})`,
+          date: new Date().toISOString(),
+          read: readState[id] || false,
+        });
+      }
+    } else {
+      // ─── Fallback : logique packSchedule / getPackCompletion() pré-existante
+      let completion = null;
+      try {
+        completion = isSuiviPack ? getPackCompletion(c) : null;
+      } catch {
+        completion = null;
+      }
+
+      // ── 1. pack_completed ── (prioritaire sur almost_done)
+      if (completion && completion.total > 0 && completion.done >= completion.total) {
+        const id = `benoit_pack_completed-${c.id}`;
+        cleaned.push({
+          id,
+          type: 'benoit_pack_completed',
+          clientId: c.id,
+          clientName: prenom,
+          message: `Pack terminé : ${prenom}`,
+          date: new Date().toISOString(),
+          read: readState[id] || false,
+        });
+      }
+      // ── 2. pack_almost_done ──
+      else if (completion && completion.total > 0 && completion.percent >= BENOIT_ALMOST_DONE_PERCENT) {
+        const remaining = completion.total - completion.done;
+        const id = `benoit_pack_almost_done-${c.id}`;
+        cleaned.push({
+          id,
+          type: 'benoit_pack_almost_done',
+          clientId: c.id,
+          clientName: prenom,
+          message: `Pack presque terminé : ${prenom} (${remaining} étape${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''})`,
+          date: new Date().toISOString(),
+          read: readState[id] || false,
+        });
+      }
+    }
+
+    // ── 3. client_inactive ──
+    // Exige un pack actif (sinon pas d'attente de suivi)
+    if (packType) {
+      const lastActivity = resolveLastActivityDate(c);
+      const reference = lastActivity || (c.packStartedAt ? new Date(c.packStartedAt) : null);
+      if (reference && !isNaN(reference.getTime())) {
+        const delta = now.getTime() - reference.getTime();
+        if (delta >= inactiveCutoffMs) {
+          const days = Math.floor(delta / (24 * 60 * 60 * 1000));
+          const id = `benoit_client_inactive-${c.id}`;
+          cleaned.push({
+            id,
+            type: 'benoit_client_inactive',
+            clientId: c.id,
+            clientName: prenom,
+            message: `Client inactif : ${prenom} (${days}j sans activité)`,
+            date: reference.toISOString(),
+            read: readState[id] || false,
+          });
+        }
+      }
+    }
+  }
+
+  writeNotifications(cleaned);
 }
 
 // ─── Draft persistence for nutrition consultations ───

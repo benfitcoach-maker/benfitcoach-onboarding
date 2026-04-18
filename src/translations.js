@@ -59,6 +59,9 @@ export const T = {
     'pack.pack10': "Pack 10 seances - 1'200 CHF",
     'pack.pack20': "Pack 20 seances - 2'200 CHF",
     'pack.pack30': "Pack 30 seances - 3'000 CHF",
+    'pack.custom': 'Pack sur mesure',
+    'field.packCustomSessions': 'Nombre de seances',
+    'field.packCustomPrice': 'Prix du pack (CHF)',
 
     // ── Step 2 — Goals ──
     'field.objectifPrincipal': 'Objectif principal',
@@ -248,6 +251,9 @@ export const T = {
     'pack.pack10': "10-session pack - 1'200 CHF",
     'pack.pack20': "20-session pack - 2'200 CHF",
     'pack.pack30': "30-session pack - 3'000 CHF",
+    'pack.custom': 'Custom pack',
+    'field.packCustomSessions': 'Number of sessions',
+    'field.packCustomPrice': 'Pack price (CHF)',
 
     // ── Step 2 — Goals ──
     'field.objectifPrincipal': 'Main goal',

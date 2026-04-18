@@ -65,7 +65,7 @@ function Field({ label, field, form, updateField, type = 'text', options, fullWi
     return (
       <div className={`field ${fullWidth ? 'full-width' : ''}`}>
         <label htmlFor={id}>{label}</label>
-        <select id={id} value={form[field]} onChange={e => updateField(field, e.target.value)}>
+        <select id={id} value={form[field] ?? ''} onChange={e => updateField(field, e.target.value)}>
           {options.map(o => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -80,7 +80,7 @@ function Field({ label, field, form, updateField, type = 'text', options, fullWi
         <label htmlFor={id}>{label}</label>
         <textarea
           id={id}
-          value={form[field]}
+          value={form[field] ?? ''}
           onChange={e => updateField(field, e.target.value)}
           rows={rows || 3}
         />
@@ -94,7 +94,7 @@ function Field({ label, field, form, updateField, type = 'text', options, fullWi
       <input
         id={id}
         type={type}
-        value={form[field]}
+        value={form[field] ?? ''}
         onChange={e => updateField(field, e.target.value)}
       />
     </div>
@@ -303,7 +303,26 @@ function Step1Presentiel({ form, updateField, originalForm, t }) {
         opt('pack10', t('pack.pack10')),
         opt('pack20', t('pack.pack20')),
         opt('pack30', t('pack.pack30')),
+        opt('custom', t('pack.custom')),
       ]} />
+      {form.pack === 'custom' && (
+        <>
+          <Field
+            label={t('field.packCustomSessions')}
+            field="benoitSessionsTotal"
+            form={form}
+            updateField={updateField}
+            type="number"
+          />
+          <Field
+            label={t('field.packCustomPrice')}
+            field="benoitPackPrice"
+            form={form}
+            updateField={updateField}
+            type="number"
+          />
+        </>
+      )}
       <Field label={t('field.age')} field="age" form={form} updateField={updateField} type="number" />
       <Field label={t('field.genre')} field="genre" form={form} updateField={updateField} type="select" options={[
         opt('', t('select.placeholder')),

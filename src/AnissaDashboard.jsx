@@ -56,6 +56,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   const [menuOpen, setMenuOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('loading');
   const [latestReview, setLatestReview] = useState(null);
+  const [transferExpanded, setTransferExpanded] = useState(false);
   const consultations = getNutritionConsultations(client.id);
   const followUp = getFollowUpStatus(client.id);
   const lastConsultation = consultations[0];
@@ -200,6 +201,63 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           }}>
             🔁 Reprise — {daysSince}j
           </span>
+        )}
+        {client.form?.referredBy === 'benoit' && (
+          <>
+            <span
+              onClick={e => { e.stopPropagation(); if (client.form?.anissaTransferSummary) setTransferExpanded(v => !v); }}
+              title={client.form?.anissaTransferSummary
+                ? `Transmission Benoit disponible — cliquer pour ${transferExpanded ? 'masquer' : 'afficher'} le résumé`
+                : 'Client de Benoit'}
+              style={{
+                display:'inline-flex', alignItems:'center', gap:4,
+                fontSize:'.7rem', fontWeight:600, padding:'2px 8px',
+                borderRadius:20, alignSelf:'flex-start',
+                background:'rgba(196,160,80,.12)',
+                color:'#c4a050',
+                border:'1px solid rgba(196,160,80,.3)',
+                marginBottom:4,
+                cursor: client.form?.anissaTransferSummary ? 'pointer' : 'default',
+              }}
+            >
+              🤝 Client de Benoit
+              {client.form?.anissaTransferStatus && client.form.anissaTransferStatus !== 'sent' ? ` · ${client.form.anissaTransferStatus}` : ''}
+              {client.form?.anissaTransferSummary ? (transferExpanded ? ' ▴' : ' ▾') : ''}
+            </span>
+            {client.form?.anissaTransferSummary && !transferExpanded && (
+              <span style={{
+                fontSize:'.68rem', color:'rgba(196,160,80,.75)',
+                fontStyle:'italic', marginTop:-2, marginBottom:4,
+              }}>
+                📋 Résumé transmission disponible (cliquer badge)
+              </span>
+            )}
+            {client.form?.anissaTransferSummary && transferExpanded && (
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  marginTop: 2, marginBottom: 6,
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: 'rgba(196,160,80,0.06)',
+                  border: '1px solid rgba(196,160,80,0.25)',
+                  whiteSpace: 'pre-wrap',
+                  fontSize: '.72rem',
+                  lineHeight: 1.5,
+                  color: 'var(--text)',
+                  maxHeight: 240,
+                  overflowY: 'auto',
+                }}
+              >
+                {client.form.anissaTransferSummary}
+                {client.form?.anissaTransferAt && (
+                  <div style={{ marginTop: 6, fontSize: '.9em', color: 'var(--text-muted)' }}>
+                    Transmis le {formatDate(client.form.anissaTransferAt)}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
         {isFollowupPack && packDef && (
           <div style={{
