@@ -3879,29 +3879,31 @@ body{
   border-top:1px solid rgba(74,74,66,.1);
 }
 
-/* ═══ Anissa Client Card — Mobile responsive (V41) ═══ */
+/* ═══ Anissa Client Card — Responsive (V41) ═══ */
 .anissa-client-card-mobile{
-  /* default desktop layout kept via inline styles */
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:16px;
 }
 @media(max-width:600px){
   .anissa-client-card-mobile{
-    flex-direction:column !important;
-    align-items:stretch !important;
-    gap:12px !important;
+    flex-direction:column;
+    align-items:stretch;
+    gap:12px;
     padding:14px !important;
   }
   .anissa-client-card-mobile > :nth-child(1){
-    /* Avatar: keep horizontal with name */
     align-self:flex-start;
   }
   .anissa-client-card-mobile > :nth-child(3){
-    /* Actions: full width buttons */
-    flex-direction:row !important;
     width:100%;
     justify-content:space-between;
   }
   .anissa-client-card-mobile > :nth-child(3) > button:first-child{
     flex:1;
     min-height:44px;
+    padding:10px 14px !important;
+    font-size:.85rem !important;
   }
 }
