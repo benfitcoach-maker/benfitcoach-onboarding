@@ -121,6 +121,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
 
   return (
     <div
+      className="anissa-client-card-mobile"
       style={{
         background: 'rgba(255,255,255,.04)',
         border: '1px solid rgba(255,255,255,.08)',
@@ -723,11 +724,11 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           }}
           disabled={syncing}
           style={{
-            marginLeft:'auto', padding:'6px 12px', borderRadius:8,
+            marginLeft:'auto', padding:'8px 12px', borderRadius:8,
             border:'1px solid rgba(255,255,255,.1)', background:'none',
             color: syncing ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.5)',
             cursor: syncing ? 'not-allowed' : 'pointer',
-            fontSize:'.75rem', marginRight:8,
+            fontSize:'.75rem', marginRight:8, minHeight:36,
           }}
         >
           {syncing ? 'Sync...' : syncResult ? `${syncResult.synced} synced` : 'Sync cloud'}

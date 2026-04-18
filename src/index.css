@@ -188,6 +188,9 @@ body{
   align-items:center;
   gap:16px;
   padding:12px 28px;
+  padding-top:calc(12px + env(safe-area-inset-top));
+  padding-left:calc(28px + env(safe-area-inset-left));
+  padding-right:calc(28px + env(safe-area-inset-right));
   background:rgba(10,9,8,.78);
   backdrop-filter:blur(20px) saturate(1.4);
   -webkit-backdrop-filter:blur(20px) saturate(1.4);
@@ -258,7 +261,9 @@ body{
 }
 .mobile-menu{
   display:none;
-  position:fixed;top:60px;left:0;right:0;
+  position:fixed;
+  top:calc(60px + env(safe-area-inset-top));
+  left:0;right:0;
   background:rgba(10,9,8,.95);
   backdrop-filter:blur(20px);
   border-bottom:1px solid var(--border);
@@ -1248,8 +1253,17 @@ body{
 
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:768px){
-  .app{padding:70px 16px 40px}
-  .header{padding:10px 16px}
+  .app{
+    padding:calc(70px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));
+    padding-left:calc(16px + env(safe-area-inset-left));
+    padding-right:calc(16px + env(safe-area-inset-right));
+  }
+  .header{
+    padding:10px 16px;
+    padding-top:calc(10px + env(safe-area-inset-top));
+    padding-left:calc(16px + env(safe-area-inset-left));
+    padding-right:calc(16px + env(safe-area-inset-right));
+  }
   .header-nav{display:none}
   .header-io{display:none}
   .hamburger{display:flex}
@@ -2562,8 +2576,25 @@ body{
   .compare-grid{grid-template-columns:1fr}
   .nutrition-plan-actions{flex-direction:column}
   .recontact-item{flex-direction:column;align-items:flex-start}
-  .stats-row-4{grid-template-columns:repeat(2,1fr)}
+  .stats-row-4{grid-template-columns:repeat(2,1fr);gap:10px}
   .stats-row-3{grid-template-columns:1fr}
+  .stat-card{padding:14px 12px}
+  .stat-number{font-size:1.5rem}
+  .stat-label{font-size:.65rem}
+  /* Dashboard header stacks on mobile */
+  .dashboard-header{
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
+  .dashboard-header h2{
+    flex:1 1 100%;
+    margin-bottom:4px;
+  }
+  .dashboard-header .btn{
+    min-height:44px;
+    padding:10px 16px;
+  }
 }
 
 /* ─── Business Dashboard ─── */
@@ -3846,4 +3877,31 @@ body{
   font-size:.78rem;
   color:#4A4A42;
   border-top:1px solid rgba(74,74,66,.1);
+}
+
+/* ═══ Anissa Client Card — Mobile responsive (V41) ═══ */
+.anissa-client-card-mobile{
+  /* default desktop layout kept via inline styles */
+}
+@media(max-width:600px){
+  .anissa-client-card-mobile{
+    flex-direction:column !important;
+    align-items:stretch !important;
+    gap:12px !important;
+    padding:14px !important;
+  }
+  .anissa-client-card-mobile > :nth-child(1){
+    /* Avatar: keep horizontal with name */
+    align-self:flex-start;
+  }
+  .anissa-client-card-mobile > :nth-child(3){
+    /* Actions: full width buttons */
+    flex-direction:row !important;
+    width:100%;
+    justify-content:space-between;
+  }
+  .anissa-client-card-mobile > :nth-child(3) > button:first-child{
+    flex:1;
+    min-height:44px;
+  }
 }
