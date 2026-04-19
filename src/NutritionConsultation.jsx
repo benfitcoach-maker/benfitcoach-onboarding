@@ -3613,7 +3613,7 @@ ${suppText}`;
                   justifyContent: 'space-between',
                 }}>
                   <span>📝 Analyses recommandées (MGD)</span>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -3633,6 +3633,30 @@ ${suppText}`;
                     >
                       ✨ Générer
                     </button>
+                    {/* V50 : Export PDF directement dans la section MGD */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnalysesError('');
+                        const symp = detectSymptomsFromForm(form);
+                        const recs = getEnrichedMGDRecommendations(symp);
+                        const val = validateAnalysesPDF(symp, recs);
+                        if (!val.valid) {
+                          setAnalysesError('Export bloque : ' + val.errors.join(' | '));
+                          return;
+                        }
+                        exportAnalysesPDF(recs, symp, clientName, formatDate(today));
+                      }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6,
+                        border: '1px solid rgba(106,191,138,.3)',
+                        background: 'rgba(106,191,138,.1)',
+                        color: '#8abf9a', cursor: 'pointer',
+                        fontSize: '.72rem', fontWeight: 600,
+                      }}
+                    >
+                      📄 Export prescription labo
+                    </button>
                     <button
                       type="button"
                       onClick={() => setConsultation(prev => ({
@@ -3651,6 +3675,11 @@ ${suppText}`;
                     </button>
                   </div>
                 </div>
+                {analysesError && (
+                  <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(248,113,113,.1)', border: '1px solid rgba(248,113,113,.3)', borderRadius: 6, color: '#f87171', fontSize: '.75rem' }}>
+                    {analysesError}
+                  </div>
+                )}
                 <textarea
                   value={consultation.mgd_recommended_tests_text || ''}
                   onChange={e => setConsultation(prev => ({
@@ -4339,45 +4368,13 @@ ${suppText}`;
                       >
                         {'\u2728'} Mode Expert {'\u2014'} Optimiser le plan
                       </button>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
+                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
                         onClick={() => { setShowMedicalSummary(true); setShowMoreMenu(false); }}
                         disabled={!hasPlan}>
                         Resume medecin
                       </button>
-                      {consultation.mgd_recommendation && consultation.mgd_recommendation !== 'none' && (
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border)' }}
-                        onClick={() => {
-                          setAnalysesError('');
-                          const symp = detectSymptomsFromForm(form);
-                          const recs = getEnrichedMGDRecommendations(symp);
-                          const val = validateAnalysesPDF(symp, recs);
-                          if (!val.valid) {
-                            setAnalysesError('Export bloque : ' + val.errors.join(' | '));
-                            setShowMoreMenu(false);
-                            return;
-                          }
-                          exportAnalysesPDF(recs, symp, clientName, formatDate(today));
-                          setShowMoreMenu(false);
-                        }}>
-                        PDF analyses
-                      </button>
-                      )}
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
-                        disabled={analyzingPlan || !hasPlan}
-                        onClick={async () => {
-                          setShowMoreMenu(false);
-                          setAnalyzingPlan(true);
-                          try {
-                            const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
-                            if (result) setAiAnalysis(result);
-                          } catch (err) {
-                            console.error('[AI analysis]', err.message);
-                          } finally {
-                            setAnalyzingPlan(false);
-                          }
-                        }}>
-                        {analyzingPlan ? '\u2728 Analyse en cours...' : '\ud83d\udd0d Analyse IA compl\u00e8te'}
-                      </button>
+                      {/* V50 : "PDF analyses" déplacé vers la section MGD (section Analyses recommandées) */}
+                      {/* V50 : "Analyse IA complète" déplacé vers bloc dédié après l'éditeur */}
                     </div>
                   )}
                 </div>
@@ -4613,145 +4610,7 @@ ${suppText}`;
               </div>
             )}
 
-            {/* AI Analysis modal */}
-            {aiAnalysis && (
-              <div className="modal-overlay" onClick={() => setAiAnalysis(null)}>
-                <div className="modal-content" onClick={e => e.stopPropagation()}
-                  style={{ maxWidth: 520, padding: 0 }}>
-
-                  {/* Header */}
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                    padding:'18px 20px', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
-                    <strong style={{ fontSize:'.95rem', color:'#f0f0e8' }}>{'\ud83d\udd0d'} Analyse IA du plan</strong>
-                    <button onClick={() => setAiAnalysis(null)}
-                      style={{ background:'none', border:'none', color:'#b0c4a8',
-                        cursor:'pointer', fontSize:'1.2rem' }}>{'\u2715'}</button>
-                  </div>
-
-                  <div style={{ padding:'18px 20px', display:'flex', flexDirection:'column', gap:16 }}>
-
-                    {/* Score + verdict */}
-                    <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-                      <div style={{ fontSize:'2rem', fontWeight:800, minWidth:70,
-                        color: aiAnalysis.score >= 80 ? '#4ade80'
-                             : aiAnalysis.score >= 60 ? '#fbbf24' : '#f87171' }}>
-                        {aiAnalysis.score}/100
-                      </div>
-                      <div style={{ fontSize:'.82rem', color:'#b0c4a8', lineHeight:1.5,
-                        fontStyle:'italic', flex:1 }}>
-                        {aiAnalysis.verdict}
-                      </div>
-                    </div>
-
-                    {/* Points forts */}
-                    {aiAnalysis.strengths?.length > 0 && (
-                      <div>
-                        <div style={{ fontSize:'.68rem', fontWeight:700, color:'#4ade80',
-                          textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>
-                          {'\u2705'} Points forts
-                        </div>
-                        {aiAnalysis.strengths.slice(0, 3).map((s, i) => (
-                          <div key={i} style={{ fontSize:'.8rem', color:'#b0c4a8',
-                            paddingLeft:10, borderLeft:'2px solid rgba(74,222,128,.25)',
-                            marginBottom:5, lineHeight:1.4 }}>{s}</div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Points d'attention avec bouton Appliquer */}
-                    {aiAnalysis.issues?.length > 0 && (
-                      <div>
-                        <div style={{ fontSize:'.68rem', fontWeight:700, color:'#fbbf24',
-                          textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>
-                          {'\u26a0\ufe0f'} {'\u00c0'} corriger
-                        </div>
-                        {aiAnalysis.issues.slice(0, 4).map((issue, i) => (
-                          <div key={i} style={{
-                            display:'flex', alignItems:'flex-start', gap:10,
-                            padding:'7px 10px', marginBottom:5, borderRadius:8,
-                            background:'rgba(251,191,36,.05)',
-                            border:'1px solid rgba(251,191,36,.1)',
-                          }}>
-                            <span style={{ fontSize:'.79rem', color:'#b0c4a8',
-                              flex:1, lineHeight:1.4 }}>{issue}</span>
-                            <button
-                              onClick={() => handleImproveFromAnalysis(issue, null)}
-                              style={{
-                                padding:'3px 10px', borderRadius:6, border:'none',
-                                background:'rgba(251,191,36,.15)', color:'#fbbf24',
-                                cursor:'pointer', fontSize:'.72rem', fontWeight:600,
-                                whiteSpace:'nowrap', flexShrink:0, transition:'all .15s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background='rgba(251,191,36,.28)'}
-                              onMouseLeave={e => e.currentTarget.style.background='rgba(251,191,36,.15)'}
-                            >
-                              Appliquer
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Quick wins avec bouton Appliquer */}
-                    {aiAnalysis.quickWins?.length > 0 && (
-                      <div>
-                        <div style={{ fontSize:'.68rem', fontWeight:700, color:'#60a5fa',
-                          textTransform:'uppercase', letterSpacing:'.4px', marginBottom:6 }}>
-                          {'\u26a1'} Am{'\u00e9'}liorations rapides
-                        </div>
-                        {aiAnalysis.quickWins.map((win, i) => (
-                          <div key={i} style={{
-                            display:'flex', alignItems:'flex-start', gap:10,
-                            padding:'7px 10px', marginBottom:5, borderRadius:8,
-                            background:'rgba(96,165,250,.05)',
-                            border:'1px solid rgba(96,165,250,.1)',
-                          }}>
-                            <span style={{ fontSize:'.79rem', color:'#b0c4a8',
-                              flex:1, lineHeight:1.4 }}>{win}</span>
-                            <button
-                              onClick={() => handleImproveFromAnalysis(win, null)}
-                              style={{
-                                padding:'3px 10px', borderRadius:6, border:'none',
-                                background:'rgba(96,165,250,.15)', color:'#60a5fa',
-                                cursor:'pointer', fontSize:'.72rem', fontWeight:600,
-                                whiteSpace:'nowrap', flexShrink:0, transition:'all .15s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background='rgba(96,165,250,.28)'}
-                              onMouseLeave={e => e.currentTarget.style.background='rgba(96,165,250,.15)'}
-                            >
-                              Appliquer
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Bouton Améliorer tout */}
-                    <button
-                      onClick={handleImproveAll}
-                      disabled={improvingAll}
-                      style={{
-                        width:'100%', padding:'10px', borderRadius:10,
-                        border:'1px solid rgba(106,191,138,.3)',
-                        background: improvingAll ? 'rgba(106,191,138,.08)' : 'rgba(106,191,138,.12)',
-                        color: improvingAll ? 'rgba(106,191,138,.5)' : '#8abf9a',
-                        cursor: improvingAll ? 'not-allowed' : 'pointer',
-                        fontSize:'.85rem', fontWeight:600, transition:'all .2s',
-                        display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                      }}
-                      onMouseEnter={e => { if (!improvingAll) e.currentTarget.style.background='rgba(106,191,138,.2)'; }}
-                      onMouseLeave={e => { if (!improvingAll) e.currentTarget.style.background='rgba(106,191,138,.12)'; }}
-                    >
-                      {improvingAll
-                        ? <><span style={{animation:'neSpin .8s linear infinite',display:'inline-block'}}>{'\u2728'}</span> Analyse en cours...</>
-                        : '\u2728 Am\u00e9liorer tout le plan'
-                      }
-                    </button>
-
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* V50 : Modale aiAnalysis remplacee par un bloc inline juste apres l'editeur */}
 
             {/* ─── SPLIT VIEW ─── */}
             <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start' }}>
@@ -4798,6 +4657,113 @@ ${suppText}`;
                 </div>
               </section>
             </div>
+
+            {/* V50 : Bloc Audit du plan (IA) — juste après l'éditeur */}
+            {hasPlan && (
+              <div style={{
+                marginTop: 16,
+                padding: '16px',
+                background: 'rgba(124,92,191,.06)',
+                border: '1px solid rgba(124,92,191,.2)',
+                borderRadius: 12,
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: aiAnalysis ? 12 : 0,
+                  gap: 10, flexWrap: 'wrap',
+                }}>
+                  <div>
+                    <div style={{ fontSize: '.75rem', fontWeight: 700, color: '#b89ef0', textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                      🔬 Audit du plan (IA) — verification interne
+                    </div>
+                    <div style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>
+                      Score qualite + points forts + ameliorations rapides. Ne va pas au client.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={analyzingPlan}
+                    onClick={async () => {
+                      setAnalyzingPlan(true);
+                      try {
+                        const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
+                        if (result) setAiAnalysis(result);
+                      } catch (err) {
+                        console.error('[AI analysis]', err.message);
+                      } finally {
+                        setAnalyzingPlan(false);
+                      }
+                    }}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8,
+                      border: '1px solid rgba(124,92,191,.35)',
+                      background: 'rgba(124,92,191,.12)',
+                      color: '#b89ef0', cursor: analyzingPlan ? 'wait' : 'pointer',
+                      fontSize: '.75rem', fontWeight: 600,
+                      opacity: analyzingPlan ? 0.6 : 1,
+                    }}
+                  >
+                    {analyzingPlan ? '✨ Analyse en cours...' : (aiAnalysis ? '🔁 Re-analyser' : '🔍 Analyser le plan')}
+                  </button>
+                </div>
+
+                {aiAnalysis && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'start' }}>
+                    {/* Score */}
+                    <div style={{
+                      textAlign: 'center', padding: '12px 18px',
+                      background: 'rgba(0,0,0,.25)', borderRadius: 10,
+                      border: `1px solid ${aiAnalysis.score >= 80 ? 'rgba(74,222,128,.3)' : aiAnalysis.score >= 60 ? 'rgba(251,191,36,.3)' : 'rgba(248,113,113,.3)'}`,
+                    }}>
+                      <div style={{
+                        fontSize: '1.8rem', fontWeight: 700,
+                        color: aiAnalysis.score >= 80 ? '#4ade80' : aiAnalysis.score >= 60 ? '#fbbf24' : '#f87171',
+                        lineHeight: 1,
+                      }}>
+                        {aiAnalysis.score}
+                      </div>
+                      <div style={{ fontSize: '.65rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>/ 100</div>
+                    </div>
+
+                    <div>
+                      {aiAnalysis.verdict && (
+                        <div style={{ fontSize: '.82rem', fontStyle: 'italic', color: '#d4c9a8', marginBottom: 10 }}>
+                          « {aiAnalysis.verdict} »
+                        </div>
+                      )}
+
+                      {aiAnalysis.strengths?.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#4ade80', marginBottom: 3 }}>✔ Points forts</div>
+                          {aiAnalysis.strengths.slice(0, 3).map((s, i) => (
+                            <div key={i} style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.7)', marginLeft: 10, lineHeight: 1.4 }}>• {s}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {aiAnalysis.issues?.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#fbbf24', marginBottom: 3 }}>⚠ A ameliorer</div>
+                          {aiAnalysis.issues.slice(0, 4).map((issue, i) => (
+                            <div key={i} style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.7)', marginLeft: 10, lineHeight: 1.4 }}>• {issue}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {aiAnalysis.quickWins?.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#8abf9a', marginBottom: 3 }}>💡 Quick wins</div>
+                          {aiAnalysis.quickWins.slice(0, 3).map((win, i) => (
+                            <div key={i} style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.7)', marginLeft: 10, lineHeight: 1.4 }}>• {win}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Analyses preview (below split, full width) */}
             {showAnalysesPreview && (() => {
