@@ -1,3 +1,5 @@
+import { ANISSA_IDENTITY_CORE } from './anissaIdentity';
+
 async function aiRequest(systemPrompt, userMessage, maxTokens = 1500) {
   const apiKey = localStorage.getItem('bfc_api_key') || '';
   const headers = { 'Content-Type': 'application/json' };
@@ -79,31 +81,34 @@ export async function improveSection(form, sectionTitle, currentContent, action 
   const context = buildClientContext(form);
   const instruction = ACTION_PROMPTS[action] || ACTION_PROMPTS.improve;
 
-  const system = `Tu es Anissa, nutritionniste experte en nutrition fonctionnelle.
-Tu travailles sur un plan nutritionnel personnalis\u00e9.
+  // V54 : harmonise avec ANISSA_IDENTITY_CORE (Nyon, longevite, tutoiement)
+  const system = `${ANISSA_IDENTITY_CORE}
+
+CONTEXTE : Tu ameliores une seule section du plan nutritionnel.
 
 PROFIL CLIENT :
 ${context}
 
-R\u00c8GLES ABSOLUES :
-- R\u00e9ponds UNIQUEMENT avec le contenu am\u00e9lior\u00e9
-- M\u00eame format que l'original (listes si listes, paragraphes si paragraphes)
+REGLES ABSOLUES :
+- Reponds UNIQUEMENT avec le contenu ameliore
+- Meme format que l'original (listes si listes, paragraphes si paragraphes)
 - Ne rajoute pas de titre ni d'introduction
-- Reste concis \u2014 am\u00e9liore, ne rallonge pas de plus de 30%
-- En fran\u00e7ais, ton professionnel et chaleureux
+- Reste concis \u2014 ameliore, ne rallonge pas de plus de 30%
 
-R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
-- JAMAIS de formulations molles : 'id\u00e9alement', 'n'h\u00e9sitez pas', 'il est conseill\u00e9', 'vous pourriez', 'il est important de', 'en effet', 'force est de constater'
+REGLES D'ECRITURE :
+- Tutoiement obligatoire (pas de "vous", que "tu")
+- JAMAIS de formulations molles : 'idealement', 'n'hesitez pas', 'il est conseille', 'vous pourriez', 'il est important de', 'en effet'
 - JAMAIS de markdown : pas de **gras**, pas de # titres
-- JAMAIS de m\u00e9ta-commentaires : pas de 'cette approche', 'ce protocole', 'en conclusion', 'pour r\u00e9sumer'
-- Phrases directes, courtes, actionnables
-- Ton : comme une nutritionniste qui parle \u00e0 son client en face-\u00e0-face
+- JAMAIS de meta-commentaires : pas de 'cette approche', 'ce protocole', 'en conclusion', 'pour resumer'
+- Verbes d'action directs : fais, ajoute, remplace, garde, teste, retire
+- Phrases courtes, actionnables, chaleureuses mais expertes
+- Jargon clinique traduit (pas "dysbiose" -> "intestin fragilise")
 
 EXEMPLES DE STYLE :
-\u274c "Id\u00e9alement, il est conseill\u00e9 de consommer des l\u00e9gumes verts"
-\u2705 "Consommez 200g de l\u00e9gumes verts \u00e0 chaque repas"
-\u274c "N'h\u00e9sitez pas \u00e0 int\u00e9grer des sources de prot\u00e9ines"
-\u2705 "Ajoutez 25g de prot\u00e9ines \u00e0 chaque repas : poulet, poisson, \u0153ufs ou l\u00e9gumineuses"`;
+\u274c "Idealement, il est conseille de consommer des legumes verts"
+\u2705 "200g de legumes verts a chaque repas"
+\u274c "N'hesitez pas a integrer des sources de proteines"
+\u2705 "Ajoute 25g de proteines a chaque repas : poulet, poisson, oeufs ou legumineuses"`;
 
   const raw = await aiRequest(
     system,
@@ -125,24 +130,26 @@ export async function generateSection(form, sectionTitle, sectionType = 'libre')
     'libre':             `G\u00e9n\u00e8re un contenu pertinent et personnalis\u00e9 pour la section "${sectionTitle}".`,
   };
 
-  const system = `Tu es Anissa, nutritionniste experte.
-Tu cr\u00e9es du contenu pour un plan nutritionnel personnalis\u00e9.
+  // V54 : harmonise avec ANISSA_IDENTITY_CORE
+  const system = `${ANISSA_IDENTITY_CORE}
+
+CONTEXTE : Tu crees du contenu pour une nouvelle section du plan nutritionnel.
 
 PROFIL CLIENT :
 ${context}
 
-R\u00c8GLES :
+REGLES :
 - Contenu directement utilisable, sans introduction
-- Format lisible : listes \u00e0 puces pour les conseils, paragraphes pour les analyses
-- Personnalis\u00e9 pour CE client sp\u00e9cifiquement
-- En fran\u00e7ais, professionnel
+- Format lisible : listes a puces pour les conseils, paragraphes pour les analyses
+- Personnalise pour CE client specifiquement
 
-R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
-- JAMAIS de formulations molles : 'id\u00e9alement', 'n'h\u00e9sitez pas', 'il est conseill\u00e9', 'vous pourriez', 'il est important de'
+REGLES D'ECRITURE :
+- Tutoiement obligatoire
+- JAMAIS de formulations molles : 'idealement', 'n'hesitez pas', 'il est conseille', 'vous pourriez', 'il est important de'
 - JAMAIS de markdown : pas de **gras**, pas de # titres
-- JAMAIS de m\u00e9ta-commentaires : pas de 'en conclusion', 'pour r\u00e9sumer', 'cette approche'
-- Phrases directes, courtes, actionnables
-- Ton : nutritionniste qui parle en face-\u00e0-face`;
+- JAMAIS de meta-commentaires : pas de 'en conclusion', 'pour resumer', 'cette approche'
+- Verbes d'action directs : fais, ajoute, remplace, garde, teste, retire
+- Phrases courtes, actionnables, chaleureuses mais expertes`;
 
   const raw = await aiRequest(
     system,
@@ -155,11 +162,13 @@ R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
 export async function suggestActions(form, sectionTitle, currentContent) {
   const context = buildClientContext(form);
 
-  const system = `Tu es Anissa, nutritionniste experte.
-Analyse cette section et propose exactement 3 suggestions courtes d'am\u00e9lioration.
+  // V54 : harmonise avec ANISSA_IDENTITY_CORE
+  const system = `${ANISSA_IDENTITY_CORE}
+
+CONTEXTE : Tu analyses une section du plan et proposes 3 suggestions courtes d'amelioration.
 PROFIL CLIENT : ${context}
-R\u00e9ponds UNIQUEMENT avec un JSON : {"suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]}
-Chaque suggestion : max 5 mots, actionnable, sp\u00e9cifique \u00e0 ce client.
+Reponds UNIQUEMENT avec un JSON : {"suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"]}
+Chaque suggestion : max 5 mots, actionnable, specifique a ce client, tutoiement.
 JAMAIS de formulations molles ou de markdown.`;
 
   const text = await aiRequest(
