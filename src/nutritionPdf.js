@@ -1,11 +1,50 @@
 import { jsPDF } from 'jspdf';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/69c276fd79d460813b99867a/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
-const GREEN = [26, 46, 31];       // #1A2E1F
-const DARK_TEXT = [74, 74, 66];   // #4A4A42
-const GREY_TEXT = [136, 136, 136];
-const SEPARATOR = [232, 230, 225];
-const BG_PAGE = [245, 242, 236];  // #F5F2EC
+
+// ═══════════════════════════════════════════════════════════════════════
+// V56 : DESIGN SYSTEM — palette, typographie, spacing premium
+// ═══════════════════════════════════════════════════════════════════════
+
+// Palette (cohérente avec branding Anissa)
+const GREEN = [26, 46, 31];       // #1A2E1F — primaire (titres, accents)
+const GOLD = [196, 160, 80];      // #C4A050 — accent doré
+const GOLD_SOFT = [230, 210, 160]; // #E6D2A0 — accent doré léger
+const DARK_TEXT = [51, 51, 48];   // #333330 — texte principal (contraste max)
+const SOFT_TEXT = [85, 85, 80];   // #555550 — texte secondaire
+const GREY_TEXT = [128, 128, 120]; // #808078 — labels, meta
+const MUTED_TEXT = [170, 168, 162]; // #AAA8A2 — footer, captions
+const SEPARATOR = [224, 220, 210]; // #E0DCD2 — lignes fines
+const BG_PAGE = [250, 248, 243];  // #FAF8F3 — fond page (warm white)
+const BG_CARD = [255, 255, 255];  // #FFFFFF — cartes (contraste)
+const BG_SOFT = [244, 241, 234];  // #F4F1EA — blocks soft
+const BG_ACCENT = [248, 243, 232]; // #F8F3E8 — highlight doré très léger
+
+// Typographie (tailles en pt)
+const FONT = {
+  hero: 22,        // Cover title
+  h1: 14,          // Section title (ANALYSE DU PROFIL)
+  h2: 11,          // Subsection (Stratégie)
+  h3: 10,          // Card title (Petit-déjeuner)
+  body: 9.5,       // Texte normal
+  small: 8.5,      // Secondaire
+  micro: 7.5,      // Meta, footer
+};
+
+// Spacing (en mm)
+const SPACE = {
+  pageMarginX: 20,
+  pageMarginTop: 22,
+  pageMarginBottom: 20,
+  sectionGap: 11,     // entre sections majeures
+  blockGap: 7,        // entre blocs
+  cardPadding: 6,
+  lineHeight: 4.6,
+  bulletIndent: 6,
+};
+
+const PAGE_H = 297;  // A4 hauteur
+const PAGE_W = 210;  // A4 largeur
 
 function formatDateFR(iso) {
   if (!iso) return '-';
@@ -303,6 +342,331 @@ function parseNutritionPlan(markdownText) {
 // ─────────────────────────────────────────────────────
 // PDF RENDERING HELPERS
 // ─────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════
+// V56 : HELPERS PREMIUM — cartes, blocs, listes, titres harmonieux
+// ═══════════════════════════════════════════════════════════════════════
+
+// Slugifier un texte pour detecter le type de section
+function normalizeSectionKey(title) {
+  return (title || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Detecte le TYPE visuel d'une section pour choisir le rendu
+function detectSectionType(title) {
+  const k = normalizeSectionKey(title);
+  if (/semaine\s*\d/.test(k)) return 'week';
+  if (/analyse\s*du\s*profil|profil/.test(k)) return 'profile';
+  if (/strategie\s*nutritionnelle|strategie/.test(k)) return 'strategy';
+  if (/semaine\s*1.*structure|structure\s*alimentaire|plan\s*alimentaire|menus?/.test(k)) return 'meals';
+  if (/rotation|substitutions?/.test(k)) return 'rotation';
+  if (/aliments?\s*autorises|aliments?\s*favoris/.test(k)) return 'food_yes';
+  if (/aliments?\s*limites|aliments?\s*moderes/.test(k)) return 'food_limit';
+  if (/aliments?\s*interdits|aliments?\s*a\s*eviter/.test(k)) return 'food_no';
+  if (/protocoles?\s*cibles|protocole/.test(k)) return 'protocol';
+  if (/fiche\s*frigo|frigo/.test(k)) return 'fridge';
+  if (/ajustements?\s*environnementaux|ajustements/.test(k)) return 'adjustments';
+  if (/recommandations?\s*coach|recommandations/.test(k)) return 'coach';
+  if (/plan\s*d.?action|action/.test(k)) return 'action';
+  if (/supplements?\s*recommandes|supplements/.test(k)) return 'supplements';
+  if (/stabilisation\s*glycemique|glycemie/.test(k)) return 'protocol_glycemic';
+  if (/gestion\s*stress|stress/.test(k)) return 'protocol_stress';
+  if (/reparation\s*intestinale|intestinale/.test(k)) return 'protocol_gut';
+  return 'default';
+}
+
+// Dessiner un header de section (H1) — style premium
+function drawSectionHeader(doc, title, y, margin, opts = {}) {
+  const pw = doc.internal.pageSize.getWidth();
+  y = ensurePage(doc, y, 22);
+  y += SPACE.sectionGap * 0.4;
+
+  // Accent doré à gauche (fine barre verticale)
+  doc.setFillColor(...GOLD);
+  doc.rect(margin, y - 3, 1.5, 6.5, 'F');
+
+  // Titre en vert
+  doc.setFontSize(FONT.h1);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  const maxTitleW = pw - 2 * margin - 6;
+  const titleLines = doc.splitTextToSize((title || '').toUpperCase(), maxTitleW);
+  let ty = y + 1;
+  doc.text(titleLines[0], margin + 5, ty);
+  for (let i = 1; i < titleLines.length; i++) {
+    ty += 6;
+    doc.text(titleLines[i], margin + 5, ty);
+  }
+  y = ty + 4.5;
+
+  // Ligne fine de separation
+  doc.setDrawColor(...SEPARATOR);
+  doc.setLineWidth(0.25);
+  doc.line(margin, y, pw - margin, y);
+
+  return y + 7;
+}
+
+// Dessiner un petit label + valeur (info block) — utile pour profil/strategie
+function drawInfoBlock(doc, label, value, x, y, width) {
+  if (!value?.trim()) return y;
+  doc.setFontSize(FONT.micro);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GOLD);
+  doc.text(label.toUpperCase(), x, y);
+  y += 3.3;
+  doc.setFontSize(FONT.body);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...DARK_TEXT);
+  const lines = doc.splitTextToSize(value.trim(), width);
+  for (const l of lines) {
+    y = ensurePage(doc, y);
+    doc.text(l, x, y);
+    y += SPACE.lineHeight;
+  }
+  y += 3;
+  return y;
+}
+
+// Dessiner une "card" pour un repas (Petit-dejeuner, Dejeuner, etc.)
+function drawMealCard(doc, title, content, x, y, width) {
+  if (!content?.trim()) return y;
+  y = ensurePage(doc, y, 20);
+
+  // Card background subtile
+  const padX = 8;
+  const padY = 6;
+  const contentLines = doc.splitTextToSize(content.trim(), width - padX * 2);
+  const h = padY * 2 + 5 + contentLines.length * SPACE.lineHeight;
+
+  doc.setFillColor(...BG_CARD);
+  doc.setDrawColor(...SEPARATOR);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(x, y, width, h, 2.5, 2.5, 'FD');
+
+  // Titre (doré, petit)
+  doc.setFontSize(FONT.micro);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GOLD);
+  doc.text((title || '').toUpperCase(), x + padX, y + padY);
+
+  // Contenu
+  doc.setFontSize(FONT.body);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...DARK_TEXT);
+  let cy = y + padY + 5.5;
+  for (const l of contentLines) {
+    doc.text(l, x + padX, cy);
+    cy += SPACE.lineHeight;
+  }
+
+  return y + h + SPACE.blockGap * 0.7;
+}
+
+// Dessiner une liste a puces propre (avec indentation fine et pas de marker lourd)
+function drawBulletList(doc, items, x, y, width, opts = {}) {
+  if (!items || !items.length) return y;
+  const bulletChar = opts.bullet || '·';
+  const indent = SPACE.bulletIndent;
+  doc.setFontSize(FONT.body);
+  doc.setFont('helvetica', 'normal');
+
+  for (const item of items) {
+    const text = typeof item === 'string' ? item : item?.content;
+    if (!text?.trim()) continue;
+    y = ensurePage(doc, y, 6);
+    const lines = doc.splitTextToSize(text.trim(), width - indent - 3);
+    doc.setTextColor(...GOLD);
+    doc.text(bulletChar, x, y);
+    doc.setTextColor(...DARK_TEXT);
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) y = ensurePage(doc, y);
+      doc.text(lines[i], x + indent, y);
+      if (i < lines.length - 1) y += SPACE.lineHeight;
+    }
+    y += SPACE.lineHeight + 0.5;
+  }
+  return y + 1;
+}
+
+// Parser le contenu d'un supplement et le render en card compacte
+function drawSupplementCard(doc, name, fields, x, y, width) {
+  y = ensurePage(doc, y, 28);
+  const padX = 7;
+  const padY = 5;
+
+  // Estimer la hauteur approximative
+  let estH = padY + 6; // titre
+  const rows = [
+    { label: 'Moment', val: fields.moment },
+    { label: 'Dosage', val: fields.dosage },
+    { label: 'Sources', val: fields.sources },
+    { label: 'Justification', val: fields.justification },
+    { label: 'Duree', val: fields.duree },
+    { label: 'Interactions', val: fields.interactions },
+  ].filter(r => r.val?.trim());
+
+  for (const r of rows) {
+    const lines = doc.splitTextToSize(r.val.trim(), width - padX * 2 - 22);
+    estH += lines.length * 3.8 + 1.5;
+  }
+  estH += padY;
+
+  // Card background
+  doc.setFillColor(...BG_SOFT);
+  doc.roundedRect(x, y, width, estH, 2.5, 2.5, 'F');
+
+  // Accent doré gauche
+  doc.setFillColor(...GOLD);
+  doc.rect(x, y, 1.5, estH, 'F');
+
+  // Nom du supplement
+  doc.setFontSize(FONT.h3);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  doc.text((name || '').toUpperCase(), x + padX, y + padY + 2);
+
+  // Rows
+  let cy = y + padY + 8;
+  for (const r of rows) {
+    doc.setFontSize(FONT.micro);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...SOFT_TEXT);
+    doc.text(r.label, x + padX, cy);
+
+    doc.setFontSize(FONT.small);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    const lines = doc.splitTextToSize(r.val.trim(), width - padX * 2 - 22);
+    for (let i = 0; i < lines.length; i++) {
+      doc.text(lines[i], x + padX + 22, cy);
+      if (i < lines.length - 1) cy += 3.8;
+    }
+    cy += 3.8 + 1.5;
+  }
+
+  return y + estH + SPACE.blockGap * 0.8;
+}
+
+// Parse un bloc de texte en entrees de supplements structurees
+// Formats acceptes :
+//   "VITAMINE D3\n— Sources : ...\n— Complement : ...\n— Justification : ..."
+//   "VITAMINE D3\nSources : ...\nComplement : ..."
+function parseSupplementEntriesStructured(text) {
+  if (!text) return [];
+  const lines = text.split('\n');
+  const entries = [];
+  let current = null;
+
+  const isSupplementHeader = (l) => {
+    const t = l.trim();
+    // Un header : ligne courte, majuscules dominantes, pas de ":" au milieu
+    if (!t || t.length > 50) return false;
+    if (t.includes(':') && t.indexOf(':') < t.length - 3) return false;
+    const upperChars = (t.match(/[A-Z0-9 +\-/()]/g) || []).length;
+    return t.length >= 4 && upperChars >= t.length * 0.7;
+  };
+
+  const parseField = (l) => {
+    // Accepte : "— Sources : xyz" ou "Sources : xyz" ou "• Sources : xyz"
+    const m = l.trim().replace(/^[—\-•*·]\s*/, '').match(/^([A-Za-zéè][^:]{0,30}?)\s*:\s*(.+)$/);
+    if (!m) return null;
+    const rawLabel = m[1].toLowerCase().trim();
+    const val = m[2].trim();
+    if (/source/.test(rawLabel)) return { key: 'sources', val };
+    if (/complement|supplement/.test(rawLabel)) return { key: 'dosage', val };
+    if (/justif|raison|pourquoi/.test(rawLabel)) return { key: 'justification', val };
+    if (/interact|attention|eviter/.test(rawLabel)) return { key: 'interactions', val };
+    if (/duree|pendant|cure/.test(rawLabel)) return { key: 'duree', val };
+    if (/moment|quand|horaire/.test(rawLabel)) return { key: 'moment', val };
+    if (/association/.test(rawLabel)) return { key: 'interactions', val };
+    return null;
+  };
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    if (isSupplementHeader(t)) {
+      if (current) entries.push(current);
+      current = { name: t.replace(/[*#]/g, '').trim(), fields: {} };
+      continue;
+    }
+    if (current) {
+      const f = parseField(t);
+      if (f) {
+        current.fields[f.key] = current.fields[f.key] ? current.fields[f.key] + ' ' + f.val : f.val;
+      }
+    }
+  }
+  if (current) entries.push(current);
+  return entries;
+}
+
+// Render un bloc "Tableau horaire des supplements"
+function drawScheduleTable(doc, entries, x, y, width) {
+  if (!entries?.length) return y;
+  y = ensurePage(doc, y, 30);
+
+  doc.setFontSize(FONT.h3);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  doc.text('TABLEAU HORAIRE', x, y);
+  y += 6;
+  doc.setDrawColor(...SEPARATOR);
+  doc.setLineWidth(0.25);
+  doc.line(x, y, x + width, y);
+  y += 5;
+
+  for (const { moment, supp } of entries) {
+    y = ensurePage(doc, y, 6);
+    doc.setFontSize(FONT.small);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GOLD);
+    doc.text(moment, x, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    const lines = doc.splitTextToSize(supp, width - 40);
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) y += 4;
+      doc.text(lines[i], x + 40, y);
+    }
+    y += SPACE.lineHeight;
+  }
+  return y + SPACE.blockGap;
+}
+
+// Parse une section de texte en paires label/value
+function parseLabeledLines(text) {
+  if (!text) return [];
+  const lines = text.split('\n');
+  const pairs = [];
+  for (const line of lines) {
+    const t = line.trim().replace(/^[—\-•*·]\s*/, '');
+    const m = t.match(/^([A-Za-zéèàùûîâôçêŒœ][^:]{2,60}?)\s*:\s*(.+)$/);
+    if (m) {
+      pairs.push({ label: m[1].trim(), value: m[2].trim() });
+    } else if (pairs.length > 0 && t) {
+      // Continuation de la derniere pair
+      pairs[pairs.length - 1].value += ' ' + t;
+    }
+  }
+  return pairs;
+}
+
+// Parse des lignes en items bullet (accepte "- xxx", "— xxx", "• xxx", "1. xxx")
+function parseBulletLines(text) {
+  if (!text) return [];
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && /^([—\-•*·]|\d+[\.\)])\s+/.test(l))
+    .map(l => l.replace(/^([—\-•*·]|\d+[\.\)])\s+/, '').trim())
+    .filter(Boolean);
+}
 
 function ensurePage(doc, y, needed = 10) {
   if (y > 272 - needed) {
@@ -840,49 +1204,210 @@ export async function exportConsultationPDF(consultation, client) {
   if (unifiedSections) {
     // Helper: find section by type
     const findSec = (type) => unifiedSections.find(s => s.type === type);
+
+    // V56 : renderSec avec dispatch selon type de section
     const renderSec = (sec) => {
       if (!sec?.content?.trim()) return;
-      console.log('[PDF RENDER] rendering section:', sec.title, 'content length:', sec.content.length);
-      y = addSectionTitle(doc, sec.title, y, margin);
-      const tokens = parseNutritionPlan(sec.content);
-      console.log('[PDF RENDER] tokens:', tokens.length, tokens.slice(0, 3));
-      y = renderTokens(doc, tokens, margin, y, cw);
-      y += 8;
+      const sectionType = detectSectionType(sec.title);
+
+      // Header premium (remplace addSectionTitle)
+      y = drawSectionHeader(doc, sec.title, y, margin);
+
+      // Dispatch selon type
+      switch (sectionType) {
+        case 'profile':
+        case 'strategy': {
+          // Rendu en info blocks (label + value)
+          const pairs = parseLabeledLines(sec.content);
+          if (pairs.length >= 2) {
+            for (const p of pairs) {
+              y = drawInfoBlock(doc, p.label, p.value, margin, y, cw);
+            }
+          } else {
+            // Fallback : parser standard
+            const tokens = parseNutritionPlan(sec.content);
+            y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        case 'meals': {
+          // Rendu en cartes repas
+          const pairs = parseLabeledLines(sec.content);
+          const mealPairs = pairs.filter(p => /petit[- ]?dej|dejeuner|diner|collation|goute|snack/i.test(p.label));
+          if (mealPairs.length >= 2) {
+            for (const p of mealPairs) {
+              y = drawMealCard(doc, p.label, p.value, margin, y, cw);
+            }
+            // Rendre le reste eventuel
+            const rest = pairs.filter(p => !mealPairs.includes(p));
+            for (const r of rest) {
+              y = drawInfoBlock(doc, r.label, r.value, margin, y, cw);
+            }
+          } else {
+            const tokens = parseNutritionPlan(sec.content);
+            y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        case 'food_yes':
+        case 'food_limit':
+        case 'food_no': {
+          // Rendu en liste a puces propre (contenu souvent "aliment1, aliment2, ...")
+          const content = sec.content.trim();
+          // Si c'est une liste de mots separes par virgules → bullets
+          if (/,/.test(content) && !content.includes('\n\n')) {
+            const items = content
+              .replace(/\n/g, ', ')
+              .split(/,\s*/)
+              .map(s => s.trim())
+              .filter(Boolean);
+            y = drawBulletList(doc, items, margin + 2, y, cw - 2);
+          } else {
+            const bullets = parseBulletLines(content);
+            if (bullets.length >= 2) {
+              y = drawBulletList(doc, bullets, margin + 2, y, cw - 2);
+            } else {
+              const tokens = parseNutritionPlan(sec.content);
+              y = renderTokens(doc, tokens, margin, y, cw);
+            }
+          }
+          break;
+        }
+
+        case 'protocol':
+        case 'adjustments':
+        case 'coach':
+        case 'action': {
+          // Rendu en bullets propres si possible
+          const bullets = parseBulletLines(sec.content);
+          if (bullets.length >= 2) {
+            y = drawBulletList(doc, bullets, margin + 2, y, cw - 2);
+          } else {
+            // Mix labels + bullets : utiliser parser standard
+            const tokens = parseNutritionPlan(sec.content);
+            y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        case 'supplements': {
+          // Rendu en mini-cards supplement
+          const entries = parseSupplementEntriesStructured(sec.content);
+          if (entries.length >= 2) {
+            for (const entry of entries) {
+              y = drawSupplementCard(doc, entry.name, entry.fields, margin, y, cw);
+            }
+          } else {
+            const tokens = parseNutritionPlan(sec.content);
+            y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        default: {
+          // Rendu standard
+          const tokens = parseNutritionPlan(sec.content);
+          y = renderTokens(doc, tokens, margin, y, cw);
+          break;
+        }
+      }
+      y += SPACE.blockGap;
     };
     const newPage = () => { doc.addPage(); doc.setFillColor(...BG_PAGE); doc.rect(0, 0, pw, 297, 'F'); y = 22; };
 
-    // ── PAGE 1: COVER ──
+    // ── PAGE 1: COVER — Premium layout V56 ──
     {
-      const coverY = 80;
-      doc.setDrawColor(200, 198, 190); doc.setLineWidth(0.3); doc.line(pw / 2 - 30, coverY, pw / 2 + 30, coverY);
-      doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GREEN);
-      doc.text('Plan Nutritionnel Personnalise', pw / 2, coverY + 18, { align: 'center' });
-      doc.setFontSize(13); doc.setFont('helvetica', 'normal'); doc.setTextColor(...DARK_TEXT);
-      doc.text(prenom, pw / 2, coverY + 32, { align: 'center' });
+      // Ligne doree fine tout en haut (accent subtil de marque)
+      doc.setDrawColor(...GOLD);
+      doc.setLineWidth(0.5);
+      doc.line(pw / 2 - 20, 35, pw / 2 + 20, 35);
+
+      // Surtitre discret en doré
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...GOLD);
+      doc.text('PLAN NUTRITIONNEL', pw / 2, 42, { align: 'center', charSpace: 2.5 });
+
+      // Titre principal - grand et élégant
+      doc.setFontSize(28);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      doc.text('Personnalisé', pw / 2, 60, { align: 'center' });
+
+      // Ligne fine de séparation
+      doc.setDrawColor(...SEPARATOR);
+      doc.setLineWidth(0.3);
+      doc.line(pw / 2 - 14, 70, pw / 2 + 14, 70);
+
+      // Prénom du client - grand, centré, respirant
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...DARK_TEXT);
+      const prenomFormate = (prenom || '').charAt(0).toUpperCase() + (prenom || '').slice(1).toLowerCase();
+      doc.text(prenomFormate, pw / 2, 92, { align: 'center' });
+
+      // Objectif principal dans un cadre doux
       if (objectif) {
-        doc.setFontSize(10); doc.setTextColor(...GREY_TEXT);
-        const wrappedObj = doc.splitTextToSize(objectif, 120);
-        for (let i = 0; i < Math.min(wrappedObj.length, 2); i++) {
-          doc.text(wrappedObj[i], pw / 2, coverY + 44 + i * 5, { align: 'center' });
+        const objY = 108;
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GOLD);
+        doc.text('OBJECTIF', pw / 2, objY, { align: 'center', charSpace: 1.5 });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(...SOFT_TEXT);
+        const wrappedObj = doc.splitTextToSize(objectif, 130);
+        for (let i = 0; i < Math.min(wrappedObj.length, 3); i++) {
+          doc.text(wrappedObj[i], pw / 2, objY + 6 + i * 5, { align: 'center' });
         }
       }
-      doc.setFontSize(9); doc.setTextColor(...GREY_TEXT);
-      doc.text(dateStr || '', pw / 2, coverY + 60, { align: 'center' });
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GREEN);
-      doc.text('Anissa Deroubaix Nutrition', pw / 2, coverY + 74, { align: 'center' });
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(...GREY_TEXT); doc.setFontSize(7.5);
-      doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, coverY + 80, { align: 'center' });
-      doc.line(pw / 2 - 30, coverY + 90, pw / 2 + 30, coverY + 90);
+
+      // Date — discrète
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...MUTED_TEXT);
+      doc.text(dateStr || '', pw / 2, 148, { align: 'center' });
+
+      // Bloc signataire — en bas, premium
+      const sigY = 230;
+      doc.setDrawColor(...GOLD);
+      doc.setLineWidth(0.4);
+      doc.line(pw / 2 - 18, sigY, pw / 2 + 18, sigY);
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      doc.text('Anissa Deroubaix Nutrition', pw / 2, sigY + 8, { align: 'center' });
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...GREY_TEXT);
+      doc.text('Nutritionniste specialisee en longevite et genetique', pw / 2, sigY + 14, { align: 'center' });
+
+      doc.setFontSize(7.5);
+      doc.setTextColor(...MUTED_TEXT);
+      doc.text('AB Coaching Sarl  ·  Rue de Rive 28  ·  1260 Nyon', pw / 2, sigY + 20, { align: 'center' });
+
+      // Mention confidentielle en bas de page (discret)
+      doc.setFontSize(6.5);
+      doc.setTextColor(...MUTED_TEXT);
+      doc.text('Document confidentiel — usage personnel uniquement', pw / 2, 282, { align: 'center', charSpace: 1 });
     }
 
-    // ── RENDER ALL SECTIONS LINEARLY (same order as preview) ──
+    // ── RENDER ALL SECTIONS LINEARLY — V56 pagination smart ──
     newPage();
     for (let i = 0; i < unifiedSections.length; i++) {
       const sec = unifiedSections[i];
       if (!sec?.content?.trim()) continue;
-      // V55 : seuil releve (250 au lieu de 180) pour eviter pages blanches quand section courte
-      // ensurePage dans renderSec gerera les sections qui ne rentrent vraiment pas
-      if (i > 0 && y > 250) newPage();
+
+      // V56 : logique anti-orphan - estimer si le titre + 2 lignes min tient
+      // Si on est deja tres bas (y > 240) et qu'il reste plus de 2 lignes a ecrire, nouvelle page
+      const contentLines = (sec.content || '').split('\n').filter(l => l.trim()).length;
+      const needsSpace = 25 + Math.min(contentLines * 4, 40); // header + un peu de contenu
+      if (i > 0 && y + needsSpace > 275) newPage();
+
       renderSec(sec);
     }
   } else {
