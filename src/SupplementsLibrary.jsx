@@ -645,9 +645,9 @@ const SUPPLEMENTS = [
     natural: 'Bouillon d\'os, patate douce, soja, agrumes (stimulent la production naturelle)',
   },
 
-  // === LONGEVITE & BIOHACKING ===
+  // === LONGEVITE ===
   {
-    category: 'Longevite & biohacking',
+    category: 'Longevite',
     name: 'NMN (Nicotinamide Mononucleotide)',
     description: 'Precurseur du NAD+, longevite cellulaire.',
     dosage: '250-500 mg/jour',
@@ -659,7 +659,7 @@ const SUPPLEMENTS = [
     natural: 'Brocoli, avocat, edamame (en infimes quantites — supplementation necessaire si voulu)',
   },
   {
-    category: 'Longevite & biohacking',
+    category: 'Longevite',
     name: 'Spermidine',
     description: 'Active l\'autophagie cellulaire, longevite.',
     dosage: '1-5 mg/jour',
@@ -701,7 +701,7 @@ const CATEGORIES = [
   'Energie & mitochondries',
   'Immunite',
   'Peau, cheveux, ongles',
-  'Longevite & biohacking',
+  'Longevite',
   'Electrolytes & hydratation',
   'Adaptogenes & stress',
   'Sommeil',

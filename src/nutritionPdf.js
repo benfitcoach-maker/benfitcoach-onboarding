@@ -963,7 +963,7 @@ export async function exportConsultationPDF(consultation, client) {
   const closingLines = [
     `Ce plan a ete elabore specifiquement pour vous`,
     `par Anissa Deroubaix, nutritionniste specialisee`,
-    `en biohacking et genetique.`,
+    `en longevite et genetique.`,
   ];
   for (const cl of closingLines) {
     doc.text(cl, pw / 2, y, { align: 'center' });

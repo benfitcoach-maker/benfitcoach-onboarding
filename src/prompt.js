@@ -35,7 +35,7 @@ export function buildSystemPrompt(form) {
 
 CONTEXTE BENFITCOACH :
 - Entreprise : AB Coaching Sarl, Rue de Rive 28, 1260 Nyon
-- Duo d'experts : Benoit (sport + massage) et Anissa Deroubaix (nutrition, biohacking, genetique)
+- Duo d'experts : Benoit (sport + massage) et Anissa Deroubaix (nutrition, longevite, genetique)
 - App : PT Distinction (programmes, messagerie, check-ins, habitudes)
 - Zones : Nyon, Prangins, Founex, Coppet, Geneve + coaching en ligne mondial
 

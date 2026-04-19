@@ -201,7 +201,7 @@ async function generateMedicalPDF(data) {
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GREY);
-  doc.text('Anissa Deroubaix — Nutritionniste specialisee en biohacking et genetique', pw / 2, fy + 4, { align: 'center' });
+  doc.text('Anissa Deroubaix — Nutritionniste specialisee en longevite et genetique', pw / 2, fy + 4, { align: 'center' });
   doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, fy + 8, { align: 'center' });
   doc.text('Document confidentiel — usage medical uniquement', pw / 2, fy + 12, { align: 'center' });
 
