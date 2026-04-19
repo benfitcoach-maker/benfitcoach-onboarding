@@ -549,8 +549,11 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
   };
 }
 
-// Score display component
-function PlanQualityScore({ score, autoCorrected }) {
+// V53 : Score display unifie — UX simplifiee (1 seul bloc)
+// Affiche un resume (OK / a ameliorer) avec details on-demand + audit IA integre
+function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnalysisError, onAnalyze, planSignatureCurrent, analysesError }) {
+  // Hooks must be unconditional — move them before the early return
+  const [showDetails, setShowDetails] = useState(false);
   if (!score) return null;
 
   const getColor = (val, max = 10) => {
@@ -560,6 +563,11 @@ function PlanQualityScore({ score, autoCorrected }) {
     return '#d45c4c';
   };
 
+  // Compter les problemes a afficher
+  const issuesCount = (score.hardFails?.length || 0) + (score.penalties?.length || 0);
+  const isHealthy = !score.hasHardFail && score.normalized >= 8;
+  const isWarning = !score.hasHardFail && score.normalized >= 6 && score.normalized < 8;
+
   const axes = [
     { key: 'coherence', label: 'Coherence', desc: 'Allergies, macros, contradictions, ton' },
     { key: 'simplicity', label: 'Simplicite', desc: 'Mots, lignes, nb supplements' },
@@ -567,51 +575,192 @@ function PlanQualityScore({ score, autoCorrected }) {
     { key: 'constraints', label: 'Contraintes', desc: 'Pathologies, sport, profil client' },
   ];
 
+  // Stale detection pour audit IA
+  const isStale = aiAnalysis?.planSignature && aiAnalysis.planSignature !== planSignatureCurrent;
+
+  // Couleur du bandeau principal
+  const bannerColor = isHealthy
+    ? { bg: 'rgba(42,157,92,.08)', border: 'rgba(42,157,92,.3)', text: '#5fbd82' }
+    : isWarning
+    ? { bg: 'rgba(232,160,64,.08)', border: 'rgba(232,160,64,.3)', text: '#e8a040' }
+    : { bg: 'rgba(212,92,76,.08)', border: 'rgba(212,92,76,.3)', text: '#e57c6c' };
+
   return (
-    <div style={{ background: 'rgba(124,92,191,.06)', border: '1px solid rgba(124,92,191,.15)', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <strong style={{ fontSize: '.9rem' }}>Vérification du plan</strong>
-        <span style={{ fontSize: '.82rem', fontWeight: 600,
-          color: 'rgba(255,255,255,.4)' }}>
-          Qualité : {score.normalized}/10
-        </span>
-      </div>
-
-      {autoCorrected && (
-        <div style={{ background: 'rgba(42,157,92,.1)', border: '1px solid rgba(42,157,92,.25)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.8rem', color: '#2a9d5c', fontWeight: 600 }}>
-          Auto-correction appliquee — le plan a ete corrige automatiquement
-        </div>
-      )}
-
-      {score.hasHardFail && (
-        <div style={{ background: 'rgba(212,92,76,.12)', border: '1px solid rgba(212,92,76,.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.8rem', color: '#d45c4c', fontWeight: 600 }}>
-          ECHEC CRITIQUE : {score.hardFails.join(' | ')}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {axes.map(({ key, label, desc }) => (
-          <div key={key} style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '8px 10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: '.78rem', fontWeight: 600 }}>{label}</span>
-              <span style={{ fontSize: '.78rem', fontWeight: 700, color: getColor(score[key]) }}>{score[key]}/10</span>
+    <div style={{
+      background: bannerColor.bg,
+      border: `1px solid ${bannerColor.border}`,
+      borderRadius: 12, padding: '12px 16px', marginBottom: 16,
+    }}>
+      {/* BANDEAU RESUME */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 10, flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '1.1rem' }}>
+            {isHealthy ? '✅' : isWarning ? '⚠️' : '🚫'}
+          </span>
+          <div>
+            <div style={{ fontSize: '.85rem', fontWeight: 700, color: bannerColor.text }}>
+              {isHealthy ? 'Plan pret a envoyer'
+                : score.hasHardFail ? 'Echec critique — revoir le plan'
+                : `Plan a ameliorer — ${issuesCount} point${issuesCount > 1 ? 's' : ''} a corriger`}
             </div>
-            <div style={{ height: 4, background: 'rgba(255,255,255,.08)', borderRadius: 4 }}>
-              <div style={{ height: '100%', width: `${score[key] * 10}%`, background: getColor(score[key]), borderRadius: 4, transition: 'width .3s' }} />
+            <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.4)', marginTop: 2 }}>
+              {autoCorrected && '✨ Auto-corrige · '}
+              Qualite {score.normalized}/10
+              {aiAnalysis?.analyzedAt && !isStale && ` · Audit IA : ${aiAnalysis.score}/100`}
+              {aiAnalysis && isStale && ' · ⚠ Audit IA obsolete'}
             </div>
-            <div style={{ fontSize: '.68rem', color: '#6b5f48', marginTop: 3 }}>{desc}</div>
           </div>
-        ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 6 }}>
+          {!isHealthy && (
+            <button
+              type="button"
+              onClick={() => setShowDetails(s => !s)}
+              style={{
+                padding: '5px 12px', borderRadius: 7,
+                border: '1px solid rgba(255,255,255,.15)',
+                background: 'rgba(255,255,255,.04)',
+                color: 'rgba(255,255,255,.65)', cursor: 'pointer',
+                fontSize: '.72rem', fontWeight: 600,
+              }}
+            >
+              {showDetails ? 'Masquer' : 'Voir details'}
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={analyzing}
+            onClick={onAnalyze}
+            style={{
+              padding: '5px 12px', borderRadius: 7,
+              border: '1px solid rgba(124,92,191,.35)',
+              background: 'rgba(124,92,191,.12)',
+              color: '#b89ef0', cursor: analyzing ? 'wait' : 'pointer',
+              fontSize: '.72rem', fontWeight: 600,
+              opacity: analyzing ? 0.6 : 1, whiteSpace: 'nowrap',
+            }}
+          >
+            {analyzing ? '✨ Analyse...' : aiAnalysis ? '🔁 Re-analyser IA' : '🔬 Analyser avec IA'}
+          </button>
+        </div>
       </div>
 
-      {score.penalties.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: '.72rem', color: '#8a8a7a' }}>
-          Penalites : {score.penalties.join(' · ')}
+      {/* DETAILS RULES-BASED (toggle) */}
+      {showDetails && !isHealthy && (
+        <div style={{
+          marginTop: 12, paddingTop: 12,
+          borderTop: '1px solid rgba(255,255,255,.08)',
+        }}>
+          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#e8a040', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.3px' }}>
+            🔧 Ajustements necessaires
+          </div>
+
+          {score.hasHardFail && (
+            <div style={{ marginBottom: 10, padding: '8px 10px', background: 'rgba(212,92,76,.08)', border: '1px solid rgba(212,92,76,.2)', borderRadius: 7, fontSize: '.75rem', color: '#e57c6c' }}>
+              <strong>Echec critique :</strong> {score.hardFails.join(' · ')}
+            </div>
+          )}
+
+          {score.penalties.length > 0 && (
+            <div style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.6)', lineHeight: 1.5, marginBottom: 10 }}>
+              {score.penalties.map((p, i) => (
+                <div key={i}>• {p}</div>
+              ))}
+            </div>
+          )}
+
+          {/* Mini-grid des 4 axes */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 6, marginTop: 8 }}>
+            {axes.map(({ key, label }) => (
+              <div key={key} style={{
+                display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', fontSize: '.7rem',
+                padding: '4px 8px', borderRadius: 5,
+                background: 'rgba(255,255,255,.03)',
+              }}>
+                <span style={{ color: 'rgba(255,255,255,.6)' }}>{label}</span>
+                <span style={{ color: getColor(score[key]), fontWeight: 700 }}>{score[key]}/10</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
-      {score.notes.length > 0 && (
-        <div style={{ marginTop: 4, fontSize: '.68rem', color: '#5f5848', fontStyle: 'italic' }}>
-          Notes : {score.notes.join(' · ')}
+
+      {/* AUDIT IA (affiche si analyse disponible) */}
+      {aiAnalysisError && !aiAnalysis && (
+        <div style={{
+          marginTop: 12, padding: '8px 12px',
+          background: 'rgba(248,113,113,.08)',
+          border: '1px solid rgba(248,113,113,.25)',
+          borderRadius: 7, fontSize: '.75rem', color: '#f87171',
+        }}>
+          ⚠️ {aiAnalysisError}
+        </div>
+      )}
+
+      {aiAnalysis && (
+        <div style={{
+          marginTop: 12, paddingTop: 12,
+          borderTop: '1px solid rgba(255,255,255,.08)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#b89ef0', textTransform: 'uppercase', letterSpacing: '.3px' }}>
+              🔬 Audit IA
+            </span>
+            <span style={{
+              fontSize: '.82rem', fontWeight: 700,
+              color: aiAnalysis.score >= 80 ? '#5fbd82' : aiAnalysis.score >= 60 ? '#e8a040' : '#e57c6c',
+            }}>
+              {aiAnalysis.score}/100
+            </span>
+            {isStale && (
+              <span style={{
+                fontSize: '.6rem', fontWeight: 700,
+                padding: '2px 7px', borderRadius: 10,
+                background: 'rgba(232,160,64,.18)',
+                color: '#e8a040',
+              }}>
+                ⚠ OBSOLETE
+              </span>
+            )}
+          </div>
+
+          {aiAnalysis.verdict && (
+            <div style={{ fontSize: '.75rem', fontStyle: 'italic', color: 'rgba(255,255,255,.6)', marginBottom: 8 }}>
+              « {aiAnalysis.verdict} »
+            </div>
+          )}
+
+          {aiAnalysis.strengths?.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: '.65rem', fontWeight: 700, color: '#5fbd82', marginBottom: 2 }}>✔ POINTS FORTS</div>
+              {aiAnalysis.strengths.slice(0, 3).map((s, i) => (
+                <div key={i} style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.55)', marginLeft: 8, lineHeight: 1.35 }}>• {s}</div>
+              ))}
+            </div>
+          )}
+
+          {aiAnalysis.issues?.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: '.65rem', fontWeight: 700, color: '#e8a040', marginBottom: 2 }}>⚠ A AMELIORER</div>
+              {aiAnalysis.issues.slice(0, 4).map((issue, i) => (
+                <div key={i} style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.55)', marginLeft: 8, lineHeight: 1.35 }}>• {issue}</div>
+              ))}
+            </div>
+          )}
+
+          {aiAnalysis.quickWins?.length > 0 && (
+            <div>
+              <div style={{ fontSize: '.65rem', fontWeight: 700, color: '#b89ef0', marginBottom: 2 }}>💡 CORRECTIONS RAPIDES</div>
+              {aiAnalysis.quickWins.slice(0, 3).map((win, i) => (
+                <div key={i} style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.55)', marginLeft: 8, lineHeight: 1.35 }}>• {win}</div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -4239,7 +4388,7 @@ ${suppText}`;
                   {autoCorrected && <span style={{ fontSize: '.7rem', background: 'rgba(255,200,60,.15)', color: '#e8c560', padding: '2px 8px', borderRadius: 999 }}>Auto-corrige</span>}
                 </div>
                 {hasPlan && (
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div style={{ width: '100%' }}>
                     <PlanQualityScore
                       score={liveScore || scorePlanQuality(
                         planDraft,
@@ -4248,6 +4397,29 @@ ${suppText}`;
                         { isFollowup, followupWeek }
                       )}
                       autoCorrected={autoCorrected}
+                      aiAnalysis={aiAnalysis}
+                      analyzing={analyzingPlan}
+                      aiAnalysisError={aiAnalysisError}
+                      planSignatureCurrent={(planDraft || '').length + '|' + (planDraft || '').slice(0, 200)}
+                      onAnalyze={async () => {
+                        setAnalyzingPlan(true);
+                        setAiAnalysisError('');
+                        try {
+                          const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
+                          if (result) {
+                            result.planSignature = (planDraft || '').length + '|' + (planDraft || '').slice(0, 200);
+                            result.analyzedAt = new Date().toISOString();
+                            setAiAnalysis(result);
+                          } else {
+                            setAiAnalysisError('L\'IA n\'a pas pu produire une analyse structuree. Relance ou verifie ta cle API.');
+                          }
+                        } catch (err) {
+                          console.error('[AI analysis]', err.message);
+                          setAiAnalysisError('Erreur reseau : ' + (err.message || 'inconnue'));
+                        } finally {
+                          setAnalyzingPlan(false);
+                        }
+                      }}
                     />
                   </div>
                 )}
@@ -4663,156 +4835,7 @@ ${suppText}`;
               </section>
             </div>
 
-            {/* V50 : Bloc Audit du plan (IA) — juste après l'éditeur */}
-            {hasPlan && (
-              <div style={{
-                marginTop: 16,
-                padding: '16px',
-                background: 'rgba(124,92,191,.06)',
-                border: '1px solid rgba(124,92,191,.2)',
-                borderRadius: 12,
-              }}>
-                {/* V51b : détecter si l'audit est obsolète (plan édité après analyse) */}
-                {(() => {
-                  const isStale = aiAnalysis?.planSignature &&
-                    aiAnalysis.planSignature !== ((planDraft || '').length + '|' + (planDraft || '').slice(0, 200));
-                  return (
-                <div style={{
-                  display: 'flex', alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: aiAnalysis ? 12 : 0,
-                  gap: 10, flexWrap: 'wrap',
-                }}>
-                  <div>
-                    <div style={{ fontSize: '.75rem', fontWeight: 700, color: '#b89ef0', textTransform: 'uppercase', letterSpacing: '.5px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      🔬 Audit du plan (IA) — verification interne
-                      {isStale && (
-                        <span style={{
-                          fontSize: '.65rem', fontWeight: 700,
-                          padding: '2px 8px', borderRadius: 12,
-                          background: 'rgba(251,191,36,.15)',
-                          border: '1px solid rgba(251,191,36,.35)',
-                          color: '#fbbf24',
-                          textTransform: 'none', letterSpacing: 0,
-                        }}>
-                          ⚠️ Audit obsolete — plan modifie depuis
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>
-                      Score qualite + points forts + ameliorations rapides. Ne va pas au client.
-                      {aiAnalysis?.analyzedAt && (
-                        <span style={{ marginLeft: 6, opacity: .7 }}>
-                          · analyse le {new Date(aiAnalysis.analyzedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })} a {new Date(aiAnalysis.analyzedAt).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={analyzingPlan}
-                    onClick={async () => {
-                      setAnalyzingPlan(true);
-                      setAiAnalysisError('');
-                      try {
-                        const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
-                        if (result) {
-                          // V51b : stocker signature du plan analysé pour détecter si obsolète
-                          result.planSignature = (planDraft || '').length + '|' + (planDraft || '').slice(0, 200);
-                          result.analyzedAt = new Date().toISOString();
-                          setAiAnalysis(result);
-                        } else {
-                          setAiAnalysisError('L\'IA n\'a pas pu produire une analyse structuree. Relance ou verifie ta cle API.');
-                        }
-                      } catch (err) {
-                        console.error('[AI analysis]', err.message);
-                        setAiAnalysisError('Erreur reseau : ' + (err.message || 'inconnue'));
-                      } finally {
-                        setAnalyzingPlan(false);
-                      }
-                    }}
-                    style={{
-                      padding: '6px 14px', borderRadius: 8,
-                      border: '1px solid rgba(124,92,191,.35)',
-                      background: 'rgba(124,92,191,.12)',
-                      color: '#b89ef0', cursor: analyzingPlan ? 'wait' : 'pointer',
-                      fontSize: '.75rem', fontWeight: 600,
-                      opacity: analyzingPlan ? 0.6 : 1,
-                    }}
-                  >
-                    {analyzingPlan ? '✨ Analyse en cours...' : (aiAnalysis ? (isStale ? '🔁 Re-analyser' : '🔁 Re-analyser') : '🔍 Analyser le plan')}
-                  </button>
-                </div>
-                  );
-                })()}
-
-                {aiAnalysisError && !aiAnalysis && (
-                  <div style={{
-                    marginTop: 10, padding: '10px 14px',
-                    background: 'rgba(248,113,113,.08)',
-                    border: '1px solid rgba(248,113,113,.25)',
-                    borderRadius: 8, fontSize: '.78rem', color: '#f87171',
-                  }}>
-                    ⚠️ {aiAnalysisError}
-                  </div>
-                )}
-
-                {aiAnalysis && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'start' }}>
-                    {/* Score */}
-                    <div style={{
-                      textAlign: 'center', padding: '12px 18px',
-                      background: 'rgba(0,0,0,.25)', borderRadius: 10,
-                      border: `1px solid ${aiAnalysis.score >= 80 ? 'rgba(74,222,128,.3)' : aiAnalysis.score >= 60 ? 'rgba(251,191,36,.3)' : 'rgba(248,113,113,.3)'}`,
-                    }}>
-                      <div style={{
-                        fontSize: '1.8rem', fontWeight: 700,
-                        color: aiAnalysis.score >= 80 ? '#4ade80' : aiAnalysis.score >= 60 ? '#fbbf24' : '#f87171',
-                        lineHeight: 1,
-                      }}>
-                        {aiAnalysis.score}
-                      </div>
-                      <div style={{ fontSize: '.65rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>/ 100</div>
-                    </div>
-
-                    <div>
-                      {aiAnalysis.verdict && (
-                        <div style={{ fontSize: '.82rem', fontStyle: 'italic', color: '#d4c9a8', marginBottom: 10 }}>
-                          « {aiAnalysis.verdict} »
-                        </div>
-                      )}
-
-                      {aiAnalysis.strengths?.length > 0 && (
-                        <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#4ade80', marginBottom: 3 }}>✔ Points forts</div>
-                          {aiAnalysis.strengths.slice(0, 3).map((s, i) => (
-                            <div key={i} style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.7)', marginLeft: 10, lineHeight: 1.4 }}>• {s}</div>
-                          ))}
-                        </div>
-                      )}
-
-                      {aiAnalysis.issues?.length > 0 && (
-                        <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#fbbf24', marginBottom: 3 }}>⚠ A ameliorer</div>
-                          {aiAnalysis.issues.slice(0, 4).map((issue, i) => (
-                            <div key={i} style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.7)', marginLeft: 10, lineHeight: 1.4 }}>• {issue}</div>
-                          ))}
-                        </div>
-                      )}
-
-                      {aiAnalysis.quickWins?.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#8abf9a', marginBottom: 3 }}>💡 Quick wins</div>
-                          {aiAnalysis.quickWins.slice(0, 3).map((win, i) => (
-                            <div key={i} style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.7)', marginLeft: 10, lineHeight: 1.4 }}>• {win}</div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* V53 : Audit IA maintenant integré dans PlanQualityScore (bloc unique en haut du cockpit) */}
 
             {/* Analyses preview (below split, full width) */}
             {showAnalysesPreview && (() => {
