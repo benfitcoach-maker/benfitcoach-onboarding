@@ -353,47 +353,84 @@ Donner UNE strategie centrale unique. Inclure :
 Maximum 5 puces.
 
 ## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
-Donner une journee type claire et directement applicable.
 
-PORTIONS OBLIGATOIRES : chaque aliment du plan doit avoir une portion concrete
-(grammes ou unites familieres). La cliente doit savoir quoi manger ET en quelle
-quantite, sans deviner.
+- Donner UNE journee complete structuree (petit-dejeuner, dejeuner, collation, diner)
+- Chaque repas : aliments concrets + portions (grammes ou unites familieres)
+- Format simple, lisible, directement applicable
+- NE PAS donner plusieurs jours complets — une seule journee type
 
 Format attendu :
 Petit-dejeuner : 2 oeufs brouilles + 1 tranche pain complet (40g) + 1/2 avocat + tisane
 Dejeuner : 120g saumon + 80g quinoa cuit + legumes vapeur + 1 c.s. huile olive
-Diner : 100g blanc de poulet + 150g courgettes + 1 petite patate douce
 Collation : 1 yaourt grec + 30g amandes
+Diner : 100g blanc de poulet + 150g courgettes + 1 petite patate douce
 
-Regles :
+Regles portions :
 - Proteines : grammage obligatoire (ex : 120g saumon, 2 oeufs, 100g poulet)
-- Feculents : grammage obligatoire (ex : 80g quinoa cuit, 1 tranche 40g, 150g patate douce)
-- Legumes : portion indicative (ex : 150g, 1 bol, "volonte") selon le contexte
+- Feculents : grammage obligatoire (ex : 80g quinoa cuit, 1 tranche 40g)
+- Legumes : portion indicative (ex : 150g, 1 bol, "volonte")
 - Lipides : unite pratique (ex : 1 c.s. huile olive, 1/2 avocat, 30g amandes)
-- 1 ligne maximum par repas, mais la portion doit etre visible
+- 1 ligne maximum par repas
 
 Portions absentes UNIQUEMENT dans : aliments autorises, aliments limites/interdits,
 recommandations coach, protocoles (ces sections n'ont pas besoin de grammage).
 
 ## 4. ROTATION DES REPAS
-Donner uniquement des remplacements utiles.
-- 2 rotations proteines
-- 2 rotations feculents
-- 2 substitutions rapides
-Rester tres concis.
 
-## 5. FICHE FRIGO
-Format ultra court.
-PETIT-DEJEUNER — 2 options max
-DEJEUNER — 2 options max
-DINER — 2 options max
-COLLATION — 2 options max
-ALIMENTS AUTORISES — liste simple
-ALIMENTS LIMITES — liste simple
-ALIMENTS INTERDITS — liste simple
-Aucun texte explicatif. Aucune parenthese. Aucun commentaire.
+Objectif : permettre au client de varier ses repas sans changer la structure.
 
-## 6. PROTOCOLES CIBLES
+- Donner des groupes d'aliments interchangeables
+- Organiser par categories : proteines / feculents / legumes / matieres grasses
+- Donner 3 a 5 options par categorie
+- Inclure quelques exemples de substitutions concretes
+- Le client doit comprendre comment construire ses repas seul
+
+Format attendu :
+
+Proteines (3-5 options) : 120g saumon / 100g poulet / 2 oeufs + 1 blanc / 130g tofu ferme / 100g dinde
+Feculents (3-5 options) : 80g quinoa cuit / 80g riz complet / 150g patate douce / 1 tranche pain complet 40g / 80g sarrasin cuit
+Legumes (3-5 options) : courgettes vapeur / haricots verts / brocolis / epinards / poelee ratatouille
+Matieres grasses (3-5 options) : 1 c.s. huile olive / 1/2 avocat / 30g amandes / 30g noix / 1 c.s. tahini
+
+Exemples de substitutions :
+- Saumon du midi → tofu ferme ou dinde (meme grammage)
+- Quinoa → riz complet ou sarrasin (meme grammage)
+- Amandes → noix ou graines de courge (meme grammage)
+
+## 5. JOURNEE TYPE ALTERNATIVE
+
+- Donner UNE journee complete differente de la Semaine 1
+- Meme structure (4 moments : petit-dejeuner / dejeuner / collation / diner)
+- Aliments differents de la Semaine 1
+- Toujours coherent avec les objectifs et contraintes du client
+- Pas de repetition des memes repas qu'en Semaine 1
+- Portions visibles (memes regles qu'en Semaine 1)
+
+Format attendu :
+Petit-dejeuner : porridge 40g flocons avoine + 1 c.s. beurre amande + 100g fruits rouges + tisane
+Dejeuner : 130g tofu ferme + 80g sarrasin cuit + poelee ratatouille + 1 c.s. huile olive
+Collation : 30g noix + 1 pomme
+Diner : 100g dinde + 150g haricots verts + 1/2 patate douce
+
+## 6. FICHE FRIGO
+
+Objectif : donner des regles simples a retenir au quotidien.
+
+- 4 a 6 regles maximum
+- Format tres court (1 ligne par regle)
+- Actionnable immediatement
+- Directement lie aux problemes du client
+- Pas de generalites nutritionnelles
+
+Format attendu (exemple pour cliente T1 + stress + digestion) :
+- Toujours proteines + fibres AVANT les glucides a chaque repas
+- Jamais de fruit seul : l'associer a proteines ou oleagineux
+- Legumes vapeur 2 semaines, on reintroduira le cru apres
+- Tisane fenouil ou gingembre apres le diner
+- Pas de diner apres 20h, sinon collation proteinee
+- Eau filtree loin des repas (30 min avant / 1h apres)
+
+## 7. PROTOCOLES CIBLES
 
 Toujours partir du probleme reel du client. Ne jamais faire une liste generique.
 
@@ -439,7 +476,7 @@ INTERDIT :
 - Phrases generiques sans lien au profil
 - Repeter le meme verbe 3+ fois dans la meme section
 
-## 7. AJUSTEMENTS ENVIRONNEMENTAUX
+## 8. AJUSTEMENTS ENVIRONNEMENTAUX
 4-5 ajustements maximum, adaptes aux contraintes reelles du client.
 
 Chaque ajustement = 2 a 3 phrases qui enchainent naturellement :
@@ -478,7 +515,7 @@ INTERDIT :
 - Conseils generiques ("boire plus", "mieux dormir", "gerer le stress")
 - Regles universelles sans contexte client
 
-## 8. RECOMMANDATIONS COACH
+## 9. RECOMMANDATIONS COACH
 3 regles directes + 3 erreurs a eviter + 1 focus prioritaire.
 
 Chaque phrase reliee au client, sans pattern d'amorce repete.
@@ -520,19 +557,33 @@ Interdit :
 Objectif : le client doit sentir qu'Anissa parle vraiment et que chaque
 ligne est faite pour lui, pas pour un autre.
 
-## 9. PLAN D'ACTION
-Progression logique obligatoire :
-Semaine 1 — Mise en place : installer les bases, supprimer les blocages
-Semaine 2 — Stabilisation : ancrer les habitudes, ajuster si necessaire
-Semaine 3 — Optimisation : affiner timing, quantites, protocoles
-Semaine 4 — Automatisation : rendre le plan autonome, preparer la suite
-1 a 2 actions concretes maximum par semaine.
-Chaque semaine doit refleter une progression sur le probleme principal, pas une structure generique.
-Chaque semaine doit produire un effet physiologique different et identifiable sur le probleme principal.
-La progression doit suivre une logique : mise en place → stabilisation → optimisation → automatisation.
-Interdit : progression generique ou interchangeable.
+## 10. PLAN D'ACTION (4 SEMAINES)
 
-## 10. CLOTURE DU PLAN (OBLIGATOIRE)
+Objectif : donner une progression claire sans refaire 4 semaines completes.
+
+- Structurer par semaine (S1 a S4)
+- 1 a 2 objectifs MAXIMUM par semaine
+- Progression logique obligatoire :
+  S1 = mise en place (installer les bases, supprimer les blocages)
+  S2 = stabilisation (ancrer les habitudes, ajuster)
+  S3 = optimisation (affiner timing, quantites, protocoles)
+  S4 = automatisation (autonome, preparer la suite)
+- Format court, lisible
+- NE PAS repeter les menus (la Semaine 1 et la Journee alternative suffisent)
+- Chaque semaine doit refleter une progression sur le probleme principal
+
+Format attendu :
+S1 — Mise en place : poser les 3 repas fixes + installer la collation proteinee 16h
+S2 — Stabilisation : ancrer les portions + tester la tisane fenouil post-diner
+S3 — Optimisation : affiner timing dinner (avant 20h) + respiration carree matin/soir
+S4 — Automatisation : repas construits en autonomie via la rotation + bilan avant RDV
+
+Interdit :
+- Progression generique ou interchangeable
+- Plus de 2 actions par semaine
+- Reprendre les menus dans chaque semaine
+
+## 11. CLOTURE DU PLAN (OBLIGATOIRE)
 4 a 6 lignes maximum. Vraie fin de consultation ecrite : rassurante, simple,
 engageante, orientee progression.
 
