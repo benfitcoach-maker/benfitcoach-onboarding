@@ -185,23 +185,29 @@ Tu analyses des plans nutritionnels et fournis un feedback structur\u00e9.
 PROFIL CLIENT :
 ${context}
 
-R\u00e9ponds UNIQUEMENT en JSON valide, sans markdown, sans explication :
+R\u00e9ponds UNIQUEMENT en JSON valide, SANS balises markdown (pas de \`\`\`json), SANS texte avant ou apres :
 {
   "score": <number 0-100>,
-  "strengths": ["point fort 1", "point fort 2"],
-  "issues": ["probl\u00e8me 1", "probl\u00e8me 2"],
-  "quickWins": ["am\u00e9lioration rapide 1", "am\u00e9lioration rapide 2", "am\u00e9lioration rapide 3"],
-  "verdict": "<1 phrase de verdict global>"
+  "strengths": ["point fort 1 (max 15 mots)", "point fort 2 (max 15 mots)"],
+  "issues": ["probleme 1 (max 15 mots)", "probleme 2 (max 15 mots)"],
+  "quickWins": ["amelioration 1 (max 15 mots)", "amelioration 2 (max 15 mots)", "amelioration 3 (max 15 mots)"],
+  "verdict": "<1 phrase max 20 mots>"
 }
 
-R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
-- Dans le verdict et les textes : JAMAIS de formulations molles, markdown ou m\u00e9ta-commentaires
+CONTRAINTES CRITIQUES :
+- Chaque string TRES courte (max 15 mots)
+- Max 2-3 items par tableau
+- Verdict max 20 mots
+- Priorite a la concision pour que le JSON reste dans la limite de tokens
+
+R\u00c8GLES D'\u00c9CRITURE :
+- JAMAIS de formulations molles, markdown ou meta-commentaires
 - Phrases directes et concises`;
 
   const text = await aiRequest(
     system,
     `Analyse ce plan (${wordCount} mots) :\n\n${(planText || '').slice(0, 3000)}`,
-    800
+    2000
   );
 
   if (!text) return null;
