@@ -4223,7 +4223,7 @@ ${suppText}`;
         );
 
         return (
-          <div className="nc-cockpit" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="nc-cockpit" style={{ display: 'flex', flexDirection: 'column', gap: 16, height: 'auto', minHeight: '100vh', overflowY: 'auto', overflowX: 'hidden' }}>
             {/* ─── HEADER ACTIONS ─── */}
             <div className="nc-cockpit-header" style={{ position: 'sticky', top: 0, zIndex: 5, background: 'rgba(12,18,15,.92)', backdropFilter: 'blur(10px)', border: '1px solid rgba(106,191,138,.15)', borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Meta line */}
@@ -4614,7 +4614,7 @@ ${suppText}`;
             {/* V50 : Modale aiAnalysis remplacee par un bloc inline juste apres l'editeur */}
 
             {/* ─── SPLIT VIEW ─── */}
-            <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start' }}>
+            <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start', flex: 'none', overflow: 'visible', minHeight: 600 }}>
               {/* LEFT : Editor — push-based : NutritionEditor notifie le parent
                   via onDraftChange (debounced cote editeur). Plus de onInput parasite ici. */}
               <section className="nc-panel nc-panel--editor">
