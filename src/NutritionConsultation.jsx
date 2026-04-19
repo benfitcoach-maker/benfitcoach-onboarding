@@ -117,6 +117,21 @@ Pas de regles universelles. Chaque phrase doit suivre une de ces structures :
 
 Objectif : le client doit sentir que chaque ligne est faite pour lui, pas pour un autre.
 
+REGLES DE STYLE AVANCEES (TRES IMPORTANT) :
+- Ne jamais repeter 3 fois le meme verbe dans une section
+- Varier les verbes d'action : ajouter / integrer / garder / tester / privilegier / limiter / remplacer / decaler / associer
+- Varier les amorces : "tu fais", "pense a", "garde", "privilegie", "ajoute", "limite"
+- Toujours partir du probleme du client (pas d'une regle generale)
+- Maximum 3-5 elements par section
+- Chaque section doit donner l'impression d'un raisonnement humain, pas d'une fiche generee
+- Supprimer toute repetition inutile (formules, intros, conclusions)
+
+INTERDIT ABSOLU :
+- Listes generiques
+- Phrases vides ou de remplissage
+- Ton robotique ou IA
+- Repetition systematique de "tu + verbe" : varier naturellement
+
 INTERDITS :
 - "idealement", "si vous souhaitez", "il est conseille", "manger equilibre", "varier l'alimentation", "boire suffisamment"
 - Conseils vagues qui marcheraient pour n'importe qui
@@ -132,12 +147,45 @@ Recommande des complements disponibles en Suisse. Cite une marque entre parenthe
 - Burgerstein (pharmacie), Pure Encapsulations (pro), Nahrin (rapport qualite/prix), Sekoya (digestif/mobilite).`;
 
 const SUPPLEMENT_PROMPT = `
-SUPPLEMENTS :
-- Source alimentaire naturelle EN PREMIER pour chaque nutriment. Complement en option si insuffisant.
-- Moment de prise obligatoire : matin a jeun (fer, probiotiques), matin (D3+K2, B-complexe), midi/soir (omega-3, zinc), coucher (magnesium).
-- Associations obligatoires : D3+K2+Mg, Fer+VitC, Curcuma+Piperine+gras, Collagene+VitC.
-- Interdictions : Fer jamais avec cafe/the/calcium (2h min). Calcium jamais avec Mg (2h). Pas de CoQ10/B12/Rhodiola le soir. Zinc >8 sem → ajouter Cuivre.
-- Terminer par un TABLEAU HORAIRE PERSONNALISE (matin a jeun / petit-dej / midi / soir / coucher).`;
+SUPPLEMENTS RECOMMANDES — STRUCTURE LISIBLE OBLIGATOIRE
+
+Pour chaque supplement (5-6 max), utiliser EXACTEMENT ce format :
+
+NOM DU SUPPLEMENT (en majuscules, sur sa propre ligne)
+
+Moment : [matin a jeun / petit-dejeuner / midi / soir / coucher]
+Dose : [dosage clair, forme biodisponible, marque suisse si pertinent]
+Pourquoi : [UNE SEULE phrase personnalisee, liee au probleme du client]
+Duree : [ex : 3 mois puis controle — uniquement si pertinent]
+Attention : [interaction ou precaution — uniquement si utile]
+
+Exemple attendu :
+
+MAGNESIUM GLYCINATE
+
+Moment : Le soir avant le coucher
+Dose : 300 mg (Burgerstein)
+Pourquoi : Avec ton stress eleve et ton sommeil fragmente, il va ameliorer ta recuperation nerveuse
+Attention : A distance du calcium (2h min)
+
+REGLES CLINIQUES :
+- Source alimentaire naturelle EN PREMIER pour chaque nutriment, complement si insuffisant
+- Associations obligatoires : D3+K2+Mg, Fer+VitC, Curcuma+Piperine+gras, Collagene+VitC
+- Interdictions : Fer jamais avec cafe/the/calcium (2h min). Pas de CoQ10/B12/Rhodiola le soir.
+  Zinc >8 sem → ajouter Cuivre.
+- Marques suisses : Burgerstein, Pure Encapsulations, Nahrin, Sekoya
+
+Terminer par un TABLEAU HORAIRE PERSONNALISE en texte simple :
+Matin a jeun : [supplement]
+Petit-dejeuner : [supplement]
+Midi : [supplement]
+Soir : [supplement si pertinent, sinon omettre cette ligne]
+Coucher : [supplement]
+
+INTERDIT :
+- Paragraphes longs ou repetitifs
+- Tableau markdown avec pipes | |
+- Justifications generiques non liees au profil du client`;
 
 const FOUR_WEEKS_PROMPT = `
 Produis le plan strictement avec les sections suivantes, dans cet ordre, sans rien ajouter avant ou apres.
@@ -188,40 +236,65 @@ ALIMENTS INTERDITS — liste simple
 Aucun texte explicatif. Aucune parenthese. Aucun commentaire.
 
 ## 6. PROTOCOLES CIBLES
-Maximum 3 protocoles. Uniquement si justifies par le profil.
 
-STYLE OBLIGATOIRE POUR CHAQUE PROTOCOLE :
-Ne jamais presenter un protocole comme une fiche generique.
-Toujours l'introduire par le probleme precis du client.
+Toujours partir du probleme reel du client. Ne jamais faire une liste generique.
 
 Format obligatoire :
-"Pour [corriger probleme precis du client] :
-- Tu [action concrete] pour [benefice lie au probleme]
-- Tu [action concrete] pour [benefice lie au probleme]
-- Tu [action concrete] pour [benefice lie au probleme]"
+
+Commencer par une phrase contexte (une seule) :
+"Pour corriger [probleme principal]" OU
+"Avec ton [probleme]" OU
+"Dans ton cas"
+
+Puis 3 a 5 actions maximum :
+- Chaque action est concrete, applicable immediatement
+- Chaque action porte une mini logique implicite (sans expliquer la physiologie)
+- Varier les verbes d'action — eviter la repetition "tu fais / tu prends"
+  (utiliser : associe, ajoute, integre, garde, remplace, teste, privilegie, limite, decale)
 
 Exemple attendu :
-"Pour stabiliser ta glycemie instable :
-- Tu ajoutes une source de proteines a chaque repas pour ralentir les pics
-- Tu utilises la cannelle pour ameliorer la regulation du glucose
-- Tu prends un vinaigre de cidre avant le midi pour lisser la montee glycemique"
 
-Interdit : liste de regles absolues deconnectees du profil.
-Chaque action = concrete, courte, applicable immediatement.
+"Pour stabiliser ta glycemie avec ton diabete T1 :
+- Associe toujours proteines + fibres des qu'il y a des glucides
+- Ajoute un filet de vinaigre de cidre avant le repas du midi
+- Garde une collation proteinee l'apres-midi pour eviter les chutes"
+
+Maximum 3 protocoles dans cette section. Uniquement si justifies par le profil.
+
+INTERDIT :
+- Liste brute sans contexte
+- Plus de 5 actions par protocole
+- Phrases generiques applicables a tout le monde
+- Repeter le meme verbe plus de 2 fois
 
 ## 7. AJUSTEMENTS ENVIRONNEMENTAUX
 Maximum 4-5 ajustements, adaptes aux contraintes reelles du client.
 
-STYLE OBLIGATOIRE :
-Chaque ajustement doit partir d'un constat du profil (stress, sommeil, rythme).
-Format : "Ton [constat actuel] → [action progressive] → [benefice attendu]"
+Chaque ajustement doit suivre ce modele en 2-3 phrases :
+
+Phrase 1 — Constat personnalise (OBLIGATOIRE) :
+"Ton [X] est actuellement [etat mesure/ressenti]"
+
+Phrase 2 — Action simple et precise :
+"On [action progressive]" ou "Decale / Integre / Coupe / Ajoute / Remonte..."
+
+Phrase 3 — Benefice direct (optionnelle) :
+"Objectif : [resultat concret attendu pour CE client]"
 
 Exemple attendu :
-"Ton hydratation est trop basse actuellement (<1L). On remonte progressivement
-a 2L, en concentrant l'eau en premiere partie de journee pour ne pas perturber
-ton sommeil."
 
-Interdit : "Hydratation : 2L/jour". Jamais de regle universelle sans contexte client.
+"Ton hydratation est actuellement trop basse (<1L).
+On monte progressivement a 1,5L cette semaine, puis 2L.
+Cela va ameliorer ta digestion et limiter tes fringales de l'apres-midi.
+
+Ton sommeil est fragmente (6h).
+Decale ton diner a 19h maximum et coupe les ecrans 1h avant.
+Objectif : relancer ta recuperation et stabiliser ton energie diurne."
+
+INTERDIT :
+- Phrases courtes type bullet sans logique
+- Conseils generiques ("boire plus", "mieux dormir", "gerer le stress")
+- Regles universelles sans contexte client
 
 ## 8. RECOMMANDATIONS COACH
 3 regles directes + 3 erreurs a eviter + 1 focus prioritaire.
