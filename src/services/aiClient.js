@@ -57,10 +57,9 @@ export function postProcess(text) {
   out = out.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F000}-\u{1F2FF}]|[\u{1FA00}-\u{1FAFF}]|[\u2700-\u27BF]/gu, '');
 
   // 3) Detecter et fusionner les mots lettre-espacees ("F A I R E" -> "FAIRE")
-  // V55b : elargi aux minuscules et accents (pas juste majuscules)
-  // Pattern : 4+ caracteres mono-lettre separes par espaces simples
-  out = out.replace(/((?:[A-Za-zÀ-ÿ]\s){4,}[A-Za-zÀ-ÿ])/g, (match) => {
-    // Verifier que ce n'est pas du texte normal : chaque "token" doit etre 1 seul caractere
+  // V62 : regex plus robuste, supporte 3+ tokens mono-char successifs
+  // Pattern : 3+ caracteres mono-lettre separes par espaces simples
+  out = out.replace(/((?:[A-Za-zÀ-ÿ]\s){3,}[A-Za-zÀ-ÿ])/g, (match) => {
     const tokens = match.split(/\s+/);
     const allSingle = tokens.every(t => t.length === 1);
     if (!allSingle) return match;
@@ -68,12 +67,14 @@ export function postProcess(text) {
   });
 
   // 4) Remplacer fleches cassees par fleches propres
-  // V55b : inclure smart quotes Unicode (U+201C, U+201D, U+2018, U+2019)
+  // V62 : regex encore plus permissive (tolere espace entre ! et quote)
   out = out
-    .replace(/!["'»«\u2018\u2019\u201C\u201D\u00AB\u00BB]/g, '→')
-    .replace(/→\s*["'»«\u2018\u2019\u201C\u201D\u00AB\u00BB]/g, '→ ')
-    // Remplacer aussi les sequences ->" ou ->'  residuelles
-    .replace(/!["']/g, '→');
+    // Pattern principal : ! directement suivi d'un quote (droit, courbe, francais)
+    .replace(/!["'«»\u00AB\u00BB\u2018\u2019\u201C\u201D\u2033]/g, '→')
+    // Pattern rare : ! ' ou ! " (avec espace)
+    .replace(/!\s+["'«»\u00AB\u00BB\u2018\u2019\u201C\u201D]/g, '→')
+    // Nettoyer les double-chevrons " apres fleche
+    .replace(/→\s*["'»«\u2018\u2019\u201C\u201D\u00AB\u00BB]/g, '→ ');
 
   // 5) Convertir tableaux markdown | a | b | c | en format texte lisible
   // Si on detecte un pattern de tableau markdown, on le convertit

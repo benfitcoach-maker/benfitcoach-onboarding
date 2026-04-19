@@ -3205,7 +3205,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
           if (correctionResponse.ok) {
             const correctionData = await correctionResponse.json();
-            const correctedPlan = correctionData.content?.[0]?.text || '';
+            // V62 : appliquer postProcess aussi au plan corrige (nettoyage emojis, fleches, letter-spacing)
+            const correctedPlan = postProcess(correctionData.content?.[0]?.text || '');
 
             if (correctedPlan) {
               // Re-audit the corrected version (pour scoring uniquement)
