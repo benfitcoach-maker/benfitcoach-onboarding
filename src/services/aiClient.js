@@ -88,22 +88,21 @@ export function postProcess(text) {
     return tokens.join('');
   });
 
-  // 4) Remplacer fleches cassees par fleches propres
-  // V64 : approche aggressive - match ! suivi de N'IMPORTE QUEL char non-alphanum
-  // Plus simple et plus robuste que les listes exhaustives de V63
+  // 4) Remplacer fleches cassees et → unicode par ">" (safe WinAnsi/Helvetica)
+  // V67 : → rend mal en jsPDF Helvetica (encodage WinAnsi sans U+2192)
+  // Solution : tout convertir en ">" qui rend parfaitement
   out = out
-    // Pattern exhaustif : ! + (0..3 espaces/zero-width) + char non-alphanum/non-ouvert-paren
-    // Capture tous les cas : !' !" !» !› !´ !` !~ !^ !- !_ etc.
+    // Pattern exhaustif : ! + (0..3 espaces) + char non-alphanum/non-ouvert-paren → ">"
     .replace(/!\s{0,3}([^\sA-Za-zÀ-ÿ0-9(])/g, (m, c) => {
-      // Ne pas remplacer si c'est une ponctuation legitime apres !
-      // ex: "!." "!," "!)" "!;" "!:" "!?" "!]" "!}"
       if (/[\.\,\)\;\:\?\]\}\!]/.test(c)) return m;
-      return '→ ';
+      return '> ';
     })
-    // Nettoyer les quotes residuelles apres une fleche propre
-    .replace(/→\s*[\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033]/g, '→ ')
-    // Normaliser espaces multiples apres fleche
-    .replace(/→\s{2,}/g, '→ ');
+    // Remplacer TOUTES les vraies fleches unicode par ">"
+    .replace(/[→⇒➜➔➤▶►]/g, '>')
+    // Nettoyer les quotes residuelles apres ">"
+    .replace(/>\s*[\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033]/g, '> ')
+    // Normaliser espaces multiples apres ">"
+    .replace(/>\s{2,}/g, '> ');
 
   // 5) Convertir tableaux markdown | a | b | c | en format texte lisible
   // Si on detecte un pattern de tableau markdown, on le convertit

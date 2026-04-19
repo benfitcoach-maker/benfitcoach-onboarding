@@ -1398,6 +1398,9 @@ export async function exportConsultationPDF(consultation, client) {
     // V56 : renderSec avec dispatch selon type de section
     const renderSec = (sec) => {
       if (!sec?.content?.trim()) return;
+      // V67 : reset charSpace AVANT chaque section pour eviter leak des labels precedents
+      // (intro "LE MOT D'ANISSA" charSpace=2, VARIANTE charSpace=1.5, etc.)
+      if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
       const sectionType = detectSectionType(sec.title);
 
       // V59 : intro/closing = style lettre manuscrite, pas de header lourd

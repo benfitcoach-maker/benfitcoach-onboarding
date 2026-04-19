@@ -59,14 +59,32 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
   }
 
   // Build final sections with IDs
-  const sections = [...merged.values()].map(s => ({
+  let sections = [...merged.values()].map(s => ({
     id: crypto.randomUUID(),
     title: s.title,
     content: s.content,
     originalContent: s.content,
   }));
 
+  // V67 : filtrer sections "TABLEAU HORAIRE" vides (souvent creees par all-caps detection)
+  sections = sections.filter(s => {
+    if (!/^TABLEAU\s+HORAIRE/i.test(s.title)) return true;
+    // Garder seulement si content a au moins 2 lignes "label : contenu" utiles
+    const useful = (s.content || '').split('\n')
+      .map(l => l.trim().replace(/^[-–•*·]\s*/, ''))
+      .filter(l => {
+        const c = l.indexOf(':');
+        if (c <= 0) return false;
+        const v = l.slice(c + 1).trim();
+        return v.length > 2 && !/^(aucun|rien|n\/a|-+|n[eé]ant|\/)$/i.test(v);
+      });
+    return useful.length >= 2;
+  });
+
   if (supplementsText?.trim()) {
+    // V67 : si suppText dedie existe, RETIRER les sections supplements du plan pour eviter doublon
+    const SUPP_RE = /^(suppl[eé]ments?|compl[eé]ments?|recommandations?\s+compl[eé]mentaires?|alternatives?\s+naturelles?)/i;
+    sections = sections.filter(s => !SUPP_RE.test(s.title));
     sections.push({
       id: crypto.randomUUID(),
       title: 'SUPPLEMENTS RECOMMANDES',
