@@ -2631,14 +2631,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         return '';
       };
 
-      // Initial audit
+      // V49 : Audit garde en INTERNE uniquement — jamais dans le plan client (PDF)
+      // Initial audit — utilise pour scoring et correction, mais pas injecte dans finalPlan
       auditResult = await runAudit(planText);
-      if (auditResult && !auditResult.includes('AUDIT OK')) {
-        finalPlan = planText + '\n\n---\n\nAUDIT DE COHERENCE :\n' + auditResult;
-      }
 
-      // Score the plan
-      const initialScore = scorePlanQuality(finalPlan, suppText, scoreFormData, { isFollowup, followupWeek });
+      // Score the plan (sans audit injecte — on score uniquement le plan)
+      const initialScore = scorePlanQuality(planText, suppText, scoreFormData, { isFollowup, followupWeek });
 
       // Auto-correction: single attempt if score is too low or hard fail
       if (shouldAutoCorrect(initialScore)) {
@@ -2649,8 +2647,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
             body: JSON.stringify({
               model: 'claude-sonnet-4-20250514',
               max_tokens: 16000,
-              system: buildCorrectionPrompt(finalPlan, initialScore, form, auditResult),
-              messages: [{ role: 'user', content: 'Corrige le plan ci-dessus selon les problemes detectes. Renvoie uniquement le plan corrige.' }],
+              // V49 : passer planText (sans audit injecte) pour eviter que Claude reprenne le texte d'audit
+              system: buildCorrectionPrompt(planText, initialScore, form, auditResult),
+              messages: [{ role: 'user', content: 'Corrige le plan ci-dessus selon les problemes detectes. Renvoie UNIQUEMENT le plan corrige, sans mentionner les problemes identifies, sans section "AUDIT", sans commentaires meta. Garde le meme format et la meme structure que l\'original.' }],
             }),
           });
 
@@ -2659,14 +2658,11 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
             const correctedPlan = correctionData.content?.[0]?.text || '';
 
             if (correctedPlan) {
-              // Re-audit the corrected version
-              let correctedAuditResult = await runAudit(correctedPlan);
-              let correctedFinal = correctedPlan;
-              if (correctedAuditResult && !correctedAuditResult.includes('AUDIT OK')) {
-                correctedFinal = correctedPlan + '\n\n---\n\nAUDIT DE COHERENCE :\n' + correctedAuditResult;
-              }
+              // Re-audit the corrected version (pour scoring uniquement)
+              const correctedAuditResult = await runAudit(correctedPlan);
+              const correctedFinal = correctedPlan; // V49 : pas d'injection audit
 
-              // Re-score the corrected + re-audited version
+              // Re-score the corrected version
               const correctedScore = scorePlanQuality(correctedFinal, suppText, scoreFormData, { isFollowup, followupWeek });
 
               // Strict selection: never accept if new hard fail introduced
@@ -2692,7 +2688,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       reseedEditor(finalPlan, suppText, consultation.recipes);
 
       // Learning signal: log quality data for prompt improvement
-      const wasAutoCorrected = finalPlan !== planText && finalPlan !== (planText + '\n\n---\n\nAUDIT DE COHERENCE :\n' + auditResult);
+      const wasAutoCorrected = finalPlan !== planText;
       const finalScore = scorePlanQuality(finalPlan, suppText, scoreFormData, { isFollowup, followupWeek });
       saveLearningSignal(buildLearningSignal(
         { ...form, _clientFormule: client?.formule || '' },
