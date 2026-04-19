@@ -247,6 +247,11 @@ function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', follo
   return parts.join('\n\n');
 }
 
+// V48 : System prompt dedie aux suppléments (sans FOUR_WEEKS_PROMPT qui regenererait le plan entier)
+function buildSupplementsSystemPrompt() {
+  return [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT, SUPPLEMENT_PROMPT].join('\n\n');
+}
+
 // ─── FOLLOWUP WEEKLY PROMPTS ───
 
 const INITIAL_WEEKLY_FEEDBACK = {
@@ -2585,7 +2590,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
           body: JSON.stringify({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
-            system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '', followupWeek }),
+            // V48 : system prompt dedie sans FOUR_WEEKS_PROMPT pour eviter duplication du plan
+            system: buildSupplementsSystemPrompt(),
             messages: [{ role: 'user', content: userMessage + '\n\n' + SUPPLEMENTS_INSTRUCTION }],
           }),
         });
