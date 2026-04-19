@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "cap:build": "vite build && cap sync ios",
-    "cap:ios": "vite build && cap sync ios && cap open ios"
+    "cap:build": "vite build --mode capacitor && cap sync ios",
+    "cap:ios": "vite build --mode capacitor && cap sync ios && cap open ios"
   },
   "dependencies": {
     "@capacitor/cli": "^8.3.1",

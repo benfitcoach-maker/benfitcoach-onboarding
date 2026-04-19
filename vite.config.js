@@ -2,9 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-export default defineConfig({
+// V44 : base conditionnelle
+// - mode 'capacitor' → './' (chemins relatifs pour WebView natif iOS/Android)
+// - mode par defaut → '/' (chemins absolus pour routes web sub-paths comme /questionnaire/:id)
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  // V40 : chemins relatifs obligatoires pour Capacitor (WebView native file://)
-  // — sinon les assets ne se chargent pas dans l'app iOS/Android
-  base: './',
-})
+  base: mode === 'capacitor' ? './' : '/',
+}))
