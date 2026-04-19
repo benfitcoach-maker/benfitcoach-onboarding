@@ -126,6 +126,28 @@ REGLES DE STYLE AVANCEES (TRES IMPORTANT) :
 - Chaque section doit donner l'impression d'un raisonnement humain, pas d'une fiche generee
 - Supprimer toute repetition inutile (formules, intros, conclusions)
 
+STORYTELLING CLIENT (OBLIGATOIRE) :
+Le plan doit ressembler a une consultation ecrite, pas a un document genere.
+- Introduction personnalisee (4-6 lignes) OBLIGATOIRE avant la section 1 : reformuler la situation reelle, montrer la comprehension, donner une direction, rassurer
+- Micro-contexte avant chaque section importante : une phrase courte qui donne du sens
+  Exemples : "Pour stabiliser ta glycemie...", "Avec ton stress actuel...", "Dans ton cas...", "Vu ta digestion..."
+- Chaque recommandation suit la logique : [probleme client] -> [action] -> [impact]
+- Cloture (4-6 lignes) OBLIGATOIRE apres la section 9 : responsabiliser sans culpabiliser, rassurer, donner direction
+
+REGLES PSYCHOLOGIQUES (SIGNATURE ANISSA) :
+- Le client doit se sentir compris AVANT d'etre guide
+- Ne jamais culpabiliser (pas de "tu ne dois pas", "il faut absolument")
+- Simplifier au maximum sans etre simpliste
+- Valoriser la progression (etre regulier > etre parfait)
+- Donner une sensation de controle (le plan s'adapte a lui, pas l'inverse)
+
+TON GLOBAL :
+- Tutoiement bienveillant
+- Direct mais chaleureux
+- Expert mais accessible
+- Jamais robotique, jamais marketing
+Le plan est une consultation ecrite, pas un document automatique.
+
 INTERDIT ABSOLU :
 - Listes generiques
 - Phrases vides ou de remplissage
@@ -189,7 +211,33 @@ INTERDIT :
 
 const FOUR_WEEKS_PROMPT = `
 Produis le plan strictement avec les sections suivantes, dans cet ordre, sans rien ajouter avant ou apres.
-1200 a 1600 mots maximum pour l'ensemble.
+1400 a 1800 mots maximum pour l'ensemble (intro + cloture compris).
+
+## 0. INTRODUCTION PERSONNALISEE (OBLIGATOIRE)
+4 a 6 lignes maximum. Ton humain, direct, sans marketing.
+
+Contenu :
+- Reformuler la situation reelle du client (ses problemes principaux)
+- Montrer que tu comprends ses difficultes
+- Donner une direction claire
+- Rassurer
+
+Format attendu :
+
+"[Prenom],
+
+Avec [problemes principaux du client], ton corps est aujourd'hui en desequilibre
+sur plusieurs niveaux.
+
+L'objectif ici n'est pas de tout changer d'un coup, mais de remettre de la
+stabilite, etape par etape.
+
+Ce plan est construit pour s'adapter a ta realite, pas pour te compliquer la vie."
+
+INTERDIT :
+- Phrases generiques ou marketing ("felicitations pour ton engagement", etc.)
+- Texte trop long
+- Promesses irrealistes
 
 ## 1. ANALYSE DU PROFIL
 Format tres court. Inclure uniquement :
@@ -332,11 +380,37 @@ Chaque semaine doit produire un effet physiologique different et identifiable su
 La progression doit suivre une logique : mise en place → stabilisation → optimisation → automatisation.
 Interdit : progression generique ou interchangeable.
 
+## 10. CLOTURE DU PLAN (OBLIGATOIRE)
+4 a 6 lignes maximum. Ton humain, bienveillant, engageant. Responsabilise sans culpabiliser.
+
+Contenu :
+- Donner une direction claire pour les prochaines semaines
+- Rassurer : pas besoin d'etre parfait, etre regulier
+- Valoriser les premiers changements attendus
+- Indiquer que le suivi viendra ajuster selon les retours
+
+Format attendu :
+
+"Ce plan te donne une base claire pour les prochaines semaines.
+
+L'objectif n'est pas d'etre parfaite, mais d'etre reguliere.
+
+Les premiers changements vont deja t'apporter plus de stabilite
+et moins de fatigue.
+
+On ajustera ensuite en fonction de tes retours."
+
+INTERDIT :
+- Ton froid ou impersonnel
+- Phrases generiques ("bonne continuation", "bon courage")
+- Jargon clinique
+- Promesses de resultats chiffres
+
 REGLES DE SORTIE :
 - Aucune section bonus, aucune annexe, aucun resume supplementaire
 - Aucun tableau de supplements (gere separement)
-- Aucune conclusion, aucun commentaire de wordcount
-- Stop strict apres la section 9`;
+- Aucun commentaire de wordcount
+- Stop strict apres la section 10`;
 
 const AUDIT_PROMPT = `Tu es un auditeur nutrition. Analyse ce plan nutritionnel et verifie :
 
@@ -1236,6 +1310,9 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false }
 
 function classifySection(title) {
   const t = (title || '').toLowerCase();
+  // V59 : intro et cloture
+  if (/^(introduction|intro)(\s*personnalisee)?$/i.test(t.trim())) return 'intro';
+  if (/^(cloture|conclusion)(\s*du\s*plan)?$/i.test(t.trim())) return 'closing';
   if (/profil|analyse|bilan|metabol/i.test(t)) return 'analyse';
   if (/strat[eé]gie|principe|nutritionnel|approche/i.test(t)) return 'principes';
   if (/semaine|structure\s*alimentaire|menu|repas|lundi|mardi/i.test(t)) return 'plan';

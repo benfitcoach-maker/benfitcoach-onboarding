@@ -360,6 +360,9 @@ function normalizeSectionKey(title) {
 // Detecte le TYPE visuel d'une section pour choisir le rendu
 function detectSectionType(title) {
   const k = normalizeSectionKey(title);
+  // V59 : intro / cloture en style lettre (pas liste)
+  if (/^(introduction|intro)(\s*personnalisee)?$/.test(k)) return 'intro';
+  if (/^(cloture|conclusion)(\s*du\s*plan)?$/.test(k)) return 'closing';
   if (/semaine\s*\d/.test(k)) return 'week';
   if (/analyse\s*du\s*profil|profil/.test(k)) return 'profile';
   if (/strategie\s*nutritionnelle|strategie/.test(k)) return 'strategy';
@@ -378,6 +381,41 @@ function detectSectionType(title) {
   if (/gestion\s*stress|stress/.test(k)) return 'protocol_stress';
   if (/reparation\s*intestinale|intestinale/.test(k)) return 'protocol_gut';
   return 'default';
+}
+
+// V59 : render une section intro / cloture en style lettre manuscrite
+// Centre, italique leger, pas de bullets
+function drawLetterBlock(doc, text, x, y, width, opts = {}) {
+  if (!text?.trim()) return y;
+  y = ensurePage(doc, y, 20);
+
+  // Bloc respirant : padding vertical genereux
+  y += 4;
+  doc.setFontSize(FONT.body + 0.5);
+  doc.setFont('helvetica', opts.italic ? 'italic' : 'normal');
+  doc.setTextColor(...SOFT_TEXT);
+
+  const paragraphs = text.trim().split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  for (const para of paragraphs) {
+    const lines = doc.splitTextToSize(para.replace(/\n/g, ' '), width - 12);
+    for (const line of lines) {
+      y = ensurePage(doc, y);
+      doc.text(line, x + 6, y);
+      y += SPACE.lineHeight + 0.8;
+    }
+    y += 3; // espacement entre paragraphes
+  }
+
+  // Ligne subtile doree en bas
+  if (opts.signature) {
+    y += 4;
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.4);
+    doc.line(x + 6, y, x + 22, y);
+    y += 3;
+  }
+
+  return y + 4;
 }
 
 // Dessiner un header de section (H1) — style premium
@@ -1209,6 +1247,23 @@ export async function exportConsultationPDF(consultation, client) {
     const renderSec = (sec) => {
       if (!sec?.content?.trim()) return;
       const sectionType = detectSectionType(sec.title);
+
+      // V59 : intro/closing = style lettre manuscrite, pas de header lourd
+      if (sectionType === 'intro' || sectionType === 'closing') {
+        // Petit label discret en haut (pas un gros header)
+        doc.setFontSize(FONT.micro);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GOLD);
+        const labelText = sectionType === 'intro' ? 'LE MOT D\'ANISSA' : 'POUR LA SUITE';
+        doc.text(labelText, margin + 6, y + 4, { charSpace: 2 });
+        y += 9;
+        y = drawLetterBlock(doc, sec.content, margin, y, cw, {
+          italic: sectionType === 'intro',
+          signature: sectionType === 'closing',
+        });
+        y += SPACE.blockGap;
+        return;
+      }
 
       // Header premium (remplace addSectionTitle)
       y = drawSectionHeader(doc, sec.title, y, margin);
