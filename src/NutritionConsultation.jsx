@@ -4672,6 +4672,11 @@ ${suppText}`;
                 border: '1px solid rgba(124,92,191,.2)',
                 borderRadius: 12,
               }}>
+                {/* V51b : détecter si l'audit est obsolète (plan édité après analyse) */}
+                {(() => {
+                  const isStale = aiAnalysis?.planSignature &&
+                    aiAnalysis.planSignature !== ((planDraft || '').length + '|' + (planDraft || '').slice(0, 200));
+                  return (
                 <div style={{
                   display: 'flex', alignItems: 'center',
                   justifyContent: 'space-between',
@@ -4679,11 +4684,28 @@ ${suppText}`;
                   gap: 10, flexWrap: 'wrap',
                 }}>
                   <div>
-                    <div style={{ fontSize: '.75rem', fontWeight: 700, color: '#b89ef0', textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                    <div style={{ fontSize: '.75rem', fontWeight: 700, color: '#b89ef0', textTransform: 'uppercase', letterSpacing: '.5px', display: 'flex', alignItems: 'center', gap: 8 }}>
                       🔬 Audit du plan (IA) — verification interne
+                      {isStale && (
+                        <span style={{
+                          fontSize: '.65rem', fontWeight: 700,
+                          padding: '2px 8px', borderRadius: 12,
+                          background: 'rgba(251,191,36,.15)',
+                          border: '1px solid rgba(251,191,36,.35)',
+                          color: '#fbbf24',
+                          textTransform: 'none', letterSpacing: 0,
+                        }}>
+                          ⚠️ Audit obsolete — plan modifie depuis
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)', marginTop: 3 }}>
                       Score qualite + points forts + ameliorations rapides. Ne va pas au client.
+                      {aiAnalysis?.analyzedAt && (
+                        <span style={{ marginLeft: 6, opacity: .7 }}>
+                          · analyse le {new Date(aiAnalysis.analyzedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })} a {new Date(aiAnalysis.analyzedAt).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
@@ -4695,6 +4717,9 @@ ${suppText}`;
                       try {
                         const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
                         if (result) {
+                          // V51b : stocker signature du plan analysé pour détecter si obsolète
+                          result.planSignature = (planDraft || '').length + '|' + (planDraft || '').slice(0, 200);
+                          result.analyzedAt = new Date().toISOString();
                           setAiAnalysis(result);
                         } else {
                           setAiAnalysisError('L\'IA n\'a pas pu produire une analyse structuree. Relance ou verifie ta cle API.');
@@ -4715,9 +4740,11 @@ ${suppText}`;
                       opacity: analyzingPlan ? 0.6 : 1,
                     }}
                   >
-                    {analyzingPlan ? '✨ Analyse en cours...' : (aiAnalysis ? '🔁 Re-analyser' : '🔍 Analyser le plan')}
+                    {analyzingPlan ? '✨ Analyse en cours...' : (aiAnalysis ? (isStale ? '🔁 Re-analyser' : '🔁 Re-analyser') : '🔍 Analyser le plan')}
                   </button>
                 </div>
+                  );
+                })()}
 
                 {aiAnalysisError && !aiAnalysis && (
                   <div style={{
