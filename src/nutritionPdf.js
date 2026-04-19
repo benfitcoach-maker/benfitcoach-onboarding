@@ -1370,7 +1370,15 @@ export async function exportConsultationPDF(consultation, client) {
       }
       y += SPACE.blockGap;
     };
-    const newPage = () => { doc.addPage(); doc.setFillColor(...BG_PAGE); doc.rect(0, 0, pw, 297, 'F'); y = 22; };
+    const newPage = () => {
+      doc.addPage();
+      doc.setFillColor(...BG_PAGE);
+      doc.rect(0, 0, pw, 297, 'F');
+      // V63 : RESET charSpace a chaque nouvelle page pour eviter le leak du cover
+      // (charSpace: 2.5 de "PLAN NUTRITIONNEL" leake sinon sur les pages suivantes)
+      if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
+      y = 22;
+    };
 
     // ── PAGE 1: COVER — Premium layout V56 ──
     {
@@ -1449,6 +1457,9 @@ export async function exportConsultationPDF(consultation, client) {
       doc.setFontSize(6.5);
       doc.setTextColor(...MUTED_TEXT);
       doc.text('Document confidentiel — usage personnel uniquement', pw / 2, 282, { align: 'center', charSpace: 1 });
+
+      // V63 : RESET charSpace apres cover pour eviter le leak sur pages suivantes
+      if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
     }
 
     // ── RENDER ALL SECTIONS LINEARLY — V56 pagination smart ──

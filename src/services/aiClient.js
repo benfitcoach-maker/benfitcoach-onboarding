@@ -67,14 +67,17 @@ export function postProcess(text) {
   });
 
   // 4) Remplacer fleches cassees par fleches propres
-  // V62 : regex encore plus permissive (tolere espace entre ! et quote)
+  // V63 : regex definitive - tous patterns de ! + quote-like, apostrophe, accent
   out = out
-    // Pattern principal : ! directement suivi d'un quote (droit, courbe, francais)
-    .replace(/!["'«»\u00AB\u00BB\u2018\u2019\u201C\u201D\u2033]/g, '→')
-    // Pattern rare : ! ' ou ! " (avec espace)
-    .replace(/!\s+["'«»\u00AB\u00BB\u2018\u2019\u201C\u201D]/g, '→')
-    // Nettoyer les double-chevrons " apres fleche
-    .replace(/→\s*["'»«\u2018\u2019\u201C\u201D\u00AB\u00BB]/g, '→ ');
+    // Pattern 1 : ! suivi de TOUT char de quote/apostrophe (liste exhaustive)
+    .replace(/![\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033\u2034\u2039\u203A]/g, '→')
+    // Pattern 2 : ! + espace + quote (variante avec espace)
+    .replace(/!\s+[\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033\u2034\u2039\u203A]/g, '→')
+    // Nettoyer les quotes residuelles apres fleche
+    .replace(/→\s*[\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033]/g, '→ ')
+    // Filet de securite final : ! + tout char non-alphanumerique/non-espace (tres permissif)
+    // seulement si suivi d'espace ensuite (evite les faux positifs comme "!)")
+    .replace(/!([^\sA-Za-zÀ-ÿ0-9)])\s/g, '→ ');
 
   // 5) Convertir tableaux markdown | a | b | c | en format texte lisible
   // Si on detecte un pattern de tableau markdown, on le convertit

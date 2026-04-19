@@ -354,12 +354,26 @@ Maximum 5 puces.
 
 ## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
 Donner une journee type claire et directement applicable.
-Format :
-Petit-dejeuner :
-Dejeuner :
-Diner :
-Collation :
-1 ligne maximum par repas.
+
+PORTIONS OBLIGATOIRES : chaque aliment du plan doit avoir une portion concrete
+(grammes ou unites familieres). La cliente doit savoir quoi manger ET en quelle
+quantite, sans deviner.
+
+Format attendu :
+Petit-dejeuner : 2 oeufs brouilles + 1 tranche pain complet (40g) + 1/2 avocat + tisane
+Dejeuner : 120g saumon + 80g quinoa cuit + legumes vapeur + 1 c.s. huile olive
+Diner : 100g blanc de poulet + 150g courgettes + 1 petite patate douce
+Collation : 1 yaourt grec + 30g amandes
+
+Regles :
+- Proteines : grammage obligatoire (ex : 120g saumon, 2 oeufs, 100g poulet)
+- Feculents : grammage obligatoire (ex : 80g quinoa cuit, 1 tranche 40g, 150g patate douce)
+- Legumes : portion indicative (ex : 150g, 1 bol, "volonte") selon le contexte
+- Lipides : unite pratique (ex : 1 c.s. huile olive, 1/2 avocat, 30g amandes)
+- 1 ligne maximum par repas, mais la portion doit etre visible
+
+Portions absentes UNIQUEMENT dans : aliments autorises, aliments limites/interdits,
+recommandations coach, protocoles (ces sections n'ont pas besoin de grammage).
 
 ## 4. ROTATION DES REPAS
 Donner uniquement des remplacements utiles.
