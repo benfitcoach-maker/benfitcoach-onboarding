@@ -367,6 +367,7 @@ function detectSectionType(title) {
   if (/analyse\s*du\s*profil|profil/.test(k)) return 'profile';
   if (/strategie\s*nutritionnelle|strategie/.test(k)) return 'strategy';
   if (/semaine\s*1.*structure|structure\s*alimentaire|plan\s*alimentaire|menus?/.test(k)) return 'meals';
+  if (/journee\s*type\s*alternative|journee\s*alternative|variante/.test(k)) return 'meals_alt';
   if (/rotation|substitutions?/.test(k)) return 'rotation';
   if (/aliments?\s*autorises|aliments?\s*favoris/.test(k)) return 'food_yes';
   if (/aliments?\s*limites|aliments?\s*moderes/.test(k)) return 'food_limit';
@@ -643,6 +644,155 @@ function parseSupplementEntriesStructured(text) {
   }
   if (current) entries.push(current);
   return entries;
+}
+
+// V66 : render rotation en 2 colonnes (Proteines | Feculents) puis (Legumes | Gras)
+// groups = [{ title, items: [] }]
+function drawTwoColumnList(doc, groups, x, y, width) {
+  if (!groups?.length) return y;
+  const colW = (width - 6) / 2;
+  for (let i = 0; i < groups.length; i += 2) {
+    const left = groups[i];
+    const right = groups[i + 1];
+    const leftLines = left ? Math.max(2, left.items.length) : 0;
+    const rightLines = right ? Math.max(2, right.items.length) : 0;
+    const maxLines = Math.max(leftLines, rightLines);
+    const cardH = 10 + maxLines * 5 + 4;
+    y = ensurePage(doc, y, cardH + 4);
+    // Rendu cote gauche
+    if (left) drawColGroup(doc, left, x, y, colW);
+    if (right) drawColGroup(doc, right, x + colW + 6, y, colW);
+    y += cardH + SPACE.blockGap;
+  }
+  return y;
+}
+function drawColGroup(doc, group, x, y, width) {
+  // Titre colonne
+  doc.setFontSize(FONT.h3);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GREEN);
+  doc.text(group.title.toUpperCase(), x, y + 4);
+  // Trait doré fin
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.4);
+  doc.line(x, y + 6, x + width, y + 6);
+  // Items
+  doc.setFontSize(FONT.body);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...DARK_TEXT);
+  let ly = y + 11;
+  for (const item of group.items) {
+    const lines = doc.splitTextToSize(item, width - 2);
+    for (const line of lines) {
+      doc.text(line, x, ly);
+      ly += 5;
+    }
+  }
+}
+
+// V66 : parse une section rotation "Proteines : A / B / C" → groups
+function parseRotationGroups(text) {
+  if (!text) return [];
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const groups = [];
+  for (const line of lines) {
+    const cleaned = line.replace(/^[-–•*·]\s*/, '');
+    const m = cleaned.match(/^(Prot[eé]ines?|F[eé]culents?|L[eé]gumes?|Mati[eè]res?\s*grasses?|Lipides?|Gras|Gras?\s*bons?)[^:]{0,30}?\s*:\s*(.+)$/i);
+    if (!m) continue;
+    const title = m[1].trim();
+    const raw = m[2].trim();
+    // Items separes par / ou ,
+    const items = raw.split(/\s*[\/,]\s*/).map(s => s.trim()).filter(Boolean);
+    if (items.length >= 2) groups.push({ title, items });
+  }
+  return groups;
+}
+
+// V66 : render fiche frigo en bloc compact "À RETENIR"
+function drawCompactRulesBlock(doc, items, x, y, width, label = 'À RETENIR') {
+  if (!items?.length) return y;
+  const lineH = 5.5;
+  const padding = 7;
+  const bodyH = items.length * lineH + 6;
+  const blockH = padding + 6 + bodyH + padding;
+  y = ensurePage(doc, y, blockH + 4);
+  // Fond carte
+  doc.setFillColor(...BG_CARD);
+  doc.roundedRect(x, y, width, blockH, 2.5, 2.5, 'F');
+  // Border gauche doré (accent)
+  doc.setFillColor(...GOLD);
+  doc.rect(x, y, 1.8, blockH, 'F');
+  // Label
+  doc.setFontSize(FONT.small);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...GOLD);
+  doc.text(label, x + padding, y + padding + 2, { charSpace: 1.5 });
+  // Items
+  doc.setFontSize(FONT.body);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...DARK_TEXT);
+  let ly = y + padding + 10;
+  for (const item of items) {
+    const lines = doc.splitTextToSize('• ' + item, width - padding * 2 - 2);
+    for (const line of lines) {
+      doc.text(line, x + padding, ly);
+      ly += lineH;
+    }
+  }
+  return y + blockH + SPACE.blockGap;
+}
+
+// V66 : render plan d'action en timeline verticale S1 → S4
+function drawTimeline(doc, steps, x, y, width) {
+  if (!steps?.length) return y;
+  const stepH = 14;
+  const totalH = steps.length * stepH + 6;
+  y = ensurePage(doc, y, totalH + 4);
+  const dotX = x + 3;
+  const textX = x + 11;
+  // Ligne verticale reliant les dots
+  doc.setDrawColor(...GOLD_SOFT);
+  doc.setLineWidth(0.6);
+  doc.line(dotX, y + 4, dotX, y + stepH * steps.length);
+  for (let i = 0; i < steps.length; i++) {
+    const cy = y + 4 + i * stepH;
+    // Dot doré
+    doc.setFillColor(...GOLD);
+    doc.circle(dotX, cy, 1.8, 'F');
+    // Label semaine en vert
+    doc.setFontSize(FONT.h3);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREEN);
+    doc.text(steps[i].label, textX, cy + 1.2);
+    // Texte
+    doc.setFontSize(FONT.body);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK_TEXT);
+    const txt = steps[i].text || '';
+    const lines = doc.splitTextToSize(txt, width - 30);
+    let ly = cy + 6;
+    for (let j = 0; j < lines.length && j < 2; j++) {
+      doc.text(lines[j], textX, ly);
+      ly += 4.5;
+    }
+  }
+  return y + totalH + SPACE.blockGap;
+}
+
+// V66 : parse plan d'action "S1 — texte" → steps
+function parseTimelineSteps(text) {
+  if (!text) return [];
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const steps = [];
+  for (const line of lines) {
+    const cleaned = line.replace(/^[-–•*·]\s*/, '');
+    // Match "S1 — texte" ou "Semaine 1 — texte" ou "S1 : texte"
+    const m = cleaned.match(/^(S(?:emaine)?\s*\d|S\d)\s*[—\-:]\s*(.+)$/i);
+    if (!m) continue;
+    const label = m[1].replace(/semaine\s*/i, 'S').toUpperCase().replace(/\s+/g, '');
+    steps.push({ label, text: m[2].trim() });
+  }
+  return steps;
 }
 
 // Render un bloc "Tableau horaire des supplements"
@@ -1288,7 +1438,16 @@ export async function exportConsultationPDF(consultation, client) {
           break;
         }
 
-        case 'meals': {
+        case 'meals':
+        case 'meals_alt': {
+          // V66 : label discret "VARIANTE" pour journee alternative
+          if (sectionType === 'meals_alt') {
+            doc.setFontSize(FONT.micro);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...GOLD);
+            doc.text('VARIANTE', margin, y - 2, { charSpace: 1.5 });
+            y += 2;
+          }
           // Rendu en cartes repas
           const pairs = parseLabeledLines(sec.content);
           const mealPairs = pairs.filter(p => /petit[- ]?dej|dejeuner|diner|collation|goute|snack/i.test(p.label));
@@ -1304,6 +1463,56 @@ export async function exportConsultationPDF(consultation, client) {
           } else {
             const tokens = parseNutritionPlan(sec.content);
             y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        case 'rotation': {
+          // V66 : 2 colonnes (Prot | Fec puis Leg | Gras)
+          const groups = parseRotationGroups(sec.content);
+          if (groups.length >= 2) {
+            y = drawTwoColumnList(doc, groups, margin, y, cw);
+            // Rendre le reste (ex: exemples substitutions) en bullets
+            const restLines = sec.content.split('\n')
+              .filter(l => !/^(Prot[eé]ines?|F[eé]culents?|L[eé]gumes?|Mati[eè]res?\s*grasses?|Lipides?|Gras)/i.test(l.trim()))
+              .join('\n');
+            const bullets = parseBulletLines(restLines);
+            if (bullets.length >= 1) {
+              y = drawBulletList(doc, bullets, margin + 2, y, cw - 2);
+            }
+          } else {
+            const tokens = parseNutritionPlan(sec.content);
+            y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        case 'fridge': {
+          // V66 : bloc compact "À RETENIR"
+          const bullets = parseBulletLines(sec.content);
+          if (bullets.length >= 2) {
+            y = drawCompactRulesBlock(doc, bullets, margin, y, cw, 'À RETENIR');
+          } else {
+            const tokens = parseNutritionPlan(sec.content);
+            y = renderTokens(doc, tokens, margin, y, cw);
+          }
+          break;
+        }
+
+        case 'action': {
+          // V66 : timeline S1 → S4 si detection possible
+          const steps = parseTimelineSteps(sec.content);
+          if (steps.length >= 2) {
+            y = drawTimeline(doc, steps, margin + 2, y, cw - 2);
+          } else {
+            // Fallback : bullets classiques
+            const bullets = parseBulletLines(sec.content);
+            if (bullets.length >= 2) {
+              y = drawBulletList(doc, bullets, margin + 2, y, cw - 2);
+            } else {
+              const tokens = parseNutritionPlan(sec.content);
+              y = renderTokens(doc, tokens, margin, y, cw);
+            }
           }
           break;
         }
@@ -1335,8 +1544,7 @@ export async function exportConsultationPDF(consultation, client) {
 
         case 'protocol':
         case 'adjustments':
-        case 'coach':
-        case 'action': {
+        case 'coach': {
           // Rendu en bullets propres si possible
           const bullets = parseBulletLines(sec.content);
           if (bullets.length >= 2) {
