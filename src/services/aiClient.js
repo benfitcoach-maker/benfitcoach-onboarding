@@ -29,13 +29,17 @@ async function aiRequest(systemPrompt, userMessage, maxTokens = 1500) {
 // (ex : "PLAN NUTRITIONNEL PERSONNALISÉ", "SYNTHÈSE CLINIQUE", "JOURNÉES TYPES"...)
 export function stripPlanLeakage(suppText) {
   if (!suppText) return suppText;
+  let out = suppText;
   const marker = /SUPPL[EÉ]MENTS?\s+(RECOMMAND[EÉ]S?|A\s+PRENDRE)/i;
-  const match = suppText.match(marker);
+  const match = out.match(marker);
   if (match && match.index > 50) {
     // Il y a un prefixe suspect avant "SUPPLEMENTS..." : on le coupe
-    return suppText.slice(match.index).trim();
+    out = out.slice(match.index).trim();
   }
-  return suppText;
+  // V55b : strip le titre redondant "SUPPLEMENTS RECOMMANDES" en debut si present
+  // (sera rendu par addSectionTitle, inutile de l'avoir aussi dans le contenu)
+  out = out.replace(/^SUPPL[EÉ]MENTS?\s+(RECOMMAND[EÉ]S?|A\s+PRENDRE)\s*:?\s*\n+/i, '').trim();
+  return out;
 }
 
 export function postProcess(text) {
@@ -53,15 +57,23 @@ export function postProcess(text) {
   out = out.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F000}-\u{1F2FF}]|[\u{1FA00}-\u{1FAFF}]|[\u2700-\u27BF]/gu, '');
 
   // 3) Detecter et fusionner les mots lettre-espacees ("F A I R E" -> "FAIRE")
-  // Pattern : 3+ lettres majuscules seules separees par espaces simples
-  out = out.replace(/\b([A-ZÀ-Ú])(\s[A-ZÀ-Ú]){2,}\b/g, (match) => match.replace(/\s/g, ''));
+  // V55b : elargi aux minuscules et accents (pas juste majuscules)
+  // Pattern : 4+ caracteres mono-lettre separes par espaces simples
+  out = out.replace(/((?:[A-Za-zÀ-ÿ]\s){4,}[A-Za-zÀ-ÿ])/g, (match) => {
+    // Verifier que ce n'est pas du texte normal : chaque "token" doit etre 1 seul caractere
+    const tokens = match.split(/\s+/);
+    const allSingle = tokens.every(t => t.length === 1);
+    if (!allSingle) return match;
+    return tokens.join('');
+  });
 
   // 4) Remplacer fleches cassees par fleches propres
+  // V55b : inclure smart quotes Unicode (U+201C, U+201D, U+2018, U+2019)
   out = out
-    .replace(/!["»]/g, '→')
-    .replace(/!['»]/g, '→')
-    .replace(/→\s*"/g, '→ ')
-    .replace(/→\s*'/g, '→ ');
+    .replace(/!["'»«\u2018\u2019\u201C\u201D\u00AB\u00BB]/g, '→')
+    .replace(/→\s*["'»«\u2018\u2019\u201C\u201D\u00AB\u00BB]/g, '→ ')
+    // Remplacer aussi les sequences ->" ou ->'  residuelles
+    .replace(/!["']/g, '→');
 
   // 5) Convertir tableaux markdown | a | b | c | en format texte lisible
   // Si on detecte un pattern de tableau markdown, on le convertit
