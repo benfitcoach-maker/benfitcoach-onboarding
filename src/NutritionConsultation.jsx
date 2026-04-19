@@ -2042,7 +2042,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [liveScore, setLiveScore] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const scoreDebounceRef = useRef(null);
-  const [aiAnalysis, setAiAnalysis] = useState(null);
+  // V51 : aiAnalysis persiste dans la consultation (survivre nav + reload)
+  const [aiAnalysis, setAiAnalysis] = useState(() => {
+    return initialConsultation?.aiAnalysis || initialConsultation?.ai_analysis || null;
+  });
   const [analyzingPlan, setAnalyzingPlan] = useState(false);
   const [aiAnalysisError, setAiAnalysisError] = useState('');
   const [improvingAll, setImprovingAll] = useState(false);
@@ -2819,6 +2822,7 @@ ${suppText}`;
       ficheFrigoJson: consultation.fiche_frigo_json || null,
       labResults: consultation.lab_results || {},
       geneticResults: consultation.genetic_results || {},
+      aiAnalysis: aiAnalysis || null,
       isFollowup,
       followupData: isFollowup ? {
         ...followupData,
