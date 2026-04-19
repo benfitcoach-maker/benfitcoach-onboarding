@@ -2044,6 +2044,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const scoreDebounceRef = useRef(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [analyzingPlan, setAnalyzingPlan] = useState(false);
+  const [aiAnalysisError, setAiAnalysisError] = useState('');
   const [improvingAll, setImprovingAll] = useState(false);
   const [globalProposal, setGlobalProposal] = useState(null);
   const [expertMode, setExpertMode] = useState(false);
@@ -4686,11 +4687,17 @@ ${suppText}`;
                     disabled={analyzingPlan}
                     onClick={async () => {
                       setAnalyzingPlan(true);
+                      setAiAnalysisError('');
                       try {
                         const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
-                        if (result) setAiAnalysis(result);
+                        if (result) {
+                          setAiAnalysis(result);
+                        } else {
+                          setAiAnalysisError('L\'IA n\'a pas pu produire une analyse structuree. Relance ou verifie ta cle API.');
+                        }
                       } catch (err) {
                         console.error('[AI analysis]', err.message);
+                        setAiAnalysisError('Erreur reseau : ' + (err.message || 'inconnue'));
                       } finally {
                         setAnalyzingPlan(false);
                       }
@@ -4707,6 +4714,17 @@ ${suppText}`;
                     {analyzingPlan ? '✨ Analyse en cours...' : (aiAnalysis ? '🔁 Re-analyser' : '🔍 Analyser le plan')}
                   </button>
                 </div>
+
+                {aiAnalysisError && !aiAnalysis && (
+                  <div style={{
+                    marginTop: 10, padding: '10px 14px',
+                    background: 'rgba(248,113,113,.08)',
+                    border: '1px solid rgba(248,113,113,.25)',
+                    borderRadius: 8, fontSize: '.78rem', color: '#f87171',
+                  }}>
+                    ⚠️ {aiAnalysisError}
+                  </div>
+                )}
 
                 {aiAnalysis && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'start' }}>

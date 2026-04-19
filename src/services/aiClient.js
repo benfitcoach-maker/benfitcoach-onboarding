@@ -201,13 +201,23 @@ R\u00c8GLES D'\u00c9CRITURE ABSOLUES :
   const text = await aiRequest(
     system,
     `Analyse ce plan (${wordCount} mots) :\n\n${(planText || '').slice(0, 3000)}`,
-    600
+    800
   );
 
+  if (!text) return null;
+
+  // V50b : parsing JSON robuste (extrait le premier bloc JSON trouvé même si texte autour)
   try {
-    const clean = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
-  } catch {
+    let clean = (text || '').replace(/```json|```/g, '').trim();
+    // Si Claude ajoute du texte avant/après, on extrait le JSON
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (jsonMatch) clean = jsonMatch[0];
+    const parsed = JSON.parse(clean);
+    // Validation basique : doit avoir au moins score OU verdict
+    if (typeof parsed.score !== 'number' && !parsed.verdict) return null;
+    return parsed;
+  } catch (err) {
+    console.warn('[analyzeFullPlan] JSON parse failed:', err.message, '\nRaw text:', text?.slice(0, 200));
     return null;
   }
 }
