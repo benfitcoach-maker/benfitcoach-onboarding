@@ -3408,7 +3408,9 @@ ${suppText}`;
                   : LAB_MARKERS_UI
                 ).map(({ key, label, unit }) => (
                   <div key={key} className="field" style={{ marginBottom: 0 }}>
-                    <label style={{ fontSize: '.72rem' }}>{label} ({unit})</label>
+                    <label style={{ fontSize: '.72rem' }}>
+                      {label} <span style={{ textTransform: 'none' }}>({unit})</span>
+                    </label>
                     <input
                       type="number"
                       step="any"
