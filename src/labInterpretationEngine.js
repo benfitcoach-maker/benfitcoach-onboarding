@@ -3,10 +3,12 @@
 // Pas de diagnostic medical — signaux nutritionnels uniquement
 
 // ─── REFERENCE RANGES (adulte, fonctionnel) ───
+// V47 : Unités SI suisses (mmol/L, µmol/L, nmol/L, pmol/L)
+// Conversions appliquées depuis les ranges US originaux pour matcher les labos CH
 
 const LAB_MARKERS = {
   ferritine: {
-    unit: 'ng/mL',
+    unit: 'µg/L',  // = ng/mL (valeurs numeriques identiques)
     ranges: { low: [0, 30], low_borderline: [30, 50], normal: [50, 200], high_borderline: [200, 300], high: [300, Infinity] },
     signal_low: 'low_iron_status',
     signal_high: 'iron_overload',
@@ -20,35 +22,35 @@ const LAB_MARKERS = {
     label: 'Fer serique',
   },
   vitamine_d: {
-    unit: 'ng/mL',
-    ranges: { low: [0, 20], low_borderline: [20, 30], normal: [30, 60], high_borderline: [60, 80], high: [80, Infinity] },
+    unit: 'nmol/L',  // conversion : ng/mL × 2.5
+    ranges: { low: [0, 50], low_borderline: [50, 75], normal: [75, 150], high_borderline: [150, 200], high: [200, Infinity] },
     signal_low: 'low_vitamin_d',
     signal_high: 'excess_vitamin_d',
-    label: 'Vitamine D',
+    label: 'Vitamine D (25-OH)',
   },
   vitamine_b12: {
-    unit: 'pg/mL',
-    ranges: { low: [0, 300], low_borderline: [300, 450], normal: [450, 900], high_borderline: [900, 1200], high: [1200, Infinity] },
+    unit: 'pmol/L',  // conversion : pg/mL × 0.738
+    ranges: { low: [0, 220], low_borderline: [220, 330], normal: [330, 660], high_borderline: [660, 885], high: [885, Infinity] },
     signal_low: 'low_b12',
     signal_high: null,
     label: 'Vitamine B12',
   },
   folates: {
-    unit: 'ng/mL',
-    ranges: { low: [0, 5], low_borderline: [5, 8], normal: [8, 20], high_borderline: [20, 30], high: [30, Infinity] },
+    unit: 'nmol/L',  // conversion : ng/mL × 2.266
+    ranges: { low: [0, 11], low_borderline: [11, 18], normal: [18, 45], high_borderline: [45, 68], high: [68, Infinity] },
     signal_low: 'low_folates',
     signal_high: null,
     label: 'Folates (B9)',
   },
   glucose_jeun: {
-    unit: 'mg/dL',
-    ranges: { low: [0, 70], low_borderline: [70, 80], normal: [80, 100], high_borderline: [100, 126], high: [126, Infinity] },
+    unit: 'mmol/L',  // conversion : mg/dL / 18
+    ranges: { low: [0, 3.9], low_borderline: [3.9, 4.4], normal: [4.4, 5.6], high_borderline: [5.6, 7.0], high: [7.0, Infinity] },
     signal_low: 'hypoglycemia_tendency',
     signal_high: 'glycemic_dysregulation',
     label: 'Glucose a jeun',
   },
   insuline_jeun: {
-    unit: 'µU/mL',
+    unit: 'mU/L',  // = µU/mL (valeurs identiques)
     ranges: { low: [0, 2], low_borderline: [2, 3], normal: [3, 10], high_borderline: [10, 15], high: [15, Infinity] },
     signal_low: null,
     signal_high: 'insulin_resistance',
@@ -65,21 +67,21 @@ const LAB_MARKERS = {
     unit: 'mUI/L',
     ranges: { low: [0, 0.4], low_borderline: [0.4, 1.0], normal: [1.0, 3.5], high_borderline: [3.5, 5.0], high: [5.0, Infinity] },
     signal_low: 'tsh_low_to_investigate',
-    signal_low_borderline: null,  // 0.4-1.0 = normal, pas de signal
+    signal_low_borderline: null,
     signal_high: 'tsh_high_to_investigate',
     signal_high_borderline: 'thyroid_axis_to_monitor',
     label: 'TSH',
   },
   t3_libre: {
-    unit: 'pg/mL',
-    ranges: { low: [0, 2.3], low_borderline: [2.3, 2.8], normal: [2.8, 4.2], high_borderline: [4.2, 5.0], high: [5.0, Infinity] },
+    unit: 'pmol/L',  // conversion : pg/mL × 1.536
+    ranges: { low: [0, 3.5], low_borderline: [3.5, 4.3], normal: [4.3, 6.5], high_borderline: [6.5, 7.7], high: [7.7, Infinity] },
     signal_low: 'thyroid_conversion_to_monitor',
     signal_high: null,
     label: 'T3 libre',
   },
   t4_libre: {
-    unit: 'ng/dL',
-    ranges: { low: [0, 0.8], low_borderline: [0.8, 1.0], normal: [1.0, 1.7], high_borderline: [1.7, 2.0], high: [2.0, Infinity] },
+    unit: 'pmol/L',  // conversion : ng/dL × 12.87
+    ranges: { low: [0, 10], low_borderline: [10, 13], normal: [13, 22], high_borderline: [22, 26], high: [26, Infinity] },
     signal_low: 'thyroid_axis_to_monitor',
     signal_high: 'tsh_low_to_investigate',
     label: 'T4 libre',
@@ -92,45 +94,45 @@ const LAB_MARKERS = {
     label: 'CRP ultrasensible',
   },
   magnesium: {
-    unit: 'mg/L',
-    ranges: { low: [0, 18], low_borderline: [18, 20], normal: [20, 25], high_borderline: [25, 28], high: [28, Infinity] },
+    unit: 'mmol/L',  // conversion : mg/L / 24.3
+    ranges: { low: [0, 0.65], low_borderline: [0.65, 0.75], normal: [0.75, 1.0], high_borderline: [1.0, 1.1], high: [1.1, Infinity] },
     signal_low: 'low_magnesium',
     signal_high: null,
-    label: 'Magnesium',
+    label: 'Magnesium serique',
   },
   zinc: {
-    unit: 'µg/dL',
-    ranges: { low: [0, 70], low_borderline: [70, 80], normal: [80, 120], high_borderline: [120, 140], high: [140, Infinity] },
+    unit: 'µmol/L',  // conversion : µg/dL / 6.54
+    ranges: { low: [0, 11], low_borderline: [11, 12], normal: [12, 18], high_borderline: [18, 21], high: [21, Infinity] },
     signal_low: 'low_zinc',
     signal_high: null,
     label: 'Zinc',
   },
-  // ─── V45 : MARQUEURS ETENDUS ───
-  // Lipides
+  // ─── V45/V47 : MARQUEURS ETENDUS (unités SI suisses) ───
+  // Lipides — conversion mg/dL → mmol/L (facteurs 38.67 pour chol/HDL/LDL ; 88.57 pour TG)
   cholesterol_total: {
-    unit: 'mg/dL',
-    ranges: { low: [0, 150], low_borderline: [150, 170], normal: [170, 200], high_borderline: [200, 240], high: [240, Infinity] },
+    unit: 'mmol/L',
+    ranges: { low: [0, 3.5], low_borderline: [3.5, 4.4], normal: [4.4, 5.2], high_borderline: [5.2, 6.2], high: [6.2, Infinity] },
     signal_low: null,
     signal_high: 'high_cholesterol',
     label: 'Cholesterol total',
   },
   hdl: {
-    unit: 'mg/dL',
-    ranges: { low: [0, 40], low_borderline: [40, 50], normal: [50, 80], high_borderline: [80, 100], high: [100, Infinity] },
+    unit: 'mmol/L',
+    ranges: { low: [0, 1.0], low_borderline: [1.0, 1.3], normal: [1.3, 2.1], high_borderline: [2.1, 2.6], high: [2.6, Infinity] },
     signal_low: 'low_hdl',
     signal_high: null,
     label: 'HDL',
   },
   ldl: {
-    unit: 'mg/dL',
-    ranges: { low: [0, 70], low_borderline: [70, 100], normal: [100, 130], high_borderline: [130, 160], high: [160, Infinity] },
+    unit: 'mmol/L',
+    ranges: { low: [0, 1.8], low_borderline: [1.8, 2.6], normal: [2.6, 3.4], high_borderline: [3.4, 4.1], high: [4.1, Infinity] },
     signal_low: null,
     signal_high: 'high_ldl',
     label: 'LDL',
   },
   triglycerides: {
-    unit: 'mg/dL',
-    ranges: { low: [0, 50], low_borderline: [50, 70], normal: [70, 150], high_borderline: [150, 200], high: [200, Infinity] },
+    unit: 'mmol/L',
+    ranges: { low: [0, 0.6], low_borderline: [0.6, 0.8], normal: [0.8, 1.7], high_borderline: [1.7, 2.3], high: [2.3, Infinity] },
     signal_low: null,
     signal_high: 'high_triglycerides',
     label: 'Triglycerides',
@@ -142,10 +144,10 @@ const LAB_MARKERS = {
     signal_high: 'high_homocysteine',
     label: 'Homocysteine',
   },
-  // Hemogramme
+  // Hemogramme — Suisse utilise g/L (× 10 par rapport a g/dL)
   hemoglobine: {
-    unit: 'g/dL',
-    ranges: { low: [0, 11.5], low_borderline: [11.5, 12.5], normal: [12.5, 16.5], high_borderline: [16.5, 17.5], high: [17.5, Infinity] },
+    unit: 'g/L',
+    ranges: { low: [0, 115], low_borderline: [115, 125], normal: [125, 165], high_borderline: [165, 175], high: [175, Infinity] },
     signal_low: 'low_hemoglobin',
     signal_high: null,
     label: 'Hemoglobine',
@@ -157,10 +159,10 @@ const LAB_MARKERS = {
     signal_high: null,
     label: 'Hematocrite',
   },
-  // Thyroide etendue
+  // Thyroide etendue — T3 reverse en pmol/L (Swiss std)
   t3_reverse: {
-    unit: 'ng/dL',
-    ranges: { low: [0, 8], low_borderline: [8, 10], normal: [10, 24], high_borderline: [24, 28], high: [28, Infinity] },
+    unit: 'pmol/L',
+    ranges: { low: [0, 120], low_borderline: [120, 155], normal: [155, 370], high_borderline: [370, 430], high: [430, Infinity] },
     signal_low: null,
     signal_high: 'high_rt3',
     label: 'T3 reverse',
@@ -186,17 +188,17 @@ const LAB_MARKERS = {
     signal_high: null,
     label: 'Iode urinaire',
   },
-  // Cofacteurs
+  // Cofacteurs — Cuivre et Zinc en µmol/L (Swiss std)
   cuivre: {
-    unit: 'µg/dL',
-    ranges: { low: [0, 70], low_borderline: [70, 80], normal: [80, 140], high_borderline: [140, 160], high: [160, Infinity] },
+    unit: 'µmol/L',
+    ranges: { low: [0, 11], low_borderline: [11, 12.5], normal: [12.5, 22], high_borderline: [22, 25], high: [25, Infinity] },
     signal_low: 'low_copper',
     signal_high: 'high_copper',
     label: 'Cuivre',
   },
   selenium: {
-    unit: 'µg/L',
-    ranges: { low: [0, 70], low_borderline: [70, 80], normal: [80, 160], high_borderline: [160, 200], high: [200, Infinity] },
+    unit: 'µmol/L',  // conversion : µg/L / 79
+    ranges: { low: [0, 0.9], low_borderline: [0.9, 1.0], normal: [1.0, 2.0], high_borderline: [2.0, 2.5], high: [2.5, Infinity] },
     signal_low: 'low_selenium',
     signal_high: null,
     label: 'Selenium',
