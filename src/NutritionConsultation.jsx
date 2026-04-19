@@ -12,6 +12,7 @@ import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planA
 import { analyzeFullPlan } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './services/anissaIdentity';
+import { GENE_CATALOG, buildGeneticSectionForPrompt, getActiveGeneticAdjustments } from './services/geneticInterpretation';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
@@ -1757,6 +1758,7 @@ const INITIAL_CONSULTATION = {
   private_notes: '',
   fiche_frigo_json: null,
   lab_results: {},
+  genetic_results: {},
   status: 'questionnaire_recu',
 };
 
@@ -1924,6 +1926,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         private_notes: initialConsultation.privateNotes || initialConsultation.private_notes || '',
         fiche_frigo_json: initialConsultation.ficheFrigoJson || initialConsultation.fiche_frigo_json || null,
         lab_results: initialConsultation.labResults || initialConsultation.lab_results || {},
+        genetic_results: initialConsultation.geneticResults || initialConsultation.genetic_results || {},
       };
     }
     // Pre-fill observations from questionnaire data
@@ -2442,6 +2445,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       }
     }
 
+    // V46 : Inject genetic tests (nutrigenetics) if any variant is recorded
+    const geneticSection = buildGeneticSectionForPrompt(consultation.genetic_results);
+    if (geneticSection) {
+      parts.push(geneticSection);
+    }
+
     // Inject emotional shock context if present
     if (form.emotional_shock === 'Oui') {
       parts.push('');
@@ -2805,6 +2814,7 @@ ${suppText}`;
       privateNotes: consultation.private_notes,
       ficheFrigoJson: consultation.fiche_frigo_json || null,
       labResults: consultation.lab_results || {},
+      geneticResults: consultation.genetic_results || {},
       isFollowup,
       followupData: isFollowup ? {
         ...followupData,
@@ -3662,6 +3672,88 @@ ${suppText}`;
                   Basé sur le profil client. Modifiable librement.
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* V46 : Tests génétiques (ADN) — visible si dna_test_done ou advanced */}
+          {(consultation.dna_test_done || consultation.mgd_recommendation === 'advanced') && (
+            <div style={{
+              marginTop: 16,
+              padding: '16px',
+              background: 'rgba(255,255,255,.03)',
+              border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: 12,
+            }}>
+              <div style={{
+                fontSize: '.75rem', fontWeight: 700,
+                color: '#c5b07a',
+                textTransform: 'uppercase', letterSpacing: '.5px',
+                marginBottom: 12,
+              }}>
+                🧬 Tests génétiques (ADN)
+              </div>
+              <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 12 }}>
+                Renseignez les variants disponibles. Les tests non renseignés sont ignorés.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {GENE_CATALOG.map(gene => (
+                  <div key={gene.id} className="field" style={{ marginBottom: 0 }}>
+                    <label style={{ fontSize: '.72rem', display: 'block' }}>
+                      {gene.label}
+                      <span style={{ color: '#6b5f48', fontWeight: 400, fontSize: '.65rem', marginLeft: 6 }}>
+                        — {gene.description}
+                      </span>
+                    </label>
+                    <select
+                      value={consultation.genetic_results?.[gene.id] || ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setConsultation(prev => ({
+                          ...prev,
+                          genetic_results: { ...(prev.genetic_results || {}), [gene.id]: val },
+                        }));
+                      }}
+                      style={{ fontSize: '.8rem', padding: '6px 8px', width: '100%' }}
+                    >
+                      {gene.options.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              {/* Live preview des ajustements actifs */}
+              {(() => {
+                const active = getActiveGeneticAdjustments(consultation.genetic_results);
+                if (active.length === 0) return (
+                  <div style={{ marginTop: 12, fontSize: '.75rem', color: '#6b5f48', fontStyle: 'italic' }}>
+                    Aucun variant significatif renseigné pour le moment.
+                  </div>
+                );
+                return (
+                  <div style={{ marginTop: 12, background: 'rgba(124,92,191,.06)', borderRadius: 8, padding: '10px 14px', fontSize: '.78rem' }}>
+                    <strong style={{ display: 'block', marginBottom: 6, color: '#d4c9a8' }}>
+                      🧬 Variants actifs ({active.length}) — seront intégrés au plan
+                    </strong>
+                    {active.map((adj, i) => (
+                      <div key={i} style={{ marginBottom: 8 }}>
+                        <div style={{ color: '#d4c9a8', fontWeight: 600, fontSize: '.75rem' }}>{adj.label}</div>
+                        {adj.note && (
+                          <div style={{ color: '#6b5f48', fontSize: '.7rem', marginTop: 2 }}>{adj.note}</div>
+                        )}
+                        {adj.recos && adj.recos.length > 0 && (
+                          <div style={{ color: 'rgba(255,255,255,.55)', fontSize: '.7rem', marginTop: 3 }}>
+                            → {adj.recos[0]}
+                            {adj.recos.length > 1 && <span style={{ color: '#6b5f48' }}> (+{adj.recos.length - 1} autres)</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
               </div>
