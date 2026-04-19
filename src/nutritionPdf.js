@@ -1064,9 +1064,11 @@ function splitPlanIntoClientSections(planText, supplementsText, recipesText) {
   }
   flush();
 
-  // Merge external supplements/recipes
+  // V64 : si suppText dedie existe (version standardisee/pratique),
+  // on l'utilise SEUL et on jette la version narrative extraite du plan
+  // (evite le doublon narrative + standardisee dans le PDF client)
   if (supplementsText?.trim()) {
-    result.supplements += (result.supplements ? '\n\n' : '') + supplementsText.trim();
+    result.supplements = supplementsText.trim();
   }
   if (recipesText?.trim()) {
     result.recipes += (result.recipes ? '\n\n' : '') + recipesText.trim();

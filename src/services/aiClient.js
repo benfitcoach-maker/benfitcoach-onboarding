@@ -39,6 +39,28 @@ export function stripPlanLeakage(suppText) {
   // V55b : strip le titre redondant "SUPPLEMENTS RECOMMANDES" en debut si present
   // (sera rendu par addSectionTitle, inutile de l'avoir aussi dans le contenu)
   out = out.replace(/^SUPPL[EÉ]MENTS?\s+(RECOMMAND[EÉ]S?|A\s+PRENDRE)\s*:?\s*\n+/i, '').trim();
+
+  // V64 Fix 3 : strip "TABLEAU HORAIRE PERSONNALISE" trailing block si vide/quasi-vide
+  // Evite d'afficher un header de section sans contenu utile (effet doc non fini)
+  const tableauRe = /\n+\s*#{0,4}\s*TABLEAU\s+HORAIRE(?:\s+PERSONNALIS[EÉ])?\s*:?\s*\n([\s\S]*)$/i;
+  const tableauMatch = out.match(tableauRe);
+  if (tableauMatch) {
+    const after = tableauMatch[1] || '';
+    // Compte les lignes "utiles" : "Moment : contenu" avec contenu non-vide/non-trivial
+    const usefulLines = after.split('\n')
+      .map(l => l.trim().replace(/^[-–•*·]\s*/, ''))
+      .filter(l => {
+        const colon = l.indexOf(':');
+        if (colon <= 0) return false;
+        const content = l.slice(colon + 1).trim();
+        return content.length > 2 && !/^(aucun|rien|n\/a|-+|n[eé]ant)$/i.test(content);
+      });
+    // Si moins de 2 lignes utiles → strip le header ET tout ce qui suit
+    if (usefulLines.length < 2) {
+      out = out.slice(0, tableauMatch.index).trimEnd();
+    }
+  }
+
   return out;
 }
 
@@ -67,17 +89,21 @@ export function postProcess(text) {
   });
 
   // 4) Remplacer fleches cassees par fleches propres
-  // V63 : regex definitive - tous patterns de ! + quote-like, apostrophe, accent
+  // V64 : approche aggressive - match ! suivi de N'IMPORTE QUEL char non-alphanum
+  // Plus simple et plus robuste que les listes exhaustives de V63
   out = out
-    // Pattern 1 : ! suivi de TOUT char de quote/apostrophe (liste exhaustive)
-    .replace(/![\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033\u2034\u2039\u203A]/g, '→')
-    // Pattern 2 : ! + espace + quote (variante avec espace)
-    .replace(/!\s+[\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033\u2034\u2039\u203A]/g, '→')
-    // Nettoyer les quotes residuelles apres fleche
+    // Pattern exhaustif : ! + (0..3 espaces/zero-width) + char non-alphanum/non-ouvert-paren
+    // Capture tous les cas : !' !" !» !› !´ !` !~ !^ !- !_ etc.
+    .replace(/!\s{0,3}([^\sA-Za-zÀ-ÿ0-9(])/g, (m, c) => {
+      // Ne pas remplacer si c'est une ponctuation legitime apres !
+      // ex: "!." "!," "!)" "!;" "!:" "!?" "!]" "!}"
+      if (/[\.\,\)\;\:\?\]\}\!]/.test(c)) return m;
+      return '→ ';
+    })
+    // Nettoyer les quotes residuelles apres une fleche propre
     .replace(/→\s*[\u0022\u0027\u00AB\u00B4\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F\u2032\u2033]/g, '→ ')
-    // Filet de securite final : ! + tout char non-alphanumerique/non-espace (tres permissif)
-    // seulement si suivi d'espace ensuite (evite les faux positifs comme "!)")
-    .replace(/!([^\sA-Za-zÀ-ÿ0-9)])\s/g, '→ ');
+    // Normaliser espaces multiples apres fleche
+    .replace(/→\s{2,}/g, '→ ');
 
   // 5) Convertir tableaux markdown | a | b | c | en format texte lisible
   // Si on detecte un pattern de tableau markdown, on le convertit
