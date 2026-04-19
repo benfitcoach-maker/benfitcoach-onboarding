@@ -347,11 +347,20 @@ function addSectionTitle(doc, title, y, margin) {
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GREEN);
-  doc.text(title.toUpperCase(), margin + 8, y);
+  // V55 : wrap long titles to fit page width
+  const pw = doc.internal.pageSize.getWidth();
+  const maxTitleWidth = pw - margin - (margin + 8) - 2;
+  const titleLines = doc.splitTextToSize(title.toUpperCase(), maxTitleWidth);
+  const firstLine = titleLines[0];
+  doc.text(firstLine, margin + 8, y);
+  for (let i = 1; i < titleLines.length; i++) {
+    y += 5;
+    doc.text(titleLines[i], margin + 8, y);
+  }
   y += 4;
   doc.setDrawColor(200, 198, 190);
   doc.setLineWidth(0.25);
-  doc.line(margin, y, doc.internal.pageSize.getWidth() - margin, y);
+  doc.line(margin, y, pw - margin, y);
   return y + 10;
 }
 
@@ -871,8 +880,9 @@ export async function exportConsultationPDF(consultation, client) {
     for (let i = 0; i < unifiedSections.length; i++) {
       const sec = unifiedSections[i];
       if (!sec?.content?.trim()) continue;
-      // Start a new page if we'd overflow (leave room for title + some content)
-      if (i > 0 && y > 180) newPage();
+      // V55 : seuil releve (250 au lieu de 180) pour eviter pages blanches quand section courte
+      // ensurePage dans renderSec gerera les sections qui ne rentrent vraiment pas
+      if (i > 0 && y > 250) newPage();
       renderSec(sec);
     }
   } else {

@@ -9,7 +9,7 @@ import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, extractFridgeDataFromSections, extractMeals, extractSupplements } from './nutritionPdf';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
-import { analyzeFullPlan } from './services/aiClient';
+import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './services/anissaIdentity';
 import { GENE_CATALOG, buildGeneticSectionForPrompt, getActiveGeneticAdjustments } from './services/geneticInterpretation';
@@ -247,9 +247,26 @@ function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', follo
   return parts.join('\n\n');
 }
 
-// V48 : System prompt dedie aux suppléments (sans FOUR_WEEKS_PROMPT qui regenererait le plan entier)
+// V55 : System prompt dedie aux supplements - STRICT (ne regenere JAMAIS de plan)
+// Retire SYSTEM_PROMPT qui contenait "TA MISSION : creer un plan" (cause de duplication)
+// Garde seulement l'identite + regles supplements + contexte suisse
 function buildSupplementsSystemPrompt() {
-  return [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT, SUPPLEMENT_PROMPT].join('\n\n');
+  return `${ANISSA_IDENTITY_CORE}
+
+${SWISS_BRANDS_PROMPT}
+
+${SUPPLEMENT_PROMPT}
+
+TA MISSION : Rediger UNIQUEMENT la section SUPPLEMENTS RECOMMANDES.
+INTERDICTIONS STRICTES :
+- NE PAS rediger de plan nutritionnel (pas de semaines, pas de menus, pas de strategie)
+- NE PAS rediger de synthese clinique, regles de base, ou journees types
+- NE PAS inclure les sections "PLAN NUTRITIONNEL PERSONNALISE", "ANALYSE DU PROFIL", etc.
+- Demarrer directement par "SUPPLEMENTS RECOMMANDES" puis la liste des supplements
+- Terminer par le TABLEAU HORAIRE PERSONNALISE
+- Format : texte brut, pas de markdown (pas de **gras**, pas de # titres)
+- Pas d'emojis (pas de 🥑, 💧, ✓, etc.)
+- Pas de tableau ASCII avec pipes | | (utiliser format texte simple)`;
 }
 
 // ─── FOLLOWUP WEEKLY PROMPTS ───
@@ -333,13 +350,33 @@ FORMAT DE SORTIE :
 - PROCHAINE ETAPE : ce que le client doit observer pour la semaine suivante`;
 }
 
-const SUPPLEMENTS_INSTRUCTION = `Genere SEPAREMENT la section SUPPLEMENTS RECOMMANDES.
-Pour chaque supplement :
-1. Source alimentaire naturelle (aliments, quantites)
-2. Si insuffisant : complement avec dosage, moment de prise, forme biodisponible, marque suisse
-3. Justification basee sur le profil client
-4. Interactions a eviter
-Termine par le TABLEAU HORAIRE PERSONNALISE. Ecris uniquement cette section.`;
+// V55 : instruction renforcee - STRICT pour eviter generation plan
+const SUPPLEMENTS_INSTRUCTION = `TACHE EXCLUSIVE : redige UNIQUEMENT la section des supplements recommandes.
+
+NE PAS rediger de plan nutritionnel, menus, journees types, strategie, synthese clinique,
+regles de base, rotations, fiche frigo, ou ajustements environnementaux.
+Demarre DIRECTEMENT par "SUPPLEMENTS RECOMMANDES" et rien avant.
+
+Format pour chaque supplement (5-6 max) :
+Nom du supplement (en majuscules)
+- Sources alimentaires : aliments + quantites
+- Complement si insuffisant : dosage, moment, forme, marque suisse
+- Justification : 1 phrase liee au profil
+- Interactions : 1 ligne si pertinent
+- Duree : X semaines / mois
+
+Termine par TABLEAU HORAIRE (format texte simple, PAS markdown avec pipes) :
+Matin a jeun : [supplement]
+Petit-dejeuner : [supplement]
+Midi : [supplement]
+Soir : [supplement]
+Coucher : [supplement]
+
+REGLES :
+- Pas d'emojis (pas de 🥑💧✓ etc.)
+- Pas de markdown (**gras**, # titres, tableaux | |)
+- Texte brut lisible
+- Tutoiement`;
 
 // ─── PLAN QUALITY SCORING ───
 
@@ -2728,7 +2765,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       }
 
       const planData = await planResponse.json();
-      const planText = planData.content?.[0]?.text || '';
+      // V55 : postProcess nettoie emojis, letter-spacing, markdown tables, arrows cassees
+      let planText = postProcess(planData.content?.[0]?.text || '');
 
       // Appel 2 : Supplements (conditionnel — seulement si client ouvert aux complements)
       let suppText = '';
@@ -2743,7 +2781,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
           body: JSON.stringify({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
-            // V48 : system prompt dedie sans FOUR_WEEKS_PROMPT pour eviter duplication du plan
+            // V48/V55 : system prompt dedie STRICT (sans mission "creer un plan")
             system: buildSupplementsSystemPrompt(),
             messages: [{ role: 'user', content: userMessage + '\n\n' + SUPPLEMENTS_INSTRUCTION }],
           }),
@@ -2751,7 +2789,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
         if (suppResponse.ok) {
           const suppData = await suppResponse.json();
-          suppText = suppData.content?.[0]?.text || '';
+          // V55 : double securite - strip leakage + postProcess
+          suppText = postProcess(stripPlanLeakage(suppData.content?.[0]?.text || ''));
         }
       }
       updateField('supplements', suppText);

@@ -25,11 +25,60 @@ async function aiRequest(systemPrompt, userMessage, maxTokens = 1500) {
   return data.content?.[0]?.text?.trim() || '';
 }
 
-function postProcess(text) {
+// V55 : strip le contenu de plan redondant qui se glisse parfois avant la section Suppléments
+// (ex : "PLAN NUTRITIONNEL PERSONNALISÉ", "SYNTHÈSE CLINIQUE", "JOURNÉES TYPES"...)
+export function stripPlanLeakage(suppText) {
+  if (!suppText) return suppText;
+  const marker = /SUPPL[EÉ]MENTS?\s+(RECOMMAND[EÉ]S?|A\s+PRENDRE)/i;
+  const match = suppText.match(marker);
+  if (match && match.index > 50) {
+    // Il y a un prefixe suspect avant "SUPPLEMENTS..." : on le coupe
+    return suppText.slice(match.index).trim();
+  }
+  return suppText;
+}
+
+export function postProcess(text) {
   if (!text) return text;
-  return text
+
+  let out = text;
+
+  // V55 : nettoyage visuel critique (emojis, letter-spacing, arrows cassees, markdown tables)
+
+  // 1) Retirer caracteres invisibles (zero-width spaces, joiners) qui causent "F A I R E"
+  out = out.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+  // 2) Retirer TOUS les emojis (unicode ranges emoji/symbol/pictographic)
+  // Conserve les caracteres accentues francais, garde les fleches simples
+  out = out.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{27BF}]|[\u{1F000}-\u{1F2FF}]|[\u{1FA00}-\u{1FAFF}]|[\u2700-\u27BF]/gu, '');
+
+  // 3) Detecter et fusionner les mots lettre-espacees ("F A I R E" -> "FAIRE")
+  // Pattern : 3+ lettres majuscules seules separees par espaces simples
+  out = out.replace(/\b([A-ZÀ-Ú])(\s[A-ZÀ-Ú]){2,}\b/g, (match) => match.replace(/\s/g, ''));
+
+  // 4) Remplacer fleches cassees par fleches propres
+  out = out
+    .replace(/!["»]/g, '→')
+    .replace(/!['»]/g, '→')
+    .replace(/→\s*"/g, '→ ')
+    .replace(/→\s*'/g, '→ ');
+
+  // 5) Convertir tableaux markdown | a | b | c | en format texte lisible
+  // Si on detecte un pattern de tableau markdown, on le convertit
+  out = out.replace(/^\|([^\n]+)\|\s*$/gm, (match, content) => {
+    // Skip separateurs | ---- | ---- |
+    if (/^[\s|:\-]+$/.test(match)) return '';
+    const cells = content.split('|').map(c => c.trim()).filter(Boolean);
+    return cells.join(' : ').replace(/\s+:\s+:\s+/g, ' : ');
+  }).replace(/\n\n+/g, '\n\n');
+
+  // 6) Nettoyer markdown standard
+  out = out
     .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/^#{1,4}\s+/gm, '')
+    .replace(/^#{1,4}\s+/gm, '');
+
+  // 7) Formulations molles
+  out = out
     .replace(/n'h\u00e9sitez pas \u00e0/gi, '')
     .replace(/il est (important|essentiel|crucial|recommand\u00e9) de/gi, '')
     .replace(/id\u00e9alement[,]?\s*/gi, '')
@@ -45,9 +94,12 @@ function postProcess(text) {
     .replace(/ce protocole/gi, '')
     .replace(/il est \u00e0 noter que/gi, '')
     .replace(/force est de constater que/gi, '')
-    .replace(/en effet[,.]?\s*/gi, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/en effet[,.]?\s*/gi, '');
+
+  // 8) Normaliser les retours a la ligne
+  out = out.replace(/\n{3,}/g, '\n\n').trim();
+
+  return out;
 }
 
 function buildClientContext(form) {
