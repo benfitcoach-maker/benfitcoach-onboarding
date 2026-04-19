@@ -105,6 +105,124 @@ const LAB_MARKERS = {
     signal_high: null,
     label: 'Zinc',
   },
+  // ─── V45 : MARQUEURS ETENDUS ───
+  // Lipides
+  cholesterol_total: {
+    unit: 'mg/dL',
+    ranges: { low: [0, 150], low_borderline: [150, 170], normal: [170, 200], high_borderline: [200, 240], high: [240, Infinity] },
+    signal_low: null,
+    signal_high: 'high_cholesterol',
+    label: 'Cholesterol total',
+  },
+  hdl: {
+    unit: 'mg/dL',
+    ranges: { low: [0, 40], low_borderline: [40, 50], normal: [50, 80], high_borderline: [80, 100], high: [100, Infinity] },
+    signal_low: 'low_hdl',
+    signal_high: null,
+    label: 'HDL',
+  },
+  ldl: {
+    unit: 'mg/dL',
+    ranges: { low: [0, 70], low_borderline: [70, 100], normal: [100, 130], high_borderline: [130, 160], high: [160, Infinity] },
+    signal_low: null,
+    signal_high: 'high_ldl',
+    label: 'LDL',
+  },
+  triglycerides: {
+    unit: 'mg/dL',
+    ranges: { low: [0, 50], low_borderline: [50, 70], normal: [70, 150], high_borderline: [150, 200], high: [200, Infinity] },
+    signal_low: null,
+    signal_high: 'high_triglycerides',
+    label: 'Triglycerides',
+  },
+  homocysteine: {
+    unit: 'µmol/L',
+    ranges: { low: [0, 4], low_borderline: [4, 6], normal: [6, 10], high_borderline: [10, 15], high: [15, Infinity] },
+    signal_low: null,
+    signal_high: 'high_homocysteine',
+    label: 'Homocysteine',
+  },
+  // Hemogramme
+  hemoglobine: {
+    unit: 'g/dL',
+    ranges: { low: [0, 11.5], low_borderline: [11.5, 12.5], normal: [12.5, 16.5], high_borderline: [16.5, 17.5], high: [17.5, Infinity] },
+    signal_low: 'low_hemoglobin',
+    signal_high: null,
+    label: 'Hemoglobine',
+  },
+  hematocrite: {
+    unit: '%',
+    ranges: { low: [0, 35], low_borderline: [35, 37], normal: [37, 48], high_borderline: [48, 52], high: [52, Infinity] },
+    signal_low: 'low_hematocrite',
+    signal_high: null,
+    label: 'Hematocrite',
+  },
+  // Thyroide etendue
+  t3_reverse: {
+    unit: 'ng/dL',
+    ranges: { low: [0, 8], low_borderline: [8, 10], normal: [10, 24], high_borderline: [24, 28], high: [28, Infinity] },
+    signal_low: null,
+    signal_high: 'high_rt3',
+    label: 'T3 reverse',
+  },
+  anti_tpo: {
+    unit: 'UI/mL',
+    ranges: { low: [0, 0], low_borderline: [0, 0], normal: [0, 35], high_borderline: [35, 100], high: [100, Infinity] },
+    signal_low: null,
+    signal_high: 'autoimmune_thyroid',
+    label: 'Anti-TPO',
+  },
+  anti_tg: {
+    unit: 'UI/mL',
+    ranges: { low: [0, 0], low_borderline: [0, 0], normal: [0, 40], high_borderline: [40, 115], high: [115, Infinity] },
+    signal_low: null,
+    signal_high: 'autoimmune_thyroid',
+    label: 'Anti-Tg',
+  },
+  iode_urinaire: {
+    unit: 'µg/L',
+    ranges: { low: [0, 50], low_borderline: [50, 100], normal: [100, 200], high_borderline: [200, 300], high: [300, Infinity] },
+    signal_low: 'low_iodine',
+    signal_high: null,
+    label: 'Iode urinaire',
+  },
+  // Cofacteurs
+  cuivre: {
+    unit: 'µg/dL',
+    ranges: { low: [0, 70], low_borderline: [70, 80], normal: [80, 140], high_borderline: [140, 160], high: [160, Infinity] },
+    signal_low: 'low_copper',
+    signal_high: 'high_copper',
+    label: 'Cuivre',
+  },
+  selenium: {
+    unit: 'µg/L',
+    ranges: { low: [0, 70], low_borderline: [70, 80], normal: [80, 160], high_borderline: [160, 200], high: [200, Infinity] },
+    signal_low: 'low_selenium',
+    signal_high: null,
+    label: 'Selenium',
+  },
+  magnesium_erythro: {
+    unit: 'mmol/L',
+    ranges: { low: [0, 1.5], low_borderline: [1.5, 1.65], normal: [1.65, 2.65], high_borderline: [2.65, 2.85], high: [2.85, Infinity] },
+    signal_low: 'low_magnesium',
+    signal_high: null,
+    label: 'Magnesium erythrocytaire',
+  },
+  // Intestinal
+  zonuline: {
+    unit: 'ng/mL',
+    ranges: { low: [0, 0], low_borderline: [0, 0], normal: [0, 50], high_borderline: [50, 80], high: [80, Infinity] },
+    signal_low: null,
+    signal_high: 'intestinal_permeability',
+    label: 'Zonuline',
+  },
+  calprotectine: {
+    unit: 'µg/g',
+    ranges: { low: [0, 0], low_borderline: [0, 0], normal: [0, 50], high_borderline: [50, 200], high: [200, Infinity] },
+    signal_low: null,
+    signal_high: 'intestinal_inflammation',
+    label: 'Calprotectine',
+  },
 };
 
 // ─── CLASSIFICATION ───
@@ -352,6 +470,162 @@ const SIGNAL_TO_ADJUSTMENTS = {
     ],
     supplement: 'Zinc bisglycinate 15-30 mg soir avec proteines. Si >8 sem : ajouter cuivre 1-2 mg',
     caution: null,
+  },
+  // ─── V45 : NOUVEAUX SIGNAUX ETENDUS ───
+  high_cholesterol: {
+    label: 'Cholesterol total eleve',
+    dietary: [
+      'Reduire graisses saturees (charcuterie, fromages gras, patisseries industrielles)',
+      'Augmenter fibres solubles : avoine, legumineuses, pommes, psyllium',
+      'Augmenter omega-3 : poissons gras 3x/sem, noix, graines de lin',
+      'Steroles vegetaux naturels (avocat, olives, graines)',
+    ],
+    supplement: 'Omega-3 EPA/DHA 2g/jour, levure de riz rouge uniquement si LDL tres eleve (avis medical)',
+    caution: 'Toujours lire avec le bilan lipidique complet (HDL, LDL, TG)',
+  },
+  low_hdl: {
+    label: 'HDL bas (cholesterol protecteur)',
+    dietary: [
+      'Augmenter huile d\'olive vierge, avocat, noix',
+      'Poissons gras 3x/sem (saumon, sardines, maquereau)',
+      'Activite physique reguliere essentielle pour elever HDL',
+      'Eviter sucres rapides qui abaissent le HDL',
+    ],
+    supplement: 'Omega-3 2g/jour avec repas gras',
+    caution: null,
+  },
+  high_ldl: {
+    label: 'LDL eleve',
+    dietary: [
+      'Reduire graisses saturees et trans',
+      'Augmenter fibres solubles : avoine, psyllium, legumineuses',
+      'Steroles vegetaux naturels (noix, graines, huile olive)',
+      'Limiter aliments ultra-transformes',
+    ],
+    supplement: 'Omega-3 2g/jour, fibres solubles si alimentation insuffisante',
+    caution: 'LDL >160 mg/dL persistant — avis medical recommande',
+  },
+  high_triglycerides: {
+    label: 'Triglycerides eleves',
+    dietary: [
+      'Reduire sucres rapides, alcool, fructose en exces (sodas, jus de fruits)',
+      'Limiter glucides raffines (pain blanc, riz blanc)',
+      'Augmenter omega-3 (poissons gras) — effet direct sur TG',
+      'Activite physique reguliere',
+    ],
+    supplement: 'Omega-3 EPA/DHA 2-4g/jour',
+    caution: 'TG >200 mg/dL — evaluer insulinoresistance, alcool, foie gras',
+  },
+  high_homocysteine: {
+    label: 'Homocysteine elevee',
+    dietary: [
+      'Augmenter legumes verts feuillus (folates)',
+      'Augmenter proteines animales de qualite (B12)',
+      'Betterave, oeufs, champignons pour la choline',
+    ],
+    supplement: '5-MTHF (folates methyles) 400-800 µg + B12 methylcobalamine 1000 µg + B6 P-5-P 25 mg',
+    caution: 'Homocysteine >15 µmol/L — verifier statut MTHFR si persistant',
+  },
+  low_hemoglobin: {
+    label: 'Hemoglobine basse (anemie probable)',
+    dietary: [
+      'Viande rouge 2-3x/sem, foie, boudin noir',
+      'Associer vitamine C aux repas (citron, poivron, kiwi)',
+      'Eviter the et cafe 2h autour des repas riches en fer',
+    ],
+    supplement: 'A discuter avec medecin selon cause (fer, B12, folates ou autre)',
+    caution: 'Hb <11.5 g/dL (F) ou <12.5 g/dL (H) — diagnostic medical requis',
+  },
+  low_hematocrite: {
+    label: 'Hematocrite bas',
+    dietary: [
+      'Meme approche que pour hemoglobine basse',
+      'Bonne hydratation pour eviter fausses interpretations',
+    ],
+    supplement: null,
+    caution: 'A interpreter avec l\'hemoglobine et la ferritine',
+  },
+  high_rt3: {
+    label: 'T3 reverse elevee (conversion thyroidienne freinee)',
+    dietary: [
+      'Reduire stress chronique (priorite absolue)',
+      'Selenium via noix du Bresil 2-3/jour',
+      'Zinc (viande rouge, graines de courge)',
+      'Calories suffisantes — eviter restrictions drastiques',
+    ],
+    supplement: 'Selenium 100-200 µg/jour, a discuter avec bilan thyroidien complet',
+    caution: 'T3 reverse >24 ng/dL : investiguer stress, restriction calorique, inflammation',
+  },
+  autoimmune_thyroid: {
+    label: 'Auto-immunite thyroidienne (Hashimoto possible)',
+    dietary: [
+      'Regime sans gluten strict (benefice clinique chez 80% des Hashimoto)',
+      'Reduire produits laitiers si intolerance',
+      'Augmenter selenium (noix du Bresil) et zinc',
+      'Anti-inflammatoire : omega-3, curcuma, polyphenols',
+      'Eviter soja en exces',
+    ],
+    supplement: 'Selenium 200 µg/jour, Vitamine D3 selon dosage, B12 methylee',
+    caution: 'Anti-TPO ou anti-Tg eleves : suivi medical imperatif (endocrinologue)',
+  },
+  low_iodine: {
+    label: 'Iode insuffisant',
+    dietary: [
+      'Sel iode, algues (wakame, nori) avec moderation',
+      'Poissons de mer, fruits de mer',
+      'Oeufs, produits laitiers',
+    ],
+    supplement: 'Iode 150-300 µg/jour (prudence si Hashimoto : avis medical)',
+    caution: 'Eviter la supplementation iode si auto-immunite thyroidienne active',
+  },
+  low_copper: {
+    label: 'Cuivre bas',
+    dietary: [
+      'Foie de veau, huitres, noix de cajou, graines de sesame',
+      'Chocolat noir 85%, champignons',
+    ],
+    supplement: 'Cuivre bisglycinate 1-2 mg/jour si deficit confirme. Jamais sans dosage',
+    caution: 'Le zinc en exces chronique reduit le cuivre. Verifier ratio Zn/Cu',
+  },
+  high_copper: {
+    label: 'Cuivre eleve',
+    dietary: [
+      'Reduire aliments tres riches en cuivre',
+      'Augmenter zinc (antagoniste naturel)',
+    ],
+    supplement: 'Zinc bisglycinate 15-30 mg/jour pour rebalancer',
+    caution: 'Cuivre >140 µg/dL persistant : avis medical pour exclure Wilson ou inflammation',
+  },
+  low_selenium: {
+    label: 'Selenium bas',
+    dietary: [
+      'Noix du Bresil (2-3/jour suffit, tres riches)',
+      'Poissons, oeufs, abats, graines de tournesol',
+    ],
+    supplement: 'Selenium 100-200 µg/jour avec petit-dejeuner',
+    caution: 'Eviter doses >400 µg/jour (toxicite possible)',
+  },
+  intestinal_permeability: {
+    label: 'Permeabilite intestinale (leaky gut)',
+    dietary: [
+      'Retirer gluten strict 4-6 semaines (test)',
+      'Reduire produits laitiers et sucres',
+      'Bouillon d\'os, aliments fermentes (kefir, choucroute si toleres)',
+      'Glutamine via alimentation (viande, poisson, oeufs, legumineuses)',
+    ],
+    supplement: 'L-glutamine 5g matin a jeun, zinc-carnosine, probiotiques cibles',
+    caution: 'Protocole reparation intestinale minimum 8-12 semaines',
+  },
+  intestinal_inflammation: {
+    label: 'Inflammation intestinale (calprotectine elevee)',
+    dietary: [
+      'Regime anti-inflammatoire strict temporaire',
+      'Retirer gluten, produits laitiers, ultra-transformes',
+      'Curcuma + piperine midi, omega-3, bone broth',
+      'Introduction progressive fibres solubles si toleres',
+    ],
+    supplement: 'Omega-3 3g/jour, curcuma 500 mg midi, probiotiques cibles (S. boulardii)',
+    caution: 'Calprotectine >200 µg/g : avis gastro-enterologue pour exclure MICI',
   },
 };
 

@@ -1535,20 +1535,80 @@ function AnalysisPdfBody({ recommendations, symptoms, clientName, date }) {
 }
 
 const LAB_MARKERS_UI = [
-  { key: 'ferritine', label: 'Ferritine', unit: 'ng/mL' },
-  { key: 'fer_serique', label: 'Fer serique', unit: 'µmol/L' },
-  { key: 'vitamine_d', label: 'Vitamine D', unit: 'ng/mL' },
-  { key: 'vitamine_b12', label: 'Vitamine B12', unit: 'pg/mL' },
-  { key: 'folates', label: 'Folates (B9)', unit: 'ng/mL' },
-  { key: 'glucose_jeun', label: 'Glucose a jeun', unit: 'mg/dL' },
-  { key: 'insuline_jeun', label: 'Insuline a jeun', unit: 'µU/mL' },
-  { key: 'hba1c', label: 'HbA1c', unit: '%' },
-  { key: 'tsh', label: 'TSH', unit: 'mUI/L' },
-  { key: 't3_libre', label: 'T3 libre', unit: 'pg/mL' },
-  { key: 't4_libre', label: 'T4 libre', unit: 'ng/dL' },
-  { key: 'crp_us', label: 'CRP ultrasensible', unit: 'mg/L' },
-  { key: 'magnesium', label: 'Magnesium', unit: 'mg/L' },
-  { key: 'zinc', label: 'Zinc', unit: 'µg/dL' },
+  // ─── BASE (14 original) ───
+  { key: 'ferritine', label: 'Ferritine', unit: 'ng/mL', group: 'fer' },
+  { key: 'fer_serique', label: 'Fer serique', unit: 'µmol/L', group: 'fer' },
+  { key: 'vitamine_d', label: 'Vitamine D', unit: 'ng/mL', group: 'vitamines' },
+  { key: 'vitamine_b12', label: 'Vitamine B12', unit: 'pg/mL', group: 'vitamines' },
+  { key: 'folates', label: 'Folates (B9)', unit: 'ng/mL', group: 'vitamines' },
+  { key: 'glucose_jeun', label: 'Glucose a jeun', unit: 'mg/dL', group: 'glycemie' },
+  { key: 'insuline_jeun', label: 'Insuline a jeun', unit: 'µU/mL', group: 'glycemie' },
+  { key: 'hba1c', label: 'HbA1c', unit: '%', group: 'glycemie' },
+  { key: 'tsh', label: 'TSH', unit: 'mUI/L', group: 'thyroide' },
+  { key: 't3_libre', label: 'T3 libre', unit: 'pg/mL', group: 'thyroide' },
+  { key: 't4_libre', label: 'T4 libre', unit: 'ng/dL', group: 'thyroide' },
+  { key: 'crp_us', label: 'CRP ultrasensible', unit: 'mg/L', group: 'inflammation' },
+  { key: 'magnesium', label: 'Magnesium', unit: 'mg/L', group: 'mineraux' },
+  { key: 'zinc', label: 'Zinc', unit: 'µg/dL', group: 'mineraux' },
+  // ─── V45 : MARQUEURS ETENDUS (15) ───
+  { key: 'cholesterol_total', label: 'Cholesterol total', unit: 'mg/dL', group: 'lipides' },
+  { key: 'hdl', label: 'HDL', unit: 'mg/dL', group: 'lipides' },
+  { key: 'ldl', label: 'LDL', unit: 'mg/dL', group: 'lipides' },
+  { key: 'triglycerides', label: 'Triglycerides', unit: 'mg/dL', group: 'lipides' },
+  { key: 'homocysteine', label: 'Homocysteine', unit: 'µmol/L', group: 'inflammation' },
+  { key: 'hemoglobine', label: 'Hemoglobine', unit: 'g/dL', group: 'hemogramme' },
+  { key: 'hematocrite', label: 'Hematocrite', unit: '%', group: 'hemogramme' },
+  { key: 't3_reverse', label: 'T3 reverse', unit: 'ng/dL', group: 'thyroide' },
+  { key: 'anti_tpo', label: 'Anti-TPO', unit: 'UI/mL', group: 'thyroide' },
+  { key: 'anti_tg', label: 'Anti-Tg', unit: 'UI/mL', group: 'thyroide' },
+  { key: 'iode_urinaire', label: 'Iode urinaire', unit: 'µg/L', group: 'thyroide' },
+  { key: 'cuivre', label: 'Cuivre', unit: 'µg/dL', group: 'mineraux' },
+  { key: 'selenium', label: 'Selenium', unit: 'µg/L', group: 'mineraux' },
+  { key: 'magnesium_erythro', label: 'Mg erythrocytaire', unit: 'mmol/L', group: 'mineraux' },
+  { key: 'zonuline', label: 'Zonuline', unit: 'ng/mL', group: 'intestinal' },
+  { key: 'calprotectine', label: 'Calprotectine', unit: 'µg/g', group: 'intestinal' },
+];
+
+// ─── V45 : QUICK FILLS (bilans pre-configures) ───
+// Chaque bilan = shortlist des marqueurs attendus. Cliquer sur un bilan filtre l'UI
+// pour n'afficher QUE ces marqueurs (le reste reste accessible via "Tout afficher").
+const LAB_QUICK_FILLS = [
+  {
+    id: 'thyroide',
+    label: 'Thyroide complet',
+    icon: '🦋',
+    markers: ['tsh', 't3_libre', 't4_libre', 't3_reverse', 'anti_tpo', 'anti_tg', 'iode_urinaire', 'selenium', 'zinc', 'vitamine_d', 'ferritine'],
+  },
+  {
+    id: 'sopk',
+    label: 'SOPK / insulinoresistance',
+    icon: '🍩',
+    markers: ['glucose_jeun', 'insuline_jeun', 'hba1c', 'tsh', 'vitamine_d', 'ferritine', 'crp_us'],
+  },
+  {
+    id: 'surpoids',
+    label: 'Surpoids / metabolique',
+    icon: '⚖️',
+    markers: ['glucose_jeun', 'insuline_jeun', 'hba1c', 'cholesterol_total', 'hdl', 'ldl', 'triglycerides', 'tsh', 'crp_us', 'ferritine'],
+  },
+  {
+    id: 'hormonal_femme',
+    label: 'Hormonal femme',
+    icon: '🌸',
+    markers: ['tsh', 't3_libre', 't4_libre', 'ferritine', 'vitamine_d', 'magnesium', 'crp_us'],
+  },
+  {
+    id: 'stress_oxydant',
+    label: 'Stress oxydant / nutrition',
+    icon: '🧘',
+    markers: ['vitamine_d', 'vitamine_b12', 'folates', 'magnesium_erythro', 'zinc', 'selenium', 'cuivre', 'homocysteine', 'crp_us'],
+  },
+  {
+    id: 'intestinal',
+    label: 'Intestinal',
+    icon: '🌱',
+    markers: ['zonuline', 'calprotectine', 'crp_us', 'vitamine_d', 'ferritine', 'vitamine_b12'],
+  },
 ];
 
 function buildLabSectionForPlan(labResults) {
@@ -1939,6 +1999,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const editorGetDataRef = useRef(null);
   const [planVersions, setPlanVersions] = useState(() => getPlanVersions(clientId));
   const [showVersions, setShowVersions] = useState(false);
+  // V45 : Quick fill actif (id du bilan selectionne, ou null pour "tout afficher")
+  const [activeLabQuickFill, setActiveLabQuickFill] = useState(null);
 
   // ─── Cockpit (split view) ───
   const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp'
@@ -3265,9 +3327,75 @@ ${suppText}`;
               }}>
                 🔬 Résultats biologiques
               </div>
-              <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>Saisissez les valeurs disponibles. Les champs vides sont ignorés.</p>
+              <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>
+                Saisissez les valeurs disponibles. Les champs vides sont ignorés.
+              </p>
+
+              {/* V45 : Quick Fills — bilans pre-configures */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '.7rem', color: '#6b5f48', marginRight: 4 }}>
+                    Bilan type :
+                  </span>
+                  {LAB_QUICK_FILLS.map(qf => {
+                    const isActive = activeLabQuickFill === qf.id;
+                    return (
+                      <button
+                        key={qf.id}
+                        type="button"
+                        onClick={() => setActiveLabQuickFill(isActive ? null : qf.id)}
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: '.72rem',
+                          fontWeight: isActive ? 700 : 500,
+                          borderRadius: 20,
+                          border: `1px solid ${isActive ? 'rgba(197,176,122,.5)' : 'rgba(255,255,255,.12)'}`,
+                          background: isActive ? 'rgba(197,176,122,.14)' : 'rgba(255,255,255,.03)',
+                          color: isActive ? '#d4c9a8' : 'rgba(255,255,255,.65)',
+                          cursor: 'pointer',
+                          transition: 'all .15s',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {qf.icon} {qf.label}
+                      </button>
+                    );
+                  })}
+                  {activeLabQuickFill && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveLabQuickFill(null)}
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: '.7rem',
+                        fontWeight: 500,
+                        borderRadius: 20,
+                        border: '1px solid rgba(255,255,255,.12)',
+                        background: 'transparent',
+                        color: 'rgba(255,255,255,.45)',
+                        cursor: 'pointer',
+                        marginLeft: 4,
+                      }}
+                    >
+                      ✕ Tout afficher
+                    </button>
+                  )}
+                </div>
+                {activeLabQuickFill && (() => {
+                  const qf = LAB_QUICK_FILLS.find(q => q.id === activeLabQuickFill);
+                  return (
+                    <div style={{ marginTop: 8, fontSize: '.68rem', color: '#6b5f48' }}>
+                      {qf.markers.length} marqueurs attendus pour ce bilan. Les autres restent disponibles via "Tout afficher".
+                    </div>
+                  );
+                })()}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                {LAB_MARKERS_UI.map(({ key, label, unit }) => (
+                {(activeLabQuickFill
+                  ? LAB_MARKERS_UI.filter(m => LAB_QUICK_FILLS.find(q => q.id === activeLabQuickFill)?.markers.includes(m.key))
+                  : LAB_MARKERS_UI
+                ).map(({ key, label, unit }) => (
                   <div key={key} className="field" style={{ marginBottom: 0 }}>
                     <label style={{ fontSize: '.72rem' }}>{label} ({unit})</label>
                     <input
