@@ -2,6 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
 import { improveSection } from './services/aiClient';
+import {
+  detectSectionType,
+  parseLabeledLines,
+  parseBulletLines,
+  parseRotationGroups,
+  parseTimelineSteps,
+  parseSupplementEntriesStructured,
+} from './nutritionEditorParsers';
 
 // ─── MARKDOWN → SECTIONS PARSER ───
 // Parses raw plan text into structured sections. Used on initial load
@@ -105,12 +113,248 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
   return sections;
 }
 
-// ─── PREMIUM SECTION RENDER (read-only preview, renders markdown as styled HTML) ───
+// ─── PREMIUM SECTION RENDER ───
+// Dispatcher that picks the right visual render based on section type,
+// mirroring the PDF design system (nutritionPdf.js:1398 renderSec switch).
 
-function PremiumSectionRender({ content }) {
+function PremiumSectionRender({ title, content }) {
+  const type = detectSectionType(title);
+
+  switch (type) {
+    case 'intro':
+    case 'closing':
+      return <LetterBlock content={content} kind={type} />;
+
+    case 'profile':
+    case 'strategy': {
+      const pairs = parseLabeledLines(content);
+      if (pairs.length >= 2) return <InfoBlockList pairs={pairs} />;
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'meals':
+    case 'meals_alt': {
+      const pairs = parseLabeledLines(content);
+      const mealPairs = pairs.filter(p => /petit[- ]?dej|dejeuner|diner|d[iî]ner|collation|gout|goûte|snack/i.test(p.label));
+      if (mealPairs.length >= 2) {
+        const rest = pairs.filter(p => !mealPairs.includes(p));
+        return (
+          <>
+            {type === 'meals_alt' && <div className="p-variant-label">VARIANTE</div>}
+            <MealCards pairs={mealPairs} />
+            {rest.length > 0 && <InfoBlockList pairs={rest} />}
+          </>
+        );
+      }
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'rotation': {
+      const groups = parseRotationGroups(content);
+      if (groups.length >= 2) {
+        const restLines = content.split('\n')
+          .filter(l => !/^(Prot[eé]ines?|F[eé]culents?|L[eé]gumes?|Mati[eè]res?\s*grasses?|Lipides?|Gras)/i.test(l.trim()))
+          .join('\n');
+        const bullets = parseBulletLines(restLines);
+        return (
+          <>
+            <RotationColumns groups={groups} />
+            {bullets.length > 0 && <BulletList items={bullets} />}
+          </>
+        );
+      }
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'fridge': {
+      const bullets = parseBulletLines(content);
+      if (bullets.length >= 2) return <CompactRulesBlock items={bullets} label="À RETENIR" />;
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'action': {
+      const steps = parseTimelineSteps(content);
+      if (steps.length >= 2) return <Timeline steps={steps} />;
+      const bullets = parseBulletLines(content);
+      if (bullets.length >= 2) return <BulletList items={bullets} />;
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'supplements': {
+      const entries = parseSupplementEntriesStructured(content);
+      if (entries.length >= 2) return <SupplementCards entries={entries} />;
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'food_yes':
+    case 'food_limit':
+    case 'food_no': {
+      const raw = (content || '').trim();
+      if (/,/.test(raw) && !raw.includes('\n\n')) {
+        const items = raw.replace(/\n/g, ', ').split(/,\s*/).map(s => s.trim()).filter(Boolean);
+        if (items.length >= 2) return <BulletList items={items} />;
+      }
+      const bullets = parseBulletLines(content);
+      if (bullets.length >= 2) return <BulletList items={bullets} />;
+      return <MarkdownFallback content={content} />;
+    }
+
+    case 'protocol':
+    case 'protocol_glycemic':
+    case 'protocol_stress':
+    case 'protocol_gut':
+    case 'adjustments':
+    case 'coach': {
+      const bullets = parseBulletLines(content);
+      if (bullets.length >= 2) return <BulletList items={bullets} />;
+      return <MarkdownFallback content={content} />;
+    }
+
+    default:
+      return <MarkdownFallback content={content} />;
+  }
+}
+
+// ─── PREMIUM SUB-COMPONENTS ───
+
+// V59 : lettre manuscrite (intro / closing)
+function LetterBlock({ content, kind }) {
+  const label = kind === 'intro' ? "LE MOT D'ANISSA" : 'POUR LA SUITE';
+  const paragraphs = (content || '').trim().split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  return (
+    <div className="p-letter">
+      <div className="p-letter-label">{label}</div>
+      {paragraphs.map((p, i) => (
+        <p key={i}>{renderInlineFormatting(p.replace(/\n/g, ' '))}</p>
+      ))}
+    </div>
+  );
+}
+
+// Profil / stratégie : label micro doré + valeur sombre
+function InfoBlockList({ pairs }) {
+  return (
+    <div>
+      {pairs.map((p, i) => (
+        <div key={i} className="p-info">
+          <div className="p-info-label">{p.label.toUpperCase()}</div>
+          <div className="p-info-value">{renderInlineFormatting(p.value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Meal cards : card blanche titre doré + contenu
+function MealCards({ pairs }) {
+  return (
+    <div>
+      {pairs.map((p, i) => (
+        <div key={i} className="p-card">
+          <div className="p-meal-title">{p.label.toUpperCase()}</div>
+          <div>{renderInlineFormatting(p.value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Rotation : 2 colonnes titre vert + trait doré + items
+function RotationColumns({ groups }) {
+  // Render par paires pour conserver le layout PDF (Prot|Fec puis Leg|Gras)
+  const rows = [];
+  for (let i = 0; i < groups.length; i += 2) {
+    rows.push([groups[i], groups[i + 1]]);
+  }
+  return (
+    <div>
+      {rows.map((pair, i) => (
+        <div key={i} className="p-cols">
+          {pair.map((g, j) => g ? (
+            <div key={j}>
+              <div className="p-col-title">{g.title.toUpperCase()}</div>
+              {g.items.map((it, k) => <div key={k} className="p-col-item">{it}</div>)}
+            </div>
+          ) : <div key={j} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Fiche frigo : bloc "À RETENIR" avec border gauche dorée
+function CompactRulesBlock({ items, label }) {
+  return (
+    <div className="p-card-accent">
+      <div className="p-rules-label">{label}</div>
+      {items.map((it, i) => (
+        <div key={i} className="p-rules-item">{renderInlineFormatting(it)}</div>
+      ))}
+    </div>
+  );
+}
+
+// Timeline verticale S1 → S4
+function Timeline({ steps }) {
+  return (
+    <div className="p-timeline">
+      {steps.map((s, i) => (
+        <div key={i} className="p-timeline-step">
+          <div className="p-timeline-label">{s.label}</div>
+          <div className="p-timeline-text">{renderInlineFormatting(s.text)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Supplement cards
+function SupplementCards({ entries }) {
+  const rowOrder = [
+    { key: 'moment', label: 'Moment' },
+    { key: 'dosage', label: 'Dose' },
+    { key: 'sources', label: 'Sources' },
+    { key: 'justification', label: 'Pourquoi' },
+    { key: 'duree', label: 'Durée' },
+    { key: 'interactions', label: 'Attention' },
+  ];
+  return (
+    <div>
+      {entries.map((e, i) => (
+        <div key={i} className="p-supp">
+          <div className="p-supp-name">{e.name}</div>
+          {rowOrder
+            .filter(r => e.fields[r.key]?.trim())
+            .map(r => (
+              <div key={r.key} className="p-supp-row">
+                <div className="p-supp-row-label">{r.label}</div>
+                <div className="p-supp-row-value">{renderInlineFormatting(e.fields[r.key])}</div>
+              </div>
+            ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Liste à puces (fallback pour food/protocol/coach/adjustments)
+function BulletList({ items }) {
+  return (
+    <div>
+      {items.map((it, i) => (
+        <div key={i} className="p-bullet">
+          <span>{renderInlineFormatting(it)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Fallback markdown générique (ancien PremiumSectionRender)
+function MarkdownFallback({ content }) {
   const lines = (content || '').split('\n');
   return (
-    <div style={{ fontSize: '.83rem', lineHeight: 1.65, color: '#d4c9a8' }}>
+    <div style={{ fontSize: '.83rem', lineHeight: 1.6, color: 'var(--p-text, #333330)' }}>
       {lines.map((line, i) => {
         const trimmed = line.trim();
         if (!trimmed) return <div key={i} style={{ height: 6 }} />;
@@ -118,14 +362,14 @@ function PremiumSectionRender({ content }) {
         // Sub-header
         if (/^#{1,4}\s+/.test(trimmed) || /^\*\*[^*]+\*\*\s*$/.test(trimmed)) {
           const title = trimmed.replace(/^#+\s+/, '').replace(/\*\*/g, '');
-          return <div key={i} style={{ fontWeight: 700, color: '#f0f0e8', marginTop: 8, marginBottom: 4 }}>{title}</div>;
+          return <div key={i} style={{ fontWeight: 700, color: 'var(--p-green, #1A2E1F)', marginTop: 8, marginBottom: 4 }}>{title}</div>;
         }
 
         // Bullet
         if (/^[-–•]\s/.test(trimmed)) {
           return (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-              <span style={{ color: '#4ade80', fontWeight: 700, flexShrink: 0 }}>-</span>
+              <span style={{ color: 'var(--p-gold, #C4A050)', fontWeight: 700, flexShrink: 0 }}>·</span>
               <span>{renderInlineFormatting(trimmed.replace(/^[-–•]\s+/, ''))}</span>
             </div>
           );
@@ -136,7 +380,7 @@ function PremiumSectionRender({ content }) {
           const num = trimmed.match(/^(\d+)/)[1];
           return (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-              <span style={{ fontWeight: 700, minWidth: 18, flexShrink: 0 }}>{num}.</span>
+              <span style={{ fontWeight: 700, color: 'var(--p-gold, #C4A050)', minWidth: 18, flexShrink: 0 }}>{num}.</span>
               <span>{renderInlineFormatting(trimmed.replace(/^\d+[.)]\s+/, ''))}</span>
             </div>
           );
@@ -147,12 +391,12 @@ function PremiumSectionRender({ content }) {
           return <div key={i} style={{ fontWeight: 600, marginBottom: 2 }}>{trimmed.replace(/\*\*/g, '')}</div>;
         }
 
-        // Note block
+        // Note / alert
         if (/^\{\{note\}\}/.test(trimmed)) {
-          return <div key={i} style={{ borderLeft: '3px solid #4ade80', padding: '6px 10px', margin: '4px 0', background: 'rgba(74,222,128,0.05)', borderRadius: 4, fontSize: '.8rem' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
+          return <div key={i} style={{ borderLeft: '3px solid var(--p-gold, #C4A050)', padding: '6px 10px', margin: '4px 0', background: 'rgba(196,160,80,.08)', borderRadius: 4, fontSize: '.8rem' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
         }
         if (/^\{\{alert\}\}/.test(trimmed)) {
-          return <div key={i} style={{ borderLeft: '3px solid #f87171', padding: '6px 10px', margin: '4px 0', background: 'rgba(248,113,113,0.05)', borderRadius: 4, fontSize: '.8rem', color: '#f87171' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
+          return <div key={i} style={{ borderLeft: '3px solid #d45c4c', padding: '6px 10px', margin: '4px 0', background: 'rgba(212,92,76,.08)', borderRadius: 4, fontSize: '.8rem', color: '#b3432f' }}>{trimmed.replace(/\{\{\/?(note|alert)\}\}/g, '')}</div>;
         }
 
         return <div key={i} style={{ marginBottom: 2 }}>{renderInlineFormatting(trimmed)}</div>;
@@ -189,7 +433,7 @@ function renderInlineFormatting(text) {
 
     const isBold = match[0].startsWith('**');
     if (isBold) {
-      parts.push(<strong key={key++} style={{ color: '#f0f0e8' }}>{match[1]}</strong>);
+      parts.push(<strong key={key++} style={{ color: 'var(--p-green, #1A2E1F)' }}>{match[1]}</strong>);
     } else {
       parts.push(<em key={key++}>{match[1]}</em>);
     }
@@ -388,7 +632,7 @@ function SectionBlock({
       </div>
 
       {/* Body: textarea when active, premium render when inactive */}
-      <div style={{ padding: '12px 16px' }}>
+      <div style={{ padding: isActive ? '12px 16px' : '10px 12px' }}>
         {isActive ? (
           <div>
             {/* Simple formatting hints */}
@@ -425,7 +669,9 @@ function SectionBlock({
         ) : (
           <div onClick={handleContentClick} style={{ cursor: 'text', minHeight: 40 }}>
             {section.content.trim() ? (
-              <PremiumSectionRender content={section.content} />
+              <div className="ne-premium">
+                <PremiumSectionRender title={section.title} content={section.content} />
+              </div>
             ) : (
               <div style={{ color: 'rgba(255,255,255,.2)', fontStyle: 'italic', fontSize: '.8rem', padding: '8px 0' }}>
                 Section vide — cliquez pour editer

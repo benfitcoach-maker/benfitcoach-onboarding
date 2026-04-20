@@ -346,6 +346,12 @@ function parseNutritionPlan(markdownText) {
 // ═══════════════════════════════════════════════════════════════════════
 // V56 : HELPERS PREMIUM — cartes, blocs, listes, titres harmonieux
 // ═══════════════════════════════════════════════════════════════════════
+//
+// ⚠️  V68 : Les fonctions normalizeSectionKey, detectSectionType,
+//     parseLabeledLines, parseBulletLines, parseRotationGroups,
+//     parseTimelineSteps, parseSupplementEntriesStructured sont DUPLIQUEES
+//     dans src/nutritionEditorParsers.js (pour eviter jsPDF dans le bundle
+//     de l'editeur React). Toute modif ici DOIT etre repliquee la-bas.
 
 // Slugifier un texte pour detecter le type de section
 function normalizeSectionKey(title) {

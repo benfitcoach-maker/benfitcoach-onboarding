@@ -283,13 +283,6 @@ REGLES CLINIQUES :
   Zinc >8 sem → ajouter Cuivre.
 - Marques suisses : Burgerstein, Pure Encapsulations, Nahrin, Sekoya
 
-Terminer par un TABLEAU HORAIRE PERSONNALISE en texte simple :
-Matin a jeun : [supplement]
-Petit-dejeuner : [supplement]
-Midi : [supplement]
-Soir : [supplement si pertinent, sinon omettre cette ligne]
-Coucher : [supplement]
-
 INTERDIT :
 - Paragraphes longs ou repetitifs
 - Tableau markdown avec pipes | |

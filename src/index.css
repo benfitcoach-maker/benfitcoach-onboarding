@@ -3909,3 +3909,170 @@ html{overflow-x:hidden}
     font-size:.85rem !important;
   }
 }
+
+/* ═══ NUTRITION EDITOR — PREMIUM CARDS (look cabinet PDF) ═══ */
+/* Scope local : cards claires dans l'editeur, sur fond sombre de l'app */
+.ne-premium{
+  --p-green:#1A2E1F;
+  --p-gold:#C4A050;
+  --p-gold-soft:#E6D2A0;
+  --p-text:#333330;
+  --p-soft-text:#6b6a65;
+  --p-bg-page:#FAF8F3;
+  --p-bg-card:#FFFFFF;
+  --p-bg-soft:#F4F1EA;
+  --p-separator:rgba(0,0,0,.12);
+  background:var(--p-bg-page);
+  color:var(--p-text);
+  border-radius:8px;
+  padding:14px 16px;
+  font-size:.83rem;
+  line-height:1.55;
+}
+.ne-premium .p-label{
+  font-size:.62rem;font-weight:700;letter-spacing:1.2px;
+  color:var(--p-gold);text-transform:uppercase;
+}
+.ne-premium .p-card{
+  background:var(--p-bg-card);
+  border:1px solid var(--p-separator);
+  border-radius:6px;
+  padding:10px 14px;
+  margin-bottom:10px;
+}
+.ne-premium .p-card-accent{
+  background:var(--p-bg-soft);
+  border-radius:6px;
+  padding:10px 14px 10px 16px;
+  margin-bottom:10px;
+  position:relative;
+  border-left:3px solid var(--p-gold);
+}
+.ne-premium .p-meal-title{
+  font-size:.65rem;font-weight:700;letter-spacing:1px;
+  color:var(--p-gold);text-transform:uppercase;
+  margin-bottom:4px;
+}
+.ne-premium .p-section-title{
+  font-size:.85rem;font-weight:700;
+  color:var(--p-green);text-transform:uppercase;
+  letter-spacing:.5px;
+  padding-left:10px;border-left:3px solid var(--p-gold);
+  margin-bottom:10px;
+}
+.ne-premium .p-letter{
+  background:var(--p-bg-card);
+  border-radius:6px;
+  padding:14px 18px 16px;
+  border-bottom:1px solid var(--p-gold-soft);
+}
+.ne-premium .p-letter-label{
+  font-size:.62rem;font-weight:700;letter-spacing:2px;
+  color:var(--p-gold);text-transform:uppercase;
+  margin-bottom:8px;
+}
+.ne-premium .p-letter p{
+  font-style:italic;
+  color:var(--p-green);
+  margin-bottom:7px;
+  line-height:1.6;
+}
+.ne-premium .p-letter p:last-child{margin-bottom:0}
+.ne-premium .p-info{
+  margin-bottom:9px;
+}
+.ne-premium .p-info-label{
+  font-size:.62rem;font-weight:700;letter-spacing:1.2px;
+  color:var(--p-gold);text-transform:uppercase;
+  margin-bottom:2px;
+}
+.ne-premium .p-info-value{color:var(--p-text);line-height:1.5}
+.ne-premium .p-cols{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  margin-bottom:10px;
+}
+.ne-premium .p-col-title{
+  font-size:.75rem;font-weight:700;
+  color:var(--p-green);text-transform:uppercase;
+  padding-bottom:3px;margin-bottom:5px;
+  border-bottom:1.5px solid var(--p-gold);
+}
+.ne-premium .p-col-item{
+  color:var(--p-text);
+  font-size:.8rem;
+  line-height:1.5;
+}
+.ne-premium .p-rules-label{
+  font-size:.72rem;font-weight:700;letter-spacing:1.5px;
+  color:var(--p-gold);text-transform:uppercase;
+  margin-bottom:6px;
+}
+.ne-premium .p-rules-item{
+  color:var(--p-text);
+  margin-bottom:3px;
+  line-height:1.5;
+}
+.ne-premium .p-rules-item::before{
+  content:"• ";color:var(--p-gold);font-weight:700;
+}
+.ne-premium .p-timeline{
+  position:relative;
+  padding-left:20px;
+}
+.ne-premium .p-timeline::before{
+  content:"";position:absolute;left:4px;top:6px;bottom:6px;
+  width:2px;background:var(--p-gold-soft);
+}
+.ne-premium .p-timeline-step{
+  position:relative;margin-bottom:12px;
+}
+.ne-premium .p-timeline-step:last-child{margin-bottom:0}
+.ne-premium .p-timeline-step::before{
+  content:"";position:absolute;left:-20px;top:3px;
+  width:10px;height:10px;border-radius:50%;
+  background:var(--p-gold);
+  box-shadow:0 0 0 3px var(--p-bg-page);
+}
+.ne-premium .p-timeline-label{
+  font-size:.78rem;font-weight:700;
+  color:var(--p-green);
+  margin-bottom:1px;
+}
+.ne-premium .p-timeline-text{color:var(--p-text);line-height:1.45}
+.ne-premium .p-supp{
+  background:var(--p-bg-soft);
+  border-left:3px solid var(--p-gold);
+  border-radius:4px;
+  padding:10px 14px;
+  margin-bottom:10px;
+}
+.ne-premium .p-supp-name{
+  font-size:.82rem;font-weight:700;
+  color:var(--p-green);text-transform:uppercase;
+  margin-bottom:6px;
+}
+.ne-premium .p-supp-row{
+  display:grid;grid-template-columns:80px 1fr;gap:10px;
+  margin-bottom:3px;font-size:.78rem;line-height:1.4;
+}
+.ne-premium .p-supp-row-label{
+  font-size:.62rem;font-weight:700;letter-spacing:.8px;
+  color:var(--p-soft-text);text-transform:uppercase;
+  padding-top:2px;
+}
+.ne-premium .p-supp-row-value{color:var(--p-text)}
+.ne-premium .p-bullet{
+  display:flex;gap:8px;margin-bottom:3px;line-height:1.5;
+}
+.ne-premium .p-bullet::before{
+  content:"·";color:var(--p-gold);font-weight:700;flex-shrink:0;
+}
+.ne-premium .p-variant-label{
+  display:inline-block;
+  font-size:.62rem;font-weight:700;letter-spacing:1.5px;
+  color:var(--p-gold);text-transform:uppercase;
+  background:rgba(196,160,80,.12);
+  padding:3px 8px;border-radius:3px;
+  margin-bottom:8px;
+}
+
