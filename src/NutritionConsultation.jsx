@@ -4767,7 +4767,7 @@ ${suppText}`;
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
-                  onClick={() => setShowFrigoModal(true)}
+                  onClick={() => { setShowPdfPreview(false); setShowFrigoModal(true); }}
                   style={{ width: '100%', padding: '10px 16px', borderRadius: 10, fontSize: '.8rem' }}
                 >
                   Ouvrir l'editeur complet (3 vues)
@@ -4791,7 +4791,7 @@ ${suppText}`;
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
-                  onClick={() => setShowCoverForm(true)}
+                  onClick={() => { setShowPdfPreview(false); setShowCoverForm(true); }}
                   style={{ marginTop: 20, alignSelf: 'flex-start', padding: '8px 14px', borderRadius: 10, fontSize: '.78rem' }}
                 >
                   Personnaliser la cover
