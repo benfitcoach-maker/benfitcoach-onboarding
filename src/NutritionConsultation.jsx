@@ -676,7 +676,6 @@ INTERDICTIONS STRICTES :
 - NE PAS rediger de synthese clinique, regles de base, ou journees types
 - NE PAS inclure les sections "PLAN NUTRITIONNEL PERSONNALISE", "ANALYSE DU PROFIL", etc.
 - Demarrer directement par "SUPPLEMENTS RECOMMANDES" puis la liste des supplements
-- Terminer par le TABLEAU HORAIRE PERSONNALISE
 - Format : texte brut, pas de markdown (pas de **gras**, pas de # titres)
 - Pas d'emojis (pas de 🥑, 💧, ✓, etc.)
 - Pas de tableau ASCII avec pipes | | (utiliser format texte simple)`;
@@ -777,13 +776,6 @@ Nom du supplement (en majuscules)
 - Justification : 1 phrase liee au profil
 - Interactions : 1 ligne si pertinent
 - Duree : X semaines / mois
-
-Termine par TABLEAU HORAIRE (format texte simple, PAS markdown avec pipes) :
-Matin a jeun : [supplement]
-Petit-dejeuner : [supplement]
-Midi : [supplement]
-Soir : [supplement]
-Coucher : [supplement]
 
 REGLES :
 - Pas d'emojis (pas de 🥑💧✓ etc.)
