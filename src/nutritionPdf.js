@@ -708,8 +708,9 @@ function parseRotationGroups(text) {
     if (!m) continue;
     const title = m[1].trim();
     const raw = m[2].trim();
-    // Items separes par / ou ,
-    const items = raw.split(/\s*[\/,]\s*/).map(s => s.trim()).filter(Boolean);
+    // V71 : Items separes par ", " OU " / " (slash EXIGE des espaces autour)
+    // Sinon "1/2 avocat" se fait splitter en "1" + "2 avocat" → bug wrap PDF
+    const items = raw.split(/\s*,\s*|\s+\/\s+/).map(s => s.trim()).filter(Boolean);
     if (items.length >= 2) groups.push({ title, items });
   }
   return groups;
