@@ -1601,8 +1601,12 @@ export async function exportConsultationPDF(consultation, client) {
       y = 22;
     };
 
-    // ── PAGE 1: COVER — Premium layout V56 ──
+    // ── COVER — Premium layout V56 ──
+    // V73 fix : si une progression a ete dessinee en page 1 (followup), passer a une nouvelle page
+    // avant de dessiner la cover, sinon les deux se superposent.
     {
+      if (!isFirstPage) newPage();
+      isFirstPage = false;
       // Ligne doree fine tout en haut (accent subtil de marque)
       doc.setDrawColor(...GOLD);
       doc.setLineWidth(0.5);
