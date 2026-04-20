@@ -23,10 +23,11 @@ export function detectSectionType(title) {
   const k = normalizeSectionKey(title);
   if (/^(introduction|intro)(\s*personnalisee)?$/.test(k)) return 'intro';
   if (/^(cloture|conclusion)(\s*du\s*plan)?$/.test(k)) return 'closing';
-  if (/semaine\s*\d/.test(k)) return 'week';
   if (/analyse\s*du\s*profil|profil/.test(k)) return 'profile';
   if (/strategie\s*nutritionnelle|strategie/.test(k)) return 'strategy';
+  // V69 : meals AVANT week pour que "SEMAINE 1 — STRUCTURE ALIMENTAIRE" gagne sur 'week'
   if (/semaine\s*1.*structure|structure\s*alimentaire|plan\s*alimentaire|menus?/.test(k)) return 'meals';
+  if (/semaine\s*\d/.test(k)) return 'week';
   if (/journee\s*type\s*alternative|journee\s*alternative|variante/.test(k)) return 'meals_alt';
   if (/rotation|substitutions?/.test(k)) return 'rotation';
   if (/aliments?\s*autorises|aliments?\s*favoris/.test(k)) return 'food_yes';

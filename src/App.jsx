@@ -99,6 +99,35 @@ function Toast({ message, visible }) {
   );
 }
 
+// Version badge — discret en bas a droite, utile pour verifier le cache
+// Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
+const APP_VERSION = 'V69';
+const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
+function VersionBadge() {
+  return (
+    <div
+      title={`Build ${BUILD_AT} UTC`}
+      style={{
+        position: 'fixed',
+        bottom: 6,
+        right: 8,
+        zIndex: 9999,
+        fontSize: 10,
+        fontFamily: 'ui-monospace, monospace',
+        color: 'rgba(196,160,80,.35)',
+        background: 'rgba(0,0,0,.25)',
+        padding: '2px 6px',
+        borderRadius: 4,
+        letterSpacing: '.5px',
+        pointerEvents: 'auto',
+        userSelect: 'none',
+      }}
+    >
+      {APP_VERSION}
+    </div>
+  );
+}
+
 // Public questionnaire route — no auth required
 function getQuestionnaireClientId() {
   const match = window.location.pathname.match(/^\/questionnaire\/([a-f0-9-]+)$/i);
@@ -304,7 +333,12 @@ function App() {
 
   // Show login screen if cloud is enabled and not authenticated
   if (!authenticated) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return (
+      <>
+        <LoginScreen onLogin={handleLogin} />
+        <VersionBadge />
+      </>
+    );
   }
 
   const updateField = (field, value) => {
@@ -742,6 +776,7 @@ function App() {
     return (
       <div className={`app anissa-theme${page === 'nutritionConsultation' ? ' app-wide' : ''}`}>
         <Toast message={toast.message} visible={toast.visible} />
+        <VersionBadge />
 
         {/* Header */}
         <div className="header anissa-header">
