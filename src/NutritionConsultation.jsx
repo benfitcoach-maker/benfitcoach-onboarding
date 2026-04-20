@@ -5245,17 +5245,35 @@ ${suppText}`;
 
             {/* V50 : Modale aiAnalysis remplacee par un bloc inline juste apres l'editeur */}
 
-            {/* ─── SPLIT VIEW ─── */}
-            <div className="nc-cockpit-split" style={{ display: 'grid', alignItems: 'start', flex: 'none', overflow: 'visible', minHeight: 600 }}>
-              {/* LEFT : Editor — push-based : NutritionEditor notifie le parent
-                  via onDraftChange (debounced cote editeur). Plus de onInput parasite ici. */}
+            {/* ─── V70 : SINGLE EDITOR (plus de split view) — apercu PDF a la demande via modal ─── */}
+            <div className="nc-cockpit-single" style={{ display: 'flex', flexDirection: 'column', flex: 'none', overflow: 'visible', minHeight: 600, padding: '12px 16px 16px' }}>
               <section className="nc-panel nc-panel--editor">
-                <header className="nc-panel__header">
+                <header className="nc-panel__header" style={{ flexWrap: 'wrap', gap: 6 }}>
                   <span className="nc-panel__label">Editeur</span>
                   <Tab active={editorTab === 'plan'} onClick={() => setEditorTab('plan')}>Plan complet</Tab>
                   <Tab active={editorTab === 'frigo'} onClick={() => setEditorTab('frigo')}>Fiche frigo</Tab>
                   <Tab active={editorTab === 's1s4'} onClick={() => setEditorTab('s1s4')}>Plan S1-S4</Tab>
                   <Tab active={editorTab === 'supp'} onClick={() => setEditorTab('supp')}>Supplements</Tab>
+                  <span style={{ flex: 1 }} />
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => setShowPdfPreview(true)}
+                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
+                    title="Ouvrir l'apercu PDF dans une fenetre"
+                  >
+                    👁 Apercu PDF
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-anissa-primary"
+                    disabled={!hasPlan}
+                    onClick={() => doExportPdf()}
+                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
+                  >
+                    ⬇ Telecharger
+                  </button>
                 </header>
                 <div className="nc-panel__body">
                   {generating && (
@@ -5267,29 +5285,76 @@ ${suppText}`;
                   {!generating && renderEditorTab()}
                 </div>
               </section>
-
-              {/* RIGHT : Preview — re-render natif React quand les drafts changent */}
-              <section className="nc-panel nc-panel--preview">
-                <header className="nc-panel__header" style={{ flexWrap: 'wrap', gap: 6 }}>
-                  <span className="nc-panel__label">Apercu</span>
-                  <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
-                  <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
-                  <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
-                  <span style={{ flex: 1 }} />
-                  <button
-                    className="btn btn-anissa-secondary"
-                    disabled={!hasPlan}
-                    onClick={() => doExportPdf()}
-                    style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
-                  >
-                    Telecharger le plan nutrition
-                  </button>
-                </header>
-                <div className="nc-panel__body" style={{ padding: 16 }} ref={previewBodyRef}>
-                  {renderPreviewTab()}
-                </div>
-              </section>
             </div>
+
+            {/* V70 : Modale apercu PDF — ouverte a la demande via le bouton "Apercu PDF" */}
+            {showPdfPreview && (
+              <div
+                className="modal-overlay"
+                onClick={() => setShowPdfPreview(false)}
+                role="dialog"
+                aria-modal="true"
+                style={{
+                  position: 'fixed', inset: 0, zIndex: 1000,
+                  background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 20,
+                }}
+              >
+                <div
+                  className="modal-content nc-pdf-modal"
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    width: '100%', maxWidth: 900, maxHeight: '92vh',
+                    background: '#12100c',
+                    border: '1px solid rgba(197,176,122,.25)',
+                    borderRadius: 14,
+                    display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 20px 60px rgba(0,0,0,.6)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <header
+                    className="nc-panel__header"
+                    style={{ flexWrap: 'wrap', gap: 6, borderBottom: '1px solid rgba(255,255,255,.08)' }}
+                  >
+                    <span className="nc-panel__label" style={{ color: '#c5b07a' }}>Apercu</span>
+                    <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
+                    <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
+                    <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
+                    <span style={{ flex: 1 }} />
+                    <button
+                      type="button"
+                      className="btn btn-anissa-secondary"
+                      disabled={!hasPlan}
+                      onClick={() => doExportPdf()}
+                      style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
+                    >
+                      ⬇ Telecharger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfPreview(false)}
+                      style={{
+                        background: 'none', border: '1px solid rgba(255,255,255,.12)',
+                        color: 'rgba(255,255,255,.55)', padding: '5px 10px',
+                        borderRadius: 8, fontSize: '.72rem', cursor: 'pointer',
+                      }}
+                      title="Fermer"
+                    >
+                      ✕ Fermer
+                    </button>
+                  </header>
+                  <div
+                    className="nc-panel__body"
+                    style={{ padding: 16, overflowY: 'auto', flex: 1 }}
+                    ref={previewBodyRef}
+                  >
+                    {renderPreviewTab()}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* V53 : Audit IA maintenant integré dans PlanQualityScore (bloc unique en haut du cockpit) */}
 
