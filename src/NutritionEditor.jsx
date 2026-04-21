@@ -1051,8 +1051,17 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
 
   const handleAcceptProposal = useCallback((id) => {
     const proposal = proposals[id];
-    if (!proposal) return;
+    if (!proposal) {
+      console.warn('[Remplacer] no proposal for id', id, 'available keys:', Object.keys(proposals));
+      return;
+    }
+    console.log('[Remplacer] accept', { id, proposalPreview: proposal.slice(0, 80) });
     setSections(prev => {
+      const targetExists = prev.some(s => s.id === id);
+      if (!targetExists) {
+        console.warn('[Remplacer] section id not found in current sections', id, 'known ids:', prev.map(s => s.id));
+        return prev; // no-op — evite d'ecraser avec un .map sans match
+      }
       const next = prev.map(s =>
         s.id === id ? { ...s, content: proposal } : s
       );
