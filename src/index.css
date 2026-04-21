@@ -2102,6 +2102,34 @@ html{overflow-x:hidden}
 .ne-section-just-moved{
   animation:neSectionFlash 1s ease-in-out;
 }
+
+/* V79.1 : flash doré sur la section qui vient de recevoir une insertion Copilot IA.
+   Pulse sur 2.5s — border + halo dorés, assez visible sans etre agressif. */
+@keyframes neSectionCopilotFlash{
+  0%{
+    box-shadow:0 0 0 0 rgba(196,160,80,0);
+    border-color:#3a5a3a;
+    background-color:transparent;
+  }
+  12%{
+    box-shadow:0 0 0 3px rgba(196,160,80,.45), 0 0 24px rgba(196,160,80,.2);
+    border-color:rgba(196,160,80,.7);
+    background-color:rgba(196,160,80,.06);
+  }
+  60%{
+    box-shadow:0 0 0 2px rgba(196,160,80,.25);
+    border-color:rgba(196,160,80,.4);
+    background-color:rgba(196,160,80,.03);
+  }
+  100%{
+    box-shadow:0 0 0 0 rgba(196,160,80,0);
+    border-color:#3a5a3a;
+    background-color:transparent;
+  }
+}
+.ne-section--flash{
+  animation:neSectionCopilotFlash 2.5s ease-out;
+}
 .ne-section-header{
   display:flex;align-items:center;gap:6px;
   padding:10px 16px;background:rgba(0,0,0,.15);

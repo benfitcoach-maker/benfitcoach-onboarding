@@ -532,8 +532,19 @@ function SectionBlock({
     letterSpacing: '.4px',
   };
 
+  // V79.1 : attribut stable pour que le Copilot (NutritionConsultation) puisse
+  // retrouver la section cible apres insertion (reseed remount) et y scroller + flash.
+  const sectionType = detectSectionType(section.title);
+
   return (
-    <div className={classNames} style={cardStyle} onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowActions(false); }}>
+    <div
+      className={classNames}
+      data-section-type={sectionType}
+      data-section-id={section.id}
+      style={cardStyle}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setShowActions(false); }}
+    >
       {/* Header */}
       <div style={headerStyle}>
         <div className="ne-move-buttons" style={{

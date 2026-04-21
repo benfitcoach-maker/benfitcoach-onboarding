@@ -4666,6 +4666,26 @@ ${suppText}`;
                         // Reseed editor avec le nouveau plan
                         reseedEditor(result.newPlan, supplementsDraft, recipesDraft);
                         showSaveToast(`✨ Inséré dans ${sectionLabel(result.type)}`);
+
+                        // V79.1 : scroll + flash vers la section modifiee.
+                        // 2 RAF pour laisser React remount apres reseedEditor (editorSeed++),
+                        // + petit timeout pour que les styles soient appliques.
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            setTimeout(() => {
+                              const sel = `.ne-section[data-section-type="${result.type}"]`;
+                              const el = document.querySelector(sel);
+                              if (!el) return; // fallback silencieux si la section n'est pas dans le DOM
+                              try {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              } catch { /* scrollIntoView options non supportees — fallback */
+                                el.scrollIntoView();
+                              }
+                              el.classList.add('ne-section--flash');
+                              setTimeout(() => el.classList.remove('ne-section--flash'), 2500);
+                            }, 30);
+                          });
+                        });
                       }}
                       onAnalyze={async () => {
                         setAnalyzingPlan(true);
