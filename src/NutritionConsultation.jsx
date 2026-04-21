@@ -2488,6 +2488,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V79 : copilot — backup du plan avant derniere insertion pour undo
   const [lastInsertBackup, setLastInsertBackup] = useState(null);
   // { prevPlan, prevSupplements, prevRecipes, win, type, expiresAt }
+  // V79.1 : type de section a faire flasher (persistent sur re-render via React state)
+  const [flashSectionType, setFlashSectionType] = useState(null);
 
   // Memoize MGD correlation computations (expensive, re-run only when lab data or form changes)
   const hasLabData = useMemo(() => {
@@ -2507,6 +2509,13 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     const timer = setTimeout(() => setLastInsertBackup(null), msLeft);
     return () => clearTimeout(timer);
   }, [lastInsertBackup]);
+
+  // V79.1 : auto-clear du flash Copilot apres 2.5s
+  useEffect(() => {
+    if (!flashSectionType) return;
+    const t = setTimeout(() => setFlashSectionType(null), 2500);
+    return () => clearTimeout(t);
+  }, [flashSectionType]);
 
   const mgdCorrelationMemo = useMemo(() => {
     if (!hasLabData || !labAnalysisMemo?.signals?.length) return null;
@@ -4498,6 +4507,7 @@ ${suppText}`;
                   getEditedDataRef={editorGetDataRef}
                   onDraftChange={handleDraftChange}
                   hideActions
+                  flashSectionType={flashSectionType}
                   onSave={(plan, supplements, recipes) => {
                     setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements, recipes }));
                     setPlanDraft(plan);
@@ -4667,23 +4677,21 @@ ${suppText}`;
                         reseedEditor(result.newPlan, supplementsDraft, recipesDraft);
                         showSaveToast(`✨ Inséré dans ${sectionLabel(result.type)}`);
 
-                        // V79.1 : scroll + flash vers la section modifiee.
-                        // 2 RAF pour laisser React remount apres reseedEditor (editorSeed++),
-                        // + petit timeout pour que les styles soient appliques.
+                        // V79.1 : scroll vers la section + flash via React state (robuste aux re-renders)
+                        setFlashSectionType(result.type);
+                        // Scroll : attendre le remount (editorSeed++) avant de chercher le DOM
                         requestAnimationFrame(() => {
                           requestAnimationFrame(() => {
                             setTimeout(() => {
                               const sel = `.ne-section[data-section-type="${result.type}"]`;
                               const el = document.querySelector(sel);
-                              if (!el) return; // fallback silencieux si la section n'est pas dans le DOM
+                              if (!el) return;
                               try {
                                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              } catch { /* scrollIntoView options non supportees — fallback */
+                              } catch {
                                 el.scrollIntoView();
                               }
-                              el.classList.add('ne-section--flash');
-                              setTimeout(() => el.classList.remove('ne-section--flash'), 2500);
-                            }, 30);
+                            }, 50);
                           });
                         });
                       }}

@@ -464,6 +464,7 @@ function SectionBlock({
   onAcceptProposal,
   onAppendProposal,
   onRejectProposal,
+  flashing, // V79.1 : contrôle la classe .ne-section--flash via React state
 }) {
   const [hovered, setHovered] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -506,6 +507,7 @@ function SectionBlock({
     'ne-section',
     isActive ? 'ne-section--active' : '',
     justMoved ? 'ne-section-just-moved' : '',
+    flashing ? 'ne-section--flash' : '', // V79.1 : flash Copilot, persistent sur re-render
   ].filter(Boolean).join(' ');
 
   const cardStyle = {
@@ -765,7 +767,7 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, onDraftChange, hideActions = false }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, onDraftChange, hideActions = false, flashSectionType = null }) {
   // sections[] is THE single source of truth for all content.
   // Each section.content is plain text/markdown, directly edited via controlled textarea.
   const [sections, setSections] = useState(() =>
@@ -1032,6 +1034,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           onAcceptProposal={handleAcceptProposal}
           onAppendProposal={handleAppendProposal}
           onRejectProposal={handleRejectProposal}
+          flashing={flashSectionType && detectSectionType(section.title) === flashSectionType}
         />
       ))}
 
