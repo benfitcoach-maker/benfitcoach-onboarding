@@ -643,26 +643,33 @@ function SectionBlock({
             <button
               type="button"
               onClick={() => {
+                // V80.1 : ordre important pour que le feedback soit visible :
+                // 1. declenche le flash vert immediatement
+                // 2. change le label du bouton en "✓ Enregistré"
+                // 3. differe la fermeture de l'edition de 450ms pour laisser voir le flash
                 setJustSaved(true);
-                setTimeout(() => setJustSaved(false), 1500);
-                onActivate(null); // ferme l'edition de cette section
+                setTimeout(() => {
+                  onActivate(null); // ferme l'edition
+                }, 450);
+                setTimeout(() => setJustSaved(false), 1800);
               }}
               title="Confirmer et fermer l'édition"
               style={{
-                background: 'rgba(95,189,130,.15)',
-                border: '1px solid rgba(95,189,130,.4)',
-                color: '#5fbd82',
-                padding: '3px 10px',
+                background: justSaved ? 'rgba(95,189,130,.35)' : 'rgba(95,189,130,.15)',
+                border: '1px solid rgba(95,189,130,' + (justSaved ? '.7' : '.4') + ')',
+                color: justSaved ? '#a5e0b8' : '#5fbd82',
+                padding: '3px 12px',
                 borderRadius: 6,
                 fontSize: '.72rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all .15s',
+                whiteSpace: 'nowrap',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(95,189,130,.25)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(95,189,130,.15)'}
+              onMouseEnter={e => { if (!justSaved) e.currentTarget.style.background = 'rgba(95,189,130,.25)'; }}
+              onMouseLeave={e => { if (!justSaved) e.currentTarget.style.background = 'rgba(95,189,130,.15)'; }}
             >
-              ✓ Valider
+              {justSaved ? '✓ Enregistré' : '✓ Valider'}
             </button>
           )}
           {/* Boutons reset/delete */}
