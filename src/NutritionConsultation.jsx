@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft } from './store';
+import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft, softDeleteConsultation } from './store';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -2433,6 +2433,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [showPdfMenu, setShowPdfMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [mgdOpen, setMgdOpen] = useState(false);
+  // V78 : soft delete consultation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Memoize MGD correlation computations (expensive, re-run only when lab data or form changes)
   const hasLabData = useMemo(() => {
@@ -4735,6 +4737,26 @@ ${suppText}`;
                       </button>
                       {/* V50 : "PDF analyses" déplacé vers la section MGD (section Analyses recommandées) */}
                       {/* V50 : "Analyse IA complète" déplacé vers bloc dédié après l'éditeur */}
+
+                      {/* V78 : Soft delete consultation */}
+                      {consultation?.id && (
+                        <button
+                          type="button"
+                          onClick={() => { setShowMoreMenu(false); setShowDeleteConfirm(true); }}
+                          style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '10px 16px', background: 'none', border: 'none',
+                            borderTop: '1px solid rgba(255,255,255,.06)',
+                            color: '#d4806c', cursor: 'pointer',
+                            fontSize: '.85rem', fontWeight: 500,
+                            transition: 'background .15s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,92,76,.08)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        >
+                          🗑 Supprimer la consultation
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -5109,6 +5131,85 @@ ${suppText}`;
                       style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
                     >
                       Exporter Cover
+                    </button>
+                  </footer>
+                </div>
+              </div>
+            )}
+
+            {/* V78 : modale confirmation soft delete consultation */}
+            {showDeleteConfirm && (
+              <div
+                onClick={() => setShowDeleteConfirm(false)}
+                role="dialog"
+                aria-modal="true"
+                style={{
+                  position: 'fixed', inset: 0, zIndex: 1000,
+                  background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 20,
+                }}
+              >
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    width: '100%', maxWidth: 440,
+                    background: '#1e241f',
+                    border: '1px solid rgba(212,92,76,.3)',
+                    borderRadius: 14,
+                    boxShadow: '0 20px 60px rgba(0,0,0,.5)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <header style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                    <h3 style={{ margin: 0, color: '#d4806c', fontSize: '1rem', fontWeight: 700 }}>
+                      🗑 Supprimer cette consultation ?
+                    </h3>
+                  </header>
+                  <div style={{ padding: '18px 22px', fontSize: '.85rem', color: '#d4c9a8', lineHeight: 1.55 }}>
+                    Cette action est réversible mais la consultation ne sera plus visible.
+                  </div>
+                  <footer style={{
+                    padding: '14px 22px 18px',
+                    borderTop: '1px solid rgba(255,255,255,.06)',
+                    display: 'flex', justifyContent: 'flex-end', gap: 8,
+                  }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!consultation?.id) {
+                          showSaveToast('ID de consultation invalide');
+                          setShowDeleteConfirm(false);
+                          return;
+                        }
+                        const ok = softDeleteConsultation(consultation.id);
+                        setShowDeleteConfirm(false);
+                        if (ok) {
+                          showSaveToast('Consultation supprimée');
+                          // Redirection immediate vers la liste
+                          setTimeout(() => { onCancel?.(); }, 700);
+                        } else {
+                          showSaveToast('Suppression échouée');
+                        }
+                      }}
+                      style={{
+                        padding: '8px 16px', borderRadius: 10, fontSize: '.82rem',
+                        border: '1px solid rgba(212,92,76,.5)',
+                        background: 'rgba(212,92,76,.15)', color: '#d4806c',
+                        cursor: 'pointer', fontWeight: 600,
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,92,76,.25)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(212,92,76,.15)'}
+                    >
+                      Supprimer
                     </button>
                   </footer>
                 </div>

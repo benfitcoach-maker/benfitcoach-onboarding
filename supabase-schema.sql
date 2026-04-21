@@ -104,6 +104,10 @@ CREATE TABLE nutrition_consultations (
   is_followup BOOLEAN DEFAULT FALSE,
   followup_data JSONB DEFAULT NULL,
   previous_consultation_id UUID DEFAULT NULL,
+  -- V78 : soft delete
+  is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  deleted_by TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

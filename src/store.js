@@ -41,6 +41,19 @@ function writeAll(clients) {
 
 function readNutritionConsultations() {
   try {
+    const all = JSON.parse(localStorage.getItem(NUTRITION_KEY) || '[]');
+    // V78 : filtrer les consultations soft-delete a la lecture.
+    // Les lignes restent en localStorage + DB (reversibles), mais invisibles pour l'app.
+    return all.filter(c => !c.isDeleted);
+  } catch {
+    return [];
+  }
+}
+
+// V78 : lecture interne SANS filtre, utilisee par softDeleteConsultation
+// pour retrouver une consultation deja soft-deletee et/ou pour re-sync.
+function readNutritionConsultationsRaw() {
+  try {
     return JSON.parse(localStorage.getItem(NUTRITION_KEY) || '[]');
   } catch {
     return [];
@@ -257,6 +270,10 @@ async function cloudSyncNutritionConsultation(consultation) {
     mgd_recommendation: consultation.mgdRecommendation || 'none',
     mgd_recommended_tests_text: consultation.mgdRecommendedTestsText || '',
     status: consultation.status || 'questionnaire_recu',
+    // V78 : propage l'etat soft delete cote DB
+    is_deleted: consultation.isDeleted || false,
+    deleted_at: consultation.deletedAt || null,
+    deleted_by: consultation.deletedBy || null,
     created_at: consultation.createdAt || new Date().toISOString(),
   };
   supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' }).then(({ error }) => {
@@ -402,10 +419,16 @@ export async function pullFromCloud() {
       mgdRecommendation: n.mgd_recommendation || 'none',
       mgdRecommendedTestsText: n.mgd_recommended_tests_text || '',
       status: n.status || 'questionnaire_recu',
+      // V78 : propage l'etat soft delete depuis le cloud
+      isDeleted: n.is_deleted || false,
+      deletedAt: n.deleted_at || null,
+      deletedBy: n.deleted_by || null,
       createdAt: n.created_at,
     }));
     // Merge with existing local nutrition consultations
-    const existingNutrition = readNutritionConsultations();
+    // V78 : utiliser la lecture RAW (sans filtre) pour le merge — sinon les soft-delete
+    // locaux seraient invisibles et pourraient etre ecrases par les versions cloud.
+    const existingNutrition = readNutritionConsultationsRaw();
     const nutritionMap = {};
     // Partir du cloud
     for (const n of localNutrition) nutritionMap[n.id] = n;
@@ -787,6 +810,15 @@ export function saveNutritionConsultation(consultation) {
     status: consultation.status || 'questionnaire_recu',
     createdAt: consultation.createdAt || new Date().toISOString(),
   };
+  // V78 : si une consultation avec ce id existe deja et est soft-delete,
+  // preserver le flag pour eviter un "undelete" silencieux via edit.
+  const allRaw = readNutritionConsultationsRaw();
+  const existing = allRaw.find(c => c.id === entry.id);
+  if (existing?.isDeleted) {
+    entry.isDeleted = existing.isDeleted;
+    entry.deletedAt = existing.deletedAt;
+    entry.deletedBy = existing.deletedBy;
+  }
   const idx = consultations.findIndex(c => c.id === entry.id);
   if (idx >= 0) {
     consultations[idx] = entry;
@@ -796,6 +828,26 @@ export function saveNutritionConsultation(consultation) {
   writeNutritionConsultations(consultations);
   cloudSyncNutritionConsultation(entry);
   return entry;
+}
+
+// V78 : Soft delete d'une consultation nutrition.
+// La ligne reste en localStorage + Supabase (is_deleted=true, deleted_at, deleted_by)
+// mais disparait des lectures (filtre applique dans readNutritionConsultations).
+export function softDeleteConsultation(consultationId, deletedBy = null) {
+  if (!consultationId) return false;
+  const all = readNutritionConsultationsRaw();
+  const idx = all.findIndex(c => c.id === consultationId);
+  if (idx < 0) return false;
+  if (all[idx].isDeleted) return true; // idempotent
+  all[idx] = {
+    ...all[idx],
+    isDeleted: true,
+    deletedAt: new Date().toISOString(),
+    deletedBy: deletedBy || null,
+  };
+  writeNutritionConsultations(all);
+  cloudSyncNutritionConsultation(all[idx]);
+  return true;
 }
 
 // ─── Client reminder frequency (localStorage, default 3 months) ───
