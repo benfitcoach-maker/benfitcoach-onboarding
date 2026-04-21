@@ -3979,12 +3979,12 @@ html{overflow-x:hidden}
 }
 .ne-premium .p-letter p:last-child{margin-bottom:0}
 .ne-premium .p-info{
-  margin-bottom:9px;
+  margin-bottom:12px;
 }
 .ne-premium .p-info-label{
   font-size:.62rem;font-weight:700;letter-spacing:1.2px;
   color:var(--p-gold);text-transform:uppercase;
-  margin-bottom:2px;
+  margin-bottom:5px;
 }
 .ne-premium .p-info-value{color:var(--p-text);line-height:1.5}
 .ne-premium .p-cols{

@@ -465,7 +465,8 @@ function drawInfoBlock(doc, label, value, x, y, width) {
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GOLD);
   doc.text(label.toUpperCase(), x, y);
-  y += 3.3;
+  // V77 : espace label→valeur bumpe de 3.3 → 4.8 pour respirer
+  y += 4.8;
   doc.setFontSize(FONT.body);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...DARK_TEXT);
@@ -475,7 +476,8 @@ function drawInfoBlock(doc, label, value, x, y, width) {
     doc.text(l, x, y);
     y += SPACE.lineHeight;
   }
-  y += 3;
+  // V77 : gap entre 2 info blocks bumpe de 3 → 4.5
+  y += 4.5;
   return y;
 }
 
@@ -1259,6 +1261,26 @@ export async function exportConsultationPDF(consultation, client) {
     consultation.nutritionPlan, consultation.supplements, consultation.recipes
   );
 
+  // V77 : chargement du logo Anissa (canvas re-encode pour compat jsPDF)
+  // Silent fallback si indisponible — pas de blocage PDF.
+  const loadCoverLogo = (url) => new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve({ data: canvas.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight });
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+  let coverLogo = null;
+  try { coverLogo = await loadCoverLogo('/logo-anissa.png'); } catch { coverLogo = null; }
+
   // Cover page supprimee — generee separement via exportCoverPDF
   // Le contenu demarre directement sur la page 1
   doc.setFillColor(...BG_PAGE);
@@ -1452,12 +1474,15 @@ export async function exportConsultationPDF(consultation, client) {
         case 'meals':
         case 'meals_alt': {
           // V66 : label discret "VARIANTE" pour journee alternative
+          // V77 : bumped gap de 2 → 5 pour que "VARIANTE" respire au-dessus des repas
           if (sectionType === 'meals_alt') {
             doc.setFontSize(FONT.micro);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...GOLD);
             doc.text('VARIANTE', margin, y - 2, { charSpace: 1.5 });
-            y += 2;
+            y += 5;
+            // V77 : reset charSpace pour eviter le leak sur la card repas suivante
+            if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
           }
           // Rendu en cartes repas
           const pairs = parseLabeledLines(sec.content);
@@ -1658,6 +1683,17 @@ export async function exportConsultationPDF(consultation, client) {
       doc.setTextColor(...MUTED_TEXT);
       doc.text(dateStr || '', pw / 2, 148, { align: 'center' });
 
+      // V77 : Logo Anissa dans l'espace vide entre date et signature
+      if (coverLogo) {
+        const logoH = 40; // hauteur en mm
+        const logoW = logoH * (coverLogo.w / coverLogo.h);
+        const logoX = (pw - logoW) / 2;
+        const logoY = 170; // espace entre date (148) et signature (230)
+        try {
+          doc.addImage(coverLogo.data, 'PNG', logoX, logoY, logoW, logoH);
+        } catch (e) { /* silent fail */ }
+      }
+
       // Bloc signataire — en bas, premium
       const sigY = 230;
       doc.setDrawColor(...GOLD);
@@ -1672,7 +1708,7 @@ export async function exportConsultationPDF(consultation, client) {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...GREY_TEXT);
-      doc.text('Nutritionniste specialisee en longevite et genetique', pw / 2, sigY + 14, { align: 'center' });
+      doc.text('Nutritionniste spécialisée en longévité et génétique', pw / 2, sigY + 14, { align: 'center' });
 
       doc.setFontSize(7.5);
       doc.setTextColor(...MUTED_TEXT);
@@ -1792,9 +1828,9 @@ export async function exportConsultationPDF(consultation, client) {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...DARK_TEXT);
   const closingLines = [
-    `Ce plan a ete elabore specifiquement pour vous`,
-    `par Anissa Deroubaix, nutritionniste specialisee`,
-    `en longevite et genetique.`,
+    `Ce plan a été élaboré spécifiquement pour vous`,
+    `par Anissa Deroubaix, nutritionniste spécialisée`,
+    `en longévité et génétique.`,
   ];
   for (const cl of closingLines) {
     doc.text(cl, pw / 2, y, { align: 'center' });
@@ -1804,7 +1840,7 @@ export async function exportConsultationPDF(consultation, client) {
   y += 6;
   doc.setFontSize(9.5);
   doc.setTextColor(...GREY_TEXT);
-  doc.text('Il est recommande de suivre ce plan pendant 4 semaines', pw / 2, y, { align: 'center' });
+  doc.text('Il est recommandé de suivre ce plan pendant 4 semaines', pw / 2, y, { align: 'center' });
   y += 5;
   doc.text("avant d'envisager des ajustements.", pw / 2, y, { align: 'center' });
 
