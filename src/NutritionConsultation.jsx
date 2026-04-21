@@ -4801,6 +4801,13 @@ ${suppText}`;
               {/* Meta line */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* V83.1 : mini logo Anissa dans le cockpit sticky — reste visible au scroll */}
+                  <img
+                    src="/logo-anissa.png"
+                    alt="Anissa Nutrition"
+                    style={{ height: 28, width: 'auto', flexShrink: 0, opacity: .9 }}
+                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                  />
                   <span style={{ fontSize: '.72rem', color: '#8abf9a', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 600 }}>Plan nutrition</span>
                   <span style={{ fontSize: '.82rem', color: '#d4c9a8', fontWeight: 500 }}>{clientName}</span>
                   {/* V80 : badge mode (one-shot vs suivi) — discret, lu depuis client.packType */}
