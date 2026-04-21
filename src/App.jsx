@@ -101,7 +101,7 @@ function Toast({ message, visible }) {
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V85.2';
+const APP_VERSION = 'V85.3';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (
@@ -566,9 +566,8 @@ function App() {
       }
     }
     showToast('Consultation sauvegardee avec succes');
-    setTimeout(() => {
-      setPage('dashboard');
-    }, 2000);
+    // V85.3 : plus de redirection auto vers dashboard — l'utilisateur reste sur la page
+    // pour continuer ses modifications. Il ferme manuellement via le bouton Fermer.
   };
 
   const handleViewNutritionHistory = (id) => {

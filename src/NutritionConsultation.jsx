@@ -5754,6 +5754,47 @@ ${suppText}`;
           </span>
         </div>
       )}
+
+      {/* V85.3 : FAB Sauvegarder flottant — visible sur l'etape plan quand il y a
+          des modifications non sauvees. Evite de remonter en haut de page. */}
+      {currentStepType === 'plan' && autoSaveStatus === 'unsaved' && (
+        <button
+          type="button"
+          onClick={handleSave}
+          title="Sauvegarder maintenant (Ctrl+S)"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 900,
+            padding: '12px 18px',
+            borderRadius: 999,
+            background: 'linear-gradient(135deg, #c4a050, #a88740)',
+            color: '#1a2e1f',
+            border: 'none',
+            fontSize: '.82rem',
+            fontWeight: 700,
+            letterSpacing: '.04em',
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(196,160,80,.35), 0 2px 6px rgba(0,0,0,.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontFamily: 'inherit',
+            transition: 'transform .15s, box-shadow .15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 12px 28px rgba(196,160,80,.45), 0 4px 10px rgba(0,0,0,.3)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(196,160,80,.35), 0 2px 6px rgba(0,0,0,.25)';
+          }}
+        >
+          Sauvegarder
+        </button>
+      )}
     </div>
   );
 }
