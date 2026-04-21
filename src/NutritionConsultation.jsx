@@ -996,7 +996,7 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
 
 // V53 : Score display unifie — UX simplifiee (1 seul bloc)
 // Affiche un resume (OK / a ameliorer) avec details on-demand + audit IA integre
-function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnalysisError, onAnalyze, planSignatureCurrent, analysesError, onInsertQuickWin }) {
+function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnalysisError, onAnalyze, planSignatureCurrent, analysesError, onInsertQuickWin, onRevisitWin, insertedWinsMap }) {
   // Hooks must be unconditional — move them before the early return
   const [showDetails, setShowDetails] = useState(false);
   if (!score) return null;
@@ -1204,6 +1204,7 @@ function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnaly
               {aiAnalysis.quickWins.slice(0, 5).map((win, i) => {
                 const routed = routeQuickWin(win);
                 const target = routed ? sectionLabel(routed) : null;
+                const inserted = insertedWinsMap && insertedWinsMap[win]; // V79.3
                 return (
                   <div
                     key={i}
@@ -1217,9 +1218,9 @@ function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnaly
                       • {win}
                       {target && (
                         <span style={{
-                          fontSize: '.62rem', color: '#b89ef0',
+                          fontSize: '.62rem', color: inserted ? '#5fbd82' : '#b89ef0',
                           marginLeft: 6, letterSpacing: '.5px',
-                          background: 'rgba(184,158,240,.1)',
+                          background: inserted ? 'rgba(95,189,130,.12)' : 'rgba(184,158,240,.1)',
                           padding: '1px 6px', borderRadius: 4,
                           whiteSpace: 'nowrap',
                         }}>
@@ -1227,7 +1228,26 @@ function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnaly
                         </span>
                       )}
                     </span>
-                    {onInsertQuickWin && (
+                    {inserted && onRevisitWin ? (
+                      <button
+                        type="button"
+                        onClick={() => onRevisitWin(win)}
+                        title={`Voir dans ${sectionLabel(inserted)}`}
+                        style={{
+                          flexShrink: 0,
+                          padding: '3px 10px', borderRadius: 6,
+                          border: '1px solid rgba(95,189,130,.4)',
+                          background: 'rgba(95,189,130,.12)',
+                          color: '#5fbd82',
+                          fontSize: '.68rem', fontWeight: 600,
+                          cursor: 'pointer', transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(95,189,130,.22)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(95,189,130,.12)'}
+                      >
+                        ✓ Revoir
+                      </button>
+                    ) : onInsertQuickWin && (
                       <button
                         type="button"
                         onClick={() => onInsertQuickWin(win)}
@@ -2490,6 +2510,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // { prevPlan, prevSupplements, prevRecipes, win, type, expiresAt }
   // V79.1 : type de section a faire flasher (persistent sur re-render via React state)
   const [flashSectionType, setFlashSectionType] = useState(null);
+  // V79.3 : map { winText: sectionType } des quickWins deja inserees
+  // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
+  const [insertedWinsMap, setInsertedWinsMap] = useState({});
 
   // Memoize MGD correlation computations (expensive, re-run only when lab data or form changes)
   const hasLabData = useMemo(() => {
@@ -4657,6 +4680,23 @@ ${suppText}`;
                       analyzing={analyzingPlan}
                       aiAnalysisError={aiAnalysisError}
                       planSignatureCurrent={(planDraft || '').length + '|' + (planDraft || '').slice(0, 200)}
+                      insertedWinsMap={insertedWinsMap}
+                      onRevisitWin={(win) => {
+                        // V79.3 : Re-clic sur une quickWin deja inseree → on re-scroll + flash.
+                        const type = insertedWinsMap[win];
+                        if (!type) return;
+                        setFlashSectionType(type);
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            const sel = `.ne-section[data-section-type="${type}"]`;
+                            const el = document.querySelector(sel);
+                            if (el) {
+                              try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                              catch { el.scrollIntoView(); }
+                            }
+                          });
+                        });
+                      }}
                       onInsertQuickWin={(win) => {
                         // V79 : Copilot — insertion ciblee dans la section detectee
                         const result = insertWinIntoPlan(planDraft, win);
@@ -4673,6 +4713,8 @@ ${suppText}`;
                           type: result.type,
                           expiresAt: Date.now() + 20000, // fenetre undo : 20s
                         });
+                        // V79.3 : marquer la win comme inseree
+                        setInsertedWinsMap(prev => ({ ...prev, [win]: result.type }));
                         // Reseed editor avec le nouveau plan
                         reseedEditor(result.newPlan, supplementsDraft, recipesDraft);
                         showSaveToast(`✨ Inséré dans ${sectionLabel(result.type)}`);
@@ -5354,6 +5396,15 @@ ${suppText}`;
                       lastInsertBackup.prevSupplements,
                       lastInsertBackup.prevRecipes
                     );
+                    // V79.3 : retirer la win du map → le bouton redevient "Inserer"
+                    const undoneWin = lastInsertBackup.win;
+                    if (undoneWin) {
+                      setInsertedWinsMap(prev => {
+                        const next = { ...prev };
+                        delete next[undoneWin];
+                        return next;
+                      });
+                    }
                     setLastInsertBackup(null);
                     showSaveToast('↩ Insertion annulée');
                   }}
