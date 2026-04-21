@@ -4738,8 +4738,8 @@ ${suppText}`;
                       {/* V50 : "PDF analyses" déplacé vers la section MGD (section Analyses recommandées) */}
                       {/* V50 : "Analyse IA complète" déplacé vers bloc dédié après l'éditeur */}
 
-                      {/* V78 : Soft delete consultation */}
-                      {consultation?.id && (
+                      {/* V78 : Soft delete consultation (visible seulement si deja sauvegardee = id existant) */}
+                      {initialConsultation?.id && (
                         <button
                           type="button"
                           onClick={() => { setShowMoreMenu(false); setShowDeleteConfirm(true); }}
@@ -5185,12 +5185,13 @@ ${suppText}`;
                     <button
                       type="button"
                       onClick={() => {
-                        if (!consultation?.id) {
+                        const consultationId = initialConsultation?.id;
+                        if (!consultationId) {
                           showSaveToast('ID de consultation invalide');
                           setShowDeleteConfirm(false);
                           return;
                         }
-                        const ok = softDeleteConsultation(consultation.id);
+                        const ok = softDeleteConsultation(consultationId);
                         setShowDeleteConfirm(false);
                         if (ok) {
                           showSaveToast('Consultation supprimée');
