@@ -683,11 +683,13 @@ export function getClient(id) {
   return readAll().find(c => c.id === id) || null;
 }
 
-// Get clients shared with Anissa (Suivi Complet or Intensif formulas, created by Benoit)
+// Get clients shared with Anissa (formules qui donnent acces nutrition, created by Benoit)
+// V86.3 : ajout pack20 + pack30 qui ont egalement acces optionnel aux services Anissa.
+export const FORMULES_WITH_ANISSA_ACCESS = ['suivi', 'intensif', 'pack20', 'pack30'];
 export function getSharedClients() {
   return getClients().filter(c => {
     const formule = c.formule || '';
-    return (formule === 'suivi' || formule === 'intensif') && (c.createdBy || 'benoit') !== 'anissa';
+    return FORMULES_WITH_ANISSA_ACCESS.includes(formule) && (c.createdBy || 'benoit') !== 'anissa';
   });
 }
 

@@ -3,11 +3,14 @@
 //
 // Regle metier :
 //   L'anglais V1 s'applique UNIQUEMENT aux clientes Benfitcoach avec
-//   formule 'suivi' ou 'intensif' ET langue 'EN'.
+//   formule donnant acces Anissa ET langue 'EN'.
+//   V86.3 : formules eligibles = suivi, intensif, pack20, pack30 (meme
+//   liste que getSharedClients / FORMULES_WITH_ANISSA_ACCESS dans store.js).
 //   Toutes les autres clientes (y compris one-shot EN) restent FR.
 //
 // Point unique de verite pour la detection locale. Utilise par :
 //   - App.jsx (choix du mail questionnaire FR vs anamnese EN)
+//   - AnissaDashboard.jsx (choix du bouton + lien)
 //   - NutritionConsultation.jsx (choix des prompts FR vs EN)
 //   - nutritionPdf.js (labels FR vs EN, format date)
 //   - cockpit header (badge FR/EN)
@@ -16,6 +19,11 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 export const LOCALES = Object.freeze({ FR: 'FR', EN: 'EN' });
+
+// Formules Benoit qui donnent acces nutrition Anissa (source : FORMULES
+// dans formSteps.js). Doit rester synchronisee avec FORMULES_WITH_ANISSA_ACCESS
+// dans store.js.
+const EN_ELIGIBLE_FORMULES = ['suivi', 'intensif', 'pack20', 'pack30'];
 
 /**
  * Retourne la locale nutrition a utiliser pour un client donne.
@@ -26,7 +34,7 @@ export function getClientNutritionLocale(client) {
   if (!client) return LOCALES.FR;
   const formule = String(client.formule || client.form?.formule || '').toLowerCase();
   const langue = String(client.langue || client.form?.langue || 'FR').toUpperCase();
-  const isBenfitcoachFormule = formule === 'suivi' || formule === 'intensif';
+  const isBenfitcoachFormule = EN_ELIGIBLE_FORMULES.includes(formule);
   return (isBenfitcoachFormule && langue === 'EN') ? LOCALES.EN : LOCALES.FR;
 }
 
