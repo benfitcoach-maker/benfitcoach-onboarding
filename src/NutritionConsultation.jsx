@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft, softDeleteConsultation } from './store';
+// V79 : Copilot IA — routing + insertion des quickWins dans le plan
+import { routeQuickWin, insertWinIntoPlan, sectionLabel, failureMessage } from './services/planCopilot';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -994,7 +996,7 @@ function scorePlanQuality(planText, supplementsText, form, { isFollowup = false,
 
 // V53 : Score display unifie — UX simplifiee (1 seul bloc)
 // Affiche un resume (OK / a ameliorer) avec details on-demand + audit IA integre
-function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnalysisError, onAnalyze, planSignatureCurrent, analysesError }) {
+function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnalysisError, onAnalyze, planSignatureCurrent, analysesError, onInsertQuickWin }) {
   // Hooks must be unconditional — move them before the early return
   const [showDetails, setShowDetails] = useState(false);
   if (!score) return null;
@@ -1198,10 +1200,58 @@ function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnaly
 
           {aiAnalysis.quickWins?.length > 0 && (
             <div>
-              <div style={{ fontSize: '.65rem', fontWeight: 700, color: '#b89ef0', marginBottom: 2 }}>💡 CORRECTIONS RAPIDES</div>
-              {aiAnalysis.quickWins.slice(0, 3).map((win, i) => (
-                <div key={i} style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.55)', marginLeft: 8, lineHeight: 1.35 }}>• {win}</div>
-              ))}
+              <div style={{ fontSize: '.65rem', fontWeight: 700, color: '#b89ef0', marginBottom: 4 }}>💡 CORRECTIONS RAPIDES</div>
+              {aiAnalysis.quickWins.slice(0, 5).map((win, i) => {
+                const routed = routeQuickWin(win);
+                const target = routed ? sectionLabel(routed) : null;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex', gap: 8, alignItems: 'flex-start',
+                      fontSize: '.72rem', color: 'rgba(255,255,255,.65)',
+                      marginLeft: 4, marginBottom: 6, lineHeight: 1.4,
+                    }}
+                  >
+                    <span style={{ flex: 1 }}>
+                      • {win}
+                      {target && (
+                        <span style={{
+                          fontSize: '.62rem', color: '#b89ef0',
+                          marginLeft: 6, letterSpacing: '.5px',
+                          background: 'rgba(184,158,240,.1)',
+                          padding: '1px 6px', borderRadius: 4,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          → {target}
+                        </span>
+                      )}
+                    </span>
+                    {onInsertQuickWin && (
+                      <button
+                        type="button"
+                        onClick={() => onInsertQuickWin(win)}
+                        disabled={!routed}
+                        title={routed ? `Insérer dans ${target}` : 'Aucune section cible détectée'}
+                        style={{
+                          flexShrink: 0,
+                          padding: '3px 10px', borderRadius: 6,
+                          border: '1px solid ' + (routed ? 'rgba(184,158,240,.4)' : 'rgba(255,255,255,.1)'),
+                          background: routed ? 'rgba(184,158,240,.12)' : 'rgba(255,255,255,.03)',
+                          color: routed ? '#c4aff2' : 'rgba(255,255,255,.25)',
+                          fontSize: '.68rem', fontWeight: 600,
+                          cursor: routed ? 'pointer' : 'not-allowed',
+                          transition: 'all .15s',
+                        }}
+                        onMouseEnter={e => { if (routed) e.currentTarget.style.background = 'rgba(184,158,240,.22)'; }}
+                        onMouseLeave={e => { if (routed) e.currentTarget.style.background = 'rgba(184,158,240,.12)'; }}
+                      >
+                        ↳ Insérer
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -2435,6 +2485,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [mgdOpen, setMgdOpen] = useState(false);
   // V78 : soft delete consultation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // V79 : copilot — backup du plan avant derniere insertion pour undo
+  const [lastInsertBackup, setLastInsertBackup] = useState(null);
+  // { prevPlan, prevSupplements, prevRecipes, win, type, expiresAt }
 
   // Memoize MGD correlation computations (expensive, re-run only when lab data or form changes)
   const hasLabData = useMemo(() => {
@@ -2446,6 +2499,14 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     () => hasLabData ? analyzeLabResults(consultation.lab_results || {}) : null,
     [consultation.lab_results, hasLabData]
   );
+
+  // V79 : auto-hide du banner undo apres la fenetre de 20s
+  useEffect(() => {
+    if (!lastInsertBackup) return;
+    const msLeft = Math.max(0, lastInsertBackup.expiresAt - Date.now());
+    const timer = setTimeout(() => setLastInsertBackup(null), msLeft);
+    return () => clearTimeout(timer);
+  }, [lastInsertBackup]);
 
   const mgdCorrelationMemo = useMemo(() => {
     if (!hasLabData || !labAnalysisMemo?.signals?.length) return null;
@@ -4586,6 +4647,26 @@ ${suppText}`;
                       analyzing={analyzingPlan}
                       aiAnalysisError={aiAnalysisError}
                       planSignatureCurrent={(planDraft || '').length + '|' + (planDraft || '').slice(0, 200)}
+                      onInsertQuickWin={(win) => {
+                        // V79 : Copilot — insertion ciblee dans la section detectee
+                        const result = insertWinIntoPlan(planDraft, win);
+                        if (!result.ok) {
+                          showSaveToast('⚠ ' + failureMessage(result.reason));
+                          return;
+                        }
+                        // Backup pour undo
+                        setLastInsertBackup({
+                          prevPlan: planDraft,
+                          prevSupplements: supplementsDraft,
+                          prevRecipes: recipesDraft,
+                          win,
+                          type: result.type,
+                          expiresAt: Date.now() + 20000, // fenetre undo : 20s
+                        });
+                        // Reseed editor avec le nouveau plan
+                        reseedEditor(result.newPlan, supplementsDraft, recipesDraft);
+                        showSaveToast(`✨ Inséré dans ${sectionLabel(result.type)}`);
+                      }}
                       onAnalyze={async () => {
                         setAnalyzingPlan(true);
                         setAiAnalysisError('');
@@ -5218,6 +5299,62 @@ ${suppText}`;
             )}
 
             {saveToast && <div className="nc-save-toast">{saveToast}</div>}
+
+            {/* V79 : banner undo apres insertion Copilot (fenetre de 20s) */}
+            {lastInsertBackup && lastInsertBackup.expiresAt > Date.now() && (
+              <div style={{
+                position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+                zIndex: 900,
+                background: 'rgba(26,46,31,.96)',
+                border: '1px solid rgba(184,158,240,.35)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                display: 'flex', alignItems: 'center', gap: 12,
+                boxShadow: '0 8px 28px rgba(0,0,0,.5)',
+                fontSize: '.78rem',
+                animation: 'fadeIn .2s ease',
+              }}>
+                <span style={{ color: '#c4aff2' }}>
+                  ✨ Inséré dans <strong>{sectionLabel(lastInsertBackup.type)}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!lastInsertBackup) return;
+                    reseedEditor(
+                      lastInsertBackup.prevPlan,
+                      lastInsertBackup.prevSupplements,
+                      lastInsertBackup.prevRecipes
+                    );
+                    setLastInsertBackup(null);
+                    showSaveToast('↩ Insertion annulée');
+                  }}
+                  style={{
+                    padding: '4px 12px', borderRadius: 6,
+                    border: '1px solid rgba(184,158,240,.45)',
+                    background: 'rgba(184,158,240,.15)',
+                    color: '#c4aff2', cursor: 'pointer',
+                    fontSize: '.74rem', fontWeight: 600,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(184,158,240,.25)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(184,158,240,.15)'}
+                >
+                  ↩ Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLastInsertBackup(null)}
+                  title="Fermer"
+                  style={{
+                    background: 'none', border: 'none',
+                    color: 'rgba(255,255,255,.4)', cursor: 'pointer',
+                    fontSize: '1rem', padding: 0, lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}
