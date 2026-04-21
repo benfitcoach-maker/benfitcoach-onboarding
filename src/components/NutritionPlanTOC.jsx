@@ -25,6 +25,17 @@ export default function NutritionPlanTOC({ refreshKey, containerSelector = '.ne-
   const [viewportOk, setViewportOk] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1200 : true
   );
+  // V85.1 : collapsed state persiste en localStorage (preference utilisateur)
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('bfc_toc_collapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed(c => {
+      const next = !c;
+      try { localStorage.setItem('bfc_toc_collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // ── Collect sections from DOM (+ observe mutations for add/remove/reorder) ──
   useEffect(() => {
@@ -122,6 +133,45 @@ export default function NutritionPlanTOC({ refreshKey, containerSelector = '.ne-
   if (!viewportOk) return null;
   if (uniqueItems.length === 0) return null;
 
+  // V85.1 : mode collapsed = pill compact au bord droit, clic → expand
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-label="Afficher la table des matières"
+        title="Afficher les sections"
+        style={{
+          position: 'fixed',
+          top: 140,
+          right: 12,
+          zIndex: 10,
+          padding: '8px 10px',
+          background: 'rgba(12,18,15,.92)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(106,191,138,.2)',
+          borderRadius: 10,
+          boxShadow: '0 4px 14px rgba(0,0,0,.3)',
+          color: '#8abf9a',
+          fontSize: '.68rem',
+          fontWeight: 700,
+          letterSpacing: '.14em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontFamily: 'inherit',
+          transition: 'all .15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(26,46,31,.95)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(12,18,15,.92)'}
+      >
+        <span style={{ fontSize: '.9rem', lineHeight: 1 }}>☰</span> Sections
+      </button>
+    );
+  }
+
   return (
     <nav
       aria-label="Table des matières du plan"
@@ -143,12 +193,38 @@ export default function NutritionPlanTOC({ refreshKey, containerSelector = '.ne-
       }}
     >
       <div style={{
-        fontSize: '.62rem', fontWeight: 700,
-        color: '#8abf9a', letterSpacing: '.18em',
-        textTransform: 'uppercase',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         padding: '2px 10px 8px',
       }}>
-        Sections
+        <span style={{
+          fontSize: '.62rem', fontWeight: 700,
+          color: '#8abf9a', letterSpacing: '.18em',
+          textTransform: 'uppercase',
+        }}>
+          Sections
+        </span>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="Masquer la table des matières"
+          title="Masquer"
+          style={{
+            background: 'none', border: 'none',
+            color: 'rgba(212,201,168,.5)',
+            cursor: 'pointer',
+            padding: '0 2px',
+            fontSize: '.95rem',
+            lineHeight: 1,
+            fontFamily: 'inherit',
+            transition: 'color .15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#e0cda0'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(212,201,168,.5)'}
+        >
+          —
+        </button>
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {uniqueItems.map((it, idx) => {
