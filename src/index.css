@@ -2130,6 +2130,26 @@ html{overflow-x:hidden}
 .ne-section--flash{
   animation:neSectionCopilotFlash 2.5s ease-out;
 }
+
+/* V80.1 : flash vert "Enregistré" apres clic ✓ Valider sur une section.
+   Plus court que le flash Copilot (1.5s au lieu de 2.5s), couleur verte. */
+@keyframes neSectionSaved{
+  0%{
+    box-shadow:0 0 0 0 rgba(95,189,130,0);
+    border-color:#3a5a3a;
+  }
+  20%{
+    box-shadow:0 0 0 3px rgba(95,189,130,.5), 0 0 20px rgba(95,189,130,.18);
+    border-color:rgba(95,189,130,.6);
+  }
+  100%{
+    box-shadow:0 0 0 0 rgba(95,189,130,0);
+    border-color:#3a5a3a;
+  }
+}
+.ne-section--saved{
+  animation:neSectionSaved 1.5s ease-out;
+}
 .ne-section-header{
   display:flex;align-items:center;gap:6px;
   padding:10px 16px;background:rgba(0,0,0,.15);

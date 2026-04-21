@@ -468,6 +468,8 @@ function SectionBlock({
 }) {
   const [hovered, setHovered] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  // V80.1 : flash vert "enregistré" apres clic ✓ Valider
+  const [justSaved, setJustSaved] = useState(false);
   const textareaRef = useRef(null);
 
   // Auto-focus textarea when section becomes active
@@ -508,6 +510,7 @@ function SectionBlock({
     isActive ? 'ne-section--active' : '',
     justMoved ? 'ne-section-just-moved' : '',
     flashing ? 'ne-section--flash' : '', // V79.1 : flash Copilot, persistent sur re-render
+    justSaved ? 'ne-section--saved' : '', // V80.1 : flash vert apres ✓ Valider
   ].filter(Boolean).join(' ');
 
   const cardStyle = {
@@ -631,6 +634,36 @@ function SectionBlock({
                 )}
               </div>
             )
+          )}
+          {/* V80.1 : bouton ✓ Valider — visible uniquement en mode edition (isActive).
+              Confirme visuellement que la section est prise en compte, ferme l'edition,
+              declenche un flash vert 1.5s. Les edits sont DEJA sauves en continu
+              (debounce 300ms + autosave 1s), ce bouton est un signal UX de confirmation. */}
+          {isActive && (
+            <button
+              type="button"
+              onClick={() => {
+                setJustSaved(true);
+                setTimeout(() => setJustSaved(false), 1500);
+                onActivate(null); // ferme l'edition de cette section
+              }}
+              title="Confirmer et fermer l'édition"
+              style={{
+                background: 'rgba(95,189,130,.15)',
+                border: '1px solid rgba(95,189,130,.4)',
+                color: '#5fbd82',
+                padding: '3px 10px',
+                borderRadius: 6,
+                fontSize: '.72rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all .15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(95,189,130,.25)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(95,189,130,.15)'}
+            >
+              ✓ Valider
+            </button>
           )}
           {/* Boutons reset/delete */}
           <div style={{
