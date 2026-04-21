@@ -1695,8 +1695,13 @@ export async function exportConsultationPDF(consultation, client) {
 
       // V56 : logique anti-orphan - estimer si le titre + 2 lignes min tient
       // Si on est deja tres bas (y > 240) et qu'il reste plus de 2 lignes a ecrire, nouvelle page
+      // V75 : types a bloc "tall" (card frigo, cards supplement, timeline) sous-estimees
+      // avec la formule generique → bumper a 85mm pour garantir que le header n'est pas orphelin
+      const tallBlockTypes = ['fridge', 'supplements', 'action'];
       const contentLines = (sec.content || '').split('\n').filter(l => l.trim()).length;
-      const needsSpace = 25 + Math.min(contentLines * 4, 40); // header + un peu de contenu
+      const needsSpace = tallBlockTypes.includes(sec.type)
+        ? 85
+        : 25 + Math.min(contentLines * 4, 40);
       if (i > 0 && y + needsSpace > 275) newPage();
 
       renderSec(sec);
@@ -1850,24 +1855,48 @@ export function extractMeals(planText) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   // Find meal blocks by scanning line by line
+  // V75 : 2 fixes majeurs
+  //   1. regex ancree au DEBUT de la ligne + suivi de ":" / "(" / fin
+  //      → evite que "Pas de diner apres 19h30" (regle fiche frigo) matche comme header
+  //   2. extraction inline du contenu apres ":" sur la meme ligne
+  //      → supporte le format "Diner : 100g poisson..." en plus du format multi-ligne
+  //   3. stop SYSTEMATIQUE sur tout header de section (pas seulement meals), meme si
+  //      le block est vide → evite de polluer avec des lignes fiche frigo/protocoles
   function findMealBlocks(mealPatterns) {
     const results = [];
-    const regex = new RegExp(mealPatterns.join('|'), 'i');
+    const regex = new RegExp(
+      '^(?:[-–—•*]\\s*)?(?:' + mealPatterns.join('|') + ')\\s*(?:\\(|:|$)',
+      'i'
+    );
+    const inlineRegex = new RegExp(
+      '^(?:[-–—•*]\\s*)?(?:' + mealPatterns.join('|') + ')[^:]*:\\s*(.+)$',
+      'i'
+    );
+    const stopSectionPattern = /^(?:petit[- ]?d[eé]jeuner|d[eé]jeuner|d[iî]ner|collation|go[uû]ter|snack|semaine\s+\d|liste\s+de\s+courses|supplements?|notes\s+pour|fiche\s*frigo|[àa]\s*retenir|protocoles?|ajustements|recommandations|plan\s*d['’]?action|strat[eé]gie|analyse|journ[eé]e\s*type|rotation|exclusions|cl[oô]ture|introduction)\b/i;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!regex.test(line)) continue;
 
-      // Gather next 3-5 content lines after this header
       const block = [];
-      for (let j = i + 1; j < lines.length && block.length < 5; j++) {
-        const next = lines[j];
-        // Stop if we hit another meal/section header
-        if (/petit[- ]?d[eé]jeuner|d[eé]jeuner|d[iî]ner|collation|go[uû]ter|snack|semaine\s+\d|liste\s+de\s+courses|supplements|notes\s+pour/i.test(next) && block.length > 0) break;
-        if (/^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/i.test(next) && block.length > 0) break;
-        if (/^\d+\.\s+[A-Z]/.test(next)) break;
-        const cleaned = next.replace(/^[-–•*]\s*/, '').trim();
-        if (cleaned.length > 3) block.push(cleaned);
+
+      // V75 : inline content — format "Meal : content" (Claire's case)
+      const inlineMatch = line.match(inlineRegex);
+      if (inlineMatch && inlineMatch[1].trim().length > 3) {
+        block.push(inlineMatch[1].trim());
+      }
+
+      // V75 : gather next lines only if no inline content (multi-line format)
+      if (block.length === 0) {
+        for (let j = i + 1; j < lines.length && block.length < 5; j++) {
+          const next = lines[j];
+          // V75 : stop on ANY section header — not gated on block.length > 0
+          if (stopSectionPattern.test(next)) break;
+          if (/^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/i.test(next)) break;
+          if (/^\d+\.\s+[A-Z]/.test(next)) break;
+          const cleaned = next.replace(/^[-–•*]\s*/, '').trim();
+          if (cleaned.length > 3) block.push(cleaned);
+        }
       }
 
       if (block.length > 0) {
