@@ -10,6 +10,8 @@ import {
   parseTimelineSteps,
   parseSupplementEntriesStructured,
 } from './nutritionEditorParsers';
+// V81 : modale de confirmation reutilisable
+import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 
 // ─── MARKDOWN → SECTIONS PARSER ───
 // Parses raw plan text into structured sections. Used on initial load
@@ -820,6 +822,8 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCoverForm, setShowCoverForm] = useState(false);
+  // V81 : modale de confirmation (utilisee par handleResetAll)
+  const confirmDialog = useConfirmDialog();
   const [coverFields, setCoverFields] = useState({
     prenom: form?.prenom || client?.prenom || '',
     objectif: form?.objectifPrincipalNutrition || form?.objectifPrincipal || '',
@@ -927,8 +931,15 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     setSaved(false);
   }, []);
 
-  const handleResetAll = () => {
-    if (!confirm('Reinitialiser tout le contenu au plan original de l\'IA ?')) return;
+  const handleResetAll = async () => {
+    // V81 : modale propre au lieu de window.confirm
+    const ok = await confirmDialog.ask({
+      title: 'Réinitialiser tout le plan ?',
+      message: 'Toutes tes modifications seront perdues. Le plan reviendra à la version d\'origine (IA ou template).',
+      danger: true,
+      confirmLabel: 'Réinitialiser',
+    });
+    if (!ok) return;
     setActiveSectionId(null);
     setSections(parsePlanToSections(planText, supplementsText, recipesText));
     setSaved(false);
@@ -1229,6 +1240,9 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         </div>
       </div>
       )}
+
+      {/* V81 : modale de confirmation (handleResetAll) */}
+      <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
 
       {showFrigoPreview && (() => {
         const edited = getEditedData();

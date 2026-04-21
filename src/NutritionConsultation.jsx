@@ -4,6 +4,8 @@ import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions,
 import { routeQuickWin, insertWinIntoPlan, sectionLabel, failureMessage } from './services/planCopilot';
 // V80 : detection du mode one-shot vs followup depuis client.packType
 import { getNutritionPlanMode, planModeLabel } from './services/nutritionPlanMode';
+// V81 : modale de confirmation reutilisable (remplace window.confirm natif)
+import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -2614,6 +2616,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // { prevPlan, prevSupplements, prevRecipes, win, type, expiresAt }
   // V79.1 : type de section a faire flasher (persistent sur re-render via React state)
   const [flashSectionType, setFlashSectionType] = useState(null);
+  // V81 : modale de confirmation reutilisable
+  const confirmDialog = useConfirmDialog();
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3165,11 +3169,26 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     const hasPath = form.pathologies && form.pathologies.toString().trim();
     if (!hasMeds && !hasPath) missing.push('medicaments / pathologies');
     if (missing.length > 0) {
-      const msg = `Champs critiques non renseignes : ${missing.join(' et ')}.\n\nGenerer sans ces informations peut etre dangereux (interactions, contre-indications).\n\nContinuer quand meme ?`;
-      if (!confirm(msg)) return;
+      // V81 : modale propre au lieu de window.confirm
+      const ok = await confirmDialog.ask({
+        title: 'Champs critiques manquants',
+        message: `Champs non renseignés : ${missing.join(' et ')}.\n\nGénérer sans ces informations peut être dangereux (interactions, contre-indications).\n\nContinuer quand même ?`,
+        danger: true,
+        confirmLabel: 'Générer quand même',
+      });
+      if (!ok) return;
     }
 
-    if (consultation.nutrition_plan && !confirm('Cela remplacera le plan actuel. Continuer ?')) return;
+    if (consultation.nutrition_plan) {
+      // V81 : regeneration = destructif (ecrase le plan + modifications non sauvegardees)
+      const ok = await confirmDialog.ask({
+        title: 'Régénérer le plan ?',
+        message: 'Le plan actuel sera remplacé. Les modifications non sauvegardées seront perdues.',
+        danger: true,
+        confirmLabel: 'Régénérer',
+      });
+      if (!ok) return;
+    }
 
     // Detection des contre-indications avant generation
     const alerts = detectContraIndications({
@@ -3543,10 +3562,17 @@ ${suppText}`;
                     <button
                       className="btn btn-primary"
                       style={{ padding: '6px 12px', fontSize: '.8rem' }}
-                      onClick={() => {
-                        if (consultation.nutrition_plan && !confirm('Remplacer le plan actuel par cette version ?')) return;
-                        // Sauver l'actuel avant de restaurer
+                      onClick={async () => {
                         if (consultation.nutrition_plan) {
+                          // V81 : modale propre (restauration = destructif)
+                          const ok = await confirmDialog.ask({
+                            title: 'Restaurer cette version ?',
+                            message: 'Le plan actuel sera remplacé par cette version archivée. Le plan actuel sera sauvegardé avant restauration.',
+                            danger: true,
+                            confirmLabel: 'Restaurer',
+                          });
+                          if (!ok) return;
+                          // Sauver l'actuel avant de restaurer
                           savePlanVersion(clientId, {
                             nutritionPlan: consultation.nutrition_plan,
                             supplements: consultation.supplements,
@@ -4794,6 +4820,38 @@ ${suppText}`;
                   })()}
                   {isFollowup && <span style={{ fontSize: '.7rem', background: 'rgba(124,92,191,.18)', color: '#b49ce0', padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>Suivi S{followupWeek}/4</span>}
                   {autoCorrected && <span style={{ fontSize: '.7rem', background: 'rgba(255,200,60,.15)', color: '#e8c560', padding: '2px 8px', borderRadius: 999 }}>Auto-corrige</span>}
+                  {/* V81 : indicateur dirty state visible dans le header (remplace le petit texte bas droit) */}
+                  {autoSaveStatus === 'unsaved' && (
+                    <span
+                      title="Des modifications n'ont pas encore été enregistrées"
+                      style={{
+                        fontSize: '.7rem',
+                        background: 'rgba(232,160,64,.18)',
+                        color: '#e8a040',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: '#e8a040',
+                        animation: 'ncDirtyPulse 1.8s ease-in-out infinite',
+                      }} />
+                      Non sauvegardé
+                    </span>
+                  )}
+                  {autoSaveStatus === 'saving' && (
+                    <span style={{
+                      fontSize: '.7rem', background: 'rgba(232,160,64,.1)',
+                      color: '#c5a048', padding: '2px 8px', borderRadius: 999, fontWeight: 600,
+                    }}>
+                      ⟳ Sauvegarde…
+                    </span>
+                  )}
                 </div>
                 {hasPlan && (
                   <div style={{ width: '100%' }}>
@@ -5496,6 +5554,9 @@ ${suppText}`;
                 </div>
               </div>
             )}
+
+            {/* V81 : modale de confirmation generique (regeneration / restore version / champs critiques) */}
+            <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
 
             {saveToast && <div className="nc-save-toast">{saveToast}</div>}
 

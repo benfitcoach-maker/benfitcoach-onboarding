@@ -2159,6 +2159,12 @@ html{overflow-x:hidden}
 .ne-section--saved{
   animation:neSectionSaved 1.8s ease-out;
 }
+
+/* V81 : pulse discret pour le point du badge "Non sauvegardé" dans le cockpit header */
+@keyframes ncDirtyPulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.4;transform:scale(.85)}
+}
 .ne-section-header{
   display:flex;align-items:center;gap:6px;
   padding:10px 16px;background:rgba(0,0,0,.15);
