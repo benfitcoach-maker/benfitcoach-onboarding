@@ -2165,6 +2165,131 @@ html{overflow-x:hidden}
   0%,100%{opacity:1;transform:scale(1)}
   50%{opacity:.4;transform:scale(.85)}
 }
+
+/* ═══ V84 : Header consultation nutrition refondu (2 lignes compactes) ═══
+   Remplace : .nutrition-header + pipeline status bar + .nutrition-steps (~150px → ~88px) */
+.nutrition-header-v2{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:10px 16px;
+  margin-bottom:14px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.nutrition-header-v2__top{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.nutrition-header-v2__client-name{
+  font-family:var(--font-title);
+  font-size:1.4rem;
+  color:var(--gold);
+  font-weight:700;
+  margin:0;
+  letter-spacing:.2px;
+  flex-shrink:0;
+}
+.nutrition-header-v2__badges{
+  display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+}
+.nutrition-header-v2__spacer{flex:1}
+.nutrition-header-v2__status{
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.nhv2-status-label{
+  font-size:.7rem;color:#8a8a7a;
+  text-transform:uppercase;letter-spacing:.3px;
+  font-weight:600;
+}
+.nhv2-status-select{
+  border-radius:6px;padding:4px 10px;
+  font-size:.78rem;font-weight:600;
+  cursor:pointer;outline:none;
+  font-family:inherit;
+}
+.nhv2-status-suggest{
+  border-radius:6px;padding:3px 10px;
+  font-size:.72rem;font-weight:600;
+  cursor:pointer;
+  transition:filter .15s;
+}
+.nhv2-status-suggest:hover{filter:brightness(1.2)}
+
+/* Badges unifiés (variants par data-variant) */
+.nhv2-badge{
+  font-size:.7rem;
+  padding:3px 9px;
+  border-radius:999px;
+  font-weight:600;
+  display:inline-flex;align-items:center;gap:5px;
+  white-space:nowrap;
+}
+.nhv2-badge[data-variant="gold"]{background:rgba(196,160,80,.16);color:#d4b568}
+.nhv2-badge[data-variant="green"]{background:rgba(106,191,138,.16);color:#8abf9a}
+.nhv2-badge[data-variant="warn"]{background:rgba(232,160,64,.18);color:#e8a040}
+.nhv2-badge[data-variant="warn-soft"]{background:rgba(232,160,64,.1);color:#c5a048}
+.nhv2-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#e8a040;
+  animation:ncDirtyPulse 1.8s ease-in-out infinite;
+}
+
+/* Stepper compact en pills */
+.nutrition-header-v2__stepper{
+  display:flex;gap:4px;
+  border-top:1px solid rgba(255,255,255,.04);
+  padding-top:8px;
+}
+.nutrition-step-pill{
+  flex:1 1 auto;min-width:100px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:6px 10px;
+  background:rgba(255,255,255,.02);
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:var(--text-muted);
+  font-size:.74rem;font-weight:500;
+  font-family:var(--font-body);
+  cursor:pointer;
+  transition:all .2s;
+}
+.nutrition-step-pill:hover{
+  color:var(--text);
+  background:rgba(106,191,138,.04);
+  border-color:rgba(106,191,138,.25);
+}
+.nutrition-step-pill__num{
+  width:18px;height:18px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.62rem;font-weight:700;
+  border:1.5px solid var(--border);
+  background:var(--bg);
+  flex-shrink:0;
+  transition:all .2s;
+}
+.nutrition-step-pill__label{white-space:nowrap}
+.nutrition-step-pill--active{
+  color:var(--gold);
+  background:var(--gold-dim);
+  border-color:rgba(196,160,80,.45);
+}
+.nutrition-step-pill--active .nutrition-step-pill__num{
+  background:var(--gold);
+  border-color:var(--gold);
+  color:var(--bg);
+}
+.nutrition-step-pill--done{color:var(--gold-dark)}
+.nutrition-step-pill--done .nutrition-step-pill__num{
+  background:var(--gold-dim);
+  border-color:var(--gold);
+  color:var(--gold);
+}
+
+@media (max-width:720px){
+  .nutrition-header-v2__top{gap:8px}
+  .nutrition-header-v2__client-name{font-size:1.15rem}
+  .nhv2-status-label{display:none}
+  .nutrition-step-pill__label{font-size:.68rem}
+}
 .ne-section-header{
   display:flex;align-items:center;gap:6px;
   padding:10px 16px;background:rgba(0,0,0,.15);

@@ -3610,62 +3610,102 @@ ${suppText}`;
         </div>
       )}
 
-      <div className="nutrition-header">
-        <h2>Consultation nutrition</h2>
-        <span className="nutrition-client-name">{form.prenom || 'Client'}</span>
-      </div>
-
-      {/* Pipeline status bar */}
+      {/* V84 : Header unifié (client + mode + statut + stepper) en 2 lignes compactes.
+          Remplace nutrition-header + pipeline status bar + nutrition-steps — meme logique metier. */}
       {(() => {
         const current = consultation.status || 'questionnaire_recu';
         const statusInfo = PIPELINE_STATUSES.find(s => s.key === current) || PIPELINE_STATUSES[0];
         const suggested = suggestStatus(consultation);
         const suggestedInfo = suggested && suggested !== current ? PIPELINE_STATUSES.find(s => s.key === suggested) : null;
+        const planMode = getNutritionPlanMode(client);
+        const isOneShot = planMode === 'oneshot';
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', background: 'rgba(255,255,255,.03)', borderRadius: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: '.72rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.3px', flexShrink: 0 }}>Statut</span>
-            <select
-              value={current}
-              onChange={(e) => updateField('status', e.target.value)}
-              style={{ background: statusInfo.color + '22', border: `1px solid ${statusInfo.color}55`, borderRadius: 6, padding: '4px 10px', color: statusInfo.color, fontSize: '.78rem', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
-            >
-              {PIPELINE_STATUSES.map(s => (
-                <option key={s.key} value={s.key}>{s.label}</option>
-              ))}
-            </select>
-            {suggestedInfo && (
-              <button
-                type="button"
-                onClick={() => updateField('status', suggested)}
-                style={{ background: suggestedInfo.color + '18', border: `1px solid ${suggestedInfo.color}44`, borderRadius: 6, padding: '3px 10px', color: suggestedInfo.color, fontSize: '.72rem', fontWeight: 600, cursor: 'pointer' }}
-              >
-                &#8594; {suggestedInfo.label}
-              </button>
-            )}
+          <div className="nutrition-header-v2">
+            {/* Ligne 1 : nom client + badges + statut */}
+            <div className="nutrition-header-v2__top">
+              <h2 className="nutrition-header-v2__client-name">{form.prenom || 'Client'}</h2>
+              <div className="nutrition-header-v2__badges">
+                <span
+                  className="nhv2-badge"
+                  data-variant={isOneShot ? 'gold' : 'green'}
+                  title={isOneShot
+                    ? 'Consultation unique — plan autonome pour 4 semaines'
+                    : 'Accompagnement continu — plan évolutif'}
+                >
+                  {isOneShot ? 'Bilan individuel' : 'Suivi'}
+                </span>
+                {autoSaveStatus === 'unsaved' && (
+                  <span className="nhv2-badge" data-variant="warn" title="Des modifications n'ont pas encore été enregistrées">
+                    <span className="nhv2-dot" /> Non sauvegardé
+                  </span>
+                )}
+                {autoSaveStatus === 'saving' && (
+                  <span className="nhv2-badge" data-variant="warn-soft">⟳ Sauvegarde…</span>
+                )}
+              </div>
+              <div className="nutrition-header-v2__spacer" />
+              <div className="nutrition-header-v2__status">
+                <span className="nhv2-status-label">Statut</span>
+                <select
+                  value={current}
+                  onChange={(e) => updateField('status', e.target.value)}
+                  style={{
+                    background: statusInfo.color + '22',
+                    border: `1px solid ${statusInfo.color}55`,
+                    color: statusInfo.color,
+                  }}
+                  className="nhv2-status-select"
+                >
+                  {PIPELINE_STATUSES.map(s => (
+                    <option key={s.key} value={s.key}>{s.label}</option>
+                  ))}
+                </select>
+                {suggestedInfo && (
+                  <button
+                    type="button"
+                    onClick={() => updateField('status', suggested)}
+                    className="nhv2-status-suggest"
+                    style={{
+                      background: suggestedInfo.color + '18',
+                      border: `1px solid ${suggestedInfo.color}44`,
+                      color: suggestedInfo.color,
+                    }}
+                  >
+                    → {suggestedInfo.label}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Ligne 2 : stepper compact pills */}
+            <div className="nutrition-header-v2__stepper">
+              {stepLabels.map((label, i) => {
+                const n = i + 1;
+                const isActive = step === n;
+                const isDone = step > n;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`nutrition-step-pill${isActive ? ' nutrition-step-pill--active' : ''}${isDone ? ' nutrition-step-pill--done' : ''}`}
+                    onClick={() => setStep(n)}
+                  >
+                    <span className="nutrition-step-pill__num">{n}</span>
+                    <span className="nutrition-step-pill__label">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
 
-      {/* Followup banner */}
+      {/* Followup banner (sous le header V84) */}
       {isFollowup && previousConsultation && (
         <div className="followup-banner">
           Consultation de suivi — Semaine {followupWeek}/4 — Derniere consultation : {formatDate(previousConsultation.date)}
         </div>
       )}
-
-      {/* Step progress */}
-      <div className="nutrition-steps">
-        {stepLabels.map((label, i) => (
-          <button
-            key={i}
-            className={`nutrition-step ${step === i + 1 ? 'active' : ''} ${step > i + 1 ? 'completed' : ''}`}
-            onClick={() => setStep(i + 1)}
-          >
-            <span className="nutrition-step-num">{i + 1}</span>
-            <span className="nutrition-step-label">{label}</span>
-          </button>
-        ))}
-      </div>
 
       {/* Step: Client summary (read-only) */}
       {currentStepType === 'summary' && (
