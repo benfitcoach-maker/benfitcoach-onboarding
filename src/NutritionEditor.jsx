@@ -467,6 +467,7 @@ function SectionBlock({
   onAppendProposal,
   onRejectProposal,
   flashing, // V79.1 : contrôle la classe .ne-section--flash via React state
+  readOnly = false, // V83 : mode relecture — desactive toute interaction d'edition
 }) {
   const [hovered, setHovered] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -504,6 +505,7 @@ function SectionBlock({
   };
 
   const handleContentClick = () => {
+    if (readOnly) return; // V83 : mode relecture, pas d'activation
     if (!isActive) onActivate(section.id);
   };
 
@@ -555,22 +557,27 @@ function SectionBlock({
     >
       {/* Header */}
       <div style={headerStyle}>
-        <div className="ne-move-buttons" style={{
-          display: 'flex', flexDirection: 'column', gap: 1,
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity .15s ease',
-          flexShrink: 0,
-        }}>
-          <button type="button" className="ne-move-btn" onClick={() => onMoveUp(section.id)} disabled={!canMoveUp} title="Monter">&#9650;</button>
-          <button type="button" className="ne-move-btn" onClick={() => onMoveDown(section.id)} disabled={!canMoveDown} title="Descendre">&#9660;</button>
-        </div>
+        {/* V83 : move buttons masques en mode relecture */}
+        {!readOnly && (
+          <div className="ne-move-buttons" style={{
+            display: 'flex', flexDirection: 'column', gap: 1,
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity .15s ease',
+            flexShrink: 0,
+          }}>
+            <button type="button" className="ne-move-btn" onClick={() => onMoveUp(section.id)} disabled={!canMoveUp} title="Monter">&#9650;</button>
+            <button type="button" className="ne-move-btn" onClick={() => onMoveDown(section.id)} disabled={!canMoveDown} title="Descendre">&#9660;</button>
+          </div>
+        )}
         <span style={titleStyle}>{section.title}</span>
         <div style={{ flex: 1 }} />
-        {!isActive && section.content.trim() && (
+        {/* V83 : tout ce qui suit (line count + actions) masque en mode relecture */}
+        {!readOnly && !isActive && section.content.trim() && (
           <span style={{ fontSize: '.65rem', color: 'rgba(255,255,255,.25)', padding: '2px 6px', background: 'rgba(255,255,255,.05)', borderRadius: 4, whiteSpace: 'nowrap' }}>
             {section.content.trim().split('\n').length} lignes
           </span>
         )}
+        {!readOnly && (
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           {/* Bouton ✨ Améliorer */}
           {!aiProposal && (
@@ -685,6 +692,7 @@ function SectionBlock({
             <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => onDelete(section.id)} title="Supprimer">&#10005;</button>
           </div>
         </div>
+        )}
       </div>
 
       {/* Body: textarea when active, premium render when inactive */}
@@ -810,7 +818,7 @@ function SectionBlock({
 
 // ─── MAIN EDITOR COMPONENT ───
 
-export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, onDraftChange, hideActions = false, flashSectionType = null }) {
+export default function NutritionEditor({ planText, supplementsText, recipesText, form, client, onSave, onExportPDF, onExportCover, onExportPack, getEditedDataRef, onDraftChange, hideActions = false, flashSectionType = null, readOnly = false }) {
   // sections[] is THE single source of truth for all content.
   // Each section.content is plain text/markdown, directly edited via controlled textarea.
   const [sections, setSections] = useState(() =>
@@ -857,8 +865,9 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   }, [activeSectionId]);
 
   const handleActivateSection = useCallback((id) => {
+    if (readOnly) return; // V83 : mode relecture → pas d'activation
     setActiveSectionId(id);
-  }, []);
+  }, [readOnly]);
 
   // ─── Build edited data from sections (pure function) ───
   const buildEditedData = useCallback((sectionsList) => {
@@ -1087,11 +1096,12 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
           onAppendProposal={handleAppendProposal}
           onRejectProposal={handleRejectProposal}
           flashing={flashSectionType && detectSectionType(section.title) === flashSectionType}
+          readOnly={readOnly}
         />
       ))}
 
-      {/* Add section */}
-      <div className="ne-add-section">
+      {/* Add section — V83 : masque en mode relecture */}
+      {!readOnly && <div className="ne-add-section">
         {!showAddSection ? (
           <button
             type="button"
@@ -1170,10 +1180,11 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
-      {/* Action buttons (hidden when parent cockpit provides them) */}
-      {!hideActions && (
+      {/* Action buttons (hidden when parent cockpit provides them)
+          V83 : aussi masque en mode relecture */}
+      {!hideActions && !readOnly && (
       <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ borderRadius: 14, border: '1px solid rgba(42,157,92,.35)', background: 'rgba(26,58,42,.25)', padding: '16px 18px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

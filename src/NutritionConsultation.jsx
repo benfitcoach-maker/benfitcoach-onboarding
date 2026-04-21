@@ -2620,6 +2620,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [flashSectionType, setFlashSectionType] = useState(null);
   // V81 : modale de confirmation reutilisable
   const confirmDialog = useConfirmDialog();
+  // V83 : mode relecture — l'editeur passe en read-only pour simuler la lecture du PDF
+  const [isReviewMode, setIsReviewMode] = useState(false);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -4668,6 +4670,7 @@ ${suppText}`;
                   onDraftChange={handleDraftChange}
                   hideActions
                   flashSectionType={flashSectionType}
+                  readOnly={isReviewMode}
                   onSave={(plan, supplements, recipes) => {
                     setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements, recipes }));
                     setPlanDraft(plan);
@@ -4855,7 +4858,8 @@ ${suppText}`;
                     </span>
                   )}
                 </div>
-                {hasPlan && (
+                {/* V83 : bloc qualite/AI analysis masque en mode relecture pour lisibilite */}
+                {hasPlan && !isReviewMode && (
                   <div style={{ width: '100%' }}>
                     <PlanQualityScore
                       score={liveScore || scorePlanQuality(
@@ -4950,8 +4954,8 @@ ${suppText}`;
                 )}
               </div>
 
-              {/* Suggestions panel */}
-              {suggestions.length > 0 && (
+              {/* Suggestions panel — V83 : masque en mode relecture */}
+              {!isReviewMode && suggestions.length > 0 && (
                 <div style={{
                   marginTop: 10,
                   padding: '10px 14px',
@@ -5352,6 +5356,23 @@ ${suppText}`;
                   <span style={{ flex: 1 }} />
                   {/* V76 : Apercu PDF retire — l'editeur est deja un apercu premium.
                       Cover accessible directement via un bouton dedie. */}
+                  {/* V83 : bouton Mode relecture — transforme toggle selon l'etat. */}
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => setIsReviewMode(m => !m)}
+                    style={{
+                      padding: '5px 12px', borderRadius: 8, fontSize: '.75rem',
+                      opacity: hasPlan ? 1 : 0.4,
+                      background: isReviewMode ? 'rgba(196,160,80,.22)' : undefined,
+                      borderColor: isReviewMode ? 'rgba(196,160,80,.55)' : undefined,
+                      color: isReviewMode ? '#e0cda0' : undefined,
+                    }}
+                    title={isReviewMode ? 'Revenir en mode édition' : 'Voir le plan en mode relecture (lecture seule, plein écran)'}
+                  >
+                    {isReviewMode ? '← Édition' : '👁 Relecture'}
+                  </button>
                   <button
                     type="button"
                     className="btn btn-anissa-secondary"
