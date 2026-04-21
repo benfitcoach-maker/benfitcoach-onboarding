@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft, softDeleteConsultation } from './store';
 // V79 : Copilot IA — routing + insertion des quickWins dans le plan
 import { routeQuickWin, insertWinIntoPlan, sectionLabel, failureMessage } from './services/planCopilot';
+// V80 : detection du mode one-shot vs followup depuis client.packType
+import { getNutritionPlanMode, planModeLabel } from './services/nutritionPlanMode';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -290,6 +292,105 @@ INTERDIT :
 - Paragraphes longs ou repetitifs
 - Tableau markdown avec pipes | |
 - Justifications generiques non liees au profil du client`;
+
+// V80 — Prompt one-shot (bilan individuel, sans suivi)
+// Plan plus simple, autonome, applicable seul pendant 4 semaines.
+// MEMES TITRES DE SECTIONS que FOUR_WEEKS_PROMPT (compatibilite parser + PDF),
+// mais contenu plus leger et pas de "Plan d'action S1-S4" (pas de suivi prevu).
+const ONESHOT_PLAN_PROMPT = `
+Tu produis un plan nutritionnel ONE-SHOT (bilan individuel).
+
+REGLE ABSOLUE :
+Le client NE reviendra PAS pour un ajustement. Le plan doit etre APPLICABLE SEUL pendant 4 semaines.
+Ne jamais ecrire "on ajustera ensemble", "on verra au prochain rdv", "je reviendrai sur ce point".
+Le plan doit etre AUTOSUFFISANT.
+
+PRIORITE : simplicite > exhaustivite.
+Un plan simple applique = reussite.
+Un plan parfait non applique = echec.
+
+Produis le plan strictement avec les sections suivantes, dans cet ordre, sans rien ajouter avant ou apres.
+1200 a 1500 mots maximum pour l'ensemble.
+
+## 0. INTRODUCTION PERSONNALISEE
+4 a 5 lignes. Ton humain, direct, rassurant. Reformulation de la situation + cadre simple.
+Ne pas mentionner de suivi. Poser le cadre : 4 semaines en autonomie.
+
+## 1. ANALYSE DU PROFIL
+Format label : valeur (5 lignes max) :
+- Objectif principal
+- Probleme principal
+- 2 problemes secondaires max
+- Facteurs bloquants
+- Niveau du plan (modere / exigeant)
+
+## 2. STRATEGIE NUTRITIONNELLE
+5 puces maximum, claires et directes.
+Chaque puce = un levier action concret (pas de generalite).
+Format label : valeur (Axe principal / Structure imposee / Timing / Aliments refuges / Exclusions).
+
+## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
+Une journee type complete, calibree selon poids/sexe/objectif du client.
+Format obligatoire :
+Petit-dejeuner : [contenu + portions en grammes/ml]
+Dejeuner : [idem]
+Collation : [idem, seulement si pertinent]
+Diner : [idem]
+
+PORTIONS PRECISES OBLIGATOIRES (grammages ou mesures).
+Pas de "selon appetit", pas de "quantite raisonnable".
+
+## 4. ROTATION DES REPAS
+4 categories maximum, 3-4 options chacune.
+Format : chaque categorie sur une ligne "Categorie : option1 / option2 / option3".
+Categories : Proteines, Feculents, Legumes, Matieres grasses.
+IMPORTANT : separer les options par " / " (avec espaces) — jamais "1/2 avocat" sans espaces.
+
+## 5. JOURNEE TYPE ALTERNATIVE
+UNE seule variante, meme format que SEMAINE 1.
+Cohérente avec les aliments de la rotation.
+
+## 6. FICHE FRIGO (PRIORITAIRE)
+Cette section est LA boussole quotidienne du client.
+4 a 6 regles MAXIMUM — pas 7, pas 10.
+Format bullet, phrases courtes, action directe.
+Lisible en 10 secondes sur le frigo.
+Pas de jargon, pas d'explications.
+
+## 7. PROTOCOLES CIBLES
+MAX 3 protocoles. Pas plus.
+Chacun au format : "problem → action → benefice attendu" en UNE phrase.
+
+## 8. AJUSTEMENTS ENVIRONNEMENTAUX
+MAX 3-4 conseils concrets.
+Hydratation, sommeil, mouvement, stress.
+Formulations breves, actionnables.
+
+## 9. RECOMMANDATIONS COACH
+Structure en 2 blocs :
+A GARDER : 3 actions cles a maintenir
+A EVITER : 3 erreurs frequentes a ne pas reproduire
+
+## 10. CLOTURE DU PLAN
+Ton rassurant, autonome.
+Le client doit se dire "je comprends, je peux, je commence demain".
+PAS de reference a un futur suivi.
+PAS de "reviens me voir".
+
+STYLE OBLIGATOIRE :
+- ton humain, direct, tutoiement
+- varier structures de phrases (pas de pattern repetitif)
+- phrases courtes acceptees
+- pas de marketing, pas d'emoji
+- pas de markdown cassé (pas de tableaux avec pipes)
+
+INTERDITS ABSOLUS :
+- mentionner un suivi, un futur rdv, un ajustement a venir
+- surcharger en protocoles (max 3)
+- proposer plus de 6 regles sur la fiche frigo
+- donner des conseils generiques non lies au profil
+- utiliser des phrases vagues ou non actionnables
+`;
 
 const FOUR_WEEKS_PROMPT = `
 Produis le plan strictement avec les sections suivantes, dans cet ordre, sans rien ajouter avant ou apres.
@@ -638,7 +739,7 @@ Si problemes : liste-les et fournis le texte corrige pour chaque section concern
 
 // Helper: build the system prompt with conditional modules
 // fullPlan: true = plan 4 semaines (premiere consultation), false = ajustements (suivi)
-function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', followupWeek = 0 } = {}) {
+function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = {}) {
   const parts = [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT];
 
   // Supplements: include if client is open to them (Oui or Peut-etre)
@@ -650,6 +751,9 @@ function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', follo
   if (isFollowup && followupWeek > 0) {
     // Followup: progressive adjustment prompt based on week number
     parts.push(buildFollowupPrompt(followupWeek));
+  } else if (planMode === 'oneshot') {
+    // V80 : bilan individuel one-shot — plan autonome, pas de suivi
+    parts.push(ONESHOT_PLAN_PROMPT);
   } else {
     // 4-week plan: include for formules with ongoing nutritional follow-up
     const recurrentFormules = ['suivi', 'intensif', 'autonome', 'nutrition', 'custom'];
@@ -3110,7 +3214,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 16000,
-          system: buildSystemPrompt(form, { isFollowup, clientFormule: client?.formule || '', followupWeek }),
+          system: buildSystemPrompt(form, {
+            isFollowup,
+            clientFormule: client?.formule || '',
+            followupWeek,
+            planMode: getNutritionPlanMode(client), // V80 : oneshot vs followup
+          }),
           messages: [{ role: 'user', content: userMessage + '\n\nGenere le plan nutrition personnalise complet (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.' }],
         }),
       });
@@ -4663,6 +4772,26 @@ ${suppText}`;
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: '.72rem', color: '#8abf9a', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 600 }}>Plan nutrition</span>
                   <span style={{ fontSize: '.82rem', color: '#d4c9a8', fontWeight: 500 }}>{clientName}</span>
+                  {/* V80 : badge mode (one-shot vs suivi) — discret, lu depuis client.packType */}
+                  {(() => {
+                    const planMode = getNutritionPlanMode(client);
+                    const isOneShot = planMode === 'oneshot';
+                    return (
+                      <span
+                        title={isOneShot
+                          ? 'Consultation unique — plan autonome pour 4 semaines'
+                          : 'Accompagnement continu — plan évolutif'}
+                        style={{
+                          fontSize: '.7rem',
+                          background: isOneShot ? 'rgba(196,160,80,.16)' : 'rgba(106,191,138,.16)',
+                          color: isOneShot ? '#d4b568' : '#8abf9a',
+                          padding: '2px 8px', borderRadius: 999, fontWeight: 600,
+                        }}
+                      >
+                        {isOneShot ? 'Bilan individuel' : 'Suivi'}
+                      </span>
+                    );
+                  })()}
                   {isFollowup && <span style={{ fontSize: '.7rem', background: 'rgba(124,92,191,.18)', color: '#b49ce0', padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>Suivi S{followupWeek}/4</span>}
                   {autoCorrected && <span style={{ fontSize: '.7rem', background: 'rgba(255,200,60,.15)', color: '#e8c560', padding: '2px 8px', borderRadius: 999 }}>Auto-corrige</span>}
                 </div>
