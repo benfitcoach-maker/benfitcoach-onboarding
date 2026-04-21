@@ -908,6 +908,23 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     }
   }, [buildEditedData]);
 
+  // V85.2 FIX : helper pour pousser immediatement les sections au parent.
+  // Utilise par tous les handlers mutants NON-debouncables : delete/reset/add/move/accept/append proposal.
+  // Sans ca, le parent (NutritionConsultation) garde un planDraft stale → autosave + bouton Sauvegarder
+  // ecrivent l'ancien texte, qui ecrase la modification au reload.
+  const pushSectionsToParent = useCallback((nextSections) => {
+    sectionsRef.current = nextSections;
+    // Cancel any pending debounced push (keystroke) — notre push explicite prime
+    if (draftDebounceRef.current) {
+      clearTimeout(draftDebounceRef.current);
+      draftDebounceRef.current = null;
+    }
+    if (onDraftChangeRef.current) {
+      const data = buildEditedData(nextSections);
+      onDraftChangeRef.current(data.plan, data.supplements, data.recipes);
+    }
+  }, [buildEditedData]);
+
   // Expose getEditedData to parent via ref callback
   useEffect(() => {
     if (getEditedDataRef) getEditedDataRef.current = getEditedData;
@@ -929,17 +946,26 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   }, []);
 
   // ─── Section operations ───
+  // V85.2 FIX : chaque mutation push au parent via pushSectionsToParent (sinon autosave stale).
   const handleDelete = useCallback((id) => {
-    setSections(prev => prev.filter(s => s.id !== id));
+    setSections(prev => {
+      const next = prev.filter(s => s.id !== id);
+      pushSectionsToParent(next);
+      return next;
+    });
     setSaved(false);
-  }, []);
+  }, [pushSectionsToParent]);
 
   const handleReset = useCallback((id) => {
-    setSections(prev => prev.map(s =>
-      s.id === id ? { ...s, content: s.originalContent } : s
-    ));
+    setSections(prev => {
+      const next = prev.map(s =>
+        s.id === id ? { ...s, content: s.originalContent } : s
+      );
+      pushSectionsToParent(next);
+      return next;
+    });
     setSaved(false);
-  }, []);
+  }, [pushSectionsToParent]);
 
   const handleResetAll = async () => {
     // V81 : modale propre au lieu de window.confirm
@@ -951,7 +977,9 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     });
     if (!ok) return;
     setActiveSectionId(null);
-    setSections(parsePlanToSections(planText, supplementsText, recipesText));
+    const fresh = parsePlanToSections(planText, supplementsText, recipesText);
+    setSections(fresh);
+    pushSectionsToParent(fresh); // V85.2 FIX
     setSaved(false);
   };
 
@@ -972,6 +1000,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
       } else {
         next.push(newSection);
       }
+      pushSectionsToParent(next); // V85.2 FIX
       return next;
     });
     setNewSectionTitle('');
@@ -987,6 +1016,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
       if (targetIdx < 0 || targetIdx >= prev.length) return prev;
       const next = [...prev];
       [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      pushSectionsToParent(next); // V85.2 FIX : sauvegarder le reorder au parent
       return next;
     });
     setSaved(false);
@@ -994,7 +1024,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
     setTimeout(() => {
       setJustMovedId(prev => (prev === id ? null : prev));
     }, 1000);
-  }, []);
+  }, [pushSectionsToParent]);
 
   const handleMoveUp = useCallback((id) => moveSection(id, 'up'), [moveSection]);
   const handleMoveDown = useCallback((id) => moveSection(id, 'down'), [moveSection]);
@@ -1022,24 +1052,32 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
   const handleAcceptProposal = useCallback((id) => {
     const proposal = proposals[id];
     if (!proposal) return;
-    setSections(prev => prev.map(s =>
-      s.id === id ? { ...s, content: proposal } : s
-    ));
+    setSections(prev => {
+      const next = prev.map(s =>
+        s.id === id ? { ...s, content: proposal } : s
+      );
+      pushSectionsToParent(next); // V85.2 FIX : propager au parent sinon autosave ecrit l'ancien texte
+      return next;
+    });
     setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
     setSaved(false);
-  }, [proposals]);
+  }, [proposals, pushSectionsToParent]);
 
   const handleAppendProposal = useCallback((id) => {
     const proposal = proposals[id];
     if (!proposal) return;
-    setSections(prev => prev.map(s =>
-      s.id === id
-        ? { ...s, content: s.content.trimEnd() + '\n\n' + proposal }
-        : s
-    ));
+    setSections(prev => {
+      const next = prev.map(s =>
+        s.id === id
+          ? { ...s, content: s.content.trimEnd() + '\n\n' + proposal }
+          : s
+      );
+      pushSectionsToParent(next); // V85.2 FIX : propager au parent
+      return next;
+    });
     setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
     setSaved(false);
-  }, [proposals]);
+  }, [proposals, pushSectionsToParent]);
 
   const handleRejectProposal = useCallback((id) => {
     setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
