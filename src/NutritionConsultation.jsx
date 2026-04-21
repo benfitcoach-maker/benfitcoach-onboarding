@@ -7,7 +7,8 @@ import NutritionEditor from './NutritionEditor';
 import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
-import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, extractFridgeDataFromSections, extractMeals, extractSupplements } from './nutritionPdf';
+// V76 : extractFridgeDataFromSections / extractMeals / extractSupplements retires (utilises seulement dans la modale Apercu PDF supprimee)
+import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF } from './nutritionPdf';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
@@ -1527,157 +1528,9 @@ function classifySection(title) {
   return 'other';
 }
 
-// Body PDF preview component (body nutrition uniquement, pas de cover)
-
-function renderSectionContent(content, type) {
-  // Parse content into structured blocks for premium rendering
-  const lines = (content || '').split('\n');
-  const blocks = [];
-  let currentBlock = [];
-
-  for (const line of lines) {
-    if (line.trim() === '' && currentBlock.length > 0) {
-      blocks.push(currentBlock);
-      currentBlock = [];
-    } else if (line.trim()) {
-      currentBlock.push(line);
-    }
-  }
-  if (currentBlock.length > 0) blocks.push(currentBlock);
-
-  return blocks.map((block, bi) => {
-    // Detect sub-headers (### or ** bold lines or CAPS short lines)
-    const firstLine = block[0] || '';
-    const isSubHeader = /^#{1,4}\s+/.test(firstLine) ||
-      /^\*\*[^*]+\*\*\s*$/.test(firstLine) ||
-      (firstLine === firstLine.toUpperCase() && /^[A-ZÀ-Ü]/.test(firstLine.trim()) && firstLine.trim().length > 3 && firstLine.trim().length < 60 && !/^[-–•\d]/.test(firstLine));
-
-    if (isSubHeader) {
-      const title = firstLine.replace(/^#+\s+/, '').replace(/\*\*/g, '').trim();
-      const rest = block.slice(1);
-      return (
-        <div key={bi} style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: '.82rem', fontWeight: 700, color: '#1A2E1F', marginBottom: 4, letterSpacing: '.3px' }}>
-            {title}
-          </div>
-          {rest.map((l, li) => renderLine(l, li, type))}
-        </div>
-      );
-    }
-
-    // Detect meal blocks (plan type: lines starting with repas names)
-    if (type === 'plan' && /petit.?d[eé]j|d[eé]jeuner|d[iî]ner|collation/i.test(firstLine)) {
-      return (
-        <div key={bi} style={{ background: '#fff', border: '1px solid rgba(26,46,31,.08)', borderRadius: 8, padding: '10px 14px', marginBottom: 8 }}>
-          {block.map((l, li) => renderLine(l, li, type))}
-        </div>
-      );
-    }
-
-    // Detect supplement timing blocks
-    if (type === 'supplements' && /matin|midi|soir|coucher|jeun/i.test(firstLine)) {
-      return (
-        <div key={bi} style={{ background: '#fff', borderLeft: '3px solid #1A2E1F', borderRadius: '0 8px 8px 0', padding: '8px 14px', marginBottom: 6 }}>
-          {block.map((l, li) => renderLine(l, li, type))}
-        </div>
-      );
-    }
-
-    // Default paragraph block
-    return (
-      <div key={bi} style={{ marginBottom: 8 }}>
-        {block.map((l, li) => renderLine(l, li, type))}
-      </div>
-    );
-  });
-}
-
-function renderLine(line, key, type) {
-  const trimmed = line.trim();
-
-  // Bullet point
-  if (/^[-–•]\s/.test(trimmed)) {
-    const text = trimmed.replace(/^[-–•]\s+/, '');
-    return (
-      <div key={key} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-        <span style={{ color: '#2a9d5c', fontWeight: 700, flexShrink: 0 }}>-</span>
-        <span style={{ color: '#4A4A42' }}>{text}</span>
-      </div>
-    );
-  }
-
-  // Numbered item
-  if (/^\d+[.)]\s/.test(trimmed)) {
-    const num = trimmed.match(/^(\d+)[.)]\s/)[1];
-    const text = trimmed.replace(/^\d+[.)]\s+/, '');
-    return (
-      <div key={key} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
-        <span style={{ color: '#1A2E1F', fontWeight: 700, minWidth: 18, flexShrink: 0 }}>{num}.</span>
-        <span style={{ color: '#4A4A42' }}>{text}</span>
-      </div>
-    );
-  }
-
-  // Bold line (**text**)
-  if (/^\*\*[^*]+\*\*/.test(trimmed)) {
-    return (
-      <div key={key} style={{ fontWeight: 600, color: '#1A2E1F', marginBottom: 2 }}>
-        {trimmed.replace(/\*\*/g, '')}
-      </div>
-    );
-  }
-
-  // Regular line
-  return <div key={key} style={{ color: '#4A4A42', marginBottom: 2 }}>{trimmed}</div>;
-}
-
-function NutritionPdfBody({ sections, isFollowup, clientName, date, followupWeek }) {
-  if (!sections || sections.length === 0) return null;
-
-  const sectionOrder = isFollowup
-    ? ['suivi', 'analyse', 'plan', 'supplements', 'conseils', 'notes_coach', 'other']
-    : ['analyse', 'principes', 'plan', 'supplements', 'conseils', 'notes_coach', 'other'];
-
-  const sorted = [...sections].sort((a, b) => {
-    const ia = sectionOrder.indexOf(a.type);
-    const ib = sectionOrder.indexOf(b.type);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
-
-  const docType = isFollowup ? `Suivi semaine ${followupWeek || ''}/4` : 'Plan nutritionnel';
-
-  // Styles
-  const pageHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(26,46,31,.12)', paddingBottom: 8, marginBottom: 16, fontSize: '.7rem', color: '#8a8a7a' };
-  const sectionStyle = { marginBottom: 24, pageBreakInside: 'avoid' };
-  const titleStyle = { color: '#1A2E1F', fontSize: '.88rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '2px solid #1A2E1F', paddingBottom: 6, marginBottom: 14 };
-
-  return (
-    <div style={{ background: '#F5F2EC', color: '#1A2E1F', borderRadius: 10, padding: '24px 28px', marginTop: 12, fontSize: '.83rem', lineHeight: 1.65, fontFamily: 'Inter, system-ui, sans-serif' }}>
-      {/* Page header */}
-      <div style={pageHeader}>
-        <span>{clientName}</span>
-        <span>{docType}</span>
-        <span>{date}</span>
-      </div>
-
-      {/* Sections */}
-      {sorted.map((sec, i) => (
-        <div key={i} style={sectionStyle}>
-          <h4 style={titleStyle}>
-            {sec.title}
-          </h4>
-          <div>{renderSectionContent(sec.content, sec.type)}</div>
-        </div>
-      ))}
-
-      {/* Footer */}
-      <div style={{ borderTop: '1px solid rgba(26,46,31,.1)', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '.68rem', color: '#8a8a7a' }}>
-        <span>Apercu du contenu nutrition</span>
-        <span>{sorted.length} section{sorted.length > 1 ? 's' : ''}</span>
-      </div>
-    </div>
-  );
-}
+// V76 : NutritionPdfBody + renderSectionContent + renderLine supprimes.
+// Ces helpers rendaient l'apercu HTML du PDF dans la modale Apercu PDF (retiree).
+// L'editeur premium (NutritionEditor + nutritionEditorParsers) remplit deja ce role.
 
 // ─── QUALITY DASHBOARD ───
 
@@ -2573,7 +2426,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [genError, setGenError] = useState('');
   const [autoCorrected, setAutoCorrected] = useState(false);
   const [pdfError, setPdfError] = useState('');
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  // V76 : showPdfPreview retire avec la modale Apercu PDF
   const [showAnalysesPreview, setShowAnalysesPreview] = useState(false);
   const [analysesError, setAnalysesError] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
@@ -2605,9 +2458,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V45 : Quick fill actif (id du bilan selectionne, ou null pour "tout afficher")
   const [activeLabQuickFill, setActiveLabQuickFill] = useState(null);
 
-  // ─── Cockpit (split view) ───
+  // ─── Cockpit (single editor view) ───
+  // V76 : previewTab supprime — Apercu PDF modal retiree, l'editeur est l'apercu.
   const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp'
-  const [previewTab, setPreviewTab] = useState('pdf'); // 'pdf' | 'frigo' | 'cover'
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   const [showCoverForm, setShowCoverForm] = useState(false);
@@ -2652,7 +2505,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // 'saved' | 'unsaved' | 'saving'
   const autoSaveTimerRef = useRef(null);
   const isDirtyRef = useRef(false);
-  const previewBodyRef = useRef(null);
+  // V76 : previewBodyRef retire avec la modale Apercu PDF
 
   // Restore draft on mount if newer than saved consultation
   useEffect(() => {
@@ -4682,125 +4535,7 @@ ${suppText}`;
           return null;
         };
 
-        const renderPreviewTab = () => {
-          if (!hasPlan) {
-            return (
-              <div style={{ padding: 24, textAlign: 'center', color: '#8a8a7a', background: 'rgba(255,255,255,.02)', border: '1px dashed rgba(255,255,255,.1)', borderRadius: 12 }}>
-                <p style={{ fontSize: '.88rem', marginBottom: 8 }}>Aucun apercu disponible.</p>
-                <p style={{ fontSize: '.78rem' }}>Regenere le plan pour voir le rendu PDF, la fiche frigo et la cover.</p>
-              </div>
-            );
-          }
-          if (previewTab === 'pdf') {
-            const { plan, supplements } = readEdited();
-            return (
-              <NutritionPdfBody
-                sections={structurePlanSections(plan, supplements, { isFollowup })}
-                isFollowup={isFollowup}
-                clientName={clientName}
-                date={formatDate(today)}
-                followupWeek={followupWeek}
-              />
-            );
-          }
-          if (previewTab === 'frigo') {
-            const { plan: fPlan, supplements: fSupp } = readEdited();
-            const fSections = structurePlanSections(fPlan, fSupp, { isFollowup });
-            const fromSections = extractFridgeDataFromSections(fSections) || {};
-            const regexMeals = extractMeals(fPlan);
-            const regexSupp = extractSupplements(fSupp || '');
-            const ficheJson = consultation.fiche_frigo_json;
-            const pickArr = (...sources) => sources.find(s => Array.isArray(s) && s.length > 0) || [];
-            const pickStr = (...sources) => sources.find(s => typeof s === 'string' && s.trim()) || '';
-            const data = {
-              breakfast: pickArr(fromSections.breakfast, ficheJson?.repas?.petit_dejeuner, regexMeals.breakfast),
-              lunch: pickArr(fromSections.lunch, ficheJson?.repas?.dejeuner, regexMeals.lunch),
-              dinner: pickArr(fromSections.dinner, ficheJson?.repas?.diner, regexMeals.dinner),
-              snack: pickStr(fromSections.snack, ficheJson?.repas?.collation, regexMeals.snack),
-              toFavor: pickArr(fromSections.toFavor, ficheJson?.a_privilegier, regexMeals.toFavor),
-              toLimit: pickArr(fromSections.toLimit, ficheJson?.a_limiter, regexMeals.toLimit),
-              hydration: pickStr(fromSections.hydration, ficheJson?.hydratation, regexMeals.hydration, form.hydratation),
-              supplements: {
-                morningFasting: pickArr(ficheJson?.supplements?.matin_a_jeun, regexSupp.morningFasting),
-                breakfast: pickArr(ficheJson?.supplements?.petit_dejeuner, regexSupp.breakfast),
-                lunch: pickArr(ficheJson?.supplements?.midi, regexSupp.lunch),
-                dinner: pickArr(ficheJson?.supplements?.soir, regexSupp.dinner),
-                bedtime: pickArr(ficheJson?.supplements?.coucher, regexSupp.bedtime),
-              },
-            };
-            const Section = ({ title, items, color = '#8abf9a' }) => {
-              if (!items || items.length === 0) return null;
-              return (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: '.66rem', fontWeight: 700, color, letterSpacing: '.12em', marginBottom: 6, textTransform: 'uppercase' }}>{title}</div>
-                  {items.slice(0, 3).map((item, i) => (
-                    <div key={i} style={{ fontSize: '.82rem', color: '#d4c9a8', paddingLeft: 10, marginBottom: 3, borderLeft: `2px solid ${color}33`, lineHeight: 1.5 }}>{String(item).replace(/\([^)]*\)/g, '').replace(/^[-–•*]\s*/, '').trim()}</div>
-                  ))}
-                </div>
-              );
-            };
-            const TagRow = ({ title, items, color }) => {
-              if (!items || items.length === 0) return null;
-              return (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: '.66rem', fontWeight: 700, color, letterSpacing: '.1em', marginBottom: 5, textTransform: 'uppercase' }}>{title}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {items.slice(0, 10).map((it, i) => (
-                      <span key={i} style={{ background: `${color}18`, color, fontSize: '.72rem', padding: '2px 8px', borderRadius: 100 }}>{String(it).replace(/\([^)]*\)/g, '').trim()}</span>
-                    ))}
-                  </div>
-                </div>
-              );
-            };
-            return (
-              <div style={{ padding: 4 }}>
-                <div style={{ background: 'rgba(26,46,31,.22)', border: '1px solid rgba(106,191,138,.18)', borderRadius: 12, padding: 18, marginBottom: 12 }}>
-                  <div style={{ fontSize: '.72rem', color: '#8abf9a', letterSpacing: '.18em', fontWeight: 700, marginBottom: 14 }}>FICHE FRIGO — {(form.prenom || clientName).toUpperCase()}</div>
-                  <Section title="Petit-dejeuner" items={data.breakfast} />
-                  <Section title="Dejeuner" items={data.lunch} />
-                  <Section title="Diner" items={data.dinner} />
-                  {data.snack && <Section title="Collation" items={[data.snack]} color="#c5b07a" />}
-                  {data.hydration && <div style={{ fontSize: '.78rem', color: '#8abf9a', marginBottom: 12 }}>Hydratation : <span style={{ color: '#d4c9a8' }}>{data.hydration}</span></div>}
-                  <TagRow title="A privilegier" items={data.toFavor} color="#8abf9a" />
-                  <TagRow title="A limiter" items={data.toLimit} color="#c5b07a" />
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => { setShowPdfPreview(false); setShowFrigoModal(true); }}
-                  style={{ width: '100%', padding: '10px 16px', borderRadius: 10, fontSize: '.8rem' }}
-                >
-                  Ouvrir l'editeur complet (3 vues)
-                </button>
-              </div>
-            );
-          }
-          if (previewTab === 'cover') {
-            return (
-              <div style={{ padding: 32, minHeight: 420, background: 'linear-gradient(135deg, #0f1a14 0%, #1a2e1f 100%)', borderRadius: 12, border: '1px solid rgba(106,191,138,.18)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: '.72rem', color: 'rgba(106,191,138,.7)', letterSpacing: '.2em', marginBottom: 16 }}>BENFITCOACH</div>
-                <div style={{ fontSize: '2.2rem', fontWeight: 300, color: '#f0f0e8', letterSpacing: '-.02em', marginBottom: 8 }}>{coverFields.prenom || clientName}</div>
-                <div style={{ fontSize: '.95rem', color: '#8abf9a', marginBottom: 28 }}>{coverFields.sousTitre}</div>
-                {coverFields.objectif && (
-                  <div style={{ borderLeft: '2px solid rgba(106,191,138,.4)', paddingLeft: 14, marginBottom: 20 }}>
-                    <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4 }}>Objectif</div>
-                    <div style={{ fontSize: '.95rem', color: '#d4c9a8' }}>{coverFields.objectif}</div>
-                  </div>
-                )}
-                <div style={{ fontSize: '.8rem', color: 'rgba(255,255,255,.5)', marginTop: 'auto' }}>{coverFields.date}</div>
-                <button
-                  type="button"
-                  className="btn btn-anissa-secondary"
-                  onClick={() => { setShowPdfPreview(false); setShowCoverForm(true); }}
-                  style={{ marginTop: 20, alignSelf: 'flex-start', padding: '8px 14px', borderRadius: 10, fontSize: '.78rem' }}
-                >
-                  Personnaliser la cover
-                </button>
-              </div>
-            );
-          }
-          return null;
-        };
+        // V76 : renderPreviewTab retire — l'editeur est deja un apercu premium fidele.
 
         const Tab = ({ active, onClick, children }) => (
           <button
@@ -5247,15 +4982,17 @@ ${suppText}`;
                   <Tab active={editorTab === 's1s4'} onClick={() => setEditorTab('s1s4')}>Plan S1-S4</Tab>
                   <Tab active={editorTab === 'supp'} onClick={() => setEditorTab('supp')}>Supplements</Tab>
                   <span style={{ flex: 1 }} />
+                  {/* V76 : Apercu PDF retire — l'editeur est deja un apercu premium.
+                      Cover accessible directement via un bouton dedie. */}
                   <button
                     type="button"
                     className="btn btn-anissa-secondary"
                     disabled={!hasPlan}
-                    onClick={() => setShowPdfPreview(true)}
+                    onClick={() => setShowCoverForm(true)}
                     style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
-                    title="Ouvrir l'apercu PDF dans une fenetre"
+                    title="Personnaliser la cover du PDF"
                   >
-                    👁 Apercu PDF
+                    🎨 Cover
                   </button>
                   <button
                     type="button"
@@ -5279,74 +5016,8 @@ ${suppText}`;
               </section>
             </div>
 
-            {/* V70 : Modale apercu PDF — ouverte a la demande via le bouton "Apercu PDF" */}
-            {showPdfPreview && (
-              <div
-                className="modal-overlay"
-                onClick={() => setShowPdfPreview(false)}
-                role="dialog"
-                aria-modal="true"
-                style={{
-                  position: 'fixed', inset: 0, zIndex: 1000,
-                  background: 'rgba(0,0,0,.65)', backdropFilter: 'blur(3px)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: 20,
-                }}
-              >
-                <div
-                  className="modal-content nc-pdf-modal"
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    width: '100%', maxWidth: 900, maxHeight: '92vh',
-                    background: '#12100c',
-                    border: '1px solid rgba(197,176,122,.25)',
-                    borderRadius: 14,
-                    display: 'flex', flexDirection: 'column',
-                    boxShadow: '0 20px 60px rgba(0,0,0,.6)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <header
-                    className="nc-panel__header"
-                    style={{ flexWrap: 'wrap', gap: 6, borderBottom: '1px solid rgba(255,255,255,.08)' }}
-                  >
-                    <span className="nc-panel__label" style={{ color: '#c5b07a' }}>Apercu</span>
-                    <Tab active={previewTab === 'pdf'} onClick={() => setPreviewTab('pdf')}>PDF complet</Tab>
-                    <Tab active={previewTab === 'frigo'} onClick={() => setPreviewTab('frigo')}>Fiche frigo</Tab>
-                    <Tab active={previewTab === 'cover'} onClick={() => setPreviewTab('cover')}>Cover</Tab>
-                    <span style={{ flex: 1 }} />
-                    <button
-                      type="button"
-                      className="btn btn-anissa-secondary"
-                      disabled={!hasPlan}
-                      onClick={() => doExportPdf()}
-                      style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem', opacity: hasPlan ? 1 : 0.4 }}
-                    >
-                      ⬇ Telecharger
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowPdfPreview(false)}
-                      style={{
-                        background: 'none', border: '1px solid rgba(255,255,255,.12)',
-                        color: 'rgba(255,255,255,.55)', padding: '5px 10px',
-                        borderRadius: 8, fontSize: '.72rem', cursor: 'pointer',
-                      }}
-                      title="Fermer"
-                    >
-                      ✕ Fermer
-                    </button>
-                  </header>
-                  <div
-                    className="nc-panel__body"
-                    style={{ padding: 16, overflowY: 'auto', flex: 1 }}
-                    ref={previewBodyRef}
-                  >
-                    {renderPreviewTab()}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* V76 : Modale Apercu PDF retiree — l'editeur est deja un apercu premium fidele.
+                Cover accessible directement via le bouton "🎨 Cover" du header editeur. */}
 
             {/* V53 : Audit IA maintenant integré dans PlanQualityScore (bloc unique en haut du cockpit) */}
 
@@ -5427,7 +5098,7 @@ ${suppText}`;
                     <button className="btn btn-secondary" onClick={() => setShowCoverForm(false)} style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}>Fermer</button>
                     <button
                       className="btn btn-anissa-secondary"
-                      onClick={() => { setPreviewTab('cover'); setShowCoverForm(false); showSaveToast('Cover mise a jour — voir l\'apercu'); }}
+                      onClick={() => { setShowCoverForm(false); showSaveToast('Cover enregistree'); }}
                       style={{ padding: '8px 16px', borderRadius: 10, fontSize: '.82rem' }}
                     >
                       Valider
