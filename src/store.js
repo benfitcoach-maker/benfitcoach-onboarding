@@ -245,6 +245,77 @@ function cloudDeleteMassageSession(sessionId) {
 async function cloudSyncNutritionConsultation(consultation) {
   if (!isCloudEnabled) return;
   const ownerId = await getCurrentOwnerId();
+
+  // V85.3.2 FIX : la table nutrition_consultations a une FK sur clients.id.
+  // Si le client n'est pas encore en cloud (cree offline, queue de sync bloquee,
+  // changement de session, etc), l'upsert de la consultation echoue avec
+  // nutrition_consultations_client_id_fkey — et toutes les modifications
+  // (Remplacer IA, autosave, Sauvegarder) restent locales : au reload, Supabase
+  // renvoie une version obsolete ou rien et le travail semble perdu.
+  // Correctif : pousser le client AVANT la consultation pour garantir la FK.
+  if (consultation.clientId) {
+    const localClient = getClient(consultation.clientId);
+    if (localClient) {
+      try {
+        const { data: existing } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('id', consultation.clientId)
+          .maybeSingle();
+        if (!existing) {
+          // Client absent en cloud — on le pousse en preliminaire (synchrone ici).
+          const { history, progression, massageSessions, ...rest } = localClient;
+          const cf = rest.form || {};
+          const cm = computeMetrics(cf);
+          const clientRow = {
+            id: rest.id,
+            owner_id: ownerId,
+            categorie: rest.categorie || 'online',
+            prenom: rest.prenom || '',
+            formule: rest.formule || '',
+            langue: rest.langue || 'FR',
+            status: rest.status || 'nouveau',
+            form: cf,
+            custom_rate: cf.customRate ? Number(cf.customRate) : null,
+            waist_cm: toNumOrNull(cf.tourTaille),
+            hip_cm: toNumOrNull(cf.tourHanche),
+            neck_cm: toNumOrNull(cf.tourCou),
+            chest_cm: toNumOrNull(cf.tourPoitrine),
+            arm_right_cm: toNumOrNull(cf.tourBrasDroit),
+            arm_left_cm: toNumOrNull(cf.tourBrasGauche),
+            thigh_right_cm: toNumOrNull(cf.tourCuisseDroite),
+            thigh_left_cm: toNumOrNull(cf.tourCuisseGauche),
+            calf_cm: toNumOrNull(cf.tourMollet),
+            body_fat_percent: round1OrNull(cm.bodyFat),
+            lean_mass_kg: round1OrNull(cm.leanMass),
+            bmr_kcal: cm.bmr != null ? Math.round(cm.bmr) : null,
+            interview_notes: rest.interviewNotes || null,
+            latest_sections: rest.latestSections || null,
+            created_by: rest.createdBy || 'benoit',
+            created_at: rest.createdAt || new Date().toISOString(),
+            updated_at: rest.updatedAt || new Date().toISOString(),
+            pack_type: rest.packType || null,
+            pack_started_at: rest.packStartedAt || null,
+            pack_schedule: rest.packSchedule || null,
+            pack_started_at_confirmed: rest.packStartedAtConfirmed ?? false,
+          };
+          const { error: clientErr } = await supabase
+            .from('clients')
+            .upsert(clientRow, { onConflict: 'id' });
+          if (clientErr) {
+            console.warn('[V85.3.2] Pre-upsert client before consultation failed:', clientErr.message);
+          } else {
+            console.log('[V85.3.2] Client pre-pushed to cloud before consultation upsert:', consultation.clientId);
+          }
+        }
+      } catch (e) {
+        console.warn('[V85.3.2] Client existence check failed:', e?.message || e);
+      }
+    } else {
+      console.warn('[V85.3.2] No local client found for clientId', consultation.clientId, '— consultation upsert will likely fail FK.');
+    }
+  }
+
   const row = {
     id: consultation.id,
     owner_id: ownerId,
