@@ -548,6 +548,7 @@ function SectionBlock({
       className={classNames}
       data-section-type={sectionType}
       data-section-id={section.id}
+      data-section-title={section.title}
       style={cardStyle}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setShowActions(false); }}

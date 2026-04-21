@@ -6,6 +6,8 @@ import { routeQuickWin, insertWinIntoPlan, sectionLabel, failureMessage } from '
 import { getNutritionPlanMode, planModeLabel } from './services/nutritionPlanMode';
 // V81 : modale de confirmation reutilisable (remplace window.confirm natif)
 import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
+// V82 : mini-TOC flottant pour naviguer dans le plan
+import NutritionPlanTOC from './components/NutritionPlanTOC';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 import NutritionTemplates from './NutritionTemplates';
@@ -5331,6 +5333,12 @@ ${suppText}`;
             )}
 
             {/* V50 : Modale aiAnalysis remplacee par un bloc inline juste apres l'editeur */}
+
+            {/* V82 : Mini-TOC flottant — visible uniquement quand il y a un plan, et desktop ≥ 1200px.
+                Scanne les sections rendues par NutritionEditor via data-section-* attributes. */}
+            {hasPlan && editorTab === 'plan' && (
+              <NutritionPlanTOC refreshKey={editorSeed} />
+            )}
 
             {/* ─── V70 : SINGLE EDITOR (plus de split view) — apercu PDF a la demande via modal ─── */}
             <div className="nc-cockpit-single" style={{ display: 'flex', flexDirection: 'column', flex: 'none', overflow: 'visible', minHeight: 600, padding: '12px 16px 16px' }}>
