@@ -2167,14 +2167,21 @@ html{overflow-x:hidden}
 }
 
 /* ═══ V84 : Header consultation nutrition refondu (2 lignes compactes) ═══
-   Remplace : .nutrition-header + pipeline status bar + .nutrition-steps (~150px → ~88px) */
+   Remplace : .nutrition-header + pipeline status bar + .nutrition-steps (~150px → ~88px)
+   Note : l'app header est position:fixed,z-index:100 (60-70px haut) et .app.app-wide
+   a padding:0 → on compense ici avec margin-top + margin-horizontal pour s'aligner. */
 .nutrition-header-v2{
   background:var(--bg-card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   padding:10px 16px;
-  margin-bottom:14px;
+  margin:84px 24px 14px; /* V84.1 fix : 84px top pour passer sous l'app header fixed */
   display:flex;flex-direction:column;gap:8px;
+}
+/* Quand l'app n'est PAS en mode wide (ex: autres pages), l'app a deja padding:80px
+   → on annule notre compensation pour ne pas double-espacer. */
+.app:not(.app-wide) .nutrition-header-v2{
+  margin:0 0 14px;
 }
 .nutrition-header-v2__top{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
