@@ -5,18 +5,37 @@ import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
+import { getClientNutritionLocale } from './services/nutritionLocale';
 
-function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
+// V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
+// Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
+// Cliente EN Benfitcoach (suivi/intensif + langue EN) → anamnese complete EN /anamnese/:id,
+// pas de pre-questionnaire.
+function SendQuestionnaireButton({ client }) {
+  const locale = getClientNutritionLocale(client);
+  const clientId = client.id;
+  const clientEmail = client.form?.email;
+  const clientPrenom = client.prenom || client.form?.prenom || '';
   const handleSend = (e) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/questionnaire/${clientId}`;
-    const prenom = clientPrenom || '';
-    const subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
-    const body =
-      `Bonjour ${prenom},\n\n` +
-      `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
-      `➜ ${url}\n\n` +
-      `Ce questionnaire est strictement confidentiel.`;
+    let url, subject, body;
+    if (locale === 'EN') {
+      url = `${window.location.origin}/anamnese/${clientId}`;
+      subject = 'Your pre-consultation health assessment — Anissa Deroubaix';
+      body =
+        `Hello ${clientPrenom},\n\n` +
+        `Ahead of our consultation, please take 10-15 minutes to complete your personalized health assessment:\n\n` +
+        `➜ ${url}\n\n` +
+        `All information is strictly confidential and used only to prepare your nutrition plan.`;
+    } else {
+      url = `${window.location.origin}/questionnaire/${clientId}`;
+      subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
+      body =
+        `Bonjour ${clientPrenom},\n\n` +
+        `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
+        `➜ ${url}\n\n` +
+        `Ce questionnaire est strictement confidentiel.`;
+    }
     const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(clientEmail || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank');
   };
@@ -26,7 +45,7 @@ function SendQuestionnaireButton({ clientId, clientEmail, clientPrenom }) {
       padding: '10px 16px', background: 'none', border: 'none',
       color: 'var(--text)', cursor: 'pointer', fontSize: '.85rem',
     }}>
-      📩 Envoyer questionnaire
+      {locale === 'EN' ? '📩 Send health assessment' : '📩 Envoyer questionnaire'}
     </button>
   );
 }
@@ -507,11 +526,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                   fontSize:'.85rem' }}>
                 {'\ud83d\udccb'} Voir l'historique
               </button>
-              <SendQuestionnaireButton
-                clientId={client.id}
-                clientEmail={client.form?.email}
-                clientPrenom={client.prenom || client.form?.prenom}
-              />
+              <SendQuestionnaireButton client={client} />
               {/* Séparateur */}
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
 

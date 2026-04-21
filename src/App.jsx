@@ -101,7 +101,7 @@ function Toast({ message, visible }) {
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V85.3.3';
+const APP_VERSION = 'V86.2';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (
@@ -134,6 +134,14 @@ function getQuestionnaireClientId() {
   return match ? match[1] : null;
 }
 
+// V86.2 : Public anamnese EN route — no auth required
+// Utilisee pour les clientes Benfitcoach EN (suivi/intensif + langue EN)
+// qui recoivent l'anamnese complete directement, sans pre-questionnaire FR.
+function getAnamneseEnClientId() {
+  const match = window.location.pathname.match(/^\/anamnese\/([a-f0-9-]+)$/i);
+  return match ? match[1] : null;
+}
+
 // Public cycle review route — no auth required
 function getCycleReviewToken() {
   const match = window.location.pathname.match(/^\/review\/([a-f0-9-]+)$/i);
@@ -149,6 +157,37 @@ function App() {
   const questionnaireClientId = getQuestionnaireClientId();
   if (questionnaireClientId) {
     return <QuestionnaireClient clientId={questionnaireClientId} />;
+  }
+  // V86.2 : placeholder route (le composant AnamneseClientEn arrivera au commit 3).
+  // En attendant, on affiche un simple message d'indisponibilite cote client EN.
+  const anamneseEnClientId = getAnamneseEnClientId();
+  if (anamneseEnClientId) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#0c120f',
+        color: '#d4c9a8',
+        fontFamily: 'system-ui, sans-serif',
+        padding: 24,
+      }}>
+        <div style={{ maxWidth: 480, textAlign: 'center' }}>
+          <div style={{ fontSize: '.72rem', color: '#c4a050', letterSpacing: '.18em',
+            textTransform: 'uppercase', marginBottom: 16 }}>
+            Anissa Nutrition
+          </div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 400, marginBottom: 12 }}>
+            Your health assessment will be available shortly.
+          </h1>
+          <p style={{ fontSize: '.9rem', opacity: .7, lineHeight: 1.5 }}>
+            Anissa is preparing your personalized intake form. You will receive
+            an updated link by email within 24 hours. Thank you for your patience.
+          </p>
+        </div>
+      </div>
+    );
   }
   if (window.location.pathname === '/decouverte') {
     return <Decouverte />;
