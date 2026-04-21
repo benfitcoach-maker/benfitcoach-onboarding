@@ -1066,9 +1066,15 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
         s.id === id ? { ...s, content: proposal } : s
       );
       pushSectionsToParent(next); // V85.2 FIX : propager au parent sinon autosave ecrit l'ancien texte
+      console.log('[Remplacer] sections updated — new content preview:', next.find(s => s.id === id)?.content.slice(0, 80));
       return next;
     });
-    setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
+    setProposals(prev => {
+      const next = {...prev};
+      delete next[id];
+      console.log('[Remplacer] proposals after delete — remaining keys:', Object.keys(next));
+      return next;
+    });
     setSaved(false);
   }, [proposals, pushSectionsToParent]);
 
