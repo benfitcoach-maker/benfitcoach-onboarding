@@ -93,20 +93,8 @@ html{overflow-x:hidden}
   background:rgba(12,18,15,.95);
   border-bottom:1px solid rgba(106,191,138,.12);
 }
-.nc-cockpit-split{
-  gap:16px;
-  grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);
-  flex:1;
-  display:grid;
-  overflow:hidden;
-  padding:12px 16px 16px;
-}
-@media(max-width:1024px){
-  .nc-cockpit-split{
-    grid-template-columns:1fr;
-    overflow-y:auto;
-  }
-}
+/* V85 : .nc-cockpit-split supprimee (plus utilisee depuis V76 — single editor view
+   a remplace le split view). La regle media query associee aussi. */
 .nc-panel{
   background:rgba(255,255,255,.035);
   border:1px solid rgba(255,255,255,.1);
@@ -2297,25 +2285,8 @@ html{overflow-x:hidden}
   .nhv2-status-label{display:none}
   .nutrition-step-pill__label{font-size:.68rem}
 }
-.ne-section-header{
-  display:flex;align-items:center;gap:6px;
-  padding:10px 16px;background:rgba(0,0,0,.15);
-  border-bottom:1px solid #3a5a3a;
-}
-.ne-drag-handle{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:14px;height:22px;
-  color:#6a7a6a;
-  font-size:1rem;
-  font-weight:700;
-  letter-spacing:-3px;
-  line-height:1;
-  user-select:none;
-  opacity:0;
-  transition:opacity .2s;
-  flex-shrink:0;
-}
-.ne-section:hover .ne-drag-handle{opacity:.7}
+/* V85 : .ne-section-header + .ne-drag-handle supprimees — non utilisees dans le JSX
+   (SectionBlock utilise des inline styles pour son header depuis V68). */
 .ne-move-buttons{
   display:flex;
   flex-direction:column;
