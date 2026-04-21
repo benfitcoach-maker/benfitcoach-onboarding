@@ -1051,30 +1051,18 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
 
   const handleAcceptProposal = useCallback((id) => {
     const proposal = proposals[id];
-    if (!proposal) {
-      console.warn('[Remplacer] no proposal for id', id, 'available keys:', Object.keys(proposals));
-      return;
-    }
-    console.log('[Remplacer] accept', { id, proposalPreview: proposal.slice(0, 80) });
+    if (!proposal) return;
     setSections(prev => {
-      const targetExists = prev.some(s => s.id === id);
-      if (!targetExists) {
-        console.warn('[Remplacer] section id not found in current sections', id, 'known ids:', prev.map(s => s.id));
-        return prev; // no-op — evite d'ecraser avec un .map sans match
-      }
+      // Guard defensif : si la section a disparu (ex: remount avec nouveaux UUIDs),
+      // on ne fait rien plutot que d'ecraser avec un .map sans match.
+      if (!prev.some(s => s.id === id)) return prev;
       const next = prev.map(s =>
         s.id === id ? { ...s, content: proposal } : s
       );
       pushSectionsToParent(next); // V85.2 FIX : propager au parent sinon autosave ecrit l'ancien texte
-      console.log('[Remplacer] sections updated — new content preview:', next.find(s => s.id === id)?.content.slice(0, 80));
       return next;
     });
-    setProposals(prev => {
-      const next = {...prev};
-      delete next[id];
-      console.log('[Remplacer] proposals after delete — remaining keys:', Object.keys(next));
-      return next;
-    });
+    setProposals(prev => { const next = {...prev}; delete next[id]; return next; });
     setSaved(false);
   }, [proposals, pushSectionsToParent]);
 

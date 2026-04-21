@@ -303,16 +303,13 @@ async function cloudSyncNutritionConsultation(consultation) {
             .from('clients')
             .upsert(clientRow, { onConflict: 'id' });
           if (clientErr) {
-            console.warn('[V85.3.2] Pre-upsert client before consultation failed:', clientErr.message);
-          } else {
-            console.log('[V85.3.2] Client pre-pushed to cloud before consultation upsert:', consultation.clientId);
+            console.warn('Pre-upsert client before consultation failed:', clientErr.message);
           }
         }
-      } catch (e) {
-        console.warn('[V85.3.2] Client existence check failed:', e?.message || e);
+      } catch {
+        // Silently continue — le upsert consultation va s'executer et rapportera
+        // l'erreur FK reelle si le client n'est toujours pas en cloud.
       }
-    } else {
-      console.warn('[V85.3.2] No local client found for clientId', consultation.clientId, '— consultation upsert will likely fail FK.');
     }
   }
 
