@@ -883,6 +883,12 @@ export function saveNutritionConsultation(consultation) {
     // Aucune nouvelle colonne DB : stocke dans le champ ai_analysis existant
     // via la couche cloud OU lu a la racine de l'objet en local. Defaults a FR.
     planLocale: consultation.planLocale || 'FR',
+    // V88 : couche de finalisation humaine au-dessus du plan IA.
+    // finalText = version editee par Anissa (markdown brut), prime sur nutritionPlan
+    // au moment du PDF si isFinal est true. Ne jamais ecraser nutritionPlan.
+    finalText: consultation.finalText || null,
+    isFinal: consultation.isFinal || false,
+    finalUpdatedAt: consultation.finalUpdatedAt || null,
   };
   // V78 : si une consultation avec ce id existe deja et est soft-delete,
   // preserver le flag pour eviter un "undelete" silencieux via edit.

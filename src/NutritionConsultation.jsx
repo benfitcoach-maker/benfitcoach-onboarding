@@ -2657,6 +2657,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const confirmDialog = useConfirmDialog();
   // V83 : mode relecture — l'editeur passe en read-only pour simuler la lecture du PDF
   const [isReviewMode, setIsReviewMode] = useState(false);
+  // V88 : couche de finalisation humaine. `finalText` est la version editee manuellement
+  // par Anissa, stockee separement du plan IA (nutrition_plan). Le PDF prime finalText
+  // si isFinal est true. Sinon, fallback sur le plan IA standard.
+  const [isFinalMode, setIsFinalMode] = useState(false);
+  const [finalText, setFinalText] = useState(initialConsultation?.finalText || '');
+  const [isFinal, setIsFinal] = useState(!!initialConsultation?.isFinal);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -2959,6 +2965,31 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   const updateField = (field, value) => {
     setConsultation(prev => ({ ...prev, [field]: value }));
+  };
+
+  // V88 : handlers de la couche de finalisation humaine.
+  // finalText vit en parallele de nutrition_plan. Jamais d'ecrasement du plan IA.
+  const handleSaveFinal = () => {
+    const payload = {
+      finalText: finalText || '',
+      isFinal: true,
+      finalUpdatedAt: new Date().toISOString(),
+    };
+    setIsFinal(true);
+    setConsultation(prev => ({ ...prev, ...payload }));
+    isDirtyRef.current = true;
+    setAutoSaveStatus('unsaved');
+    showSaveToast('Version finale enregistree');
+  };
+
+  const handleClearFinal = () => {
+    setFinalText('');
+    setIsFinal(false);
+    setConsultation(prev => ({ ...prev, finalText: null, isFinal: false }));
+    setIsFinalMode(false);
+    isDirtyRef.current = true;
+    setAutoSaveStatus('unsaved');
+    showSaveToast('Finalisation supprimee');
   };
 
   // Map step index to content type based on followup
@@ -3564,6 +3595,10 @@ ${suppText}`;
       // Stocke dans le champ JSON followupData pour eviter de toucher au
       // schema DB. Accessible ensuite via consultation.followupData?._planLocale.
       planLocale: getClientNutritionLocale(client),
+      // V88 : couche finalisation humaine. Propage au store.
+      finalText: finalText || null,
+      isFinal: isFinal,
+      finalUpdatedAt: isFinal ? (consultation.finalUpdatedAt || new Date().toISOString()) : null,
     });
     clearDraft(clientId, consultationId);
     isDirtyRef.current = false;
@@ -4651,7 +4686,15 @@ ${suppText}`;
         const doExportPdf = async () => {
           console.log('[PDF] doExportPdf CALLED');
           setPdfError('');
-          const { plan, supplements, recipes } = readEdited();
+          const edited = readEdited();
+          // V88 : prime finalText si present (couche humaine au-dessus du plan IA).
+          // Sinon, fallback sur le plan IA edite par l'utilisateur.
+          const plan = (isFinal && finalText) ? finalText : edited.plan;
+          const supplements = edited.supplements;
+          const recipes = edited.recipes;
+          if (isFinal && finalText) {
+            console.log('[PDF] using FINAL version (length:', finalText.length, ')');
+          }
           console.log('[PDF] plan length:', plan?.length, 'supplements length:', supplements?.length);
           const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
           const fullText = (plan || '') + '\n' + (supplements || '');
@@ -4688,7 +4731,11 @@ ${suppText}`;
 
         const doExportPack = async () => {
           setPdfError('');
-          const { plan, supplements, recipes } = readEdited();
+          const edited = readEdited();
+          // V88 : prime finalText si version finale active
+          const plan = (isFinal && finalText) ? finalText : edited.plan;
+          const supplements = edited.supplements;
+          const recipes = edited.recipes;
           const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
           const fullText = (plan || '') + '\n' + (supplements || '');
           const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
@@ -4748,6 +4795,69 @@ ${suppText}`;
         const renderEditorTab = () => {
           if (editorTab === 'plan') {
             if (hasPlan) {
+              // V88 : mode finalisation \u2014 textarea libre au-dessus du plan IA.
+              // Le plan IA (planDraft) reste intact, le Copilot continue d'operer dessus
+              // quand on revient en mode normal.
+              if (isFinalMode) {
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px' }}>
+                    <div style={{
+                      padding: '10px 14px',
+                      background: 'rgba(196,160,80,.08)',
+                      border: '1px solid rgba(196,160,80,.25)',
+                      borderRadius: 10,
+                      fontSize: '.8rem',
+                      color: '#d4b568',
+                      lineHeight: 1.5,
+                    }}>
+                      \u270d\ufe0f <strong>Mode finalisation.</strong> Tu edites une version finale
+                      libre (texte brut markdown), au-dessus du plan IA. Le plan IA n'est pas
+                      modifie. Le PDF utilisera cette version finale si tu l'enregistres.
+                    </div>
+                    <textarea
+                      value={finalText}
+                      onChange={(e) => setFinalText(e.target.value)}
+                      className="final-editor"
+                      spellCheck={true}
+                      style={{
+                        width: '100%',
+                        minHeight: 600,
+                        padding: '16px 18px',
+                        background: 'rgba(12,18,15,.6)',
+                        border: '1px solid rgba(196,160,80,.25)',
+                        borderRadius: 10,
+                        color: '#e8e0c8',
+                        fontSize: '.88rem',
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                        lineHeight: 1.6,
+                        resize: 'vertical',
+                        outline: 'none',
+                      }}
+                      placeholder="Colle ou edite ici la version finale du plan (markdown libre)..."
+                    />
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-anissa-secondary"
+                        onClick={handleClearFinal}
+                        style={{ padding: '8px 14px', borderRadius: 8, fontSize: '.78rem' }}
+                        title="Supprime la version finale \u2014 le PDF reviendra au plan IA"
+                      >
+                        \ud83d\uddd1\ufe0f Supprimer finalisation
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-anissa-primary"
+                        onClick={handleSaveFinal}
+                        style={{ padding: '8px 16px', borderRadius: 8, fontSize: '.78rem', fontWeight: 600 }}
+                        title="Enregistre la version finale \u2014 le PDF l'utilisera"
+                      >
+                        \ud83d\udcbe Enregistrer version finale
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <NutritionEditor
                   key={`editor-${editorSeed}`}
@@ -4921,6 +5031,23 @@ ${suppText}`;
                     );
                   })()}
                   {isFollowup && <span style={{ fontSize: '.7rem', background: 'rgba(124,92,191,.18)', color: '#b49ce0', padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>Suivi S{followupWeek}/4</span>}
+                  {/* V88 : badge Version finale visible si la consultation a une couche finalisation active */}
+                  {isFinal && (
+                    <span
+                      title={consultation.finalUpdatedAt ? `Finalisee le ${new Date(consultation.finalUpdatedAt).toLocaleString('fr-CH')}` : 'Version finale active \u2014 le PDF utilise la version editee'}
+                      style={{
+                        fontSize: '.7rem',
+                        background: 'rgba(196,160,80,.22)',
+                        color: '#e0cda0',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        fontWeight: 700,
+                        border: '1px solid rgba(196,160,80,.45)',
+                      }}
+                    >
+                      \u270d\ufe0f Version finale
+                    </span>
+                  )}
                   {autoCorrected && <span style={{ fontSize: '.7rem', background: 'rgba(255,200,60,.15)', color: '#e8c560', padding: '2px 8px', borderRadius: 999 }}>Auto-corrige</span>}
                   {/* V81 : indicateur dirty state visible dans le header (remplace le petit texte bas droit) */}
                   {autoSaveStatus === 'unsaved' && (
@@ -5469,6 +5596,30 @@ ${suppText}`;
                     title={isReviewMode ? 'Revenir en mode édition' : 'Voir le plan en mode relecture (lecture seule, plein écran)'}
                   >
                     {isReviewMode ? '← Édition' : '👁 Relecture'}
+                  </button>
+                  {/* V88 : bouton Finaliser \u2014 bascule vers une zone d'edition texte libre
+                      au-dessus du plan IA. Le plan IA reste intact en dessous. */}
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => {
+                      if (!isFinalMode && !finalText) {
+                        // A l'ouverture, pre-remplir avec le plan IA actuel
+                        setFinalText(planDraft || '');
+                      }
+                      setIsFinalMode(m => !m);
+                    }}
+                    style={{
+                      padding: '5px 12px', borderRadius: 8, fontSize: '.75rem',
+                      opacity: hasPlan ? 1 : 0.4,
+                      background: isFinalMode ? 'rgba(196,160,80,.28)' : (isFinal ? 'rgba(196,160,80,.14)' : undefined),
+                      borderColor: isFinalMode || isFinal ? 'rgba(196,160,80,.55)' : undefined,
+                      color: isFinalMode || isFinal ? '#e0cda0' : undefined,
+                    }}
+                    title={isFinalMode ? 'Revenir \u00e0 l\'editeur du plan IA' : 'Editer la version finale (texte libre, au-dessus du plan IA)'}
+                  >
+                    {isFinalMode ? '\u2190 Retour \u00e9dition' : '\u270d\ufe0f Finaliser'}
                   </button>
                   <button
                     type="button"
