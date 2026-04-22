@@ -73,6 +73,19 @@ const PDF_LABELS = {
     FOOTER_BRAND: 'Anissa Deroubaix Nutrition',
     FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
     DATE_LOCALE: 'fr-CH',
+    // V87.7 : labels fiche frigo (exportFicheFrigoPDF + exportClientPackPDF)
+    FRIDGE_HEADER: 'FICHE NUTRITION',
+    FRIDGE_PACK_TITLE: 'Votre Fiche Frigo',
+    MEAL_BREAKFAST: 'PETIT-DEJEUNER',
+    MEAL_LUNCH: 'DEJEUNER',
+    MEAL_DINNER: 'DINER',
+    FAVOR_SECTION: 'A PRIVILEGIER',
+    FAVOR_SECTION_ACCENT: '\u00c0 PRIVIL\u00c9GIER',
+    LIMIT_SECTION: 'A LIMITER',
+    LIMIT_SECTION_ACCENT: '\u00c0 LIMITER',
+    MEAL_SNACK: 'COLLATION',
+    PACK_MOTTO_LINE_1: 'La regularite bat l\'intensite. Mieux vaut un plan simple suivi a 90%',
+    PACK_MOTTO_LINE_2: 'qu\'un plan parfait suivi a 50%.',
   },
   EN: {
     COVER_TITLE: 'NUTRITION PLAN',
@@ -97,6 +110,19 @@ const PDF_LABELS = {
     FOOTER_BRAND: 'Anissa Deroubaix Nutrition',
     FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
     DATE_LOCALE: 'en-GB',
+    // V87.7 : labels fiche frigo EN
+    FRIDGE_HEADER: 'NUTRITION SHEET',
+    FRIDGE_PACK_TITLE: 'Your Nutrition Sheet',
+    MEAL_BREAKFAST: 'BREAKFAST',
+    MEAL_LUNCH: 'LUNCH',
+    MEAL_DINNER: 'DINNER',
+    FAVOR_SECTION: 'TO FAVOR',
+    FAVOR_SECTION_ACCENT: 'TO FAVOR',
+    LIMIT_SECTION: 'TO LIMIT',
+    LIMIT_SECTION_ACCENT: 'TO LIMIT',
+    MEAL_SNACK: 'SNACK',
+    PACK_MOTTO_LINE_1: 'Consistency beats intensity. A simple plan followed at 90%',
+    PACK_MOTTO_LINE_2: 'beats a perfect plan followed at 50%.',
   },
 };
 
@@ -2589,11 +2615,13 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const margin = 10;
   const radius = 4; // coins arrondis 4px
   const form = client?.form || {};
-  const dateStr = formatDateFR(consultation.date);
+  // V87.7 : locale derivee du client pour localiser la fiche frigo
+  const locale = resolveLocale(client);
+  const dateStr = formatDateFR(consultation.date, locale);
   const meals = editedMeals || extractMeals(consultation.nutritionPlan);
   const supplementsData = (editedMeals && editedMeals.supplements)
     || extractSupplements(consultation.supplements || '');
-  const noContent = 'Generez un plan nutrition plus detaille';
+  const noContent = locale === 'EN' ? 'Generate a more detailed nutrition plan' : 'Generez un plan nutrition plus detaille';
 
   // ─── Fond crème plein ───
   doc.setFillColor(...CREAM);
@@ -2619,7 +2647,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setTextColor(...DARK_GREEN);
   doc.setCharSpace(0);
   doc.text(
-    `FICHE NUTRITION  —  ${(form.prenom || 'CLIENT').toUpperCase()}`,
+    `${L('FRIDGE_HEADER', locale)}  \u2014  ${(form.prenom || 'CLIENT').toUpperCase()}`,
     pw / 2,
     titleCenterY + 2,
     { align: 'center' }
@@ -2644,9 +2672,9 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   const colWidth = (pw - margin * 2 - colGap * 2) / 3;
 
   const cols = [
-    { title: 'PETIT-DEJEUNER', items: meals.breakfast },
-    { title: 'DEJEUNER', items: meals.lunch },
-    { title: 'DINER', items: meals.dinner },
+    { title: L('MEAL_BREAKFAST', locale), items: meals.breakfast },
+    { title: L('MEAL_LUNCH', locale), items: meals.lunch },
+    { title: L('MEAL_DINNER', locale), items: meals.dinner },
   ];
 
   const bandH = 10;
@@ -2935,7 +2963,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...DARK_GREEN);
   doc.setCharSpace(0);
-  doc.text('À PRIVILÉGIER', margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
+  doc.text(L('FAVOR_SECTION_ACCENT', locale), margin + btmWidth / 2, sectionTop + 7, { align: 'center' });
   renderFoodList(meals.toFavor, margin, sectionTop, btmWidth, sectionH);
 
   // À LIMITER — fond rose pâle (même top, même hauteur)
@@ -2947,7 +2975,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFontSize(BTM_TITLE_FONT);
   doc.setTextColor(...LIMIT_TITLE);
   doc.setCharSpace(0);
-  doc.text('À LIMITER', limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
+  doc.text(L('LIMIT_SECTION_ACCENT', locale), limX + btmWidth / 2, sectionTop + 7, { align: 'center' });
   renderFoodList(meals.toLimit, limX, sectionTop, btmWidth, sectionH);
 
   // ══════════════════════════════════════════════════════════════
@@ -3333,9 +3361,11 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   const cw = pw - margin * 2;
   const form = client?.form || {};
   const prenom = (coverFields?.prenom || form.prenom || 'Client').trim();
-  const dateStr = formatDateFR(consultation.date || new Date().toISOString());
+  // V87.7 : locale pour pack PDF
+  const locale = resolveLocale(client);
+  const dateStr = formatDateFR(consultation.date || new Date().toISOString(), locale);
   const objectif = (coverFields?.objectif || form.objectifPrincipalNutrition || form.objectifSport || '').trim();
-  const sousTitre = coverFields?.sousTitre || 'Plan nutrition personnalise';
+  const sousTitre = coverFields?.sousTitre || (locale === 'EN' ? 'Personalized nutrition plan' : 'Plan nutrition personnalise');
 
   // ═══════════ PAGE 1: COVER ═══════════
   doc.setFillColor(...BG_PAGE);
@@ -3422,7 +3452,7 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
     doc.setFillColor(...BG_PAGE);
     doc.rect(0, 0, pw, ph, 'F');
     y = 20;
-    y = addSectionTitle(doc, 'Votre Fiche Frigo', y, margin);
+    y = addSectionTitle(doc, L('FRIDGE_PACK_TITLE', locale), y, margin);
     const tokens = parseNutritionPlan(frigoSection.content);
     y = renderTokens(doc, tokens, margin, y, cw);
     frigoRendered = true;
@@ -3436,8 +3466,8 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
       doc.setFillColor(...BG_PAGE);
       doc.rect(0, 0, pw, ph, 'F');
       y = 20;
-      y = addSectionTitle(doc, 'Votre Fiche Frigo', y, margin);
-      y = renderFridgeData(doc, fridgeData, margin, y, cw);
+      y = addSectionTitle(doc, L('FRIDGE_PACK_TITLE', locale), y, margin);
+      y = renderFridgeData(doc, fridgeData, margin, y, cw, locale);
       frigoRendered = true;
     }
   }
@@ -3543,15 +3573,15 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...GREY_TEXT);
-  doc.text('La regularite bat l\'intensite. Mieux vaut un plan simple suivi a 90%', pw / 2, y, { align: 'center' });
+  doc.text(L('PACK_MOTTO_LINE_1', locale), pw / 2, y, { align: 'center' });
   y += 5;
-  doc.text('qu\'un plan parfait suivi a 50%.', pw / 2, y, { align: 'center' });
+  doc.text(L('PACK_MOTTO_LINE_2', locale), pw / 2, y, { align: 'center' });
 
   // ═══════════ HEADERS & FOOTERS (all pages except cover) ═══════════
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 2; i <= totalPages; i++) {
     doc.setPage(i);
-    addHeaderFooter(doc, prenom, i - 1, totalPages - 1, dateStr);
+    addHeaderFooter(doc, prenom, i - 1, totalPages - 1, dateStr, locale);
   }
 
   const fileName = `pack-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`;
@@ -3559,13 +3589,14 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
 }
 
 // Helper: render extracted fridge data as formatted PDF content
-function renderFridgeData(doc, meals, margin, startY, cw) {
+// V87.7 : accepte locale pour localiser meal labels + A PRIVILEGIER / A LIMITER
+function renderFridgeData(doc, meals, margin, startY, cw, locale = 'FR') {
   let y = startY;
 
   const mealBlocks = [
-    { label: 'PETIT-DEJEUNER', items: meals.breakfast },
-    { label: 'DEJEUNER', items: meals.lunch },
-    { label: 'DINER', items: meals.dinner },
+    { label: L('MEAL_BREAKFAST', locale), items: meals.breakfast },
+    { label: L('MEAL_LUNCH', locale), items: meals.lunch },
+    { label: L('MEAL_DINNER', locale), items: meals.dinner },
   ];
 
   for (const block of mealBlocks) {
@@ -3601,7 +3632,7 @@ function renderFridgeData(doc, meals, margin, startY, cw) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...GREEN);
-    doc.text('COLLATION', margin + 2, y);
+    doc.text(L('MEAL_SNACK', locale), margin + 2, y);
     y += 6;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -3615,7 +3646,7 @@ function renderFridgeData(doc, meals, margin, startY, cw) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...GREEN);
-    doc.text('A PRIVILEGIER', margin + 2, y);
+    doc.text(L('FAVOR_SECTION', locale), margin + 2, y);
     y += 6;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
@@ -3629,7 +3660,7 @@ function renderFridgeData(doc, meals, margin, startY, cw) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(180, 60, 60);
-    doc.text('A LIMITER', margin + 2, y);
+    doc.text(L('LIMIT_SECTION', locale), margin + 2, y);
     y += 6;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
