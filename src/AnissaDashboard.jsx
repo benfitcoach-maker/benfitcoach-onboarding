@@ -808,9 +808,27 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
         </div>
       ) : (
         <>
-          {/* Shared clients section */}
-          {filteredShared.length > 0 && (
+          {/* V87.6 : section OWN Anissa en premier, avec titre explicite.
+              Avant : pas de titre sur own, partages en premier. Les deux se
+              melangeaient visuellement car 'Mes clients' etait le seul titre
+              visible et englobait tout. */}
+          {filteredOwn.length > 0 && (
             <div className="anissa-section">
+              <h3 className="anissa-section-title">
+                Clients Anissa
+                <span className="anissa-section-count">{filteredOwn.length}</span>
+              </h3>
+              <div className="anissa-client-list">
+                {filteredOwn.map((client, i) => (
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Shared clients section \u2014 maintenant APRES own et clairement separee */}
+          {filteredShared.length > 0 && (
+            <div className="anissa-section" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,.06)' }}>
               <h3 className="anissa-section-title">
                 Clients partages avec Benoit
                 <span className="anissa-section-count">{filteredShared.length}</span>
@@ -818,17 +836,6 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
                   <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Own clients section */}
-          {filteredOwn.length > 0 && (
-            <div className="anissa-section">
-              <div className="anissa-client-list">
-                {filteredOwn.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
                 ))}
               </div>
             </div>
