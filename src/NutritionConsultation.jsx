@@ -3559,6 +3559,11 @@ ${suppText}`;
       weeklyFeedback: isFollowup ? weeklyFeedback : null,
       followupWeek: isFollowup ? followupWeek : null,
       previousConsultationId: previousConsultation?.id || null,
+      // V87.5 : tracabilite locale. Permet de filtrer les consultations EN
+      // en prod (debug, support client, audit, stats usage).
+      // Stocke dans le champ JSON followupData pour eviter de toucher au
+      // schema DB. Accessible ensuite via consultation.followupData?._planLocale.
+      planLocale: getClientNutritionLocale(client),
     });
     clearDraft(clientId, consultationId);
     isDirtyRef.current = false;

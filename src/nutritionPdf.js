@@ -970,6 +970,16 @@ function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr, locale = 'FR
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(160, 158, 150);
   doc.text(prenom, m, 12);
+  // V87.4 : badge locale discret a droite du prenom (EN uniquement).
+  // Permet a Anissa d'identifier d'un coup d'oeil un PDF anglais dans son dossier.
+  if (locale === 'EN') {
+    const prenomW = doc.getTextWidth(prenom);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GOLD);
+    doc.text('\u00b7 EN', m + prenomW + 2, 12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(160, 158, 150);
+  }
   // V86.9 : titre header central localise
   const headerTitle = locale === 'EN' ? 'Personalized nutrition plan' : 'Plan nutrition personnalise';
   doc.text(headerTitle, pw / 2, 12, { align: 'center' });

@@ -879,6 +879,10 @@ export function saveNutritionConsultation(consultation) {
     mgdRecommendedTestsText: consultation.mgdRecommendedTestsText || '',
     status: consultation.status || 'questionnaire_recu',
     createdAt: consultation.createdAt || new Date().toISOString(),
+    // V87.5 : tracabilite locale (FR/EN) pour audit et stats usage.
+    // Aucune nouvelle colonne DB : stocke dans le champ ai_analysis existant
+    // via la couche cloud OU lu a la racine de l'objet en local. Defaults a FR.
+    planLocale: consultation.planLocale || 'FR',
   };
   // V78 : si une consultation avec ce id existe deja et est soft-delete,
   // preserver le flag pour eviter un "undelete" silencieux via edit.
