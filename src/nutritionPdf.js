@@ -1801,10 +1801,20 @@ export async function exportConsultationPDF(consultation, client) {
     }
 
     // ── RENDER ALL SECTIONS LINEARLY — V56 pagination smart ──
+    // V87 : GARDE ANTI-DUPLICATION supplements (defense en profondeur).
+    // Meme si structurePlanSections a deja dedupe, on re-verifie ici que
+    // le render loop n'emettra JAMAIS plus d'un bloc 'supplements' dans le PDF.
+    // Permet de se proteger contre d'eventuels doublons injectes ailleurs
+    // (ex: modification manuelle du tableau sections, legacy path, etc.)
+    let supplementsRendered = false;
     newPage();
     for (let i = 0; i < unifiedSections.length; i++) {
       const sec = unifiedSections[i];
       if (!sec?.content?.trim()) continue;
+      if (sec.type === 'supplements') {
+        if (supplementsRendered) continue; // skip doublon
+        supplementsRendered = true;
+      }
 
       // V56 : logique anti-orphan - estimer si le titre + 2 lignes min tient
       // Si on est deja tres bas (y > 240) et qu'il reste plus de 2 lignes a ecrire, nouvelle page

@@ -1702,7 +1702,22 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false, 
     });
   }
 
-  return sections;
+  // V87 : GARDE ANTI-DUPLICATION FORTE
+  // Meme si tout le flow amont est propre, on s'assure en sortie qu'il n'y a
+  // JAMAIS plus d'UNE section type 'supplements' dans le resultat. Si l'IA
+  // a emis deux blocs supplements (ex : titre EN + titre FR mal normalises,
+  // ou une section redondante), on ne garde que le premier et on jette les
+  // suivants. Fix garantit qu'aucun doublon ne peut atteindre le PDF.
+  let supplementsKept = false;
+  const deduped = [];
+  for (const s of sections) {
+    if (s.type === 'supplements') {
+      if (supplementsKept) continue;
+      supplementsKept = true;
+    }
+    deduped.push(s);
+  }
+  return deduped;
 }
 
 function classifySection(title) {

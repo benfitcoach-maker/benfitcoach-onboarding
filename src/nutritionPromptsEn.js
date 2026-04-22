@@ -385,6 +385,9 @@ ABSOLUTE FORBIDDEN:
 - propose more than 6 rules on the fridge rules
 - give generic advice not linked to the profile
 - use vague or non-actionable sentences
+- emit any supplements section in the plan body (supplements are generated
+  by a separate API call, never by this one)
+- emit more than one supplements block, in any language, at any position
 `;
 
 // ─── FOUR-WEEK FOLLOWUP PLAN ───
@@ -717,7 +720,12 @@ FORBIDDEN:
 
 OUTPUT RULES:
 - No bonus section, no annex, no additional summary
-- No supplement table (handled separately)
+- No supplement table (handled separately by a separate API call)
+- ANTI-DUPLICATION : never emit more than one supplements section in the plan body.
+  Do NOT create a second "SUPPLEMENTS RECOMMANDES" summary at the end or
+  a second "RECOMMENDED SUPPLEMENTS" block — only the separate supplements
+  call generates the supplements. The plan body must never contain a
+  supplements listing of any kind.
 - No wordcount comment
 - Strict stop after section 11`;
 
