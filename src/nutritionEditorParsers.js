@@ -140,14 +140,14 @@ export function parseSupplementEntriesStructured(text) {
     if (!m) return null;
     const rawLabel = m[1].toLowerCase().trim();
     const val = m[2].trim();
+    // V87.1 : regex etendues FR + EN (miroir stricte avec nutritionPdf.js)
     if (/source/.test(rawLabel)) return { key: 'sources', val };
-    if (/complement|supplement/.test(rawLabel)) return { key: 'dosage', val };
-    if (/dose/.test(rawLabel)) return { key: 'dosage', val };
-    if (/justif|raison|pourquoi/.test(rawLabel)) return { key: 'justification', val };
-    if (/interact|attention|eviter/.test(rawLabel)) return { key: 'interactions', val };
-    if (/duree|pendant|cure/.test(rawLabel)) return { key: 'duree', val };
-    if (/moment|quand|horaire/.test(rawLabel)) return { key: 'moment', val };
-    if (/association/.test(rawLabel)) return { key: 'interactions', val };
+    if (/complement|supplement|dose|dosage/.test(rawLabel)) return { key: 'dosage', val };
+    if (/justif|raison|pourquoi|why|reason/.test(rawLabel)) return { key: 'justification', val };
+    if (/interact|attention|eviter|caution|warning|avoid/.test(rawLabel)) return { key: 'interactions', val };
+    if (/duree|pendant|cure|duration|length/.test(rawLabel)) return { key: 'duree', val };
+    if (/moment|quand|horaire|timing|when/.test(rawLabel)) return { key: 'moment', val };
+    if (/association|pairing/.test(rawLabel)) return { key: 'interactions', val };
     return null;
   };
 

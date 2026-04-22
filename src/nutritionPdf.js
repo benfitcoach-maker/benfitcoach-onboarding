@@ -619,14 +619,16 @@ function drawSupplementCard(doc, name, fields, x, y, width, locale = 'FR') {
 
   // Estimer la hauteur approximative
   let estH = padY + 6; // titre
-  // V86.9 : labels localises via L()
+  // V87.1 : TOUS les labels passent par L() pour match strict avec le vocabulaire
+  // du prompt. FR = Moment/Dose/Sources/Pourquoi/Duree/Attention.
+  // EN = Timing/Dose/Sources/Why/Duration/Caution.
   const rows = [
     { label: L('SUPP_TIMING', locale), val: fields.moment },
-    { label: locale === 'EN' ? 'Dosage' : 'Dosage', val: fields.dosage },
+    { label: L('SUPP_DOSE', locale), val: fields.dosage },
     { label: L('SUPP_SOURCES', locale), val: fields.sources },
-    { label: locale === 'EN' ? 'Justification' : 'Justification', val: fields.justification },
+    { label: L('SUPP_WHY', locale), val: fields.justification },
     { label: L('SUPP_DURATION', locale), val: fields.duree },
-    { label: locale === 'EN' ? 'Interactions' : 'Interactions', val: fields.interactions },
+    { label: L('SUPP_CAUTION', locale), val: fields.interactions },
   ].filter(r => r.val?.trim());
 
   for (const r of rows) {
@@ -696,13 +698,14 @@ function parseSupplementEntriesStructured(text) {
     if (!m) return null;
     const rawLabel = m[1].toLowerCase().trim();
     const val = m[2].trim();
+    // V87.1 : regex etendues FR + EN (miroir stricte avec nutritionEditorParsers.js)
     if (/source/.test(rawLabel)) return { key: 'sources', val };
-    if (/complement|supplement/.test(rawLabel)) return { key: 'dosage', val };
-    if (/justif|raison|pourquoi/.test(rawLabel)) return { key: 'justification', val };
-    if (/interact|attention|eviter/.test(rawLabel)) return { key: 'interactions', val };
-    if (/duree|pendant|cure/.test(rawLabel)) return { key: 'duree', val };
-    if (/moment|quand|horaire/.test(rawLabel)) return { key: 'moment', val };
-    if (/association/.test(rawLabel)) return { key: 'interactions', val };
+    if (/complement|supplement|dose|dosage/.test(rawLabel)) return { key: 'dosage', val };
+    if (/justif|raison|pourquoi|why|reason/.test(rawLabel)) return { key: 'justification', val };
+    if (/interact|attention|eviter|caution|warning|avoid/.test(rawLabel)) return { key: 'interactions', val };
+    if (/duree|pendant|cure|duration|length/.test(rawLabel)) return { key: 'duree', val };
+    if (/moment|quand|horaire|timing|when/.test(rawLabel)) return { key: 'moment', val };
+    if (/association|pairing/.test(rawLabel)) return { key: 'interactions', val };
     return null;
   };
 
