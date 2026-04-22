@@ -2666,6 +2666,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [finalText, setFinalText] = useState(initialConsultation?.finalText || '');
   const [isFinal, setIsFinal] = useState(!!initialConsultation?.isFinal);
   const [finalDraft, setFinalDraft] = useState('');
+  // V88.3 : modal Preview PDF \u2014 affiche exactement ce qui ira dans le PDF.
+  // Source unique : finalText si isFinal sinon planDraft. Reutilise NutritionEditor en readOnly.
+  const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3022,6 +3025,14 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     setAutoSaveStatus('unsaved');
     setIsFinalMode(false);
     showSaveToast('Finalisation supprimee');
+  };
+
+  // V88.3 : renvoie le texte qui ira REELLEMENT dans le PDF.
+  // Meme logique que doExportPdf : prime finalText si la finalisation est active.
+  const getEffectivePlanText = () => {
+    if (isFinal && finalText && finalText.trim()) return finalText.trim();
+    if (planDraft && planDraft.trim()) return planDraft.trim();
+    return consultation?.nutrition_plan || '';
   };
 
   // Map step index to content type based on followup
@@ -5585,6 +5596,21 @@ ${suppText}`;
                   >
                     {'\u270d\ufe0f'} Finaliser
                   </button>
+                  {/* V88.3 : bouton Preview PDF \u2014 affiche le rendu final tel qu'il apparaitra
+                      dans le PDF (utilise finalText si isFinal, sinon plan IA). */}
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => setIsPdfPreviewOpen(true)}
+                    style={{
+                      padding: '5px 12px', borderRadius: 8, fontSize: '.75rem',
+                      opacity: hasPlan ? 1 : 0.4,
+                    }}
+                    title="Voir le rendu PDF final (prime la version finale si active)"
+                  >
+                    {'\ud83d\udc41\ufe0f'} Preview PDF
+                  </button>
                   <button
                     type="button"
                     className="btn btn-anissa-secondary"
@@ -6082,6 +6108,88 @@ ${suppText}`;
                 >
                   {'\ud83d\udcbe'} Valider version finale
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* V88.3 : Modal Preview PDF. Affiche exactement ce qui ira dans le PDF via
+          NutritionEditor en readOnly=true. Source : getEffectivePlanText().
+          - Si isFinal && finalText : preview de la version finale
+          - Sinon : preview du plan IA actuel
+          Aucun impact sur l'etat : modal purement lecture. */}
+      {isPdfPreviewOpen && (
+        <div
+          onClick={() => setIsPdfPreviewOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1450,
+            background: 'rgba(10,14,12,.7)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'stretch', justifyContent: 'stretch',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', height: '100%',
+              background: '#101511', display: 'flex', flexDirection: 'column',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+              gap: 16, padding: '20px 24px',
+              borderBottom: '1px solid rgba(196,160,80,.14)',
+              background: 'linear-gradient(to bottom, rgba(196,160,80,.08), rgba(196,160,80,.02))',
+            }}>
+              <div style={{ flex: 1 }}>
+                {isFinal && (
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '3px 10px', borderRadius: 999,
+                    background: 'rgba(196,160,80,.22)',
+                    border: '1px solid rgba(196,160,80,.55)',
+                    color: '#e0cda0',
+                    fontSize: '.68rem', fontWeight: 700, letterSpacing: '.08em',
+                    textTransform: 'uppercase',
+                    marginBottom: 10,
+                  }}>
+                    {'\u270d\ufe0f Source : version finale'}
+                  </div>
+                )}
+                <h2 style={{ margin: '0 0 6px', color: '#f4e7b2', fontSize: '1.1rem' }}>
+                  Preview PDF
+                </h2>
+                <p style={{ margin: 0, color: 'rgba(255,255,255,.72)', fontSize: '.9rem', lineHeight: 1.5 }}>
+                  {isFinal
+                    ? 'Rendu de la version finale \u2014 identique au PDF qui sera exporte.'
+                    : 'Rendu du plan IA actuel \u2014 identique au PDF qui sera exporte (pas de version finale active).'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-anissa-secondary"
+                onClick={() => setIsPdfPreviewOpen(false)}
+                style={{ padding: '6px 12px', borderRadius: 8, fontSize: '.78rem', flexShrink: 0 }}
+              >
+                {'\u2715'} Fermer
+              </button>
+            </div>
+
+            {/* Body : reutilise NutritionEditor en readOnly avec le texte effectif */}
+            <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', background: '#0f1411' }}>
+              <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+                <NutritionEditor
+                  key={`pdf-preview-${isPdfPreviewOpen}`}
+                  planText={getEffectivePlanText()}
+                  supplementsText={supplementsDraft}
+                  recipesText={recipesDraft}
+                  form={form}
+                  client={client}
+                  readOnly={true}
+                  hideActions={true}
+                  onSave={() => {}}
+                />
               </div>
             </div>
           </div>
