@@ -22,10 +22,11 @@ const SECTIONS = [
   { id: 2, label: 'Medical' },
   { id: 3, label: "Women's health" },
   { id: 4, label: 'Digestion' },
-  { id: 5, label: 'Sport' },
-  { id: 6, label: 'Lifestyle' },
-  { id: 7, label: 'Labs' },
-  { id: 8, label: 'Goals' },
+  { id: 5, label: 'Symptoms' },
+  { id: 6, label: 'Sport' },
+  { id: 7, label: 'Lifestyle' },
+  { id: 8, label: 'Labs' },
+  { id: 9, label: 'Goals' },
 ];
 
 const OBJECTIF_OPTIONS_EN = [
@@ -78,7 +79,14 @@ function AnamneseClientEn({ clientId }) {
     transitType: '',
     alimentsProblematiques: '',
     mastication: '',
-    // Step 5 — Sport
+    // Step 5 — Symptoms (fonctionnels)
+    fringalesSucre: '',
+    variationsGlycemie: '',
+    reactionGlucides: [],
+    douleursInflammations: '',
+    troublesPeau: '',
+    frequenceMaladies: '',
+    // Step 6 — Sport
     typeSport: '',
     frequenceSport: '',
     objectifSport: '',
@@ -160,6 +168,12 @@ function AnamneseClientEn({ clientId }) {
           transitType: f.transitType || '',
           alimentsProblematiques: f.alimentsProblematiques || '',
           mastication: f.mastication || '',
+          fringalesSucre: f.fringalesSucre || '',
+          variationsGlycemie: f.variationsGlycemie || '',
+          reactionGlucides: Array.isArray(f.reactionGlucides) ? f.reactionGlucides : (f.reactionGlucides ? String(f.reactionGlucides).split(',').map(s => s.trim()).filter(Boolean) : []),
+          douleursInflammations: f.douleursInflammations || '',
+          troublesPeau: f.troublesPeau || '',
+          frequenceMaladies: f.frequenceMaladies || '',
           typeSport: f.typeSport || '',
           frequenceSport: f.frequenceSport || '',
           objectifSport: f.objectifSport || '',
@@ -240,6 +254,12 @@ function AnamneseClientEn({ clientId }) {
       transitType: form.transitType,
       alimentsProblematiques: form.alimentsProblematiques,
       mastication: form.mastication,
+      fringalesSucre: form.fringalesSucre,
+      variationsGlycemie: form.variationsGlycemie,
+      reactionGlucides: form.reactionGlucides.join(', '),
+      douleursInflammations: form.douleursInflammations,
+      troublesPeau: form.troublesPeau,
+      frequenceMaladies: form.frequenceMaladies,
       typeSport: form.typeSport,
       frequenceSport: form.frequenceSport,
       objectifSport: form.objectifSport,
@@ -613,8 +633,88 @@ function AnamneseClientEn({ clientId }) {
           </div>
         )}
 
-        {/* Section 5 — Sport */}
+        {/* Section 5 — Symptoms */}
         {section === 5 && (
+          <div className="q-section">
+            <h2 className="q-section-title">Functional symptoms</h2>
+            <div className="q-field">
+              <label className="q-label">Sugar cravings</label>
+              <BtnGroup field="fringalesSucre" options={[
+                { value: 'Jamais', label: 'Never' },
+                { value: 'Occasionnellement', label: 'Occasionally' },
+                { value: 'Quotidiennement', label: 'Daily' },
+                { value: 'Plusieurs fois par jour', label: 'Several times a day' },
+              ]} columns={2} />
+            </div>
+            <div className="q-field">
+              <label className="q-label">Energy dips / unstable energy</label>
+              <BtnGroup field="variationsGlycemie" options={[
+                { value: 'Non', label: 'No' },
+                { value: 'Oui apres les repas', label: 'Yes after meals' },
+                { value: 'Oui en milieu de journee', label: 'Yes mid-day' },
+                { value: 'Oui en permanence', label: 'Yes constantly' },
+              ]} columns={2} />
+            </div>
+            <div className="q-field">
+              <label className="q-label">After a heavy meal, you feel (multiple choices possible)</label>
+              <div className="q-checkbox-group">
+                {[
+                  { value: 'Energie stable', label: 'Stable energy' },
+                  { value: 'Somnolence', label: 'Drowsiness' },
+                  { value: 'Ballonnements', label: 'Bloating' },
+                  { value: 'Faim rapide', label: 'Hungry again quickly' },
+                ].map(opt => {
+                  const active = form.reactionGlucides.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`q-checkbox-btn ${active ? 'q-checkbox-active' : ''}`}
+                      onClick={() => setForm(prev => {
+                        const arr = prev.reactionGlucides;
+                        return {
+                          ...prev,
+                          reactionGlucides: arr.includes(opt.value) ? arr.filter(v => v !== opt.value) : [...arr, opt.value],
+                        };
+                      })}
+                    >
+                      <span className="q-check-mark">{active ? '\u2713' : ''}</span>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="q-field">
+              <label className="q-label">Joint pain / inflammation</label>
+              <BtnGroup field="douleursInflammations" options={[
+                { value: 'Non', label: 'No' },
+                { value: 'Occasionnelles', label: 'Occasional' },
+                { value: 'Frequentes', label: 'Frequent' },
+                { value: 'Quotidiennes', label: 'Daily' },
+              ]} columns={2} />
+            </div>
+            <div className="q-field">
+              <label className="q-label">Skin issues</label>
+              <BtnGroup field="troublesPeau" options={[
+                { value: 'Non', label: 'No' },
+                { value: 'Oui occasionnel', label: 'Occasional' },
+                { value: 'Oui chronique', label: 'Chronic' },
+              ]} columns={3} />
+            </div>
+            <div className="q-field">
+              <label className="q-label">Frequent illnesses (colds, infections)</label>
+              <BtnGroup field="frequenceMaladies" options={[
+                { value: 'Rarement', label: 'Rarely' },
+                { value: '1-2 fois par an', label: '1-2 times a year' },
+                { value: 'Plusieurs fois par an', label: 'Several times a year' },
+              ]} columns={3} />
+            </div>
+          </div>
+        )}
+
+        {/* Section 6 — Sport */}
+        {section === 6 && (
           <div className="q-section">
             <h2 className="q-section-title">Sport and activity</h2>
             <div className="q-field">
@@ -650,8 +750,8 @@ function AnamneseClientEn({ clientId }) {
           </div>
         )}
 
-        {/* Section 6 — Lifestyle */}
-        {section === 6 && (
+        {/* Section 7 — Lifestyle */}
+        {section === 7 && (
           <div className="q-section">
             <h2 className="q-section-title">Lifestyle and sleep</h2>
             <NumericScale field="energieJournee" label="Daily energy level" />
@@ -716,8 +816,8 @@ function AnamneseClientEn({ clientId }) {
           </div>
         )}
 
-        {/* Section 7 — Labs */}
-        {section === 7 && (
+        {/* Section 8 — Labs */}
+        {section === 8 && (
           <div className="q-section">
             <h2 className="q-section-title">Labs and genetic tests</h2>
             <div className="q-field">
@@ -747,8 +847,8 @@ function AnamneseClientEn({ clientId }) {
           </div>
         )}
 
-        {/* Section 8 — Goals */}
-        {section === 8 && (
+        {/* Section 9 — Goals */}
+        {section === 9 && (
           <div className="q-section">
             <h2 className="q-section-title">Goals and motivation</h2>
             <div className="q-field">
