@@ -5992,19 +5992,35 @@ ${suppText}`;
               borderBottom: '1px solid rgba(196,160,80,.18)',
               background: 'linear-gradient(to bottom, rgba(196,160,80,.08), rgba(196,160,80,.02))',
             }}>
-              <div>
+              <div style={{ flex: 1 }}>
+                {/* V88.2 : badge dore repere fort "FINAL VERSION \u2014 PDF PRIORITY" */}
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '3px 10px', borderRadius: 999,
+                  background: 'rgba(196,160,80,.22)',
+                  border: '1px solid rgba(196,160,80,.55)',
+                  color: '#e0cda0',
+                  fontSize: '.68rem', fontWeight: 700, letterSpacing: '.08em',
+                  textTransform: 'uppercase',
+                  marginBottom: 10,
+                }}>
+                  {'\u270d\ufe0f'} Version finale {'\u2014'} Priorit\u00e9 PDF
+                </div>
                 <h2 style={{ margin: '0 0 6px', color: '#f4e7b2', fontSize: '1.15rem' }}>
                   Version finale
                 </h2>
-                <p style={{ margin: 0, color: 'rgba(255,255,255,.72)', fontSize: '.92rem' }}>
-                  Cette version remplace le plan IA uniquement pour l{'\u2019'}export PDF.
+                <p style={{ margin: '0 0 4px', color: 'rgba(255,255,255,.72)', fontSize: '.92rem', lineHeight: 1.5 }}>
+                  Cette version remplace le plan IA uniquement pour l{'\u2019'}export PDF. Le plan IA reste intact et modifiable.
+                </p>
+                <p style={{ margin: '6px 0 0', color: 'rgba(196,160,80,.7)', fontSize: '.82rem', lineHeight: 1.5 }}>
+                  {'\ud83d\udca1'} \u00c9dite librement. Garde les titres (##) pour un formatage PDF optimal.
                 </p>
               </div>
               <button
                 type="button"
                 className="btn btn-anissa-secondary"
                 onClick={closeFinalModal}
-                style={{ padding: '6px 12px', borderRadius: 8, fontSize: '.78rem' }}
+                style={{ padding: '6px 12px', borderRadius: 8, fontSize: '.78rem', flexShrink: 0 }}
               >
                 {'\u2715'} Fermer
               </button>
@@ -6022,6 +6038,7 @@ ${suppText}`;
                   background: '#f7f2e8', color: '#1f231f',
                   padding: 22, resize: 'none', outline: 'none',
                   font: '400 15px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                  letterSpacing: '.2px', // V88.2 : micro-ameliore lisibilite
                 }}
                 placeholder="Colle ou edite ici la version finale du plan (markdown libre)..."
               />
@@ -6061,9 +6078,9 @@ ${suppText}`;
                   className="btn btn-anissa-primary"
                   onClick={handleSaveFinalVersion}
                   style={{ padding: '8px 16px', borderRadius: 8, fontSize: '.78rem', fontWeight: 600 }}
-                  title="Enregistre la version finale \u2014 le PDF l'utilisera"
+                  title="Valide la version finale \u2014 le PDF l'utilisera"
                 >
-                  {'\ud83d\udcbe'} Enregistrer version finale
+                  {'\ud83d\udcbe'} Valider version finale
                 </button>
               </div>
             </div>
