@@ -2660,9 +2660,12 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V88 : couche de finalisation humaine. `finalText` est la version editee manuellement
   // par Anissa, stockee separement du plan IA (nutrition_plan). Le PDF prime finalText
   // si isFinal est true. Sinon, fallback sur le plan IA standard.
+  // V88.1 : UI devient une modal plein ecran. finalDraft = buffer d'edition non persiste
+  // (remis a jour a l'ouverture, ecrit dans finalText uniquement sur Enregistrer).
   const [isFinalMode, setIsFinalMode] = useState(false);
   const [finalText, setFinalText] = useState(initialConsultation?.finalText || '');
   const [isFinal, setIsFinal] = useState(!!initialConsultation?.isFinal);
+  const [finalDraft, setFinalDraft] = useState('');
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -2967,28 +2970,57 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     setConsultation(prev => ({ ...prev, [field]: value }));
   };
 
-  // V88 : handlers de la couche de finalisation humaine.
+  // V88.1 : modal plein ecran pour finalisation.
   // finalText vit en parallele de nutrition_plan. Jamais d'ecrasement du plan IA.
-  const handleSaveFinal = () => {
-    const payload = {
-      finalText: finalText || '',
-      isFinal: true,
-      finalUpdatedAt: new Date().toISOString(),
-    };
-    setIsFinal(true);
-    setConsultation(prev => ({ ...prev, ...payload }));
-    isDirtyRef.current = true;
-    setAutoSaveStatus('unsaved');
-    showSaveToast('Version finale enregistree');
+  // finalDraft = buffer d'edition qui ne touche a rien avant Enregistrer.
+  const openFinalModal = () => {
+    // Pre-remplir le draft : priorite a la version finale existante, sinon plan IA courant.
+    const base = (finalText?.trim()) || (planDraft || '').trim() || '';
+    setFinalDraft(base);
+    setIsFinalMode(true);
   };
 
-  const handleClearFinal = () => {
-    setFinalText('');
-    setIsFinal(false);
-    setConsultation(prev => ({ ...prev, finalText: null, isFinal: false }));
+  const closeFinalModal = () => {
     setIsFinalMode(false);
+  };
+
+  const handleSaveFinalVersion = () => {
+    const trimmed = (finalDraft || '').trim();
+    if (trimmed) {
+      setFinalText(trimmed);
+      setIsFinal(true);
+      setConsultation(prev => ({
+        ...prev,
+        finalText: trimmed,
+        isFinal: true,
+        finalUpdatedAt: new Date().toISOString(),
+      }));
+      showSaveToast('Version finale enregistree');
+    } else {
+      // draft vide = equivalent a une suppression
+      setFinalText('');
+      setIsFinal(false);
+      setConsultation(prev => ({
+        ...prev,
+        finalText: null,
+        isFinal: false,
+        finalUpdatedAt: null,
+      }));
+      showSaveToast('Finalisation vide \u2014 supprimee');
+    }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
+    setIsFinalMode(false);
+  };
+
+  const handleClearFinalVersion = () => {
+    setFinalText('');
+    setIsFinal(false);
+    setFinalDraft('');
+    setConsultation(prev => ({ ...prev, finalText: null, isFinal: false, finalUpdatedAt: null }));
+    isDirtyRef.current = true;
+    setAutoSaveStatus('unsaved');
+    setIsFinalMode(false);
     showSaveToast('Finalisation supprimee');
   };
 
@@ -4795,69 +4827,6 @@ ${suppText}`;
         const renderEditorTab = () => {
           if (editorTab === 'plan') {
             if (hasPlan) {
-              // V88 : mode finalisation \u2014 textarea libre au-dessus du plan IA.
-              // Le plan IA (planDraft) reste intact, le Copilot continue d'operer dessus
-              // quand on revient en mode normal.
-              if (isFinalMode) {
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 12px' }}>
-                    <div style={{
-                      padding: '10px 14px',
-                      background: 'rgba(196,160,80,.08)',
-                      border: '1px solid rgba(196,160,80,.25)',
-                      borderRadius: 10,
-                      fontSize: '.8rem',
-                      color: '#d4b568',
-                      lineHeight: 1.5,
-                    }}>
-                      {'\u270d\ufe0f'} <strong>Mode finalisation.</strong> Tu edites une version finale
-                      libre (texte brut markdown), au-dessus du plan IA. Le plan IA n'est pas
-                      modifie. Le PDF utilisera cette version finale si tu l'enregistres.
-                    </div>
-                    <textarea
-                      value={finalText}
-                      onChange={(e) => setFinalText(e.target.value)}
-                      className="final-editor"
-                      spellCheck={true}
-                      style={{
-                        width: '100%',
-                        minHeight: 600,
-                        padding: '16px 18px',
-                        background: 'rgba(12,18,15,.6)',
-                        border: '1px solid rgba(196,160,80,.25)',
-                        borderRadius: 10,
-                        color: '#e8e0c8',
-                        fontSize: '.88rem',
-                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                        lineHeight: 1.6,
-                        resize: 'vertical',
-                        outline: 'none',
-                      }}
-                      placeholder="Colle ou edite ici la version finale du plan (markdown libre)..."
-                    />
-                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-anissa-secondary"
-                        onClick={handleClearFinal}
-                        style={{ padding: '8px 14px', borderRadius: 8, fontSize: '.78rem' }}
-                        title="Supprime la version finale \u2014 le PDF reviendra au plan IA"
-                      >
-                        {'\ud83d\uddd1\ufe0f'} Supprimer finalisation
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-anissa-primary"
-                        onClick={handleSaveFinal}
-                        style={{ padding: '8px 16px', borderRadius: 8, fontSize: '.78rem', fontWeight: 600 }}
-                        title="Enregistre la version finale \u2014 le PDF l'utilisera"
-                      >
-                        {'\ud83d\udcbe'} Enregistrer version finale
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
               return (
                 <NutritionEditor
                   key={`editor-${editorSeed}`}
@@ -5597,29 +5566,24 @@ ${suppText}`;
                   >
                     {isReviewMode ? '← Édition' : '👁 Relecture'}
                   </button>
-                  {/* V88 : bouton Finaliser \u2014 bascule vers une zone d'edition texte libre
-                      au-dessus du plan IA. Le plan IA reste intact en dessous. */}
+                  {/* V88.1 : bouton Finaliser \u2014 ouvre une modal plein ecran.
+                      finalText est une couche humaine au-dessus du plan IA, utilisee
+                      uniquement pour l'export PDF. Le plan IA reste intact. */}
                   <button
                     type="button"
                     className="btn btn-anissa-secondary"
                     disabled={!hasPlan}
-                    onClick={() => {
-                      if (!isFinalMode && !finalText) {
-                        // A l'ouverture, pre-remplir avec le plan IA actuel
-                        setFinalText(planDraft || '');
-                      }
-                      setIsFinalMode(m => !m);
-                    }}
+                    onClick={openFinalModal}
                     style={{
                       padding: '5px 12px', borderRadius: 8, fontSize: '.75rem',
                       opacity: hasPlan ? 1 : 0.4,
-                      background: isFinalMode ? 'rgba(196,160,80,.28)' : (isFinal ? 'rgba(196,160,80,.14)' : undefined),
-                      borderColor: isFinalMode || isFinal ? 'rgba(196,160,80,.55)' : undefined,
-                      color: isFinalMode || isFinal ? '#e0cda0' : undefined,
+                      background: isFinal ? 'rgba(196,160,80,.22)' : undefined,
+                      borderColor: isFinal ? 'rgba(196,160,80,.55)' : undefined,
+                      color: isFinal ? '#e0cda0' : undefined,
                     }}
-                    title={isFinalMode ? 'Revenir \u00e0 l\'editeur du plan IA' : 'Editer la version finale (texte libre, au-dessus du plan IA)'}
+                    title={isFinal ? 'Editer ou remplacer la version finale' : 'Figer une version finale (utilisee uniquement a l\'export PDF)'}
                   >
-                    {isFinalMode ? '\u2190 Retour \u00e9dition' : '\u270d\ufe0f Finaliser'}
+                    {'\u270d\ufe0f'} Finaliser
                   </button>
                   <button
                     type="button"
@@ -5997,6 +5961,114 @@ ${suppText}`;
         >
           Sauvegarder
         </button>
+      )}
+
+      {/* V88.1 : Modal plein ecran de finalisation du plan.
+          - pre-remplit finalDraft avec finalText (si existe) ou planDraft
+          - Save : ecrit finalDraft dans finalText + isFinal=true, marque dirty
+          - Cancel : ferme sans rien ecrire (draft jete)
+          - Clear : reset finalText=null, isFinal=false
+          Aucun impact sur planDraft / nutrition_plan. */}
+      {isFinalMode && (
+        <div
+          onClick={closeFinalModal}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1400,
+            background: 'rgba(10,14,12,.66)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'stretch', justifyContent: 'stretch',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', height: '100%',
+              background: '#111613', display: 'flex', flexDirection: 'column',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+              gap: 16, padding: '20px 24px',
+              borderBottom: '1px solid rgba(196,160,80,.18)',
+              background: 'linear-gradient(to bottom, rgba(196,160,80,.08), rgba(196,160,80,.02))',
+            }}>
+              <div>
+                <h2 style={{ margin: '0 0 6px', color: '#f4e7b2', fontSize: '1.15rem' }}>
+                  Version finale
+                </h2>
+                <p style={{ margin: 0, color: 'rgba(255,255,255,.72)', fontSize: '.92rem' }}>
+                  Cette version remplace le plan IA uniquement pour l{'\u2019'}export PDF.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-anissa-secondary"
+                onClick={closeFinalModal}
+                style={{ padding: '6px 12px', borderRadius: 8, fontSize: '.78rem' }}
+              >
+                {'\u2715'} Fermer
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, padding: '20px 24px', overflow: 'hidden' }}>
+              <textarea
+                value={finalDraft}
+                onChange={(e) => setFinalDraft(e.target.value)}
+                spellCheck={true}
+                style={{
+                  width: '100%', height: '100%',
+                  border: '1px solid rgba(196,160,80,.16)', borderRadius: 18,
+                  background: '#f7f2e8', color: '#1f231f',
+                  padding: 22, resize: 'none', outline: 'none',
+                  font: '400 15px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                }}
+                placeholder="Colle ou edite ici la version finale du plan (markdown libre)..."
+              />
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              gap: 12, padding: '16px 24px',
+              borderTop: '1px solid rgba(196,160,80,.12)', background: '#151b17',
+            }}>
+              <button
+                type="button"
+                className="btn btn-anissa-secondary"
+                onClick={handleClearFinalVersion}
+                disabled={!isFinal && !finalDraft?.trim()}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, fontSize: '.78rem',
+                  opacity: (!isFinal && !finalDraft?.trim()) ? .4 : 1,
+                  cursor: (!isFinal && !finalDraft?.trim()) ? 'not-allowed' : 'pointer',
+                }}
+                title="Supprime la version finale \u2014 le PDF reviendra au plan IA"
+              >
+                {'\ud83d\uddd1\ufe0f'} Supprimer finalisation
+              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={closeFinalModal}
+                  style={{ padding: '8px 14px', borderRadius: 8, fontSize: '.78rem' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-primary"
+                  onClick={handleSaveFinalVersion}
+                  style={{ padding: '8px 16px', borderRadius: 8, fontSize: '.78rem', fontWeight: 600 }}
+                  title="Enregistre la version finale \u2014 le PDF l'utilisera"
+                >
+                  {'\ud83d\udcbe'} Enregistrer version finale
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
