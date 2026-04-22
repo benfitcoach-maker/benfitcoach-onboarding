@@ -6004,7 +6004,7 @@ ${suppText}`;
                   textTransform: 'uppercase',
                   marginBottom: 10,
                 }}>
-                  {'\u270d\ufe0f'} Version finale {'\u2014'} Priorit\u00e9 PDF
+                  {'\u270d\ufe0f Version finale \u2014 Priorit\u00e9 PDF'}
                 </div>
                 <h2 style={{ margin: '0 0 6px', color: '#f4e7b2', fontSize: '1.15rem' }}>
                   Version finale
@@ -6013,7 +6013,7 @@ ${suppText}`;
                   Cette version remplace le plan IA uniquement pour l{'\u2019'}export PDF. Le plan IA reste intact et modifiable.
                 </p>
                 <p style={{ margin: '6px 0 0', color: 'rgba(196,160,80,.7)', fontSize: '.82rem', lineHeight: 1.5 }}>
-                  {'\ud83d\udca1'} \u00c9dite librement. Garde les titres (##) pour un formatage PDF optimal.
+                  {'\ud83d\udca1 \u00c9dite librement. Garde les titres (##) pour un formatage PDF optimal.'}
                 </p>
               </div>
               <button
