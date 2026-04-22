@@ -364,30 +364,32 @@ function normalizeSectionKey(title) {
 }
 
 // Detecte le TYPE visuel d'une section pour choisir le rendu
+// V86.8 : miroir exact de nutritionEditorParsers.js. Regex etendues FR+EN
+// pour reconnaitre aussi les titres anglais generes par nutritionPromptsEn.js.
 function detectSectionType(title) {
   const k = normalizeSectionKey(title);
   // V59 : intro / cloture en style lettre (pas liste)
-  if (/^(introduction|intro)(\s*personnalisee)?$/.test(k)) return 'intro';
-  if (/^(cloture|conclusion)(\s*du\s*plan)?$/.test(k)) return 'closing';
-  if (/analyse\s*du\s*profil|profil/.test(k)) return 'profile';
-  if (/strategie\s*nutritionnelle|strategie/.test(k)) return 'strategy';
+  if (/^(introduction|intro)(\s*personnalisee)?$|^personalized\s+introduction$/.test(k)) return 'intro';
+  if (/^(cloture|conclusion)(\s*du\s*plan)?$|^plan\s+conclusion$/.test(k)) return 'closing';
+  if (/analyse\s*du\s*profil|profil|profile\s*analysis/.test(k)) return 'profile';
+  if (/strategie\s*nutritionnelle|strategie|nutritional\s*strategy/.test(k)) return 'strategy';
   // V69 : meals AVANT week pour que "SEMAINE 1 — STRUCTURE ALIMENTAIRE" gagne sur 'week'
-  if (/semaine\s*1.*structure|structure\s*alimentaire|plan\s*alimentaire|menus?/.test(k)) return 'meals';
-  if (/semaine\s*\d/.test(k)) return 'week';
-  if (/journee\s*type\s*alternative|journee\s*alternative|variante/.test(k)) return 'meals_alt';
-  if (/rotation|substitutions?/.test(k)) return 'rotation';
-  if (/aliments?\s*autorises|aliments?\s*favoris/.test(k)) return 'food_yes';
-  if (/aliments?\s*limites|aliments?\s*moderes/.test(k)) return 'food_limit';
-  if (/aliments?\s*interdits|aliments?\s*a\s*eviter/.test(k)) return 'food_no';
-  if (/protocoles?\s*cibles|protocole/.test(k)) return 'protocol';
-  if (/fiche\s*frigo|frigo/.test(k)) return 'fridge';
-  if (/ajustements?\s*environnementaux|ajustements/.test(k)) return 'adjustments';
-  if (/recommandations?\s*coach|recommandations/.test(k)) return 'coach';
-  if (/plan\s*d.?action|action/.test(k)) return 'action';
-  if (/supplements?\s*recommandes|supplements/.test(k)) return 'supplements';
-  if (/stabilisation\s*glycemique|glycemie/.test(k)) return 'protocol_glycemic';
-  if (/gestion\s*stress|stress/.test(k)) return 'protocol_stress';
-  if (/reparation\s*intestinale|intestinale/.test(k)) return 'protocol_gut';
+  if (/semaine\s*1.*structure|structure\s*alimentaire|plan\s*alimentaire|menus?|week\s*1.*meal\s*structure/.test(k)) return 'meals';
+  if (/semaine\s*\d|week\s*\d/.test(k)) return 'week';
+  if (/journee\s*type\s*alternative|journee\s*alternative|variante|alternative\s*day/.test(k)) return 'meals_alt';
+  if (/rotation|substitutions?|meal\s*rotation/.test(k)) return 'rotation';
+  if (/aliments?\s*autorises|aliments?\s*favoris|allowed\s*foods/.test(k)) return 'food_yes';
+  if (/aliments?\s*limites|aliments?\s*moderes|limited\s*foods/.test(k)) return 'food_limit';
+  if (/aliments?\s*interdits|aliments?\s*a\s*eviter|forbidden\s*foods/.test(k)) return 'food_no';
+  if (/protocoles?\s*cibles|protocole|targeted\s*protocols/.test(k)) return 'protocol';
+  if (/fiche\s*frigo|frigo|fridge\s*rules|fridge/.test(k)) return 'fridge';
+  if (/ajustements?\s*environnementaux|ajustements|environmental\s*adjustments/.test(k)) return 'adjustments';
+  if (/recommandations?\s*coach|recommandations|coach\s*recommendations/.test(k)) return 'coach';
+  if (/plan\s*d.?action|action\s*plan|action/.test(k)) return 'action';
+  if (/supplements?\s*recommandes|supplements?|recommended\s*supplements/.test(k)) return 'supplements';
+  if (/stabilisation\s*glycemique|glycemie|glucose\s*stabilization/.test(k)) return 'protocol_glycemic';
+  if (/gestion\s*stress|stress\s*management|stress/.test(k)) return 'protocol_stress';
+  if (/reparation\s*intestinale|intestinale|gut\s*repair/.test(k)) return 'protocol_gut';
   return 'default';
 }
 
