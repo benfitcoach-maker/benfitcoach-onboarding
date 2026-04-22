@@ -22,7 +22,12 @@ import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiCli
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './services/anissaIdentity';
 // V86.6 : prompts EN isoles pour clientes Benfitcoach anglophones.
-import { buildSystemPromptEn } from './nutritionPromptsEn';
+import {
+  buildSystemPromptEn,
+  buildSupplementsSystemPromptEn,
+  SUPPLEMENTS_INSTRUCTION_EN,
+  AUDIT_PROMPT_EN,
+} from './nutritionPromptsEn';
 import { getClientNutritionLocale } from './services/nutritionLocale';
 import { GENE_CATALOG, buildGeneticSectionForPrompt, getActiveGeneticAdjustments } from './services/geneticInterpretation';
 import { SmartTextarea } from './KeywordHints';
@@ -1638,7 +1643,7 @@ function cleanPlanForPDF(planText) {
   return text;
 }
 
-function structurePlanSections(planText, supplementsText, { isFollowup = false } = {}) {
+function structurePlanSections(planText, supplementsText, { isFollowup = false, locale = 'FR' } = {}) {
   const raw = [];
   const text = cleanPlanForPDF(planText);
   const lines = text.split('\n');
@@ -1684,9 +1689,14 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false }
   }
 
   // Add supplements as separate section
-  if (supplementsText?.trim()) {
+  // V86.9 : si le plan body contient deja une section type 'supplements'
+  // (l'IA a parfois inclus les supps dans le plan malgre l'interdit), on ne
+  // rajoute PAS un second bloc depuis supplementsText. Sinon, dedoublage visible
+  // dans l'editeur et dans le PDF (un bloc EN + un bloc FR legacy).
+  const hasSupplementsInPlan = sections.some(s => s.type === 'supplements');
+  if (supplementsText?.trim() && !hasSupplementsInPlan) {
     sections.push({
-      title: 'Supplements recommandes',
+      title: locale === 'EN' ? 'Recommended supplements' : 'Supplements recommandes',
       content: cleanPlanForPDF(supplementsText),
       type: 'supplements',
     });
@@ -2883,7 +2893,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     setAcceptedSections({});
     setSectionResults([]);
 
-    const sections = structurePlanSections(currentPlan, supplementsDraft, { isFollowup });
+    const sections = structurePlanSections(currentPlan, supplementsDraft, { isFollowup, locale: getClientNutritionLocale(client) });
 
     const results = [];
     for (let i = 0; i < sections.length; i++) {
@@ -3267,9 +3277,18 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       let planText = postProcess(planData.content?.[0]?.text || '');
 
       // Appel 2 : Supplements (conditionnel — seulement si client ouvert aux complements)
+      // V86.9 : pour les clientes Benfitcoach EN, on utilise les prompts supplements EN
+      // dedies (buildSupplementsSystemPromptEn + SUPPLEMENTS_INSTRUCTION_EN). Sinon, FR.
+      const consultationLocale = getClientNutritionLocale(client);
       let suppText = '';
       const wantsSupplements = form.pretProtocole === 'Oui' || form.pretProtocole === 'Peut-etre';
       if (wantsSupplements) {
+        const suppSystemPrompt = consultationLocale === 'EN'
+          ? buildSupplementsSystemPromptEn()
+          : buildSupplementsSystemPrompt();
+        const suppInstruction = consultationLocale === 'EN'
+          ? SUPPLEMENTS_INSTRUCTION_EN
+          : SUPPLEMENTS_INSTRUCTION;
         const suppResponse = await fetch('/api/claude', {
           method: 'POST',
           headers: {
@@ -3280,8 +3299,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
             // V48/V55 : system prompt dedie STRICT (sans mission "creer un plan")
-            system: buildSupplementsSystemPrompt(),
-            messages: [{ role: 'user', content: userMessage + '\n\n' + SUPPLEMENTS_INSTRUCTION }],
+            system: suppSystemPrompt,
+            messages: [{ role: 'user', content: userMessage + '\n\n' + suppInstruction }],
           }),
         });
 
@@ -3309,7 +3328,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
             body: JSON.stringify({
               model: 'claude-sonnet-4-20250514',
               max_tokens: 4000,
-              system: AUDIT_PROMPT,
+              // V86.9 : audit en EN pour clientes Benfitcoach EN
+              system: consultationLocale === 'EN' ? AUDIT_PROMPT_EN : AUDIT_PROMPT,
               messages: [{ role: 'user', content: `${auditClientProfile}\n\nPLAN GENERE :\n${planToAudit}\n\nSUPPLEMENTS :\n${suppText || 'Aucun'}` }],
             }),
           });
@@ -4622,7 +4642,7 @@ ${suppText}`;
             setPdfError('Export bloque : ' + validation.errors.join(' | '));
             return;
           }
-          const sections = structurePlanSections(plan, supplements, { isFollowup });
+          const sections = structurePlanSections(plan, supplements, { isFollowup, locale: getClientNutritionLocale(client) });
           console.log('[PDF DEBUG] sections:', sections.length, sections.map(s => ({ title: s.title, type: s.type, contentLen: s.content?.length })));
           try {
             await exportConsultationPDF({
@@ -4656,7 +4676,7 @@ ${suppText}`;
             setPdfError('Export dossier bloque : ' + validation.errors.join(' | '));
             return;
           }
-          const sections = structurePlanSections(plan, supplements, { isFollowup });
+          const sections = structurePlanSections(plan, supplements, { isFollowup, locale: getClientNutritionLocale(client) });
           const labDataForPdf = consultation.lab_results || {};
           const hasLabForPdf = Object.values(labDataForPdf).some(v => v !== '' && v != null);
           const correlationForPdf = hasLabForPdf
@@ -4773,7 +4793,7 @@ ${suppText}`;
             );
           }
           if (editorTab === 's1s4') {
-            const sections = hasPlan ? structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup }) : [];
+            const sections = hasPlan ? structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup, locale: getClientNutritionLocale(client) }) : [];
             const weekly = sections.filter(s => /semaine\s*[1-4]|rotation|plan\s*d[ae]?\s*action/i.test(s.title));
             if (!hasPlan) {
               return <div style={{ padding: 24, textAlign: 'center', color: '#8a8a7a' }}>Genere d'abord un plan pour visualiser la progression S1-S4.</div>;
@@ -5492,7 +5512,7 @@ ${suppText}`;
                     ficheFrigoJson: consultation.fiche_frigo_json || null,
                     date: today,
                   }}
-                  sections={structurePlanSections(plan, supplements, { isFollowup })}
+                  sections={structurePlanSections(plan, supplements, { isFollowup, locale: getClientNutritionLocale(client) })}
                   client={client}
                   onClose={() => setShowFrigoModal(false)}
                 />

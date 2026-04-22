@@ -307,6 +307,10 @@ Produce the plan strictly with the following sections, in this order, adding not
 4 to 5 lines. Human tone, direct, reassuring. Rephrase the situation + simple framing.
 Do not mention any follow-up. Set the frame: 4 weeks in autonomy.
 
+SPELLING NOTE: the exact word is "PERSONALIZED" (US English). Never write
+"Personnalized" (double N), "Personalised" (British spelling) or the French
+"Personnalisee". The section header must be copied as-is: ## 0. PERSONALIZED INTRODUCTION
+
 ## 1. PROFILE ANALYSIS
 Label: value format (5 lines max):
 - Main goal
@@ -392,6 +396,10 @@ Produce the plan strictly with the following sections, in this order, adding not
 ## 0. PERSONALIZED INTRODUCTION
 4 to 6 lines maximum. Natural opening, as you would start a written consultation.
 Human tone, direct, no marketing.
+
+SPELLING NOTE: the exact word is "PERSONALIZED" (US English). Never write
+"Personnalized" (double N), "Personalised" (British spelling) or the French
+"Personnalisee". The section header must be copied as-is: ## 0. PERSONALIZED INTRODUCTION
 
 Content to integrate (in the order that reads most naturally):
 - Rephrase the real situation in your own words (do not paste the file)
@@ -712,6 +720,49 @@ OUTPUT RULES:
 - No supplement table (handled separately)
 - No wordcount comment
 - Strict stop after section 11`;
+
+// ─── SUPPLEMENTS-ONLY SYSTEM PROMPT (mirror of buildSupplementsSystemPrompt FR) ───
+// Used by the separate supplements API call. STRICT: never generates a plan.
+
+export function buildSupplementsSystemPromptEn() {
+  return `${ANISSA_IDENTITY_CORE_EN}
+
+${SWISS_BRANDS_PROMPT_EN}
+
+${SUPPLEMENT_PROMPT_EN}
+
+YOUR MISSION: Write ONLY the RECOMMENDED SUPPLEMENTS section.
+STRICT RESTRICTIONS:
+- DO NOT write any nutrition plan (no weeks, no menus, no strategy)
+- DO NOT write clinical summary, base rules, or daily menus
+- DO NOT include sections like "NUTRITION PLAN", "PROFILE ANALYSIS", etc.
+- Start DIRECTLY with "RECOMMENDED SUPPLEMENTS" then the supplement list
+- Format: plain text, no markdown (no **bold**, no # headers)
+- No emojis
+- No ASCII tables with pipes | | (use simple text format)`;
+}
+
+// ─── SUPPLEMENTS EXCLUSIVE INSTRUCTION (mirror of SUPPLEMENTS_INSTRUCTION FR) ───
+
+export const SUPPLEMENTS_INSTRUCTION_EN = `EXCLUSIVE TASK: write ONLY the recommended supplements section.
+
+DO NOT write any nutrition plan, menus, daily menus, strategy, clinical summary,
+base rules, rotations, fridge rules, or environmental adjustments.
+Start DIRECTLY with "RECOMMENDED SUPPLEMENTS" and nothing before.
+
+Format for each supplement (5-6 max):
+Supplement name (uppercase)
+- Food sources: foods + quantities
+- Supplement if insufficient: dosage, timing, form, Swiss brand
+- Justification: 1 sentence tied to the profile
+- Interactions: 1 line if relevant
+- Duration: X weeks / months
+
+RULES:
+- No emojis
+- No markdown (**bold**, # headers, tables | |)
+- Plain, readable text
+- Second person (you)`;
 
 // ─── AUDIT PROMPT (mirror of FR AUDIT_PROMPT) ───
 

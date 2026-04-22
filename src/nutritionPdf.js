@@ -46,9 +46,76 @@ const SPACE = {
 const PAGE_H = 297;  // A4 hauteur
 const PAGE_W = 210;  // A4 largeur
 
-function formatDateFR(iso) {
+// ─── V86.9 : labels localises FR / EN ─────────────────────────────────────
+// Tous les libelles visibles dans le PDF passent par L(key, locale).
+// Fallback systematique sur FR (comportement actuel preserve si locale absent).
+const PDF_LABELS = {
+  FR: {
+    COVER_TITLE: 'PLAN NUTRITIONNEL',
+    COVER_SUBTITLE: 'Personnalise',
+    INTRO_LABEL: "LE MOT D'ANISSA",
+    CLOSING_LABEL: 'POUR LA SUITE',
+    REMEMBER: 'A RETENIR',
+    VARIANT: 'VARIANTE',
+    SUPPLEMENTS_TITLE: 'SUPPLEMENTS RECOMMANDES',
+    SUPP_TIMING: 'Moment',
+    SUPP_DOSE: 'Dose',
+    SUPP_WHY: 'Pourquoi',
+    SUPP_DURATION: 'Duree',
+    SUPP_CAUTION: 'Attention',
+    SUPP_SOURCES: 'Sources',
+    CONFIDENTIAL: 'Document confidentiel \u2014 usage personnel uniquement',
+    FOOTER_CLOSING_LINE_1: 'Ce plan a ete elabore specifiquement pour vous',
+    FOOTER_CLOSING_LINE_2: 'par Anissa Deroubaix, nutritionniste specialisee',
+    FOOTER_CLOSING_LINE_3: 'en longevite et genetique.',
+    FOOTER_RECOMMENDED_LINE_1: 'Il est recommande de suivre ce plan pendant 4 semaines',
+    FOOTER_RECOMMENDED_LINE_2: "avant d'envisager des ajustements.",
+    FOOTER_BRAND: 'Anissa Deroubaix Nutrition',
+    FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
+    DATE_LOCALE: 'fr-CH',
+  },
+  EN: {
+    COVER_TITLE: 'NUTRITION PLAN',
+    COVER_SUBTITLE: 'Personalized',
+    INTRO_LABEL: "ANISSA'S NOTE",
+    CLOSING_LABEL: 'MOVING FORWARD',
+    REMEMBER: 'REMEMBER',
+    VARIANT: 'VARIANT',
+    SUPPLEMENTS_TITLE: 'RECOMMENDED SUPPLEMENTS',
+    SUPP_TIMING: 'Timing',
+    SUPP_DOSE: 'Dose',
+    SUPP_WHY: 'Why',
+    SUPP_DURATION: 'Duration',
+    SUPP_CAUTION: 'Caution',
+    SUPP_SOURCES: 'Sources',
+    CONFIDENTIAL: 'Confidential document \u2014 personal use only',
+    FOOTER_CLOSING_LINE_1: 'This plan has been specifically prepared for you',
+    FOOTER_CLOSING_LINE_2: 'by Anissa Deroubaix, nutritionist specialized',
+    FOOTER_CLOSING_LINE_3: 'in longevity and genetics.',
+    FOOTER_RECOMMENDED_LINE_1: 'It is recommended to follow this plan for 4 weeks',
+    FOOTER_RECOMMENDED_LINE_2: 'before considering adjustments.',
+    FOOTER_BRAND: 'Anissa Deroubaix Nutrition',
+    FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
+    DATE_LOCALE: 'en-GB',
+  },
+};
+
+function L(key, locale = 'FR') {
+  return (PDF_LABELS[locale] && PDF_LABELS[locale][key]) || PDF_LABELS.FR[key];
+}
+
+// Derive locale from client (local copy to avoid circular import with services/)
+function resolveLocale(client) {
+  if (!client) return 'FR';
+  const formule = String(client.formule || client.form?.formule || '').toLowerCase();
+  const langue = String(client.langue || client.form?.langue || 'FR').toUpperCase();
+  const eligible = ['suivi', 'intensif', 'pack20', 'pack30'].includes(formule);
+  return (eligible && langue === 'EN') ? 'EN' : 'FR';
+}
+
+function formatDateFR(iso, locale = 'FR') {
   if (!iso) return '-';
-  return new Date(iso).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString(L('DATE_LOCALE', locale), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 async function loadImageAsBase64(url) {
@@ -545,20 +612,21 @@ function drawBulletList(doc, items, x, y, width, opts = {}) {
 }
 
 // Parser le contenu d'un supplement et le render en card compacte
-function drawSupplementCard(doc, name, fields, x, y, width) {
+function drawSupplementCard(doc, name, fields, x, y, width, locale = 'FR') {
   y = ensurePage(doc, y, 28);
   const padX = 7;
   const padY = 5;
 
   // Estimer la hauteur approximative
   let estH = padY + 6; // titre
+  // V86.9 : labels localises via L()
   const rows = [
-    { label: 'Moment', val: fields.moment },
-    { label: 'Dosage', val: fields.dosage },
-    { label: 'Sources', val: fields.sources },
-    { label: 'Justification', val: fields.justification },
-    { label: 'Duree', val: fields.duree },
-    { label: 'Interactions', val: fields.interactions },
+    { label: L('SUPP_TIMING', locale), val: fields.moment },
+    { label: locale === 'EN' ? 'Dosage' : 'Dosage', val: fields.dosage },
+    { label: L('SUPP_SOURCES', locale), val: fields.sources },
+    { label: locale === 'EN' ? 'Justification' : 'Justification', val: fields.justification },
+    { label: L('SUPP_DURATION', locale), val: fields.duree },
+    { label: locale === 'EN' ? 'Interactions' : 'Interactions', val: fields.interactions },
   ].filter(r => r.val?.trim());
 
   for (const r of rows) {
@@ -878,7 +946,7 @@ function ensurePage(doc, y, needed = 10) {
   return y;
 }
 
-function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr) {
+function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr, locale = 'FR') {
   const pw = doc.internal.pageSize.getWidth();
   const m = 25;
 
@@ -890,7 +958,9 @@ function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr) {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(160, 158, 150);
   doc.text(prenom, m, 12);
-  doc.text('Plan nutrition personnalise', pw / 2, 12, { align: 'center' });
+  // V86.9 : titre header central localise
+  const headerTitle = locale === 'EN' ? 'Personalized nutrition plan' : 'Plan nutrition personnalise';
+  doc.text(headerTitle, pw / 2, 12, { align: 'center' });
   doc.text(dateStr || '', pw - m, 12, { align: 'right' });
 
   // ─── Footer ───
@@ -898,9 +968,10 @@ function addHeaderFooter(doc, prenom, pageNum, totalPages, dateStr) {
   doc.line(m, 281, pw - m, 281);
   doc.setFontSize(7);
   doc.setTextColor(160, 158, 150);
-  doc.text('Anissa Deroubaix Nutrition', m, 287);
+  doc.text(L('FOOTER_BRAND', locale), m, 287);
   doc.text(`${pageNum} / ${totalPages}`, pw / 2, 287, { align: 'center' });
-  doc.text('Confidentiel', pw - m, 287, { align: 'right' });
+  // V86.9 : footer right localise (FR 'Confidentiel' / EN 'Confidential')
+  doc.text(locale === 'EN' ? 'Confidential' : 'Confidentiel', pw - m, 287, { align: 'right' });
 }
 
 function addSectionTitle(doc, title, y, margin) {
@@ -1251,7 +1322,11 @@ export async function exportConsultationPDF(consultation, client) {
   const cw = pw - margin * 2;
   const form = client?.form || {};
   const prenom = form.prenom || 'Client';
-  const dateStr = formatDateFR(consultation.date);
+  // V86.9 : locale derivee du client (Benfitcoach EN ou FR par defaut).
+  // Utilisee pour localiser la cover, le footer, les cards supplement,
+  // les labels 'A RETENIR' / 'VARIANTE' / 'LE MOT D\'ANISSA' / etc.
+  const locale = resolveLocale(client);
+  const dateStr = formatDateFR(consultation.date, locale);
   const objectif = form.objectifPrincipalNutrition || form.objectifSport || '';
 
   // Use pre-computed sections from structurePlanSections (same as preview) if available,
@@ -1441,7 +1516,7 @@ export async function exportConsultationPDF(consultation, client) {
         doc.setFontSize(FONT.micro);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GOLD);
-        const labelText = sectionType === 'intro' ? 'LE MOT D\'ANISSA' : 'POUR LA SUITE';
+        const labelText = sectionType === 'intro' ? L('INTRO_LABEL', locale) : L('CLOSING_LABEL', locale);
         doc.text(labelText, margin + 6, y + 4, { charSpace: 2 });
         y += 9;
         y = drawLetterBlock(doc, sec.content, margin, y, cw, {
@@ -1481,7 +1556,7 @@ export async function exportConsultationPDF(consultation, client) {
             doc.setFontSize(FONT.micro);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...GOLD);
-            doc.text('VARIANTE', margin, y - 2, { charSpace: 1.5 });
+            doc.text(L('VARIANT', locale), margin, y - 2, { charSpace: 1.5 });
             y += 5;
             // V77 : reset charSpace pour eviter le leak sur la card repas suivante
             if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
@@ -1529,7 +1604,7 @@ export async function exportConsultationPDF(consultation, client) {
           // V66 : bloc compact "À RETENIR"
           const bullets = parseBulletLines(sec.content);
           if (bullets.length >= 2) {
-            y = drawCompactRulesBlock(doc, bullets, margin, y, cw, 'À RETENIR');
+            y = drawCompactRulesBlock(doc, bullets, margin, y, cw, L('REMEMBER', locale));
           } else {
             const tokens = parseNutritionPlan(sec.content);
             y = renderTokens(doc, tokens, margin, y, cw);
@@ -1600,7 +1675,7 @@ export async function exportConsultationPDF(consultation, client) {
           const entries = parseSupplementEntriesStructured(sec.content);
           if (entries.length >= 2) {
             for (const entry of entries) {
-              y = drawSupplementCard(doc, entry.name, entry.fields, margin, y, cw);
+              y = drawSupplementCard(doc, entry.name, entry.fields, margin, y, cw, locale);
             }
           } else {
             const tokens = parseNutritionPlan(sec.content);
@@ -1643,13 +1718,13 @@ export async function exportConsultationPDF(consultation, client) {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...GOLD);
-      doc.text('PLAN NUTRITIONNEL', pw / 2, 42, { align: 'center', charSpace: 2.5 });
+      doc.text(L('COVER_TITLE', locale), pw / 2, 42, { align: 'center', charSpace: 2.5 });
 
       // Titre principal - grand et élégant
       doc.setFontSize(28);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...GREEN);
-      doc.text('Personnalisé', pw / 2, 60, { align: 'center' });
+      doc.text(L('COVER_SUBTITLE', locale), pw / 2, 60, { align: 'center' });
 
       // Ligne fine de séparation
       doc.setDrawColor(...SEPARATOR);
@@ -1719,7 +1794,7 @@ export async function exportConsultationPDF(consultation, client) {
       // Mention confidentielle en bas de page (discret)
       doc.setFontSize(6.5);
       doc.setTextColor(...MUTED_TEXT);
-      doc.text('Document confidentiel — usage personnel uniquement', pw / 2, 282, { align: 'center', charSpace: 1 });
+      doc.text(L('CONFIDENTIAL', locale), pw / 2, 282, { align: 'center', charSpace: 1 });
 
       // V63 : RESET charSpace apres cover pour eviter le leak sur pages suivantes
       if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
@@ -1830,9 +1905,9 @@ export async function exportConsultationPDF(consultation, client) {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...DARK_TEXT);
   const closingLines = [
-    `Ce plan a été élaboré spécifiquement pour vous`,
-    `par Anissa Deroubaix, nutritionniste spécialisée`,
-    `en longévité et génétique.`,
+    L('FOOTER_CLOSING_LINE_1', locale),
+    L('FOOTER_CLOSING_LINE_2', locale),
+    L('FOOTER_CLOSING_LINE_3', locale),
   ];
   for (const cl of closingLines) {
     doc.text(cl, pw / 2, y, { align: 'center' });
@@ -1842,9 +1917,9 @@ export async function exportConsultationPDF(consultation, client) {
   y += 6;
   doc.setFontSize(9.5);
   doc.setTextColor(...GREY_TEXT);
-  doc.text('Il est recommandé de suivre ce plan pendant 4 semaines', pw / 2, y, { align: 'center' });
+  doc.text(L('FOOTER_RECOMMENDED_LINE_1', locale), pw / 2, y, { align: 'center' });
   y += 5;
-  doc.text("avant d'envisager des ajustements.", pw / 2, y, { align: 'center' });
+  doc.text(L('FOOTER_RECOMMENDED_LINE_2', locale), pw / 2, y, { align: 'center' });
 
   y += 20;
   doc.setDrawColor(200, 198, 190);
@@ -1854,20 +1929,20 @@ export async function exportConsultationPDF(consultation, client) {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GREEN);
-  doc.text('Anissa Deroubaix Nutrition', pw / 2, y, { align: 'center' });
+  doc.text(L('FOOTER_BRAND', locale), pw / 2, y, { align: 'center' });
   y += 5;
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GREY_TEXT);
-  doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, y, { align: 'center' });
+  doc.text(L('FOOTER_ADDRESS', locale), pw / 2, y, { align: 'center' });
   y += 12;
   doc.setFontSize(7.5);
-  doc.text('Document confidentiel — usage personnel uniquement', pw / 2, y, { align: 'center' });
+  doc.text(L('CONFIDENTIAL', locale), pw / 2, y, { align: 'center' });
 
   // ─── HEADERS & FOOTERS (all pages except cover and closing) ───
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 2; i < totalPages; i++) {
     doc.setPage(i);
-    addHeaderFooter(doc, prenom, i - 1, totalPages - 2, dateStr);
+    addHeaderFooter(doc, prenom, i - 1, totalPages - 2, dateStr, locale);
   }
 
   const fileName = `plan-nutrition-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`;
