@@ -54,6 +54,7 @@ import { getT } from './translations';
 import InterviewPanel from './InterviewPanel';
 import { applyInterviewNotesToForm } from './interviewTemplates';
 import QuestionnaireClient from './QuestionnaireClient';
+import AnamneseClientEn from './AnamneseClientEn';
 import CycleReviewForm from './CycleReviewForm';
 import Decouverte from './Decouverte';
 
@@ -101,7 +102,7 @@ function Toast({ message, visible }) {
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V86.3';
+const APP_VERSION = 'V86.4';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (
@@ -158,36 +159,10 @@ function App() {
   if (questionnaireClientId) {
     return <QuestionnaireClient clientId={questionnaireClientId} />;
   }
-  // V86.2 : placeholder route (le composant AnamneseClientEn arrivera au commit 3).
-  // En attendant, on affiche un simple message d'indisponibilite cote client EN.
+  // V86.4 : route publique /anamnese/:id -> AnamneseClientEn (8 steps EN)
   const anamneseEnClientId = getAnamneseEnClientId();
   if (anamneseEnClientId) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#0c120f',
-        color: '#d4c9a8',
-        fontFamily: 'system-ui, sans-serif',
-        padding: 24,
-      }}>
-        <div style={{ maxWidth: 480, textAlign: 'center' }}>
-          <div style={{ fontSize: '.72rem', color: '#c4a050', letterSpacing: '.18em',
-            textTransform: 'uppercase', marginBottom: 16 }}>
-            Anissa Nutrition
-          </div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 400, marginBottom: 12 }}>
-            Your health assessment will be available shortly.
-          </h1>
-          <p style={{ fontSize: '.9rem', opacity: .7, lineHeight: 1.5 }}>
-            Anissa is preparing your personalized intake form. You will receive
-            an updated link by email within 24 hours. Thank you for your patience.
-          </p>
-        </div>
-      </div>
-    );
+    return <AnamneseClientEn clientId={anamneseEnClientId} />;
   }
   if (window.location.pathname === '/decouverte') {
     return <Decouverte />;
