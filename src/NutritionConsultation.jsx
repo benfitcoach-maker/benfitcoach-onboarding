@@ -2674,6 +2674,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // le preview suive le textarea, on remount avec un key derive d'un texte debounce 400ms.
   const [finalPreviewText, setFinalPreviewText] = useState('');
   const [finalPreviewKey, setFinalPreviewKey] = useState(0);
+  // V88.6 : toggle diff mode dans la modal Finaliser.
+  // OFF = live preview (NutritionEditor readOnly)
+  // ON = diff simple ligne par ligne entre plan IA base et finalDraft
+  const [isDiffMode, setIsDiffMode] = useState(false);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3054,6 +3058,42 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }, 400);
     return () => clearTimeout(t);
   }, [finalDraft, planDraft, isFinalMode]);
+
+  // V88.6 : diff simple ligne par ligne (index-aligne). Zero dep externe.
+  // Retourne un tableau de { type, base?, draft? } ou type \u2208 { same, added, removed, changed }
+  const buildSimpleLineDiff = (base, draft) => {
+    const baseLines = String(base || '').split('\n');
+    const draftLines = String(draft || '').split('\n');
+    const maxLen = Math.max(baseLines.length, draftLines.length);
+    const out = [];
+    for (let i = 0; i < maxLen; i++) {
+      const b = baseLines[i];
+      const d = draftLines[i];
+      if (b === undefined) {
+        out.push({ type: 'added', draft: d });
+      } else if (d === undefined) {
+        out.push({ type: 'removed', base: b });
+      } else if (b === d) {
+        out.push({ type: 'same', base: b, draft: d });
+      } else {
+        out.push({ type: 'changed', base: b, draft: d });
+      }
+    }
+    return out;
+  };
+
+  // Stats rapides pour le header du diff
+  const diffStats = useMemo(() => {
+    if (!isFinalMode || !isDiffMode) return { added: 0, removed: 0, changed: 0 };
+    const diff = buildSimpleLineDiff(planDraft || '', finalDraft || '');
+    return diff.reduce((acc, r) => {
+      if (r.type === 'added') acc.added += 1;
+      if (r.type === 'removed') acc.removed += 1;
+      if (r.type === 'changed') acc.changed += 1;
+      return acc;
+    }, { added: 0, removed: 0, changed: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planDraft, finalDraft, isFinalMode, isDiffMode]);
 
   // Map step index to content type based on followup
   const getStepType = (s) => {
@@ -6112,41 +6152,170 @@ ${suppText}`;
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '12px 20px',
                   borderBottom: '1px solid rgba(196,160,80,.1)',
-                  gap: 12,
+                  gap: 12, flexWrap: 'wrap',
                 }}>
                   <span style={{
                     color: '#f4e7b2', fontWeight: 600, fontSize: '.8rem',
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                   }}>
-                    {'\ud83d\udc41\ufe0f Live preview (PDF)'}
+                    {isDiffMode
+                      ? '\ud83d\udd0d Diff (plan IA \u2192 final)'
+                      : '\ud83d\udc41\ufe0f Live preview (PDF)'}
                   </span>
-                  <span style={{
-                    fontSize: '.7rem', color: 'rgba(255,255,255,.55)',
-                    padding: '2px 8px', borderRadius: 999,
-                    background: 'rgba(255,255,255,.04)',
-                    textTransform: 'uppercase', letterSpacing: '.06em',
-                    fontWeight: 600,
-                  }}>
-                    {finalDraft && finalDraft.trim()
-                      ? 'Source : draft en cours'
-                      : 'Source : plan IA'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    {/* V88.6 : stats diff si mode diff actif */}
+                    {isDiffMode && (
+                      <span style={{ display: 'inline-flex', gap: 6, fontSize: '.7rem', fontWeight: 600 }}>
+                        <span style={{ color: '#8abf9a' }}>+{diffStats.added}</span>
+                        <span style={{ color: '#e57373' }}>-{diffStats.removed}</span>
+                        <span style={{ color: '#d4b568' }}>~{diffStats.changed}</span>
+                      </span>
+                    )}
+                    {!isDiffMode && (
+                      <span style={{
+                        fontSize: '.7rem', color: 'rgba(255,255,255,.55)',
+                        padding: '2px 8px', borderRadius: 999,
+                        background: 'rgba(255,255,255,.04)',
+                        textTransform: 'uppercase', letterSpacing: '.06em',
+                        fontWeight: 600,
+                      }}>
+                        {finalDraft && finalDraft.trim()
+                          ? 'Source : draft en cours'
+                          : 'Source : plan IA'}
+                      </span>
+                    )}
+                    {/* V88.6 : toggle diff */}
+                    <button
+                      type="button"
+                      onClick={() => setIsDiffMode(m => !m)}
+                      style={{
+                        padding: '4px 10px', borderRadius: 8, fontSize: '.7rem',
+                        background: isDiffMode ? 'rgba(196,160,80,.22)' : 'rgba(255,255,255,.04)',
+                        border: `1px solid ${isDiffMode ? 'rgba(196,160,80,.55)' : 'rgba(255,255,255,.1)'}`,
+                        color: isDiffMode ? '#e0cda0' : 'rgba(255,255,255,.7)',
+                        cursor: 'pointer', fontWeight: 600,
+                      }}
+                      title={isDiffMode ? 'Revenir au rendu premium' : 'Voir les differences ligne par ligne avec le plan IA'}
+                    >
+                      {isDiffMode ? '\u2190 Rendu premium' : '\ud83d\udd0d Voir differences'}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Preview body \u2014 remount a chaque debounce tick (V88.5) pour que
-                    NutritionEditor re-parse le nouveau texte */}
+                {/* Preview body \u2014 rendu premium OU diff selon toggle */}
                 <div style={{ flex: 1, overflow: 'auto', padding: 20, minHeight: 0 }}>
-                  <NutritionEditor
-                    key={`final-preview-${finalPreviewKey}`}
-                    planText={finalPreviewText}
-                    supplementsText={supplementsDraft}
-                    recipesText={recipesDraft}
-                    form={form}
-                    client={client}
-                    readOnly={true}
-                    hideActions={true}
-                    onSave={() => {}}
-                  />
+                  {isDiffMode ? (
+                    // V88.6 : diff ligne par ligne
+                    <div style={{
+                      font: '400 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                      background: '#f7f2e8',
+                      borderRadius: 12,
+                      border: '1px solid rgba(196,160,80,.16)',
+                      overflow: 'hidden',
+                    }}>
+                      {buildSimpleLineDiff(planDraft || '', finalDraft || '').map((row, idx) => {
+                        // Styles par type
+                        const rowStyle = {
+                          padding: '4px 12px',
+                          borderLeft: '3px solid transparent',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                        };
+                        if (row.type === 'same') {
+                          return (
+                            <div key={idx} style={{
+                              ...rowStyle,
+                              color: 'rgba(31,35,31,.55)',
+                              background: 'transparent',
+                            }}>
+                              {row.base || '\u00a0'}
+                            </div>
+                          );
+                        }
+                        if (row.type === 'added') {
+                          return (
+                            <div key={idx} style={{
+                              ...rowStyle,
+                              color: '#1a4a2a',
+                              background: 'rgba(138,191,154,.2)',
+                              borderLeftColor: '#6abf8a',
+                            }}>
+                              <span style={{ color: '#6abf8a', fontWeight: 700, marginRight: 8 }}>+</span>
+                              {row.draft || '\u00a0'}
+                            </div>
+                          );
+                        }
+                        if (row.type === 'removed') {
+                          return (
+                            <div key={idx} style={{
+                              ...rowStyle,
+                              color: '#7a2020',
+                              background: 'rgba(229,115,115,.18)',
+                              borderLeftColor: '#e57373',
+                              textDecoration: 'line-through',
+                              textDecorationColor: 'rgba(122,32,32,.4)',
+                            }}>
+                              <span style={{ color: '#c94141', fontWeight: 700, marginRight: 8, textDecoration: 'none' }}>{'\u2212'}</span>
+                              {row.base || '\u00a0'}
+                            </div>
+                          );
+                        }
+                        // changed : deux lignes empilees (rouge puis vert)
+                        return (
+                          <div key={idx}>
+                            <div style={{
+                              ...rowStyle,
+                              color: '#7a2020',
+                              background: 'rgba(229,115,115,.14)',
+                              borderLeftColor: '#e57373',
+                              textDecoration: 'line-through',
+                              textDecorationColor: 'rgba(122,32,32,.4)',
+                            }}>
+                              <span style={{ color: '#c94141', fontWeight: 700, marginRight: 8, textDecoration: 'none' }}>{'\u2212'}</span>
+                              {row.base || '\u00a0'}
+                            </div>
+                            <div style={{
+                              ...rowStyle,
+                              color: '#1a4a2a',
+                              background: 'rgba(138,191,154,.18)',
+                              borderLeftColor: '#6abf8a',
+                            }}>
+                              <span style={{ color: '#6abf8a', fontWeight: 700, marginRight: 8 }}>+</span>
+                              {row.draft || '\u00a0'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(() => {
+                        const diff = buildSimpleLineDiff(planDraft || '', finalDraft || '');
+                        const hasChanges = diff.some(r => r.type !== 'same');
+                        if (!hasChanges) {
+                          return (
+                            <div style={{
+                              padding: 24, textAlign: 'center',
+                              color: 'rgba(31,35,31,.5)', fontSize: '.8rem', fontStyle: 'italic',
+                            }}>
+                              Aucune difference avec le plan IA.
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  ) : (
+                    // Rendu premium via NutritionEditor readOnly (V88.4-V88.5)
+                    <NutritionEditor
+                      key={`final-preview-${finalPreviewKey}`}
+                      planText={finalPreviewText}
+                      supplementsText={supplementsDraft}
+                      recipesText={recipesDraft}
+                      form={form}
+                      client={client}
+                      readOnly={true}
+                      hideActions={true}
+                      onSave={() => {}}
+                    />
+                  )}
                 </div>
               </div>
             </div>
