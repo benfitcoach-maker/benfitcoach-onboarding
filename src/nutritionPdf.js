@@ -144,168 +144,168 @@ function L(key, locale = 'FR') {
   return (PDF_LABELS[locale] && PDF_LABELS[locale][key]) || PDF_LABELS.FR[key];
 }
 
-// V87.8 : dictionnaire de traduction FR \u2192 EN pour le contenu de la fiche frigo.
-// Scope strict : vocabulaire nutrition courant, ordre important (multi-mots AVANT
-// leurs sous-mots). Utilise uniquement dans translateFridgeText() sur les textes
-// rendus dans le PDF EN de la fiche frigo. N'affecte PAS la DB, les prompts, le
-// parser ni l'editeur React. Aucune regex complexe : remplacement case-insensitive
-// mot \u00e0 mot via RegExp avec flag 'gi'.
-const FRIDGE_FR_TO_EN = [
-  // Multi-mots d'abord (priorite absolue)
-  ['oeufs brouilles', 'scrambled eggs'],
-  ['\u0153ufs brouill\u00e9s', 'scrambled eggs'],
-  ['oeufs brouill\u00e9s', 'scrambled eggs'],
-  ['pain sans gluten', 'gluten-free bread'],
-  ['pain complet', 'whole-grain bread'],
-  ['huile d\u2019olive', 'olive oil'],
-  ['huile d\'olive', 'olive oil'],
-  ['huile olive', 'olive oil'],
-  ['huile de coco', 'coconut oil'],
-  ['huile coco', 'coconut oil'],
-  ['courgettes vapeur', 'steamed zucchini'],
-  ['haricots verts', 'green beans'],
-  ['patate douce', 'sweet potato'],
-  ['patates douces', 'sweet potatoes'],
-  ['riz complet', 'brown rice'],
-  ['riz brun', 'brown rice'],
-  ['poisson blanc', 'white fish'],
-  ['l\u00e9gumes cuits', 'cooked vegetables'],
-  ['legumes cuits', 'cooked vegetables'],
-  ['l\u00e9gumes crus', 'raw vegetables'],
-  ['legumes crus', 'raw vegetables'],
-  ['l\u00e9gumes vapeur', 'steamed vegetables'],
-  ['legumes vapeur', 'steamed vegetables'],
-  ['fruits rouges', 'berries'],
-  ['eau filtr\u00e9e', 'filtered water'],
-  ['eau filtree', 'filtered water'],
-  ['eau chaude', 'hot water'],
-  ['fromage de brebis', 'sheep cheese'],
-  ['yaourt de brebis', 'sheep yogurt'],
-  ['yaourt grec', 'greek yogurt'],
-  ['beurre d\u2019amande', 'almond butter'],
-  ['beurre d\'amande', 'almond butter'],
-  ['beurre amande', 'almond butter'],
-  ['flocons d\u2019avoine', 'oats'],
-  ['flocons d\'avoine', 'oats'],
-  ['graines de courge', 'pumpkin seeds'],
-  ['graines de chia', 'chia seeds'],
-  ['cuill\u00e8re \u00e0 soupe', 'tablespoon'],
-  ['cuillere a soupe', 'tablespoon'],
-  ['cuill\u00e8re \u00e0 caf\u00e9', 'teaspoon'],
-  ['cuillere a cafe', 'teaspoon'],
-  ['matin \u00e0 jeun', 'fasted morning'],
-  ['matin a jeun', 'fasted morning'],
-  ['\u00e0 jeun', 'fasted'],
-  ['a jeun', 'fasted'],
-  // Oeufs seuls
-  ['\u0153ufs', 'eggs'],
-  ['oeufs', 'eggs'],
-  ['\u0153uf', 'egg'],
-  ['oeuf', 'egg'],
-  // Pains / feculents
-  ['pain', 'bread'],
-  ['riz', 'rice'],
-  ['sarrasin', 'buckwheat'],
-  ['avoine', 'oats'],
-  // Legumes
-  ['courgettes', 'zucchini'],
-  ['courgette', 'zucchini'],
-  ['brocolis', 'broccoli'],
-  ['brocoli', 'broccoli'],
-  ['carottes', 'carrots'],
-  ['carotte', 'carrot'],
-  ['\u00e9pinards', 'spinach'],
-  ['epinards', 'spinach'],
-  ['poivrons', 'peppers'],
-  ['poivron', 'pepper'],
-  ['tomates', 'tomatoes'],
-  ['tomate', 'tomato'],
-  ['concombre', 'cucumber'],
-  ['salade', 'salad'],
-  ['l\u00e9gumes', 'vegetables'],
-  ['legumes', 'vegetables'],
-  // Proteines
-  ['saumon', 'salmon'],
-  ['poulet', 'chicken'],
-  ['dinde', 'turkey'],
-  ['tofu', 'tofu'],
-  ['lentilles', 'lentils'],
-  ['pois chiches', 'chickpeas'],
-  // Fruits
-  ['amandes', 'almonds'],
-  ['amande', 'almond'],
-  ['noix', 'walnuts'],
-  ['pommes', 'apples'],
-  ['pomme', 'apple'],
-  ['bananes', 'bananas'],
-  ['banane', 'banana'],
-  ['baies', 'berries'],
-  // Huiles
-  ['avocat', 'avocado'],
-  ['huile', 'oil'],
-  ['tahini', 'tahini'],
-  // Boissons / tisanes
-  ['tisane', 'herbal tea'],
-  ['camomille', 'chamomile'],
-  ['gingembre', 'ginger'],
-  ['fenouil', 'fennel'],
-  ['citron', 'lemon'],
-  ['curcuma', 'turmeric'],
-  // Laitiers
-  ['yaourt', 'yogurt'],
-  ['fromage', 'cheese'],
-  // Cuissons
-  ['vapeur', 'steamed'],
-  ['cuits', 'cooked'],
-  ['cuit', 'cooked'],
-  ['crus', 'raw'],
-  ['cru', 'raw'],
-  ['grill\u00e9s', 'grilled'],
-  ['grill\u00e9', 'grilled'],
-  ['rotis', 'roasted'],
-  ['r\u00f4tis', 'roasted'],
-  // Moments / labels
-  ['petit-d\u00e9jeuner', 'breakfast'],
-  ['petit-dejeuner', 'breakfast'],
-  ['d\u00e9jeuner', 'lunch'],
-  ['dejeuner', 'lunch'],
-  ['d\u00eener', 'dinner'],
-  ['diner', 'dinner'],
-  ['collation', 'snack'],
-  ['soir', 'evening'],
-  ['matin', 'morning'],
-  ['midi', 'midday'],
-  ['coucher', 'bedtime'],
-  // Mesures / units que la quantite puisse rester intacte
-  ['c.s.', 'tbsp'],
-  ['c.c.', 'tsp'],
-  // Connecteurs basiques
-  [' avec ', ' with '],
-  [' sans ', ' without '],
-  [' ou ', ' or '],
-];
+// V87.9 : traduction fiche frigo FR \u2192 EN, approche 3-niveaux ordonnee.
+// ORDRE : phrases (prioritaires) \u2192 mots composes \u2192 suppl\u00e9ments \u2192 nettoyage final.
+// Utilise uniquement dans translateFridgeText() sur le rendu PDF EN.
+// Aucun impact DB / prompts / editeur React / parser.
 
-// V87.8 : traduit le contenu FR vers EN uniquement pour la fiche frigo.
-// Branche exclusivement au rendu PDF EN. FR inchange. Vide inchange.
-// Preserve la casse du premier caractere (utile pour les sections en majuscules
-// comme les listes PRIVILEGIER / LIMITER).
+// 1. Phrases (priorite haute : matchent avant les mots simples)
+const FRIDGE_PHRASES = {
+  'the ginger': 'ginger tea',
+  'th\u00e9 ginger': 'ginger tea',
+  'th\u00e9 camomille': 'chamomile tea',
+  'the camomille': 'chamomile tea',
+  'th\u00e9 fenouil': 'fennel tea',
+  'the fenouil': 'fennel tea',
+  'lait coco': 'coconut milk',
+  'lait de coco': 'coconut milk',
+  'pain au levain': 'sourdough bread',
+  'pain sans gluten': 'gluten-free bread',
+  'pain complet': 'whole-grain bread',
+  'tofu ferme': 'firm tofu',
+  'blanc de poulet': 'chicken breast',
+  'blanc poulet': 'chicken breast',
+  'poisson blanc': 'white fish',
+  'l\u00e9gumes cuits': 'cooked vegetables',
+  'legumes cuits': 'cooked vegetables',
+  'l\u00e9gumes vapeur': 'steamed vegetables',
+  'legumes vapeur': 'steamed vegetables',
+  'l\u00e9gumes crus': 'raw vegetables',
+  'legumes crus': 'raw vegetables',
+  'produits laitiers': 'dairy products',
+  'sucres isol\u00e9s': 'refined sugars',
+  'sucres isoles': 'refined sugars',
+  'fruits rouges': 'berries',
+  'riz brun': 'brown rice',
+  'riz complet': 'brown rice',
+  'patate douce': 'sweet potato',
+  'patates douces': 'sweet potatoes',
+  'huile d\u2019olive': 'olive oil',
+  'huile d\'olive': 'olive oil',
+  'huile de coco': 'coconut oil',
+  'cuill\u00e8re \u00e0 soupe': 'tablespoon',
+  'cuillere a soupe': 'tablespoon',
+  'cuill\u00e8re \u00e0 caf\u00e9': 'teaspoon',
+  'cuillere a cafe': 'teaspoon',
+  'matin \u00e0 jeun': 'fasted morning',
+  'matin a jeun': 'fasted morning',
+};
+
+// 2. Mots composes / simples (complement)
+const FRIDGE_WORDS = {
+  '\u0153ufs brouill\u00e9s': 'scrambled eggs',
+  'oeufs brouill\u00e9s': 'scrambled eggs',
+  'oeufs brouilles': 'scrambled eggs',
+  '\u0153ufs': 'eggs',
+  'oeufs': 'eggs',
+  '\u0153uf': 'egg',
+  'oeuf': 'egg',
+  'avocat': 'avocado',
+  'quinoa': 'quinoa',
+  'brocolis': 'broccoli',
+  'brocoli': 'broccoli',
+  'carottes': 'carrots',
+  'carotte': 'carrot',
+  'courgettes': 'zucchini',
+  'courgette': 'zucchini',
+  'haricots': 'green beans',
+  '\u00e9pinards': 'spinach',
+  'epinards': 'spinach',
+  'poulet': 'chicken',
+  'dinde': 'turkey',
+  'saumon': 'salmon',
+  'tofu': 'tofu',
+  'lentilles': 'lentils',
+  'amandes': 'almonds',
+  'amande': 'almond',
+  'noix': 'walnuts',
+  'pommes': 'apples',
+  'pomme': 'apple',
+  'bananes': 'bananas',
+  'banane': 'banana',
+  'gingembre': 'ginger',
+  'camomille': 'chamomile',
+  'fenouil': 'fennel',
+  'citron': 'lemon',
+  'curcuma': 'turmeric',
+  'huile olive': 'olive oil',
+  'huile coco': 'coconut oil',
+  'tahini': 'tahini',
+  'yaourt': 'yogurt',
+  'fromage': 'cheese',
+  'tisane': 'herbal tea',
+  'pain': 'bread',
+  'riz': 'rice',
+  'sarrasin': 'buckwheat',
+  'avoine': 'oats',
+  'vapeur': 'steamed',
+  'cuits': 'cooked',
+  'cuit': 'cooked',
+  'crus': 'raw',
+  'cru': 'raw',
+  'grill\u00e9s': 'grilled',
+  'grill\u00e9': 'grilled',
+  'petit-d\u00e9jeuner': 'breakfast',
+  'petit-dejeuner': 'breakfast',
+  'd\u00e9jeuner': 'lunch',
+  'dejeuner': 'lunch',
+  'd\u00eener': 'dinner',
+  'diner': 'dinner',
+  'collation': 'snack',
+  'soir': 'evening',
+  'matin': 'morning',
+  'midi': 'midday',
+  'coucher': 'bedtime',
+  'l\u00e9gumes': 'vegetables',
+  'legumes': 'vegetables',
+};
+
+// 3. Supplements
+const FRIDGE_SUPPLEMENTS = {
+  'fer': 'iron',
+  'vitamine': 'vitamin',
+  'complexe b': 'vitamin b complex',
+  'enzymes digestives': 'digestive enzymes',
+  'magn\u00e9sium': 'magnesium',
+  'magnesium': 'magnesium',
+};
+
+// V87.9 : fonction de traduction fiche frigo, pipeline 5 etapes.
+// Regle : 0% FR en locale EN apres passage.
 function translateFridgeText(text, locale) {
   if (locale !== 'EN' || !text) return text;
-  let result = String(text);
-  for (const [fr, en] of FRIDGE_FR_TO_EN) {
-    // Escape regex special chars in fr, insensitive, global
+
+  let t = String(text).toLowerCase();
+
+  // 1. phrases
+  Object.entries(FRIDGE_PHRASES).forEach(([fr, en]) => {
     const pattern = fr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(pattern, 'gi');
-    result = result.replace(re, (match) => {
-      // Conserver capitalisation: si le premier caractere du match est majuscule,
-      // capitaliser la premiere lettre du remplacement.
-      if (match[0] && match[0] === match[0].toUpperCase() && en[0]) {
-        return en[0].toUpperCase() + en.slice(1);
-      }
-      return en;
-    });
-  }
-  return result;
+    t = t.replace(new RegExp(pattern, 'gi'), en);
+  });
+
+  // 2. mots
+  Object.entries(FRIDGE_WORDS).forEach(([fr, en]) => {
+    const pattern = fr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    t = t.replace(new RegExp(pattern, 'gi'), en);
+  });
+
+  // 3. supplements
+  Object.entries(FRIDGE_SUPPLEMENTS).forEach(([fr, en]) => {
+    const pattern = fr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    t = t.replace(new RegExp(pattern, 'gi'), en);
+  });
+
+  // 4. nettoyage final (mots isoles residuels)
+  t = t.replace(/\bth\u00e9\b/gi, 'tea');
+  t = t.replace(/\bthe\b/gi, 'tea');
+  t = t.replace(/\blait\b/gi, 'milk');
+  t = t.replace(/\bproduits\b/gi, '');
+  t = t.replace(/\bavec\b/gi, 'with');
+  t = t.replace(/\bsans\b/gi, 'without');
+  t = t.replace(/\s+/g, ' ').trim();
+
+  // 5. capitalisation propre (premiere lettre de la chaine)
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 // Derive locale from client (local copy to avoid circular import with services/)
