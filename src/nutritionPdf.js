@@ -86,6 +86,13 @@ const PDF_LABELS = {
     MEAL_SNACK: 'COLLATION',
     PACK_MOTTO_LINE_1: 'La regularite bat l\'intensite. Mieux vaut un plan simple suivi a 90%',
     PACK_MOTTO_LINE_2: 'qu\'un plan parfait suivi a 50%.',
+    // V87.8 : labels fiche frigo supplements (MES COMPLEMENTS + 5 creneaux)
+    SUPP_BLOCK_TITLE: 'MES COMPL\u00c9MENTS',
+    SUPP_SLOT_MORNING_FASTED: 'MATIN \u00c0 JEUN',
+    SUPP_SLOT_BREAKFAST: 'PETIT-D\u00c9JEUNER',
+    SUPP_SLOT_MIDDAY: 'MIDI',
+    SUPP_SLOT_EVENING: 'SOIR',
+    SUPP_SLOT_BEDTIME: 'COUCHER',
   },
   EN: {
     COVER_TITLE: 'NUTRITION PLAN',
@@ -123,11 +130,182 @@ const PDF_LABELS = {
     MEAL_SNACK: 'SNACK',
     PACK_MOTTO_LINE_1: 'Consistency beats intensity. A simple plan followed at 90%',
     PACK_MOTTO_LINE_2: 'beats a perfect plan followed at 50%.',
+    // V87.8 : labels fiche frigo supplements EN
+    SUPP_BLOCK_TITLE: 'SUPPLEMENTS',
+    SUPP_SLOT_MORNING_FASTED: 'FASTED',
+    SUPP_SLOT_BREAKFAST: 'BREAKFAST',
+    SUPP_SLOT_MIDDAY: 'LUNCH',
+    SUPP_SLOT_EVENING: 'EVENING',
+    SUPP_SLOT_BEDTIME: 'BEDTIME',
   },
 };
 
 function L(key, locale = 'FR') {
   return (PDF_LABELS[locale] && PDF_LABELS[locale][key]) || PDF_LABELS.FR[key];
+}
+
+// V87.8 : dictionnaire de traduction FR \u2192 EN pour le contenu de la fiche frigo.
+// Scope strict : vocabulaire nutrition courant, ordre important (multi-mots AVANT
+// leurs sous-mots). Utilise uniquement dans translateFridgeText() sur les textes
+// rendus dans le PDF EN de la fiche frigo. N'affecte PAS la DB, les prompts, le
+// parser ni l'editeur React. Aucune regex complexe : remplacement case-insensitive
+// mot \u00e0 mot via RegExp avec flag 'gi'.
+const FRIDGE_FR_TO_EN = [
+  // Multi-mots d'abord (priorite absolue)
+  ['oeufs brouilles', 'scrambled eggs'],
+  ['\u0153ufs brouill\u00e9s', 'scrambled eggs'],
+  ['oeufs brouill\u00e9s', 'scrambled eggs'],
+  ['pain sans gluten', 'gluten-free bread'],
+  ['pain complet', 'whole-grain bread'],
+  ['huile d\u2019olive', 'olive oil'],
+  ['huile d\'olive', 'olive oil'],
+  ['huile olive', 'olive oil'],
+  ['huile de coco', 'coconut oil'],
+  ['huile coco', 'coconut oil'],
+  ['courgettes vapeur', 'steamed zucchini'],
+  ['haricots verts', 'green beans'],
+  ['patate douce', 'sweet potato'],
+  ['patates douces', 'sweet potatoes'],
+  ['riz complet', 'brown rice'],
+  ['riz brun', 'brown rice'],
+  ['poisson blanc', 'white fish'],
+  ['l\u00e9gumes cuits', 'cooked vegetables'],
+  ['legumes cuits', 'cooked vegetables'],
+  ['l\u00e9gumes crus', 'raw vegetables'],
+  ['legumes crus', 'raw vegetables'],
+  ['l\u00e9gumes vapeur', 'steamed vegetables'],
+  ['legumes vapeur', 'steamed vegetables'],
+  ['fruits rouges', 'berries'],
+  ['eau filtr\u00e9e', 'filtered water'],
+  ['eau filtree', 'filtered water'],
+  ['eau chaude', 'hot water'],
+  ['fromage de brebis', 'sheep cheese'],
+  ['yaourt de brebis', 'sheep yogurt'],
+  ['yaourt grec', 'greek yogurt'],
+  ['beurre d\u2019amande', 'almond butter'],
+  ['beurre d\'amande', 'almond butter'],
+  ['beurre amande', 'almond butter'],
+  ['flocons d\u2019avoine', 'oats'],
+  ['flocons d\'avoine', 'oats'],
+  ['graines de courge', 'pumpkin seeds'],
+  ['graines de chia', 'chia seeds'],
+  ['cuill\u00e8re \u00e0 soupe', 'tablespoon'],
+  ['cuillere a soupe', 'tablespoon'],
+  ['cuill\u00e8re \u00e0 caf\u00e9', 'teaspoon'],
+  ['cuillere a cafe', 'teaspoon'],
+  ['matin \u00e0 jeun', 'fasted morning'],
+  ['matin a jeun', 'fasted morning'],
+  ['\u00e0 jeun', 'fasted'],
+  ['a jeun', 'fasted'],
+  // Oeufs seuls
+  ['\u0153ufs', 'eggs'],
+  ['oeufs', 'eggs'],
+  ['\u0153uf', 'egg'],
+  ['oeuf', 'egg'],
+  // Pains / feculents
+  ['pain', 'bread'],
+  ['riz', 'rice'],
+  ['sarrasin', 'buckwheat'],
+  ['avoine', 'oats'],
+  // Legumes
+  ['courgettes', 'zucchini'],
+  ['courgette', 'zucchini'],
+  ['brocolis', 'broccoli'],
+  ['brocoli', 'broccoli'],
+  ['carottes', 'carrots'],
+  ['carotte', 'carrot'],
+  ['\u00e9pinards', 'spinach'],
+  ['epinards', 'spinach'],
+  ['poivrons', 'peppers'],
+  ['poivron', 'pepper'],
+  ['tomates', 'tomatoes'],
+  ['tomate', 'tomato'],
+  ['concombre', 'cucumber'],
+  ['salade', 'salad'],
+  ['l\u00e9gumes', 'vegetables'],
+  ['legumes', 'vegetables'],
+  // Proteines
+  ['saumon', 'salmon'],
+  ['poulet', 'chicken'],
+  ['dinde', 'turkey'],
+  ['tofu', 'tofu'],
+  ['lentilles', 'lentils'],
+  ['pois chiches', 'chickpeas'],
+  // Fruits
+  ['amandes', 'almonds'],
+  ['amande', 'almond'],
+  ['noix', 'walnuts'],
+  ['pommes', 'apples'],
+  ['pomme', 'apple'],
+  ['bananes', 'bananas'],
+  ['banane', 'banana'],
+  ['baies', 'berries'],
+  // Huiles
+  ['avocat', 'avocado'],
+  ['huile', 'oil'],
+  ['tahini', 'tahini'],
+  // Boissons / tisanes
+  ['tisane', 'herbal tea'],
+  ['camomille', 'chamomile'],
+  ['gingembre', 'ginger'],
+  ['fenouil', 'fennel'],
+  ['citron', 'lemon'],
+  ['curcuma', 'turmeric'],
+  // Laitiers
+  ['yaourt', 'yogurt'],
+  ['fromage', 'cheese'],
+  // Cuissons
+  ['vapeur', 'steamed'],
+  ['cuits', 'cooked'],
+  ['cuit', 'cooked'],
+  ['crus', 'raw'],
+  ['cru', 'raw'],
+  ['grill\u00e9s', 'grilled'],
+  ['grill\u00e9', 'grilled'],
+  ['rotis', 'roasted'],
+  ['r\u00f4tis', 'roasted'],
+  // Moments / labels
+  ['petit-d\u00e9jeuner', 'breakfast'],
+  ['petit-dejeuner', 'breakfast'],
+  ['d\u00e9jeuner', 'lunch'],
+  ['dejeuner', 'lunch'],
+  ['d\u00eener', 'dinner'],
+  ['diner', 'dinner'],
+  ['collation', 'snack'],
+  ['soir', 'evening'],
+  ['matin', 'morning'],
+  ['midi', 'midday'],
+  ['coucher', 'bedtime'],
+  // Mesures / units que la quantite puisse rester intacte
+  ['c.s.', 'tbsp'],
+  ['c.c.', 'tsp'],
+  // Connecteurs basiques
+  [' avec ', ' with '],
+  [' sans ', ' without '],
+  [' ou ', ' or '],
+];
+
+// V87.8 : traduit le contenu FR vers EN uniquement pour la fiche frigo.
+// Branche exclusivement au rendu PDF EN. FR inchange. Vide inchange.
+// Preserve la casse du premier caractere (utile pour les sections en majuscules
+// comme les listes PRIVILEGIER / LIMITER).
+function translateFridgeText(text, locale) {
+  if (locale !== 'EN' || !text) return text;
+  let result = String(text);
+  for (const [fr, en] of FRIDGE_FR_TO_EN) {
+    // Escape regex special chars in fr, insensitive, global
+    const pattern = fr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(pattern, 'gi');
+    result = result.replace(re, (match) => {
+      // Conserver capitalisation: si le premier caractere du match est majuscule,
+      // capitaliser la premiere lettre du remplacement.
+      if (match[0] && match[0] === match[0].toUpperCase() && en[0]) {
+        return en[0].toUpperCase() + en.slice(1);
+      }
+      return en;
+    });
+  }
+  return result;
 }
 
 // Derive locale from client (local copy to avoid circular import with services/)
@@ -2766,7 +2944,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(...DARK_TEXT);
-        const itemLines = doc.splitTextToSize(col.items[i], contentW);
+        // V87.8 : traduction FR\u2192EN du contenu repas si locale EN
+        const itemLines = doc.splitTextToSize(translateFridgeText(col.items[i], locale), contentW);
         const take = Math.min(itemLines.length, linesPerOption);
         for (let j = 0; j < take; j++) {
           if (cy > contentBottom - 2) break;
@@ -2788,11 +2967,11 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   // ══════════════════════════════════════════════════════════════
   const suppWidth = pw - margin * 2;
   const suppSlots = [
-    { label: 'MATIN À JEUN',   key: 'morningFasting' },
-    { label: 'PETIT-DÉJEUNER', key: 'breakfast' },
-    { label: 'MIDI',           key: 'lunch' },
-    { label: 'SOIR',           key: 'dinner' },
-    { label: 'COUCHER',        key: 'bedtime' },
+    { label: L('SUPP_SLOT_MORNING_FASTED', locale), key: 'morningFasting' },
+    { label: L('SUPP_SLOT_BREAKFAST', locale),      key: 'breakfast' },
+    { label: L('SUPP_SLOT_MIDDAY', locale),         key: 'lunch' },
+    { label: L('SUPP_SLOT_EVENING', locale),        key: 'dinner' },
+    { label: L('SUPP_SLOT_BEDTIME', locale),        key: 'bedtime' },
   ];
   const suppColW = suppWidth / suppSlots.length;
 
@@ -2812,7 +2991,7 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
   doc.setCharSpace(0);
-  doc.text('MES COMPLÉMENTS', margin + suppWidth / 2, suppTop + 6.3, { align: 'center' });
+  doc.text(L('SUPP_BLOCK_TITLE', locale), margin + suppWidth / 2, suppTop + 6.3, { align: 'center' });
 
   // Sous-entêtes (libellés horaires) + contenu par cellule
   const subHeaderH  = 5;
@@ -2854,7 +3033,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
       doc.setTextColor(...DARK_TEXT);
       let cy = bodyContentTop + 2;
       for (const item of items) {
-        const lines = doc.splitTextToSize(String(item), cellW);
+        // V87.8 : traduction contenu supplement si locale EN
+        const lines = doc.splitTextToSize(translateFridgeText(String(item), locale), cellW);
         for (const ln of lines) {
           if (cy > bodyContentBottom) break;
           doc.text(ln, sx + cellPadX, cy);
@@ -2897,8 +3077,11 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     }
     const subColW = (btmWidth - BTM_INNER_PAD * 2 - BTM_SUB_GAP) / 2;
     const half = Math.ceil(items.length / 2);
-    const leftText  = items.slice(0, half).join(', ');
-    const rightText = items.slice(half).join(', ');
+    // V87.8 : appliquer translateFridgeText AVANT mesure pour ne pas
+    // sous-estimer la hauteur si le texte traduit est plus long.
+    const translatedItems = items.map(it => translateFridgeText(it, locale));
+    const leftText  = translatedItems.slice(0, half).join(', ');
+    const rightText = translatedItems.slice(half).join(', ');
     doc.setFontSize(BTM_LIST_FONT);
     doc.setFont('helvetica', 'normal');
     const leftLines  = doc.splitTextToSize(leftText,  subColW);
@@ -2932,8 +3115,10 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     }
 
     const half = Math.ceil(items.length / 2);
-    const leftText = items.slice(0, half).join(', ');
-    const rightText = items.slice(half).join(', ');
+    // V87.8 : traduction des aliments si locale EN (fiche frigo)
+    const translatedItems = items.map(it => translateFridgeText(it, locale));
+    const leftText = translatedItems.slice(0, half).join(', ');
+    const rightText = translatedItems.slice(half).join(', ');
 
     const leftLines = doc.splitTextToSize(leftText, subColW);
     const rightLines = doc.splitTextToSize(rightText, subColW);
@@ -3616,10 +3801,11 @@ function renderFridgeData(doc, meals, margin, startY, cw, locale = 'FR') {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...DARK_TEXT);
     for (let i = 0; i < Math.min(block.items.length, 3); i++) {
-      const lines = doc.splitTextToSize(block.items[i], cw - 10);
+      // V87.8 : traduction items meal si locale EN
+      const lines = doc.splitTextToSize(translateFridgeText(block.items[i], locale), cw - 10);
       for (const l of lines) {
         y = ensurePage(doc, y);
-        doc.text('—  ' + l, margin + 6, y);
+        doc.text('\u2014  ' + l, margin + 6, y);
         y += 4.5;
       }
       y += 2;
@@ -3637,7 +3823,7 @@ function renderFridgeData(doc, meals, margin, startY, cw, locale = 'FR') {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...DARK_TEXT);
-    doc.text('—  ' + meals.snack, margin + 6, y);
+    doc.text('\u2014  ' + translateFridgeText(meals.snack, locale), margin + 6, y);
     y += 8;
   }
 
@@ -3651,7 +3837,7 @@ function renderFridgeData(doc, meals, margin, startY, cw, locale = 'FR') {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...DARK_TEXT);
-    doc.text(meals.toFavor.slice(0, 10).join(', '), margin + 6, y);
+    doc.text(meals.toFavor.slice(0, 10).map(t => translateFridgeText(t, locale)).join(', '), margin + 6, y);
     y += 8;
   }
 
@@ -3665,7 +3851,7 @@ function renderFridgeData(doc, meals, margin, startY, cw, locale = 'FR') {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...DARK_TEXT);
-    doc.text(meals.toLimit.slice(0, 10).join(', '), margin + 6, y);
+    doc.text(meals.toLimit.slice(0, 10).map(t => translateFridgeText(t, locale)).join(', '), margin + 6, y);
     y += 8;
   }
 
