@@ -21,6 +21,9 @@ import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planA
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './services/anissaIdentity';
+// V86.6 : prompts EN isoles pour clientes Benfitcoach anglophones.
+import { buildSystemPromptEn } from './nutritionPromptsEn';
+import { getClientNutritionLocale } from './services/nutritionLocale';
 import { GENE_CATALOG, buildGeneticSectionForPrompt, getActiveGeneticAdjustments } from './services/geneticInterpretation';
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
@@ -743,7 +746,14 @@ Si problemes : liste-les et fournis le texte corrige pour chaque section concern
 
 // Helper: build the system prompt with conditional modules
 // fullPlan: true = plan 4 semaines (premiere consultation), false = ajustements (suivi)
-function buildSystemPrompt(form, { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = {}) {
+// V86.6 : nouveau param `client` (optionnel, backward compatible). Si
+// getClientNutritionLocale(client) === 'EN', on short-circuit vers les prompts EN
+// dedies — aucune modification du chemin FR en dehors de ce garde en tete.
+function buildSystemPrompt(form, opts = {}, client = null) {
+  if (client && getClientNutritionLocale(client) === 'EN') {
+    return buildSystemPromptEn(form, opts);
+  }
+  const { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = opts;
   const parts = [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT];
 
   // Supplements: include if client is open to them (Oui or Peut-etre)
@@ -3242,7 +3252,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
             clientFormule: client?.formule || '',
             followupWeek,
             planMode: getNutritionPlanMode(client), // V80 : oneshot vs followup
-          }),
+          }, client), // V86.6 : 3e param pour le branchement EN (getClientNutritionLocale)
           messages: [{ role: 'user', content: userMessage + '\n\nGenere le plan nutrition personnalise complet (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.' }],
         }),
       });
