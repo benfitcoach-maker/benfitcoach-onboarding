@@ -5957,8 +5957,10 @@ ${suppText}`;
       )}
 
       {/* V85.3 : FAB Sauvegarder flottant — visible sur l'etape plan quand il y a
-          des modifications non sauvees. Evite de remonter en haut de page. */}
-      {currentStepType === 'plan' && autoSaveStatus === 'unsaved' && (
+          des modifications non sauvees. Evite de remonter en haut de page.
+          V88.0.2 : masque en mode Finaliser (les boutons Enregistrer/Supprimer
+          version finale sont deja presents en bas du textarea, evite le chevauchement). */}
+      {currentStepType === 'plan' && autoSaveStatus === 'unsaved' && !isFinalMode && (
         <button
           type="button"
           onClick={handleSave}
