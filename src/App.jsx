@@ -102,7 +102,7 @@ function Toast({ message, visible }) {
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V86.4';
+const APP_VERSION = 'V86.5';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (
@@ -988,20 +988,30 @@ function App() {
           />
         )}
 
-        {/* Edit own client */}
+        {/* Edit own client OR shared Benoit client (anamnese update)
+            V86.5 : on preserve les metadonnees existantes (categorie/formule/langue/
+            createdBy/packType/...) pour eviter d'ecraser une cliente partagee Benoit
+            (pack20/pack30/suivi/intensif + langue EN) quand Anissa modifie l'anamnese. */}
         {page === 'anissaEditClient' && clientId && (
           <AnissaClientForm
             initialForm={getClient(clientId)?.form}
             clientId={clientId}
             onSave={(formData) => {
+              const existing = getClient(clientId) || {};
               saveClient({
+                // Spread existing first so metadata is preserved
+                ...existing,
+                // Then override only the fields Anissa can edit
                 id: clientId,
-                categorie: 'nutrition',
                 form: formData,
-                prenom: formData.prenom,
-                formule: 'nutrition',
-                langue: 'FR',
-                createdBy: 'anissa',
+                prenom: formData.prenom || existing.prenom,
+                // Ensure categorie stays set (fallback for legacy Anissa clients)
+                categorie: existing.categorie || 'nutrition',
+                // Keep existing formule/langue/createdBy/packType/packStartedAt/packSchedule
+                // untouched (fallback to nutrition/FR/anissa only if totally absent).
+                formule: existing.formule || 'nutrition',
+                langue: existing.langue || 'FR',
+                createdBy: existing.createdBy || 'anissa',
               });
               refreshClients();
               showToast('Client sauvegarde avec succes');

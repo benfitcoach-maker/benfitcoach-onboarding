@@ -526,6 +526,16 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                   fontSize:'.85rem' }}>
                 {'\ud83d\udccb'} Voir l'historique
               </button>
+              {/* V86.5 : bouton Modifier l'anamnese disponible pour tous les clients
+                  (own ET shared). Pour les shared, onOpen pointe aussi vers anissaEditClient. */}
+              {onOpen && (
+                <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onOpen(client.id); }}
+                  style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
+                    background:'none', border:'none', color:'var(--text)', cursor:'pointer',
+                    fontSize:'.85rem' }}>
+                  {'\u270f\ufe0f'} Modifier l'anamn{'\u00e8'}se
+                </button>
+              )}
               <SendQuestionnaireButton client={client} />
               {/* Séparateur */}
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
@@ -807,7 +817,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               </h3>
               <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
                 ))}
               </div>
             </div>
