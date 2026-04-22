@@ -6052,22 +6052,82 @@ ${suppText}`;
               </button>
             </div>
 
-            {/* Body */}
-            <div style={{ flex: 1, padding: '20px 24px', overflow: 'hidden' }}>
-              <textarea
-                value={finalDraft}
-                onChange={(e) => setFinalDraft(e.target.value)}
-                spellCheck={true}
-                style={{
-                  width: '100%', height: '100%',
-                  border: '1px solid rgba(196,160,80,.16)', borderRadius: 18,
-                  background: '#f7f2e8', color: '#1f231f',
-                  padding: 22, resize: 'none', outline: 'none',
-                  font: '400 15px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                  letterSpacing: '.2px', // V88.2 : micro-ameliore lisibilite
-                }}
-                placeholder="Colle ou edite ici la version finale du plan (markdown libre)..."
-              />
+            {/* V88.4 : Body split-screen \u2014 edition gauche + preview live droite */}
+            <div style={{
+              flex: 1, overflow: 'hidden',
+              display: 'grid', gridTemplateColumns: '1fr 1fr',
+              minHeight: 0,
+            }}>
+              {/* LEFT : editor textarea */}
+              <div style={{
+                padding: 20,
+                borderRight: '1px solid rgba(196,160,80,.12)',
+                display: 'flex', flexDirection: 'column',
+                minHeight: 0,
+              }}>
+                <textarea
+                  value={finalDraft}
+                  onChange={(e) => setFinalDraft(e.target.value)}
+                  spellCheck={true}
+                  style={{
+                    width: '100%', flex: 1,
+                    border: '1px solid rgba(196,160,80,.18)', borderRadius: 16,
+                    background: '#f7f2e8', color: '#1f231f',
+                    padding: 20, resize: 'none', outline: 'none',
+                    font: '400 14px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                    letterSpacing: '.2px',
+                  }}
+                  placeholder="Colle ou edite ici la version finale du plan (markdown libre)..."
+                />
+              </div>
+
+              {/* RIGHT : live preview */}
+              <div style={{
+                display: 'flex', flexDirection: 'column',
+                background: '#0f1411',
+                minHeight: 0,
+              }}>
+                {/* Preview header strip */}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '12px 20px',
+                  borderBottom: '1px solid rgba(196,160,80,.1)',
+                  gap: 12,
+                }}>
+                  <span style={{
+                    color: '#f4e7b2', fontWeight: 600, fontSize: '.8rem',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}>
+                    {'\ud83d\udc41\ufe0f Live preview (PDF)'}
+                  </span>
+                  <span style={{
+                    fontSize: '.7rem', color: 'rgba(255,255,255,.55)',
+                    padding: '2px 8px', borderRadius: 999,
+                    background: 'rgba(255,255,255,.04)',
+                    textTransform: 'uppercase', letterSpacing: '.06em',
+                    fontWeight: 600,
+                  }}>
+                    {finalDraft && finalDraft.trim()
+                      ? 'Source : draft en cours'
+                      : 'Source : plan IA'}
+                  </span>
+                </div>
+
+                {/* Preview body */}
+                <div style={{ flex: 1, overflow: 'auto', padding: 20, minHeight: 0 }}>
+                  <NutritionEditor
+                    key={`final-preview-${isFinalMode}`}
+                    planText={(finalDraft && finalDraft.trim()) || planDraft || ''}
+                    supplementsText={supplementsDraft}
+                    recipesText={recipesDraft}
+                    form={form}
+                    client={client}
+                    readOnly={true}
+                    hideActions={true}
+                    onSave={() => {}}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Footer */}
