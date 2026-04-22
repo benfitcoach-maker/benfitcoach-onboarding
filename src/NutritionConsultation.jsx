@@ -4810,7 +4810,7 @@ ${suppText}`;
                       color: '#d4b568',
                       lineHeight: 1.5,
                     }}>
-                      \u270d\ufe0f <strong>Mode finalisation.</strong> Tu edites une version finale
+                      {'\u270d\ufe0f'} <strong>Mode finalisation.</strong> Tu edites une version finale
                       libre (texte brut markdown), au-dessus du plan IA. Le plan IA n'est pas
                       modifie. Le PDF utilisera cette version finale si tu l'enregistres.
                     </div>
@@ -4843,7 +4843,7 @@ ${suppText}`;
                         style={{ padding: '8px 14px', borderRadius: 8, fontSize: '.78rem' }}
                         title="Supprime la version finale \u2014 le PDF reviendra au plan IA"
                       >
-                        \ud83d\uddd1\ufe0f Supprimer finalisation
+                        {'\ud83d\uddd1\ufe0f'} Supprimer finalisation
                       </button>
                       <button
                         type="button"
@@ -4852,7 +4852,7 @@ ${suppText}`;
                         style={{ padding: '8px 16px', borderRadius: 8, fontSize: '.78rem', fontWeight: 600 }}
                         title="Enregistre la version finale \u2014 le PDF l'utilisera"
                       >
-                        \ud83d\udcbe Enregistrer version finale
+                        {'\ud83d\udcbe'} Enregistrer version finale
                       </button>
                     </div>
                   </div>
@@ -5045,7 +5045,7 @@ ${suppText}`;
                         border: '1px solid rgba(196,160,80,.45)',
                       }}
                     >
-                      \u270d\ufe0f Version finale
+                      {'\u270d\ufe0f'} Version finale
                     </span>
                   )}
                   {autoCorrected && <span style={{ fontSize: '.7rem', background: 'rgba(255,200,60,.15)', color: '#e8c560', padding: '2px 8px', borderRadius: 999 }}>Auto-corrige</span>}
