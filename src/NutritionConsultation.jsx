@@ -2669,6 +2669,11 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V88.3 : modal Preview PDF \u2014 affiche exactement ce qui ira dans le PDF.
   // Source unique : finalText si isFinal sinon planDraft. Reutilise NutritionEditor en readOnly.
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
+  // V88.5 : debounced text pour le preview live du split-screen Finaliser.
+  // NutritionEditor parse planText au mount uniquement (useState lazy init). Pour que
+  // le preview suive le textarea, on remount avec un key derive d'un texte debounce 400ms.
+  const [finalPreviewText, setFinalPreviewText] = useState('');
+  const [finalPreviewKey, setFinalPreviewKey] = useState(0);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -2980,6 +2985,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     // Pre-remplir le draft : priorite a la version finale existante, sinon plan IA courant.
     const base = (finalText?.trim()) || (planDraft || '').trim() || '';
     setFinalDraft(base);
+    setFinalPreviewText(base); // V88.5 : init preview synchrone
+    setFinalPreviewKey(k => k + 1);
     setIsFinalMode(true);
   };
 
@@ -3034,6 +3041,19 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     if (planDraft && planDraft.trim()) return planDraft.trim();
     return consultation?.nutrition_plan || '';
   };
+
+  // V88.5 : debounce 400ms du texte utilise par le preview live (split-screen
+  // Finaliser). NutritionEditor ne reparse pas planText apres mount, on force
+  // donc un remount via un key qui change a chaque mise a jour debouncee.
+  useEffect(() => {
+    if (!isFinalMode) return undefined;
+    const effective = (finalDraft && finalDraft.trim()) || planDraft || '';
+    const t = setTimeout(() => {
+      setFinalPreviewText(effective);
+      setFinalPreviewKey(k => k + 1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [finalDraft, planDraft, isFinalMode]);
 
   // Map step index to content type based on followup
   const getStepType = (s) => {
@@ -6113,11 +6133,12 @@ ${suppText}`;
                   </span>
                 </div>
 
-                {/* Preview body */}
+                {/* Preview body \u2014 remount a chaque debounce tick (V88.5) pour que
+                    NutritionEditor re-parse le nouveau texte */}
                 <div style={{ flex: 1, overflow: 'auto', padding: 20, minHeight: 0 }}>
                   <NutritionEditor
-                    key={`final-preview-${isFinalMode}`}
-                    planText={(finalDraft && finalDraft.trim()) || planDraft || ''}
+                    key={`final-preview-${finalPreviewKey}`}
+                    planText={finalPreviewText}
                     supplementsText={supplementsDraft}
                     recipesText={recipesDraft}
                     form={form}
