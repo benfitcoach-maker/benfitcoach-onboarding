@@ -281,10 +281,19 @@ CLINICAL RULES:
   Zinc >8 weeks → add Copper.
 - Swiss brands: Burgerstein, Pure Encapsulations, Nahrin, Sekoya
 
+UNITS (ENGLISH SPELLING — IMPORTANT):
+- International units: write "IU" (not "UI", not "ui")
+- Micrograms: write "mcg" or "µg" (not "ug")
+- Milligrams: write "mg"
+- Grams: write "g"
+
 FORBIDDEN:
 - Long or repetitive paragraphs
 - Markdown tables with pipes | |
-- Generic justifications not linked to the client profile`;
+- Generic justifications not linked to the client profile
+- Duplicate headers : never write "RECOMMENDED SUPPLEMENTS" as a line in
+  the content. Start directly with the first supplement name. The section
+  title is already rendered by the PDF automatically.`;
 
 // ─── ONESHOT PLAN (single assessment, no follow-up) ───
 
@@ -752,11 +761,14 @@ STRICT RESTRICTIONS:
 
 // ─── SUPPLEMENTS EXCLUSIVE INSTRUCTION (mirror of SUPPLEMENTS_INSTRUCTION FR) ───
 
-export const SUPPLEMENTS_INSTRUCTION_EN = `EXCLUSIVE TASK: write ONLY the recommended supplements section.
+export const SUPPLEMENTS_INSTRUCTION_EN = `EXCLUSIVE TASK: write ONLY the recommended supplements list.
 
 DO NOT write any nutrition plan, menus, daily menus, strategy, clinical summary,
 base rules, rotations, fridge rules, or environmental adjustments.
-Start DIRECTLY with "RECOMMENDED SUPPLEMENTS" and nothing before.
+
+V87.2 HEADER RULE : DO NOT start with "RECOMMENDED SUPPLEMENTS" as a line —
+the section title is already rendered by the PDF automatically. Start DIRECTLY
+with the first supplement name (e.g. "MAGNESIUM GLYCINATE").
 
 Format for each supplement (5-6 max):
 Supplement name (uppercase)
@@ -765,6 +777,10 @@ Supplement name (uppercase)
 - Justification: 1 sentence tied to the profile
 - Interactions: 1 line if relevant
 - Duration: X weeks / months
+
+UNITS (ENGLISH SPELLING — IMPORTANT):
+- International units: write "IU" (not "UI")
+- Micrograms: "mcg" or "µg"
 
 RULES:
 - No emojis

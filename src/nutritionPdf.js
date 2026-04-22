@@ -677,6 +677,12 @@ function drawSupplementCard(doc, name, fields, x, y, width, locale = 'FR') {
 // Formats acceptes :
 //   "VITAMINE D3\n— Sources : ...\n— Complement : ...\n— Justification : ..."
 //   "VITAMINE D3\nSources : ...\nComplement : ..."
+// V87.2 : REDUNDANT_SUPP_TITLE_RE matche les titres de section qui
+// dupliquent le drawSectionHeader (ex: "RECOMMENDED SUPPLEMENTS",
+// "SUPPLEMENTS RECOMMANDES", "Suppléments"). Ces lignes sont rejetees par
+// isSupplementHeader pour eviter de creer une card vide avec le nom du titre.
+const REDUNDANT_SUPP_TITLE_RE = /^\s*(?:recommended\s+supplements?|suppl[eé]ments?\s+recommand[eé]s?|suppl[eé]ments?|supplements?)\s*:?\s*$/i;
+
 function parseSupplementEntriesStructured(text) {
   if (!text) return [];
   const lines = text.split('\n');
@@ -688,6 +694,8 @@ function parseSupplementEntriesStructured(text) {
     // Un header : ligne courte, majuscules dominantes, pas de ":" au milieu
     if (!t || t.length > 50) return false;
     if (t.includes(':') && t.indexOf(':') < t.length - 3) return false;
+    // V87.2 : reject les titres de section redondants (doublon visuel avec drawSectionHeader)
+    if (REDUNDANT_SUPP_TITLE_RE.test(t)) return false;
     const upperChars = (t.match(/[A-Z0-9 +\-/()]/g) || []).length;
     return t.length >= 4 && upperChars >= t.length * 0.7;
   };

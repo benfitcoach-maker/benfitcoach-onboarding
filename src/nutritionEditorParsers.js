@@ -121,6 +121,11 @@ export function parseTimelineSteps(text) {
 }
 
 // Parse un bloc de texte en entrees de supplements structurees
+// V87.2 : miroir stricte avec nutritionPdf.js — rejete les titres de section
+// redondants (RECOMMENDED SUPPLEMENTS / SUPPLEMENTS RECOMMANDES) pour eviter
+// qu'ils soient parses comme des entrees supplement vides (doublon visuel).
+const REDUNDANT_SUPP_TITLE_RE = /^\s*(?:recommended\s+supplements?|suppl[eé]ments?\s+recommand[eé]s?|suppl[eé]ments?|supplements?)\s*:?\s*$/i;
+
 export function parseSupplementEntriesStructured(text) {
   if (!text) return [];
   const lines = text.split('\n');
@@ -131,6 +136,7 @@ export function parseSupplementEntriesStructured(text) {
     const t = l.trim();
     if (!t || t.length > 50) return false;
     if (t.includes(':') && t.indexOf(':') < t.length - 3) return false;
+    if (REDUNDANT_SUPP_TITLE_RE.test(t)) return false;
     const upperChars = (t.match(/[A-Z0-9 +\-/()]/g) || []).length;
     return t.length >= 4 && upperChars >= t.length * 0.7;
   };
