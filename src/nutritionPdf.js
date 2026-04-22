@@ -657,7 +657,8 @@ function drawSupplementCard(doc, name, fields, x, y, width, locale = 'FR') {
     doc.setFontSize(FONT.micro);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...SOFT_TEXT);
-    doc.text(r.label, x + padX, cy);
+    // V87.3 : colon apres label pour meilleure lisibilite
+    doc.text(`${r.label}:`, x + padX, cy);
 
     doc.setFontSize(FONT.small);
     doc.setFont('helvetica', 'normal');
