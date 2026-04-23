@@ -2690,6 +2690,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [pdfPreviewError, setPdfPreviewError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [pdfRefreshTick, setPdfRefreshTick] = useState(0);
+  // V88.9 : preservation du scroll iframe PDF entre 2 refresh
+  const pdfIframeRef = useRef(null);
+  const pdfSavedScrollRef = useRef({ scrollY: 0, hash: '' });
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3086,9 +3089,22 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // eviter le reset page 1 a chaque frappe. Le tick incremente apres 1800ms sans
   // frappe OU au clic manuel sur \u21bb Rafraichir. Lecture de finalDraft/planDraft/
   // supplementsDraft/recipesDraft via closure au moment du trigger.
+  // V88.9 : capture scrollY + URL hash avant generation, restore au onLoad.
   useEffect(() => {
     if (!isFinalMode || previewMode !== 'pdf') return undefined;
     let cancelled = false;
+    // Capture de l'etat scroll AVANT qu'on change le blob URL (same-origin blob)
+    try {
+      const cw = pdfIframeRef.current?.contentWindow;
+      if (cw) {
+        pdfSavedScrollRef.current = {
+          scrollY: cw.scrollY || cw.pageYOffset || 0,
+          hash: cw.location?.hash || '',
+        };
+      }
+    } catch {
+      // Cross-origin ou pas encore monte \u2014 on ignore
+    }
     (async () => {
       try {
         setIsPdfPreviewLoading(true);
@@ -3113,9 +3129,16 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         };
         const blob = await buildConsultationPdfBlob(previewConsultation, client);
         if (cancelled) return;
-        const blobUrl = URL.createObjectURL(blob);
+        // V88.9 : appliquer le hash sauve (ex: #page=3) pour que le viewer PDF
+        // ouvre directement a la bonne page.
+        const rawUrl = URL.createObjectURL(blob);
+        const hash = pdfSavedScrollRef.current?.hash || '';
+        const blobUrl = hash ? `${rawUrl}${hash}` : rawUrl;
         setPdfPreviewUrl(old => {
-          if (old) URL.revokeObjectURL(old);
+          if (old) {
+            // Nettoyer l'ancien rawUrl (pas celui avec hash)
+            try { URL.revokeObjectURL(old.split('#')[0]); } catch { /* noop */ }
+          }
           return blobUrl;
         });
       } catch (err) {
@@ -6287,7 +6310,7 @@ ${suppText}`;
                           color: isTyping ? '#d4b568' : '#8abf9a',
                           border: `1px solid ${isTyping ? 'rgba(196,160,80,.35)' : 'rgba(138,191,154,.35)'}`,
                         }}>
-                          {isTyping ? '\u23f8 Mise \u00e0 jour en attente...' : '\u2705 PDF \u00e0 jour'}
+                          {isTyping ? '\u23f8 Mise a jour en attente...' : '\u2705 PDF a jour'}
                         </span>
                         <button
                           type="button"
@@ -6307,7 +6330,7 @@ ${suppText}`;
                           }}
                           title="Rafraichir manuellement l'apercu PDF"
                         >
-                          {'\u21bb'} Rafra\u00eechir
+                          {'\u21bb Rafraichir'}
                         </button>
                       </>
                     )}
@@ -6356,7 +6379,7 @@ ${suppText}`;
                           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           color: 'rgba(255,255,255,.55)', fontSize: '.85rem',
                         }}>
-                          {'\u231b'} G\u00e9n\u00e9ration du PDF...
+                          {'\u231b Generation du PDF...'}
                         </div>
                       )}
                       {pdfPreviewError && (
@@ -6369,8 +6392,21 @@ ${suppText}`;
                       )}
                       {pdfPreviewUrl && (
                         <iframe
+                          ref={pdfIframeRef}
                           title="PDF live preview"
                           src={pdfPreviewUrl}
+                          onLoad={() => {
+                            // V88.9 : restaurer le scroll sauvegarde apres le reload du blob
+                            try {
+                              const cw = pdfIframeRef.current?.contentWindow;
+                              const savedY = pdfSavedScrollRef.current?.scrollY || 0;
+                              if (cw && savedY > 0) {
+                                cw.scrollTo(0, savedY);
+                              }
+                            } catch {
+                              // Cross-origin ou viewer PDF natif \u2014 on laisse le hash #page=N gerer
+                            }
+                          }}
                           style={{
                             width: '100%', height: '100%',
                             border: 0, background: '#2b2b2b',
@@ -6387,7 +6423,7 @@ ${suppText}`;
                         fontSize: '.68rem', color: 'rgba(255,255,255,.6)',
                         textAlign: 'center',
                       }}>
-                        {'\ud83d\udca1'} Apercu bas\u00e9 sur le brouillon actuel. Le PDF export\u00e9 utilise la derni\u00e8re version enregistr\u00e9e.
+                        {'\ud83d\udca1 Apercu base sur le brouillon actuel. Le PDF exporte utilise la derniere version enregistree.'}
                       </div>
                     </div>
                   ) : previewMode === 'diff' ? (
