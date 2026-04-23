@@ -2690,7 +2690,11 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [pdfPreviewError, setPdfPreviewError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [pdfRefreshTick, setPdfRefreshTick] = useState(0);
-  // V88.9 : preservation du scroll iframe PDF entre 2 refresh
+  // V88.10 : le refresh auto 1800ms remontait le PDF en cover car le viewer natif
+  // Chrome ne permet pas la restauration du scroll. Strategie simplifiee :
+  // refresh UNIQUEMENT au clic manuel sur \u21bb Rafraichir. Indicateur 'Modifie'
+  // (pdfNeedsRefresh) previent qu'un draft plus recent existe.
+  const [pdfNeedsRefresh, setPdfNeedsRefresh] = useState(false);
   const pdfIframeRef = useRef(null);
   const pdfSavedScrollRef = useRef({ scrollY: 0, hash: '' });
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
@@ -3074,16 +3078,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     return () => clearTimeout(t);
   }, [finalDraft, planDraft, isFinalMode]);
 
-  // V88.8 : detection fin de frappe. Apres 1800ms sans changement du finalDraft,
-  // on eteint isTyping et on incremente pdfRefreshTick qui declenche la regeneration.
-  useEffect(() => {
-    if (!isFinalMode || previewMode !== 'pdf' || !isTyping) return undefined;
-    const t = setTimeout(() => {
-      setIsTyping(false);
-      setPdfRefreshTick(x => x + 1);
-    }, 1800);
-    return () => clearTimeout(t);
-  }, [finalDraft, isTyping, isFinalMode, previewMode]);
+  // V88.10 : pas d'auto-refresh. La frappe marque pdfNeedsRefresh=true mais
+  // ne regenere pas. L'utilisateur clique \u21bb Rafraichir quand il veut voir.
+  // Evite le reset scroll dans le viewer PDF natif (impossible a preserver).
 
   // V88.8 : generation blob PDF live. Depend UNIQUEMENT de pdfRefreshTick pour
   // eviter le reset page 1 a chaque frappe. Le tick incremente apres 1800ms sans
@@ -3147,7 +3144,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
           setPdfPreviewError('Impossible de generer l\u2019apercu PDF.');
         }
       } finally {
-        if (!cancelled) setIsPdfPreviewLoading(false);
+        if (!cancelled) {
+          setIsPdfPreviewLoading(false);
+          setPdfNeedsRefresh(false); // V88.10 : le PDF reflete maintenant le draft courant
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -3157,6 +3157,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V88.8 : initialiser le tick a l'ouverture de la modal / changement de mode PDF
   useEffect(() => {
     if (isFinalMode && previewMode === 'pdf') {
+      setPdfNeedsRefresh(false);
       setPdfRefreshTick(x => x + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6241,8 +6242,9 @@ ${suppText}`;
                   value={finalDraft}
                   onChange={(e) => {
                     setFinalDraft(e.target.value);
-                    // V88.8 : marque typing pour que le mode PDF attende 1800ms
-                    if (previewMode === 'pdf') setIsTyping(true);
+                    // V88.10 : marque le draft comme modifie pour le mode PDF.
+                    // Pas de refresh auto, l'utilisateur clique Rafraichir.
+                    if (previewMode === 'pdf') setPdfNeedsRefresh(true);
                   }}
                   spellCheck={true}
                   style={{
@@ -6306,29 +6308,28 @@ ${suppText}`;
                         <span style={{
                           fontSize: '.7rem', fontWeight: 600,
                           padding: '2px 8px', borderRadius: 999,
-                          background: isTyping ? 'rgba(196,160,80,.15)' : 'rgba(138,191,154,.15)',
-                          color: isTyping ? '#d4b568' : '#8abf9a',
-                          border: `1px solid ${isTyping ? 'rgba(196,160,80,.35)' : 'rgba(138,191,154,.35)'}`,
+                          background: pdfNeedsRefresh ? 'rgba(196,160,80,.18)' : 'rgba(138,191,154,.15)',
+                          color: pdfNeedsRefresh ? '#e0cda0' : '#8abf9a',
+                          border: `1px solid ${pdfNeedsRefresh ? 'rgba(196,160,80,.45)' : 'rgba(138,191,154,.35)'}`,
                         }}>
-                          {isTyping ? '\u23f8 Mise a jour en attente...' : '\u2705 PDF a jour'}
+                          {pdfNeedsRefresh ? '\u270f\ufe0f Modifie \u2014 cliquez Rafraichir' : '\u2705 PDF a jour'}
                         </span>
                         <button
                           type="button"
                           onClick={() => {
-                            setIsTyping(false);
                             setPdfRefreshTick(x => x + 1);
                           }}
                           disabled={isPdfPreviewLoading}
                           style={{
                             padding: '4px 10px', borderRadius: 8, fontSize: '.7rem',
-                            background: 'rgba(255,255,255,.04)',
-                            border: '1px solid rgba(255,255,255,.1)',
-                            color: 'rgba(255,255,255,.7)',
+                            background: pdfNeedsRefresh ? 'rgba(196,160,80,.18)' : 'rgba(255,255,255,.04)',
+                            border: `1px solid ${pdfNeedsRefresh ? 'rgba(196,160,80,.55)' : 'rgba(255,255,255,.1)'}`,
+                            color: pdfNeedsRefresh ? '#e0cda0' : 'rgba(255,255,255,.7)',
                             cursor: isPdfPreviewLoading ? 'wait' : 'pointer',
                             fontWeight: 600,
                             opacity: isPdfPreviewLoading ? .5 : 1,
                           }}
-                          title="Rafraichir manuellement l'apercu PDF"
+                          title="Regenerer l'apercu PDF avec le draft actuel (garde le scroll au niveau du viewer natif impossible)"
                         >
                           {'\u21bb Rafraichir'}
                         </button>
