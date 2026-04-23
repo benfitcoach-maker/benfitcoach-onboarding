@@ -889,6 +889,9 @@ export function saveNutritionConsultation(consultation) {
     finalText: consultation.finalText || null,
     isFinal: consultation.isFinal || false,
     finalUpdatedAt: consultation.finalUpdatedAt || null,
+    // V88.12 : historique des versions finales. Archive a chaque save.
+    // Tableau de { text, createdAt }. Limite a 15 entrees via slice(-15).
+    finalVersions: Array.isArray(consultation.finalVersions) ? consultation.finalVersions : [],
   };
   // V78 : si une consultation avec ce id existe deja et est soft-delete,
   // preserver le flag pour eviter un "undelete" silencieux via edit.

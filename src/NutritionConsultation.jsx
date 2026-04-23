@@ -2666,6 +2666,11 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [finalText, setFinalText] = useState(initialConsultation?.finalText || '');
   const [isFinal, setIsFinal] = useState(!!initialConsultation?.isFinal);
   const [finalDraft, setFinalDraft] = useState('');
+  // V88.12 : historique versions finales
+  const [finalVersions, setFinalVersions] = useState(
+    Array.isArray(initialConsultation?.finalVersions) ? initialConsultation.finalVersions : []
+  );
+  const [showVersions, setShowVersions] = useState(false);
   // V88.3 : modal Preview PDF \u2014 affiche exactement ce qui ira dans le PDF.
   // Source unique : finalText si isFinal sinon planDraft. Reutilise NutritionEditor en readOnly.
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
@@ -3023,42 +3028,118 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   const handleSaveFinalVersion = () => {
     const trimmed = (finalDraft || '').trim();
+    // V88.12 : archiver l'ancienne version finale AVANT ecrasement.
+    // Evite toute perte de texte. Limite a 15 entrees max.
+    let nextVersions = [...finalVersions];
+    const prevText = (finalText || '').trim();
+    if (prevText && prevText !== trimmed) {
+      nextVersions.push({
+        text: prevText,
+        createdAt: consultation?.finalUpdatedAt || new Date().toISOString(),
+      });
+      if (nextVersions.length > 15) nextVersions = nextVersions.slice(-15);
+    }
+
     if (trimmed) {
       setFinalText(trimmed);
       setIsFinal(true);
+      setFinalVersions(nextVersions);
       setConsultation(prev => ({
         ...prev,
         finalText: trimmed,
         isFinal: true,
         finalUpdatedAt: new Date().toISOString(),
+        finalVersions: nextVersions,
       }));
       showSaveToast('Version finale enregistree');
     } else {
-      // draft vide = equivalent a une suppression
+      // draft vide = equivalent a une suppression (mais on garde l'historique)
       setFinalText('');
       setIsFinal(false);
+      setFinalVersions(nextVersions);
       setConsultation(prev => ({
         ...prev,
         finalText: null,
         isFinal: false,
         finalUpdatedAt: null,
+        finalVersions: nextVersions,
       }));
-      showSaveToast('Finalisation vide \u2014 supprimee');
+      showSaveToast('Finalisation vide \u2014 supprimee (historique conserve)');
     }
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
     setIsFinalMode(false);
+    setShowVersions(false);
   };
 
   const handleClearFinalVersion = () => {
+    // V88.12 : archiver la version finale courante si presente avant de la supprimer
+    let nextVersions = [...finalVersions];
+    const prevText = (finalText || '').trim();
+    if (prevText) {
+      nextVersions.push({
+        text: prevText,
+        createdAt: consultation?.finalUpdatedAt || new Date().toISOString(),
+      });
+      if (nextVersions.length > 15) nextVersions = nextVersions.slice(-15);
+    }
     setFinalText('');
     setIsFinal(false);
     setFinalDraft('');
-    setConsultation(prev => ({ ...prev, finalText: null, isFinal: false, finalUpdatedAt: null }));
+    setFinalVersions(nextVersions);
+    setConsultation(prev => ({
+      ...prev,
+      finalText: null,
+      isFinal: false,
+      finalUpdatedAt: null,
+      finalVersions: nextVersions,
+    }));
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
     setIsFinalMode(false);
-    showSaveToast('Finalisation supprimee');
+    setShowVersions(false);
+    showSaveToast('Finalisation supprimee (historique conserve)');
+  };
+
+  // V88.12 : restaurer une version = la rendre active immediatement, sans perdre
+  // les autres. Archive la version courante avant de restaurer (double filet).
+  const handleRestoreVersion = (version) => {
+    if (!version?.text) return;
+    let nextVersions = [...finalVersions];
+    const prevText = (finalText || '').trim();
+    if (prevText && prevText !== version.text) {
+      nextVersions.push({
+        text: prevText,
+        createdAt: consultation?.finalUpdatedAt || new Date().toISOString(),
+      });
+      if (nextVersions.length > 15) nextVersions = nextVersions.slice(-15);
+    }
+    setFinalText(version.text);
+    setIsFinal(true);
+    setFinalDraft(version.text);
+    setFinalVersions(nextVersions);
+    setConsultation(prev => ({
+      ...prev,
+      finalText: version.text,
+      isFinal: true,
+      finalUpdatedAt: new Date().toISOString(),
+      finalVersions: nextVersions,
+    }));
+    isDirtyRef.current = true;
+    setAutoSaveStatus('unsaved');
+    setShowVersions(false);
+    setPdfNeedsRefresh(true);
+    showSaveToast('Version restauree');
+  };
+
+  // V88.12 : charger une version dans la textarea sans la rendre active.
+  // Permet a Anissa de l'editer avant de la valider.
+  const handleLoadVersionAsDraft = (version) => {
+    if (!version?.text) return;
+    setFinalDraft(version.text);
+    setShowVersions(false);
+    setPdfNeedsRefresh(true);
+    showSaveToast('Version chargee dans le brouillon');
   };
 
   // V88.3 : renvoie le texte qui ira REELLEMENT dans le PDF.
@@ -3867,6 +3948,8 @@ ${suppText}`;
       finalText: finalText || null,
       isFinal: isFinal,
       finalUpdatedAt: isFinal ? (consultation.finalUpdatedAt || new Date().toISOString()) : null,
+      // V88.12 : historique versions finales
+      finalVersions: finalVersions,
     });
     clearDraft(clientId, consultationId);
     isDirtyRef.current = false;
@@ -6234,6 +6317,7 @@ ${suppText}`;
             style={{
               width: '100%', height: '100%',
               background: '#111613', display: 'flex', flexDirection: 'column',
+              position: 'relative', // V88.12 : pour ancrer la sub-modal versions
             }}
           >
             {/* Header */}
@@ -6267,14 +6351,44 @@ ${suppText}`;
                   {'\ud83d\udca1 \u00c9dite librement. Garde les titres (##) pour un formatage PDF optimal.'}
                 </p>
               </div>
-              <button
-                type="button"
-                className="btn btn-anissa-secondary"
-                onClick={closeFinalModal}
-                style={{ padding: '6px 12px', borderRadius: 8, fontSize: '.78rem', flexShrink: 0 }}
-              >
-                {'\u2715'} Fermer
-              </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                {/* V88.12 : bouton historique versions */}
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={() => setShowVersions(true)}
+                  disabled={finalVersions.length === 0}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, fontSize: '.78rem',
+                    opacity: finalVersions.length === 0 ? .4 : 1,
+                    cursor: finalVersions.length === 0 ? 'not-allowed' : 'pointer',
+                  }}
+                  title={finalVersions.length === 0
+                    ? 'Aucune version anterieure'
+                    : `${finalVersions.length} version(s) anterieure(s)`}
+                >
+                  {'\ud83d\udd58'} Versions
+                  {finalVersions.length > 0 && (
+                    <span style={{
+                      marginLeft: 6,
+                      padding: '1px 6px', borderRadius: 999,
+                      background: 'rgba(196,160,80,.22)',
+                      color: '#e0cda0',
+                      fontSize: '.65rem', fontWeight: 700,
+                    }}>
+                      {finalVersions.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-anissa-secondary"
+                  onClick={closeFinalModal}
+                  style={{ padding: '6px 12px', borderRadius: 8, fontSize: '.78rem' }}
+                >
+                  {'\u2715'} Fermer
+                </button>
+              </div>
             </div>
 
             {/* V88.4 : Body split-screen \u2014 edition gauche + preview live droite */}
@@ -6637,6 +6751,128 @@ ${suppText}`;
                 </button>
               </div>
             </div>
+
+            {/* V88.12 : Sub-modal Historique des versions (par-dessus la modal Finaliser) */}
+            {showVersions && (
+              <div
+                onClick={() => setShowVersions(false)}
+                style={{
+                  position: 'absolute', inset: 0, zIndex: 10,
+                  background: 'rgba(10,14,12,.78)', backdropFilter: 'blur(4px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 40,
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    background: '#151b17',
+                    border: '1px solid rgba(196,160,80,.22)',
+                    borderRadius: 18,
+                    width: '100%', maxWidth: 720, maxHeight: '86vh',
+                    display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 30px 80px rgba(0,0,0,.55)',
+                  }}
+                >
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '16px 20px',
+                    borderBottom: '1px solid rgba(196,160,80,.14)',
+                  }}>
+                    <div>
+                      <h3 style={{ margin: '0 0 2px', color: '#f4e7b2', fontSize: '1rem' }}>
+                        Historique des versions
+                      </h3>
+                      <p style={{ margin: 0, color: 'rgba(255,255,255,.6)', fontSize: '.8rem' }}>
+                        {finalVersions.length} version(s) archivee(s). Max 15.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-anissa-secondary"
+                      onClick={() => setShowVersions(false)}
+                      style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.75rem' }}
+                    >
+                      {'\u2715'}
+                    </button>
+                  </div>
+                  <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {finalVersions.length === 0 ? (
+                      <div style={{
+                        padding: 30, textAlign: 'center',
+                        color: 'rgba(255,255,255,.45)', fontSize: '.85rem', fontStyle: 'italic',
+                      }}>
+                        Aucune version archivee.
+                        <br />
+                        Les versions precedentes sont automatiquement archivees a chaque Valider.
+                      </div>
+                    ) : (
+                      [...finalVersions].reverse().map((v, i) => {
+                        const realIndex = finalVersions.length - 1 - i;
+                        const dateFmt = v.createdAt
+                          ? new Date(v.createdAt).toLocaleString('fr-CH', {
+                              day: '2-digit', month: '2-digit', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })
+                          : '-';
+                        const preview = (v.text || '').slice(0, 260);
+                        return (
+                          <div
+                            key={realIndex}
+                            style={{
+                              border: '1px solid rgba(196,160,80,.18)',
+                              borderRadius: 12,
+                              background: 'rgba(196,160,80,.04)',
+                              padding: 14,
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, gap: 8 }}>
+                              <span style={{ color: '#e0cda0', fontWeight: 600, fontSize: '.82rem' }}>
+                                Version {realIndex + 1}
+                              </span>
+                              <span style={{ color: 'rgba(255,255,255,.5)', fontSize: '.72rem' }}>
+                                {dateFmt}
+                              </span>
+                            </div>
+                            <div style={{
+                              color: 'rgba(255,255,255,.72)', fontSize: '.78rem', lineHeight: 1.5,
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                              maxHeight: 80, overflow: 'hidden',
+                              background: 'rgba(0,0,0,.18)', padding: 10, borderRadius: 8,
+                              marginBottom: 10,
+                            }}>
+                              {preview}
+                              {(v.text || '').length > 260 ? '...' : ''}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="btn btn-anissa-secondary"
+                                onClick={() => handleLoadVersionAsDraft(v)}
+                                style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.72rem' }}
+                                title="Charge cette version dans la textarea (sans la rendre active)"
+                              >
+                                Ouvrir en brouillon
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-anissa-primary"
+                                onClick={() => handleRestoreVersion(v)}
+                                style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.72rem', fontWeight: 600 }}
+                                title="Restaure cette version comme version finale active immediatement"
+                              >
+                                Restaurer
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
