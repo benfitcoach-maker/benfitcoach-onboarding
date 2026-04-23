@@ -2697,6 +2697,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [pdfNeedsRefresh, setPdfNeedsRefresh] = useState(false);
   const pdfIframeRef = useRef(null);
   const pdfSavedScrollRef = useRef({ scrollY: 0, hash: '' });
+  // V88.11 : scroll sync gauche \u2194 droite (Premium + Diff uniquement, pas PDF iframe).
+  const leftScrollRef = useRef(null);
+  const rightScrollRef = useRef(null);
+  const isSyncingScrollRef = useRef(false);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3171,6 +3175,54 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinalMode]);
+
+  // V88.11 : scroll sync gauche \u2194 droite (Premium + Diff uniquement).
+  // Ratio-based via requestAnimationFrame. Flag isSyncing pour eviter boucle.
+  // Skip PDF car iframe natif impossible a synchroniser.
+  useEffect(() => {
+    if (!isFinalMode || previewMode === 'pdf') return undefined;
+    const left = leftScrollRef.current;
+    const right = rightScrollRef.current;
+    if (!left || !right) return undefined;
+
+    const getRatio = (el) => {
+      const max = el.scrollHeight - el.clientHeight;
+      if (max <= 0) return 0;
+      return el.scrollTop / max;
+    };
+    const setRatio = (el, ratio) => {
+      const max = el.scrollHeight - el.clientHeight;
+      el.scrollTop = ratio * max;
+    };
+
+    let rafId = null;
+    const onLeftScroll = () => {
+      if (isSyncingScrollRef.current) return;
+      isSyncingScrollRef.current = true;
+      const ratio = getRatio(left);
+      rafId = requestAnimationFrame(() => {
+        setRatio(right, ratio);
+        isSyncingScrollRef.current = false;
+      });
+    };
+    const onRightScroll = () => {
+      if (isSyncingScrollRef.current) return;
+      isSyncingScrollRef.current = true;
+      const ratio = getRatio(right);
+      rafId = requestAnimationFrame(() => {
+        setRatio(left, ratio);
+        isSyncingScrollRef.current = false;
+      });
+    };
+
+    left.addEventListener('scroll', onLeftScroll, { passive: true });
+    right.addEventListener('scroll', onRightScroll, { passive: true });
+    return () => {
+      left.removeEventListener('scroll', onLeftScroll);
+      right.removeEventListener('scroll', onRightScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [isFinalMode, previewMode, finalPreviewKey]);
 
   // V88.6 : diff simple ligne par ligne (index-aligne). Zero dep externe.
   // Retourne un tableau de { type, base?, draft? } ou type \u2208 { same, added, removed, changed }
@@ -6239,6 +6291,7 @@ ${suppText}`;
                 minHeight: 0,
               }}>
                 <textarea
+                  ref={leftScrollRef}
                   value={finalDraft}
                   onChange={(e) => {
                     setFinalDraft(e.target.value);
@@ -6366,8 +6419,9 @@ ${suppText}`;
                   </div>
                 </div>
 
-                {/* Preview body \u2014 3 modes : PDF live (iframe) / premium / diff */}
-                <div style={{ flex: 1, overflow: 'auto', padding: 20, minHeight: 0 }}>
+                {/* Preview body \u2014 3 modes : PDF live (iframe) / premium / diff
+                    V88.11 : ref rightScrollRef pour le sync gauche\u2194droite (Premium/Diff uniquement) */}
+                <div ref={rightScrollRef} style={{ flex: 1, overflow: 'auto', padding: 20, minHeight: 0 }}>
                   {previewMode === 'pdf' ? (
                     // V88.7 : vrai PDF live via iframe blob. Meme moteur que l'export final.
                     <div style={{
