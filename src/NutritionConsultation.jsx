@@ -16,7 +16,7 @@ import FicheFrigoPreview from './FicheFrigoPreview';
 import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 // V76 : extractFridgeDataFromSections / extractMeals / extractSupplements retires (utilises seulement dans la modale Apercu PDF supprimee)
-import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF } from './nutritionPdf';
+import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, buildConsultationPdfBlob } from './nutritionPdf';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
@@ -2674,10 +2674,18 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // le preview suive le textarea, on remount avec un key derive d'un texte debounce 400ms.
   const [finalPreviewText, setFinalPreviewText] = useState('');
   const [finalPreviewKey, setFinalPreviewKey] = useState(0);
-  // V88.6 : toggle diff mode dans la modal Finaliser.
-  // OFF = live preview (NutritionEditor readOnly)
-  // ON = diff simple ligne par ligne entre plan IA base et finalDraft
-  const [isDiffMode, setIsDiffMode] = useState(false);
+  // V88.6 \u2192 V88.7 : 3 modes de preview dans la modal Finaliser.
+  //   'premium' = NutritionEditor readOnly (rapide, pas pagination)
+  //   'pdf'     = iframe du VRAI PDF (genere via buildConsultationPdfBlob)
+  //   'diff'    = diff simple ligne par ligne entre plan IA et finalDraft
+  const [previewMode, setPreviewMode] = useState('pdf');
+  // Derived pour compat avec code existant V88.6
+  const isDiffMode = previewMode === 'diff';
+  // V88.7 : vrai PDF live preview (iframe blob). Genere via buildConsultationPdfBlob
+  // a partir de finalDraft debounce. Un seul moteur PDF (exportConsultationPDF).
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
+  const [isPdfPreviewLoading, setIsPdfPreviewLoading] = useState(false);
+  const [pdfPreviewError, setPdfPreviewError] = useState('');
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3058,6 +3066,70 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }, 400);
     return () => clearTimeout(t);
   }, [finalDraft, planDraft, isFinalMode]);
+
+  // V88.7 : generation blob PDF live avec debounce 500ms. Reutilise le meme
+  // moteur que l'export final (buildConsultationPdfBlob). On cree une blob URL
+  // a chaque tick stable et on revoke la precedente pour eviter les fuites.
+  useEffect(() => {
+    if (!isFinalMode || previewMode !== 'pdf') return undefined;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        if (cancelled) return;
+        setIsPdfPreviewLoading(true);
+        setPdfPreviewError('');
+        // Construire une consultation "virtuelle" avec le draft en cours comme
+        // plan final \u2014 force isFinal=true pour que l'export prime finalText.
+        const effectivePlan = (finalDraft && finalDraft.trim()) || planDraft || '';
+        const sectionsPreview = structurePlanSections(
+          effectivePlan,
+          supplementsDraft,
+          { isFollowup, locale: getClientNutritionLocale(client) }
+        );
+        const previewConsultation = {
+          ...consultation,
+          nutritionPlan: effectivePlan,
+          supplements: supplementsDraft,
+          recipes: recipesDraft,
+          date: consultation?.date || new Date().toISOString(),
+          isFollowup,
+          followupData: isFollowup ? followupData : null,
+          sections: sectionsPreview,
+          // Force la version finale pour ce preview uniquement
+          finalText: effectivePlan,
+          isFinal: true,
+        };
+        const blob = await buildConsultationPdfBlob(previewConsultation, client);
+        if (cancelled) return;
+        const blobUrl = URL.createObjectURL(blob);
+        setPdfPreviewUrl(old => {
+          if (old) URL.revokeObjectURL(old);
+          return blobUrl;
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[PDF live preview] error:', err);
+          setPdfPreviewError('Impossible de generer l\u2019apercu PDF.');
+        }
+      } finally {
+        if (!cancelled) setIsPdfPreviewLoading(false);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalDraft, planDraft, isFinalMode, previewMode, supplementsDraft, recipesDraft]);
+
+  // Cleanup du blob URL a la fermeture de la modal ou au demontage du composant
+  useEffect(() => {
+    if (!isFinalMode && pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinalMode]);
 
   // V88.6 : diff simple ligne par ligne (index-aligne). Zero dep externe.
   // Retourne un tableau de { type, base?, draft? } ou type \u2208 { same, added, removed, changed }
@@ -6158,20 +6230,20 @@ ${suppText}`;
                     color: '#f4e7b2', fontWeight: 600, fontSize: '.8rem',
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                   }}>
-                    {isDiffMode
-                      ? '\ud83d\udd0d Diff (plan IA \u2192 final)'
-                      : '\ud83d\udc41\ufe0f Live preview (PDF)'}
+                    {previewMode === 'pdf' && '\ud83d\udcc4 PDF live preview'}
+                    {previewMode === 'premium' && '\ud83d\udc41\ufe0f Rendu premium'}
+                    {previewMode === 'diff' && '\ud83d\udd0d Diff (plan IA \u2192 final)'}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    {/* V88.6 : stats diff si mode diff actif */}
-                    {isDiffMode && (
+                    {/* Stats / pastille source selon le mode */}
+                    {previewMode === 'diff' && (
                       <span style={{ display: 'inline-flex', gap: 6, fontSize: '.7rem', fontWeight: 600 }}>
                         <span style={{ color: '#8abf9a' }}>+{diffStats.added}</span>
                         <span style={{ color: '#e57373' }}>-{diffStats.removed}</span>
                         <span style={{ color: '#d4b568' }}>~{diffStats.changed}</span>
                       </span>
                     )}
-                    {!isDiffMode && (
+                    {previewMode !== 'diff' && (
                       <span style={{
                         fontSize: '.7rem', color: 'rgba(255,255,255,.55)',
                         padding: '2px 8px', borderRadius: 999,
@@ -6184,27 +6256,86 @@ ${suppText}`;
                           : 'Source : plan IA'}
                       </span>
                     )}
-                    {/* V88.6 : toggle diff */}
-                    <button
-                      type="button"
-                      onClick={() => setIsDiffMode(m => !m)}
-                      style={{
-                        padding: '4px 10px', borderRadius: 8, fontSize: '.7rem',
-                        background: isDiffMode ? 'rgba(196,160,80,.22)' : 'rgba(255,255,255,.04)',
-                        border: `1px solid ${isDiffMode ? 'rgba(196,160,80,.55)' : 'rgba(255,255,255,.1)'}`,
-                        color: isDiffMode ? '#e0cda0' : 'rgba(255,255,255,.7)',
-                        cursor: 'pointer', fontWeight: 600,
-                      }}
-                      title={isDiffMode ? 'Revenir au rendu premium' : 'Voir les differences ligne par ligne avec le plan IA'}
-                    >
-                      {isDiffMode ? '\u2190 Rendu premium' : '\ud83d\udd0d Voir differences'}
-                    </button>
+                    {/* V88.7 : segmented control 3 modes */}
+                    <div style={{
+                      display: 'inline-flex', borderRadius: 8, overflow: 'hidden',
+                      border: '1px solid rgba(255,255,255,.1)',
+                    }}>
+                      {[
+                        { key: 'pdf', label: '\ud83d\udcc4 PDF', title: 'Apercu du vrai PDF final (genere avec le meme moteur que l\'export)' },
+                        { key: 'premium', label: '\u2728 Premium', title: 'Rendu premium de l\'editeur (rapide, non pagine)' },
+                        { key: 'diff', label: '\ud83d\udd0d Diff', title: 'Differences ligne par ligne avec le plan IA' },
+                      ].map(opt => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setPreviewMode(opt.key)}
+                          title={opt.title}
+                          style={{
+                            padding: '4px 10px', fontSize: '.7rem', fontWeight: 600,
+                            background: previewMode === opt.key ? 'rgba(196,160,80,.22)' : 'rgba(255,255,255,.04)',
+                            color: previewMode === opt.key ? '#e0cda0' : 'rgba(255,255,255,.7)',
+                            border: 'none',
+                            borderLeft: '1px solid rgba(255,255,255,.08)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* Preview body \u2014 rendu premium OU diff selon toggle */}
+                {/* Preview body \u2014 3 modes : PDF live (iframe) / premium / diff */}
                 <div style={{ flex: 1, overflow: 'auto', padding: 20, minHeight: 0 }}>
-                  {isDiffMode ? (
+                  {previewMode === 'pdf' ? (
+                    // V88.7 : vrai PDF live via iframe blob. Meme moteur que l'export final.
+                    <div style={{
+                      height: '100%', display: 'flex', flexDirection: 'column',
+                      borderRadius: 14, overflow: 'hidden',
+                      background: '#2b2b2b',
+                    }}>
+                      {isPdfPreviewLoading && !pdfPreviewUrl && (
+                        <div style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'rgba(255,255,255,.55)', fontSize: '.85rem',
+                        }}>
+                          {'\u231b'} G\u00e9n\u00e9ration du PDF...
+                        </div>
+                      )}
+                      {pdfPreviewError && (
+                        <div style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#e57373', fontSize: '.85rem', padding: 20, textAlign: 'center',
+                        }}>
+                          {pdfPreviewError}
+                        </div>
+                      )}
+                      {pdfPreviewUrl && (
+                        <iframe
+                          title="PDF live preview"
+                          src={pdfPreviewUrl}
+                          style={{
+                            width: '100%', height: '100%',
+                            border: 0, background: '#2b2b2b',
+                            opacity: isPdfPreviewLoading ? .6 : 1,
+                            transition: 'opacity .2s',
+                          }}
+                        />
+                      )}
+                      {/* Bandeau d'info : preview vs export */}
+                      <div style={{
+                        padding: '6px 12px',
+                        background: 'rgba(196,160,80,.08)',
+                        borderTop: '1px solid rgba(196,160,80,.15)',
+                        fontSize: '.68rem', color: 'rgba(255,255,255,.6)',
+                        textAlign: 'center',
+                      }}>
+                        {'\ud83d\udca1'} Apercu bas\u00e9 sur le brouillon actuel. Le PDF export\u00e9 utilise la derni\u00e8re version enregistr\u00e9e.
+                      </div>
+                    </div>
+                  ) : previewMode === 'diff' ? (
                     // V88.6 : diff ligne par ligne
                     <div style={{
                       font: '400 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',

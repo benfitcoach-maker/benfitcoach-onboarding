@@ -1541,7 +1541,11 @@ function splitPlanIntoClientSections(planText, supplementsText, recipesText) {
 // PDF 1: PLAN NUTRITION PREMIUM (client-facing)
 // ─────────────────────────────────────────────────────
 
-export async function exportConsultationPDF(consultation, client) {
+// V88.7 : parametre { output } optionnel.
+//   output='save' (defaut) -> doc.save(fileName), comportement historique
+//   output='blob'          -> retourne directement doc.output('blob') pour preview iframe
+// Le reste de la fonction est strictement identique. Un seul moteur PDF.
+export async function exportConsultationPDF(consultation, client, { output = 'save' } = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pw = doc.internal.pageSize.getWidth();
   const margin = 25;
@@ -2182,7 +2186,15 @@ export async function exportConsultationPDF(consultation, client) {
   }
 
   const fileName = `plan-nutrition-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`;
+  if (output === 'blob') return doc.output('blob');
   doc.save(fileName);
+  return undefined;
+}
+
+// V88.7 : helper public pour le live preview iframe (cote NutritionConsultation).
+// Reutilise exportConsultationPDF avec output='blob' \u2014 un seul moteur PDF.
+export async function buildConsultationPdfBlob(consultation, client) {
+  return exportConsultationPDF(consultation, client, { output: 'blob' });
 }
 
 
