@@ -2681,11 +2681,15 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [previewMode, setPreviewMode] = useState('pdf');
   // Derived pour compat avec code existant V88.6
   const isDiffMode = previewMode === 'diff';
-  // V88.7 : vrai PDF live preview (iframe blob). Genere via buildConsultationPdfBlob
-  // a partir de finalDraft debounce. Un seul moteur PDF (exportConsultationPDF).
+  // V88.7 : vrai PDF live preview (iframe blob). Genere via buildConsultationPdfBlob.
+  // V88.8 : refresh semi-manuel pour le mode PDF \u2014 ne pas regenerer a chaque frappe
+  // (sinon retour page 1 en permanence, perte du scroll). 1800ms apres la derniere frappe
+  // OU clic sur \u21bb Rafraichir \u2192 pdfRefreshTick incremente \u2192 generation blob.
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
   const [isPdfPreviewLoading, setIsPdfPreviewLoading] = useState(false);
   const [pdfPreviewError, setPdfPreviewError] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [pdfRefreshTick, setPdfRefreshTick] = useState(0);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3067,19 +3071,28 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     return () => clearTimeout(t);
   }, [finalDraft, planDraft, isFinalMode]);
 
-  // V88.7 : generation blob PDF live avec debounce 500ms. Reutilise le meme
-  // moteur que l'export final (buildConsultationPdfBlob). On cree une blob URL
-  // a chaque tick stable et on revoke la precedente pour eviter les fuites.
+  // V88.8 : detection fin de frappe. Apres 1800ms sans changement du finalDraft,
+  // on eteint isTyping et on incremente pdfRefreshTick qui declenche la regeneration.
+  useEffect(() => {
+    if (!isFinalMode || previewMode !== 'pdf' || !isTyping) return undefined;
+    const t = setTimeout(() => {
+      setIsTyping(false);
+      setPdfRefreshTick(x => x + 1);
+    }, 1800);
+    return () => clearTimeout(t);
+  }, [finalDraft, isTyping, isFinalMode, previewMode]);
+
+  // V88.8 : generation blob PDF live. Depend UNIQUEMENT de pdfRefreshTick pour
+  // eviter le reset page 1 a chaque frappe. Le tick incremente apres 1800ms sans
+  // frappe OU au clic manuel sur \u21bb Rafraichir. Lecture de finalDraft/planDraft/
+  // supplementsDraft/recipesDraft via closure au moment du trigger.
   useEffect(() => {
     if (!isFinalMode || previewMode !== 'pdf') return undefined;
     let cancelled = false;
-    const t = setTimeout(async () => {
+    (async () => {
       try {
-        if (cancelled) return;
         setIsPdfPreviewLoading(true);
         setPdfPreviewError('');
-        // Construire une consultation "virtuelle" avec le draft en cours comme
-        // plan final \u2014 force isFinal=true pour que l'export prime finalText.
         const effectivePlan = (finalDraft && finalDraft.trim()) || planDraft || '';
         const sectionsPreview = structurePlanSections(
           effectivePlan,
@@ -3095,7 +3108,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
           isFollowup,
           followupData: isFollowup ? followupData : null,
           sections: sectionsPreview,
-          // Force la version finale pour ce preview uniquement
           finalText: effectivePlan,
           isFinal: true,
         };
@@ -3114,13 +3126,18 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       } finally {
         if (!cancelled) setIsPdfPreviewLoading(false);
       }
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalDraft, planDraft, isFinalMode, previewMode, supplementsDraft, recipesDraft]);
+  }, [pdfRefreshTick, isFinalMode, previewMode]);
+
+  // V88.8 : initialiser le tick a l'ouverture de la modal / changement de mode PDF
+  useEffect(() => {
+    if (isFinalMode && previewMode === 'pdf') {
+      setPdfRefreshTick(x => x + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinalMode, previewMode]);
 
   // Cleanup du blob URL a la fermeture de la modal ou au demontage du composant
   useEffect(() => {
@@ -6199,7 +6216,11 @@ ${suppText}`;
               }}>
                 <textarea
                   value={finalDraft}
-                  onChange={(e) => setFinalDraft(e.target.value)}
+                  onChange={(e) => {
+                    setFinalDraft(e.target.value);
+                    // V88.8 : marque typing pour que le mode PDF attende 1800ms
+                    if (previewMode === 'pdf') setIsTyping(true);
+                  }}
                   spellCheck={true}
                   style={{
                     width: '100%', flex: 1,
@@ -6243,7 +6264,7 @@ ${suppText}`;
                         <span style={{ color: '#d4b568' }}>~{diffStats.changed}</span>
                       </span>
                     )}
-                    {previewMode !== 'diff' && (
+                    {previewMode === 'premium' && (
                       <span style={{
                         fontSize: '.7rem', color: 'rgba(255,255,255,.55)',
                         padding: '2px 8px', borderRadius: 999,
@@ -6255,6 +6276,40 @@ ${suppText}`;
                           ? 'Source : draft en cours'
                           : 'Source : plan IA'}
                       </span>
+                    )}
+                    {/* V88.8 : status + bouton Rafraichir en mode PDF */}
+                    {previewMode === 'pdf' && (
+                      <>
+                        <span style={{
+                          fontSize: '.7rem', fontWeight: 600,
+                          padding: '2px 8px', borderRadius: 999,
+                          background: isTyping ? 'rgba(196,160,80,.15)' : 'rgba(138,191,154,.15)',
+                          color: isTyping ? '#d4b568' : '#8abf9a',
+                          border: `1px solid ${isTyping ? 'rgba(196,160,80,.35)' : 'rgba(138,191,154,.35)'}`,
+                        }}>
+                          {isTyping ? '\u23f8 Mise \u00e0 jour en attente...' : '\u2705 PDF \u00e0 jour'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsTyping(false);
+                            setPdfRefreshTick(x => x + 1);
+                          }}
+                          disabled={isPdfPreviewLoading}
+                          style={{
+                            padding: '4px 10px', borderRadius: 8, fontSize: '.7rem',
+                            background: 'rgba(255,255,255,.04)',
+                            border: '1px solid rgba(255,255,255,.1)',
+                            color: 'rgba(255,255,255,.7)',
+                            cursor: isPdfPreviewLoading ? 'wait' : 'pointer',
+                            fontWeight: 600,
+                            opacity: isPdfPreviewLoading ? .5 : 1,
+                          }}
+                          title="Rafraichir manuellement l'apercu PDF"
+                        >
+                          {'\u21bb'} Rafra\u00eechir
+                        </button>
+                      </>
                     )}
                     {/* V88.7 : segmented control 3 modes */}
                     <div style={{
