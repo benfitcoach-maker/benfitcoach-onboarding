@@ -2670,7 +2670,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [finalVersions, setFinalVersions] = useState(
     Array.isArray(initialConsultation?.finalVersions) ? initialConsultation.finalVersions : []
   );
-  const [showVersions, setShowVersions] = useState(false);
+  // V88.12 : renomme showFinalVersions pour ne pas clash avec showVersions
+  // (deja utilise L2748 par la feature planVersions history).
+  const [showFinalVersions, setShowFinalVersions] = useState(false);
   // V88.3 : modal Preview PDF \u2014 affiche exactement ce qui ira dans le PDF.
   // Source unique : finalText si isFinal sinon planDraft. Reutilise NutritionEditor en readOnly.
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
@@ -3069,7 +3071,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
     setIsFinalMode(false);
-    setShowVersions(false);
+    setShowFinalVersions(false);
   };
 
   const handleClearFinalVersion = () => {
@@ -3097,7 +3099,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
     setIsFinalMode(false);
-    setShowVersions(false);
+    setShowFinalVersions(false);
     showSaveToast('Finalisation supprimee (historique conserve)');
   };
 
@@ -3127,7 +3129,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     }));
     isDirtyRef.current = true;
     setAutoSaveStatus('unsaved');
-    setShowVersions(false);
+    setShowFinalVersions(false);
     setPdfNeedsRefresh(true);
     showSaveToast('Version restauree');
   };
@@ -3137,7 +3139,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const handleLoadVersionAsDraft = (version) => {
     if (!version?.text) return;
     setFinalDraft(version.text);
-    setShowVersions(false);
+    setShowFinalVersions(false);
     setPdfNeedsRefresh(true);
     showSaveToast('Version chargee dans le brouillon');
   };
@@ -6356,7 +6358,7 @@ ${suppText}`;
                 <button
                   type="button"
                   className="btn btn-anissa-secondary"
-                  onClick={() => setShowVersions(true)}
+                  onClick={() => setShowFinalVersions(true)}
                   disabled={finalVersions.length === 0}
                   style={{
                     padding: '6px 12px', borderRadius: 8, fontSize: '.78rem',
@@ -6753,9 +6755,9 @@ ${suppText}`;
             </div>
 
             {/* V88.12 : Sub-modal Historique des versions (par-dessus la modal Finaliser) */}
-            {showVersions && (
+            {showFinalVersions && (
               <div
-                onClick={() => setShowVersions(false)}
+                onClick={() => setShowFinalVersions(false)}
                 style={{
                   position: 'absolute', inset: 0, zIndex: 10,
                   background: 'rgba(10,14,12,.78)', backdropFilter: 'blur(4px)',
@@ -6790,7 +6792,7 @@ ${suppText}`;
                     <button
                       type="button"
                       className="btn btn-anissa-secondary"
-                      onClick={() => setShowVersions(false)}
+                      onClick={() => setShowFinalVersions(false)}
                       style={{ padding: '5px 10px', borderRadius: 8, fontSize: '.75rem' }}
                     >
                       {'\u2715'}
