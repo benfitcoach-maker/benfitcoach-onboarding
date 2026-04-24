@@ -1,4 +1,5 @@
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './anissaIdentity';
+import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './anissaIdentityEn';
 
 async function aiRequest(systemPrompt, userMessage, maxTokens = 2000) {
   const apiKey = localStorage.getItem('bfc_api_key') || '';
@@ -50,7 +51,22 @@ function postProcess(text) {
     .trim();
 }
 
-function buildClientContext(form) {
+function buildClientContext(form, locale = 'FR') {
+  if (locale === 'EN') {
+    return [
+      form?.prenom         ? `Client: ${form.prenom}` : '',
+      form?.age            ? `Age: ${form.age}` : '',
+      form?.genre          ? `Gender: ${form.genre}` : '',
+      form?.poids          ? `Weight: ${form.poids} kg` : '',
+      form?.objectifPrincipalNutrition
+                           ? `Goal: ${form.objectifPrincipalNutrition}` : '',
+      form?.symptomesObjectifs?.length
+                           ? `Symptoms: ${form.symptomesObjectifs.join(', ')}` : '',
+      form?.allergies      ? `Allergies: ${form.allergies}` : '',
+      form?.alimentsEvites ? `Foods avoided: ${form.alimentsEvites}` : '',
+      form?.pathologies    ? `Pathologies: ${form.pathologies}` : '',
+    ].filter(Boolean).join('\n');
+  }
   return [
     form?.prenom         ? `Client : ${form.prenom}` : '',
     form?.age            ? `\u00c2ge : ${form.age} ans` : '',
@@ -67,8 +83,68 @@ function buildClientContext(form) {
 }
 
 // Optimise UNE section \u2014 retourne { improvedContent, changes[] }
-export async function optimizeSection(form, sectionTitle, currentContent, analysisIssues = []) {
-  const context = buildClientContext(form);
+// V88.15 : param { locale } pour sortir l'optimisation en EN sur plans anglophones.
+export async function optimizeSection(form, sectionTitle, currentContent, analysisIssues = [], { locale = 'FR' } = {}) {
+  const context = buildClientContext(form, locale);
+
+  if (locale === 'EN') {
+    const issuesHintEn = analysisIssues.length > 0
+      ? `\n\nIdentified issues to fix:\n${analysisIssues.map(i => `- ${i}`).join('\n')}`
+      : '';
+    const systemEn = `${ANISSA_IDENTITY_CORE_EN}
+
+CONTEXT: You are optimizing a single part of the plan.
+Goal: improve without impacting the rest of the plan.
+
+${ADJUSTMENT_RULE_EN}
+
+OPTIMIZATION RULES:
+- Do not impact the rest of the plan
+- Improve without complexifying
+- Stay concise \u2014 improve without extending by more than 30%
+
+CLIENT PROFILE:
+${context}
+
+OUTPUT RULES:
+- Return ONLY valid JSON, no markdown fences
+- Format: { "content": "...", "changes": ["change 1", "change 2"] }
+- "content": the improved section content (in English)
+- "changes": list of 1 to 4 precise improvements made (in English)
+- Same format as the original (keep lists as lists)
+- Add calories/macros if missing
+- Fix inconsistencies with the client profile
+
+WRITING RULES:
+- NEVER soft formulations: "ideally", "feel free to", "it is advisable", "you could", "it is important to", "indeed"
+- NEVER markdown inside the content: no **bold**, no # headers
+- NEVER meta-commentary: "this approach", "this protocol", "in conclusion", "to summarize"
+- Direct, short, actionable sentences
+- Second person "you", warm but expert
+
+STYLE EXAMPLES:
+\u274c "Ideally, it is advisable to consume green vegetables"
+\u2705 "200g of green vegetables at every meal"
+\u274c "Feel free to integrate protein sources"
+\u2705 "Add 25g of protein per meal: chicken, fish, eggs or legumes"${issuesHintEn}`;
+
+    const textEn = await aiRequest(
+      systemEn,
+      `Section "${sectionTitle}" to optimize:\n\n${currentContent}`,
+      1000
+    );
+    try {
+      const clean = textEn.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      return {
+        improvedContent: postProcess(parsed.content || currentContent),
+        changes: parsed.changes || [],
+      };
+    } catch {
+      return { improvedContent: postProcess(textEn || currentContent), changes: ['Section optimized'] };
+    }
+  }
+
   const issuesHint = analysisIssues.length > 0
     ? `\n\nProbl\u00e8mes identifi\u00e9s \u00e0 corriger :\n${analysisIssues.map(i => `- ${i}`).join('\n')}`
     : '';
@@ -129,7 +205,8 @@ EXEMPLES DE STYLE :
 }
 
 // Optimise TOUTES les sections \u2014 retourne section par section
-export async function optimizeAllSections(form, sections, analysisIssues = []) {
+// V88.15 : param { locale } propage a optimizeSection pour les plans EN.
+export async function optimizeAllSections(form, sections, analysisIssues = [], { locale = 'FR' } = {}) {
   const results = [];
   for (const section of sections) {
     if (!section.content?.trim()) {
@@ -139,7 +216,7 @@ export async function optimizeAllSections(form, sections, analysisIssues = []) {
     }
     try {
       const { improvedContent, changes } = await optimizeSection(
-        form, section.title, section.content, analysisIssues
+        form, section.title, section.content, analysisIssues, { locale }
       );
       results.push({
         id: section.id,

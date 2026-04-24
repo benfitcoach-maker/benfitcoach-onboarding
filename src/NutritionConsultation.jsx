@@ -2971,8 +2971,9 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         continue;
       }
       try {
+        // V88.15 : locale propagee pour que Mode Expert sorte en EN sur les plans anglais
         const { improvedContent, changes } = await optimizeSection(
-          form, section.title, section.content
+          form, section.title, section.content, [], { locale: getClientNutritionLocale(client) }
         );
         results.push({
           id: section.id || `s_${i}`,
