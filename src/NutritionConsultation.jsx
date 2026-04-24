@@ -5448,7 +5448,11 @@ ${suppText}`;
                         setAnalyzingPlan(true);
                         setAiAnalysisError('');
                         try {
-                          const result = await analyzeFullPlan(form, planDraft, supplementsDraft);
+                          // V88.14 : passer la locale pour que l'audit et les quickWins
+                          // sortent dans la bonne langue (FR par defaut / EN pour Benfitcoach EN)
+                          const result = await analyzeFullPlan(form, planDraft, supplementsDraft, {
+                            locale: getClientNutritionLocale(client),
+                          });
                           if (result) {
                             result.planSignature = (planDraft || '').length + '|' + (planDraft || '').slice(0, 200);
                             result.analyzedAt = new Date().toISOString();
