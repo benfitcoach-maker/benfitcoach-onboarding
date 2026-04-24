@@ -14,18 +14,19 @@
 
 // Mapping keyword → section type (priorite : le premier match gagne)
 // Les regex sont ordonnees du plus specifique au plus generique.
+// V88.13 : chaque regex combine FR + EN (additif, zero impact sur les plans FR).
 const ROUTING_RULES = [
-  // Plan d'action (timeline S1→S4) — tres specifique, match en premier
-  { type: 'action', test: /\b(?:s[1-4]\b|semaine\s*[1-4]\b|phase\s*[1-4]|timeline|progression\s*s[1-4]|plan\s*d.?action|etape\s*[1-4])/i },
+  // Plan d'action (timeline S1→S4 / W1→W4) — tres specifique, match en premier
+  { type: 'action', test: /\b(?:s[1-4]\b|w[1-4]\b|semaine\s*[1-4]\b|week\s*[1-4]\b|phase\s*[1-4]|timeline|progression\s*s[1-4]|plan\s*d.?action|action\s*plan|etape\s*[1-4]|step\s*[1-4]|4\s*weeks?\s*adjustment)/i },
 
   // Ajustements environnementaux — stress / sommeil / mode de vie
-  { type: 'adjustments', test: /\b(?:stress|sommeil|endormissement|respiration|meditation|ecran|bleu|lumiere|coucher|tempsexter|marche|mouvement|exposition\s*soleil|vitamine\s*d.*soleil|cortisol|circadien|melatonine|anti-?stress|relaxation|yoga|pranayama)/i },
+  { type: 'adjustments', test: /\b(?:stress|sommeil|sleep|endormissement|bedtime|respiration|breathing|meditation|ecran|screen|bleu|blue\s*light|lumiere|light|coucher|tempsexter|marche|walk|mouvement|movement|exposition\s*soleil|sun\s*exposure|vitamine\s*d.*soleil|cortisol|circadien|circadian|melatonine|melatonin|anti-?stress|relaxation|yoga|pranayama|room\s*temperature|environmental)/i },
 
   // Recommandations coach — conseils comportementaux, habitudes, mentalite
-  { type: 'coach', test: /\b(?:adherence|motivation|habitude|routine|rituel|conseil|rappel|astuce|pedagog|encourage|regulier|perseverance|discipline|gestion\s*fringale|psychologie|stagnation|pese[er]?|balance|self)/i },
+  { type: 'coach', test: /\b(?:adherence|motivation|habitude|habit|routine|rituel|ritual|conseil|advice|rappel|reminder|astuce|tip|pedagog|encourage|regulier|consistent|perseverance|discipline|gestion\s*fringale|cravings?\s*management|psychologie|psychology|stagnation|plateau|pese[er]?|weigh|balance|self)/i },
 
   // Protocoles cibles — cliniques, nutritionnels, supplementation
-  { type: 'protocol', test: /\b(?:glycemi|insulin|proteine|fibre|portion|gramme|micronutri|ferritine|mag(?:nesium)?|zinc|vit(?:amine)?\s*[a-k]|omega|curcuma|probiotique|L-glutamine|inositol|chrome|fer|coQ10|selenium|iode|chrome|bisglycinate|repa|dejeuner|diner|petit-?dej|collation|hydratat|eau\s*entre|mastic|cruciferace|cetogene|mediterraneen|macro|indexglyce|ig\s*bas|charge\s*glyce|glucide|lipide|matiere\s*grasse|legume\s*vapeur|vapeur|cuisson|cru|inflammatoire|anti-?inflammatoire|detox|bouillon|os\s*maison|probio|microbiote|intestin|digestion|ballonnement|transit|absorption)/i },
+  { type: 'protocol', test: /\b(?:glycemi|glucose|insulin|proteine|protein|fibre|fiber|portion|gramme|gram|micronutri|ferritine|ferritin|mag(?:nesium)?|zinc|vit(?:amine|amin)?\s*[a-k]|omega|curcuma|curcumin|turmeric|probiotique|probiotic|L-glutamine|inositol|chrome|chromium|fer\b|iron|coQ10|selenium|iode|iodine|bisglycinate|repa|dejeuner|lunch|diner|dinner|petit-?dej|breakfast|collation|snack|hydratat|hydration|eau\s*entre|water|mastic|chewing|cruciferace|cruciferous|cetogene|ketogenic|mediterraneen|mediterranean|macro|indexglyce|glycemic\s*index|ig\s*bas|charge\s*glyce|glucide|carb|lipide|lipid|matiere\s*grasse|fat\b|legume\s*vapeur|steamed|vapeur|cuisson|cook|cru\b|raw|inflammatoire|inflammatory|anti-?inflammatory|detox|bouillon|broth|os\s*maison|probio|microbiote|microbiome|intestin|gut|digestion|ballonnement|bloating|transit|absorption|meal\s*structure|meal\s*rotation)/i },
 ];
 
 // Normalise le texte pour le routing : minuscules + accents strippes
@@ -51,12 +52,14 @@ export function routeQuickWin(winText) {
 }
 
 // Regex pour detecter les headers de sections cibles
-// Important : ordre par specificite — "plan d'action" avant "action" seule, etc.
+// V88.13 : alternatives EN ajoutees pour supporter les plans en anglais
+//   (TARGETED PROTOCOLS / ENVIRONMENTAL ADJUSTMENTS / COACH RECOMMENDATIONS /
+//    ACTION PLAN (4 WEEKS)). Les numeros de section (ex: ## 7.) sont toleres.
 const SECTION_HEADER_PATTERNS = {
-  protocol: /^#{0,4}\s*(?:protocoles?(\s*cibl[eé]s?)?|protocole)\b/i,
-  adjustments: /^#{0,4}\s*ajustements?(\s*environnementaux)?\b/i,
-  coach: /^#{0,4}\s*recommandations?(\s*coach)?\b/i,
-  action: /^#{0,4}\s*plan\s*d.?action\b|^#{0,4}\s*plan\s*d.?actions?\s*\(/i,
+  protocol: /^#{0,4}\s*(?:\d+\.?\s*)?(?:protocoles?(\s*cibl[eé]s?)?|protocole|targeted\s*protocols?|protocols?)\b/i,
+  adjustments: /^#{0,4}\s*(?:\d+\.?\s*)?(?:ajustements?(\s*environnementaux)?|environmental\s*adjustments?)\b/i,
+  coach: /^#{0,4}\s*(?:\d+\.?\s*)?(?:recommandations?(\s*coach)?|coach\s*recommendations?)\b/i,
+  action: /^#{0,4}\s*(?:\d+\.?\s*)?(?:plan\s*d.?action|action\s*plan)\b/i,
 };
 
 // Match : est-ce une ligne qui ouvre une AUTRE section ?
