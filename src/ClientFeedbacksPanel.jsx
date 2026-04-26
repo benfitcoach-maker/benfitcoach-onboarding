@@ -937,10 +937,15 @@ function notes(summary) {
 function formatDate(iso) {
   if (!iso) return "?";
   try {
-    const d = new Date(iso + "T00:00:00");
+    // Supporte 2 formats :
+    //  - "YYYY-MM-DD" (date pure des feedbacks) -> on force minuit local pour eviter decalage TZ
+    //  - "YYYY-MM-DDTHH:mm:ss.sssZ" (timestamp ISO complet de Supabase, ex. published_at) -> parse direct
+    const isFullIso = typeof iso === "string" && iso.includes("T");
+    const d = new Date(isFullIso ? iso : iso + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return "?";
     return d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "short" });
   } catch {
-    return iso;
+    return "?";
   }
 }
 
