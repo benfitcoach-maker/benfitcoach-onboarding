@@ -63,12 +63,37 @@ function hasConsecutiveNegative(axis, feedbacks, minCount = 2) {
   return false;
 }
 
-function buildAxisSummary(axis, status, _counts, total) {
+function buildAxisSummary(axis, status, counts, total, consecutiveNegative) {
   const label = AXIS_LABELS[axis] || axis;
-  if (total === 0)          return `${label} : pas encore assez de données.`;
-  if (status === 'stable')  return `${label} : tendance stable sur les derniers retours.`;
-  if (status === 'adjust')  return `${label} : tendance à ajuster sur plusieurs retours.`;
-  return `${label} : signal à surveiller sur les derniers retours.`;
+  if (total === 0) return `${label} : pas encore assez de données.`;
+
+  // Composantes lisibles
+  const retoursWord = `${total} retour${total > 1 ? 's' : ''}`;
+  const negPart = counts.negative > 0
+    ? `${counts.negative} négatif${counts.negative > 1 ? 's' : ''}`
+    : null;
+  const posPart = counts.positive > 0
+    ? `${counts.positive} positif${counts.positive > 1 ? 's' : ''}`
+    : null;
+  const neuPart = counts.neutral > 0
+    ? `${counts.neutral} neutre${counts.neutral > 1 ? 's' : ''}`
+    : null;
+  const consec = consecutiveNegative ? ', dont 2 consécutifs' : '';
+
+  if (status === 'stable') {
+    const parts = [posPart, neuPart].filter(Boolean).join(', ');
+    return `${label} : tendance stable (${parts || 'aucun signal négatif'} / ${retoursWord}).`;
+  }
+
+  if (status === 'adjust') {
+    return `${label} : tendance à ajuster (${negPart} sur ${retoursWord}${consec}).`;
+  }
+
+  // watch
+  if (negPart) {
+    return `${label} : à surveiller (${negPart} sur ${retoursWord}${consec}).`;
+  }
+  return `${label} : à surveiller (${retoursWord}, peu de signal exploitable).`;
 }
 
 export function computeAxisTrend(axis, feedbacks = []) {
@@ -118,7 +143,7 @@ export function computeAxisTrend(axis, feedbacks = []) {
     label: AXIS_LABELS[axis] || axis,
     status,
     statusLabel: STATUS_LABELS[status],
-    summary: buildAxisSummary(axis, status, counts, total),
+    summary: buildAxisSummary(axis, status, counts, total, consecutiveNegative),
     counts: { ...counts, total },
   };
 }

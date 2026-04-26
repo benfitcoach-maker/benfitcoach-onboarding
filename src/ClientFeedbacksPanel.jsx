@@ -130,6 +130,8 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
         feedbacks: res.feedbacks,
         summary,
         found: res.found,
+        currentPlanId: res.current_plan_id ?? null,
+        currentPlanPublishedAt: res.current_plan_published_at ?? null,
       });
     });
     return () => { cancelled = true; };
@@ -279,9 +281,19 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
   }
 
   if (!state.feedbacks?.length) {
+    // 3 sous-cas pour un empty state explicite :
+    //  1. Cliente pas encore activée (pas de ligne dans `clients` côté staging)
+    //  2. Cliente activée + plan en cours connu : explicite "depuis ce plan"
+    //  3. Cliente activée sans plan : message générique
+    let message = "💬 Aucun ressenti envoyé pour le moment côté app cliente.";
+    if (state.found === false) {
+      message = "💬 Cliente pas encore connectée à l'app cliente.";
+    } else if (state.currentPlanPublishedAt) {
+      message = `💬 Aucun feedback depuis le plan publié le ${formatDate(state.currentPlanPublishedAt)}. La cliente n'a pas encore réagi au nouveau plan.`;
+    }
     return (
       <div style={{ ...baseStyle, color: "#8a8a7a", fontSize: ".82rem" }}>
-        💬 Aucun ressenti envoyé pour le moment côté app cliente.
+        {message}
       </div>
     );
   }
@@ -326,6 +338,14 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
         color: "#8a8a7a",
         lineHeight: 1.45,
       }}>
+        {state.currentPlanPublishedAt ? (
+          <>
+            <strong style={{ color: "#a89c7a", fontWeight: 600 }}>
+              Depuis plan publié le {formatDate(state.currentPlanPublishedAt)}
+            </strong>
+            {" · "}
+          </>
+        ) : null}
         Lecture basée sur les retours récents de la cliente. À interpréter comme une tendance, pas un jour isolé.
         <span style={{ marginLeft: 8, color: "#7a7a6a" }}>
           · Dernier : {formatDate(summary.last_date)}

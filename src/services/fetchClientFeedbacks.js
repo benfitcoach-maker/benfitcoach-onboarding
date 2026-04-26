@@ -54,6 +54,8 @@ export async function fetchClientFeedbacks(client, days = 7) {
     ok: true,
     found: !!body.found,
     feedbacks: body.feedbacks || [],
+    current_plan_id: body.current_plan_id ?? null,
+    current_plan_published_at: body.current_plan_published_at ?? null,
   };
 }
 
