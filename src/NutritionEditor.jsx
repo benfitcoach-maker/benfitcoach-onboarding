@@ -209,8 +209,19 @@ function PremiumSectionRender({ title, content }) {
     case 'protocol_gut':
     case 'adjustments':
     case 'coach': {
+      // V91.0 (port de V88.17 PDF) : si la section contient AUSSI des lignes
+      // d'intro/transition (pas seulement des bullets), on rend en markdown
+      // pour preserver la structure intro + bullets. Sinon, on tombe sur la
+      // BulletList compacte.
+      // Avant V91.0 : l'editeur jetait silencieusement les intros, le PDF non.
+      // Resultat : divergence visible (ex: "Pour stabiliser ta glycemie : ..." disparaissait).
       const bullets = parseBulletLines(content);
-      if (bullets.length >= 2) return <BulletList items={bullets} />;
+      const nonBulletTextLines = content.split('\n').map(l => l.trim())
+        .filter(l => l && !/^([—\-•*·]|\d+[\.\)])\s+/.test(l));
+      const hasStructuralText = nonBulletTextLines.length > 0;
+      if (bullets.length >= 2 && !hasStructuralText) {
+        return <BulletList items={bullets} />;
+      }
       return <MarkdownFallback content={content} />;
     }
 

@@ -17,6 +17,8 @@ import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 // V76 : extractFridgeDataFromSections / extractMeals / extractSupplements retires (utilises seulement dans la modale Apercu PDF supprimee)
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, buildConsultationPdfBlob } from './nutritionPdf';
+// V91.0 : detectSectionType depuis le canonical (remplace classifySection local)
+import { detectSectionType } from './services/nutritionParsers';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import ClientFeedbacksPanel from './ClientFeedbacksPanel';
 import ClientAppSettingsCard from './ClientAppSettingsCard';
@@ -1646,6 +1648,21 @@ function cleanPlanForPDF(planText) {
   return text;
 }
 
+// V91.0.1 : pattern de NOMS DE SUPPLEMENTS qui doivent NE PAS etre traites
+// comme des headers de section quand ils apparaissent en majuscules nues
+// (sans #) au milieu d'une autre section (ex: "MAGNESIUM GLYCINATE" dans
+// RECOMMANDATIONS COACH). Sinon le splitter cree des sections parasites
+// qui dedoublent la vraie SUPPLEMENTS RECOMMANDES — bug visible sur le PDF
+// Melissa avec dosages contradictoires entre les 2 blocs.
+const SUPPLEMENT_NAME_RE = /(GLYCINATE|PICOLINATE|EPA[\/\s]*DHA|VITAMINE\s*[BD]\s*\d|VITAMIN\s*[BD]\s*\d|OMEGA[\s\-]?3|MAGNESIUM|ASHWAGANDHA|PROBIOTIQUES?|PROBIOTICS|BERB[EÉ]RINE|BERBERINE|CHROME(?:\s+PICOLINATE)?|ZINC\s*BISGLYCINATE|D3\s*\+?\s*K2|MULTI[\s-]?SOUCHES|RHODIOLA|CO\s*Q\s*10|GLUTAMINE|COLLAG[EÉ]NE|MELATONINE|QUERCETINE|RESVERATROL|CURCUMA|TURMERIC|SPIRULINE|LACTOFERRINE|NAC|TAURINE)/i;
+
+function isLikelySupplementName(line) {
+  const t = line.trim();
+  if (t.length > 50 || t.length < 4) return false;
+  if (t !== t.toUpperCase()) return false; // doit etre tout en majuscules
+  return SUPPLEMENT_NAME_RE.test(t);
+}
+
 function structurePlanSections(planText, supplementsText, { isFollowup = false, locale = 'FR' } = {}) {
   const raw = [];
   const text = cleanPlanForPDF(planText);
@@ -1658,15 +1675,22 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false, 
     if (currentTitle || currentContent.length > 0) {
       const content = currentContent.join('\n').trim();
       if (content) {
-        raw.push({ title: currentTitle || 'Introduction', content, type: classifySection(currentTitle) });
+        raw.push({ title: currentTitle || 'Introduction', content, type: detectSectionType(currentTitle) });
       }
     }
     currentContent = [];
   };
 
   for (const line of lines) {
-    const headerMatch = line.match(/^#{1,3}\s+(.+)/) ||
-      (line === line.toUpperCase() && line.trim().length > 5 && line.trim().length < 80 ? [null, line.trim()] : null);
+    // V91.0.1 : un nom de supplement nu (sans #) ne doit PAS creer de section
+    // parasite. On le laisse dans currentContent — il sera rendu comme texte
+    // dans la section en cours (typiquement RECOMMANDATIONS COACH ou
+    // PROTOCOLES CIBLES) au lieu d'etre splittee en card.
+    const isSuppNameNoHash = !line.startsWith('#') && isLikelySupplementName(line);
+    const headerMatch = !isSuppNameNoHash && (
+      line.match(/^#{1,3}\s+(.+)/) ||
+      (line === line.toUpperCase() && line.trim().length > 5 && line.trim().length < 80 ? [null, line.trim()] : null)
+    );
     if (headerMatch) {
       flushSection();
       currentTitle = headerMatch[1].trim();
@@ -1723,26 +1747,12 @@ function structurePlanSections(planText, supplementsText, { isFollowup = false, 
   return deduped;
 }
 
-function classifySection(title) {
-  const t = (title || '').toLowerCase();
-  // V59 : intro et cloture
-  if (/^(introduction|intro)(\s*personnalisee)?$/i.test(t.trim())) return 'intro';
-  if (/^(cloture|conclusion)(\s*du\s*plan)?$/i.test(t.trim())) return 'closing';
-  if (/profil|analyse|bilan|metabol/i.test(t)) return 'analyse';
-  if (/strat[eé]gie|principe|nutritionnel|approche/i.test(t)) return 'principes';
-  if (/semaine|structure\s*alimentaire|menu|repas|lundi|mardi/i.test(t)) return 'plan';
-  if (/rotation/i.test(t)) return 'rotation';
-  if (/fiche\s*frigo/i.test(t)) return 'frigo';
-  if (/protocole/i.test(t)) return 'protocoles';
-  if (/ajustement/i.test(t)) return 'ajustements';
-  if (/recommandation.*coach/i.test(t)) return 'coach';
-  if (/plan\s*d.action/i.test(t)) return 'action';
-  if (/suppl[eé]ment|compl[eé]ment|tableau horaire/i.test(t)) return 'supplements';
-  if (/conseil|pratique|hydratation|astuce|meal.?prep/i.test(t)) return 'conseils';
-  if (/suivi|progression|bilan.*semaine/i.test(t)) return 'suivi';
-  if (/coach|benoit|note/i.test(t)) return 'notes_coach';
-  return 'other';
-}
+// V91.0 : classifySection (FR-style, 16 types) supprimee.
+// detectSectionType (canonical, services/nutritionParsers.js) prend le relais.
+// Le PDF switch attend les types EN-style (profile/protocol/coach/...) et tombait
+// auparavant en default sur les types FR (analyse/principes/protocoles/...).
+// Resultat : sections desormais correctement typees → rendu specialise au lieu
+// du fallback generique.
 
 // V76 : NutritionPdfBody + renderSectionContent + renderLine supprimes.
 // Ces helpers rendaient l'apercu HTML du PDF dans la modale Apercu PDF (retiree).
@@ -3007,7 +3017,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       const accepted = acceptedSections[r.id] !== false;
       const content = accepted ? r.improved : r.original;
       if (!content?.trim()) continue;
-      if (classifySection(r.title) === 'supplements') {
+      if (detectSectionType(r.title) === 'supplements') {
         if (accepted) newSupps = content;
         continue;
       }
