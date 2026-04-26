@@ -102,7 +102,7 @@ function Toast({ message, visible }) {
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V92.1';
+const APP_VERSION = 'V92.2';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (

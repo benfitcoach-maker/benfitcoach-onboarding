@@ -2679,8 +2679,13 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V88.1 : UI devient une modal plein ecran. finalDraft = buffer d'edition non persiste
   // (remis a jour a l'ouverture, ecrit dans finalText uniquement sur Enregistrer).
   const [isFinalMode, setIsFinalMode] = useState(false);
-  const [finalText, setFinalText] = useState(initialConsultation?.finalText || '');
-  const [isFinal, setIsFinal] = useState(!!initialConsultation?.isFinal);
+  // V92.2 : finalText/isFinal forces a vide/false par defaut. Le bouton Finaliser
+  // est supprime — Anissa peaufine dans Word apres export. On garde les states
+  // pour ne pas casser le code dormant (modal, handlers) qui reste en place
+  // pour rollback rapide. Les anciennes consultations avec finalText defini
+  // ne sont plus utilisees par le PDF/Word (qui prend planDraft).
+  const [finalText, setFinalText] = useState('');
+  const [isFinal, setIsFinal] = useState(false);
   const [finalDraft, setFinalDraft] = useState('');
   // V88.12 : historique versions finales
   const [finalVersions, setFinalVersions] = useState(
@@ -5906,25 +5911,9 @@ ${suppText}`;
                   >
                     {isReviewMode ? '← Édition' : '👁 Relecture'}
                   </button>
-                  {/* V88.1 : bouton Finaliser \u2014 ouvre une modal plein ecran.
-                      finalText est une couche humaine au-dessus du plan IA, utilisee
-                      uniquement pour l'export PDF. Le plan IA reste intact. */}
-                  <button
-                    type="button"
-                    className="btn btn-anissa-secondary"
-                    disabled={!hasPlan}
-                    onClick={openFinalModal}
-                    style={{
-                      padding: '5px 12px', borderRadius: 8, fontSize: '.75rem',
-                      opacity: hasPlan ? 1 : 0.4,
-                      background: isFinal ? 'rgba(196,160,80,.22)' : undefined,
-                      borderColor: isFinal ? 'rgba(196,160,80,.55)' : undefined,
-                      color: isFinal ? '#e0cda0' : undefined,
-                    }}
-                    title={isFinal ? 'Editer ou remplacer la version finale' : 'Figer une version finale (utilisee uniquement a l\'export PDF)'}
-                  >
-                    {'\u270d\ufe0f'} Finaliser
-                  </button>
+                  {/* V92.2 : bouton Finaliser supprime — Anissa peaufine directement
+                      dans Word apres export V92.0. Le code de la modal et des states
+                      finalText/isFinal reste dormant pour rollback rapide si besoin. */}
                   {/* V92.1 : Preview PDF + Cover supprimes — Word V92.0 prime, plus de jsPDF specifique */}
                   {/* V92.0 : export Word — Anissa peaufine puis exporte PDF natif Word */}
                   <button
@@ -5933,7 +5922,8 @@ ${suppText}`;
                     disabled={!hasPlan}
                     onClick={async () => {
                       try {
-                        const planSource = (isFinal && finalText?.trim()) ? finalText : (planDraft || consultation.nutrition_plan || '');
+                        // V92.2 : source = planDraft direct (Anissa peaufine dans Word, pas dans Finaliser)
+                        const planSource = planDraft || consultation.nutrition_plan || '';
                         await exportPlanToWord(client, consultation, planSource);
                       } catch (e) {
                         // eslint-disable-next-line no-console
