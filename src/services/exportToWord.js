@@ -583,6 +583,51 @@ function buildFridgePage(fridgeData, prenom) {
   return children;
 }
 
+// ─── V92.6 : Export standalone Fiche Frigo ────────────────────────
+// Génère un .docx contenant uniquement la Fiche Frigo, à imprimer + plastifier
+// + coller sur le frigo de la cliente. Indépendant du plan alimentaire principal.
+// Utilise les données déjà éditées dans la modal FicheFrigoPreview (getEditedData)
+// pour respecter les modifs d'Anissa.
+export async function exportFridgeToWord(client, consultation, fridgeData) {
+  const prenom = (client?.prenom || 'Cliente').trim();
+  const fridgePageChildren = buildFridgePage(fridgeData, prenom);
+  if (!fridgePageChildren) {
+    throw new Error('Fiche Frigo vide — rien à exporter.');
+  }
+
+  // Premier paragraphe sans pageBreakBefore (sinon page blanche au début)
+  const first = fridgePageChildren[0];
+  if (first && first.options) first.options.pageBreakBefore = false;
+
+  const doc = new Document({
+    creator: "Anissa Deroubaix Nutrition",
+    title: `Fiche Frigo — ${prenom}`,
+    styles: {
+      default: {
+        document: { run: { font: "Calibri", size: 22 } },
+      },
+    },
+    sections: [{
+      properties: {
+        page: {
+          margin: {
+            top: convertInchesToTwip(0.6),
+            bottom: convertInchesToTwip(0.6),
+            left: convertInchesToTwip(0.6),
+            right: convertInchesToTwip(0.6),
+          },
+          size: { orientation: PageOrientation.PORTRAIT },
+        },
+      },
+      children: fridgePageChildren,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const safeDate = formatFrDate(consultation?.date).replace(/[\/\\:*?"<>|.]/g, '-');
+  saveAs(blob, `Fiche-Frigo-${prenom}-${safeDate}.docx`);
+}
+
 // ─── Document builder principal ────────────────────────────────────
 
 /**
@@ -683,11 +728,9 @@ export async function exportPlanToWord(client, consultation, finalText) {
     }
   }
 
-  // V92.4 : page Fiche Frigo enrichie (table 3 colonnes + sections couleur)
-  const fridgePageChildren = buildFridgePage(fridgeData, prenom);
-  if (fridgePageChildren) {
-    contentChildren.push(...fridgePageChildren);
-  }
+  // V92.6 : Fiche Frigo retirée du plan principal — désormais exportée en
+  // .docx séparé via exportFridgeToWord (modal Fiche Frigo) pour pouvoir être
+  // imprimée + plastifiée + collée sur le frigo, indépendamment du plan.
 
   // ─── HEADER / FOOTER (pages 2+) ───────────────────────────────
   const docHeader = new Header({

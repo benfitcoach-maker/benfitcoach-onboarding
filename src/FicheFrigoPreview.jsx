@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { extractMeals, extractSupplements, extractFridgeDataFromSections, exportFicheFrigoPDF } from './nutritionPdf';
+import { extractMeals, extractSupplements, extractFridgeDataFromSections } from './nutritionPdf';
+import { exportFridgeToWord } from './services/exportToWord';
 
 // Parse structured JSON from Claude (legacy path for saved fiche_frigo_json)
 function fromFicheJson(json, supplementsText) {
@@ -242,8 +243,13 @@ export default function FicheFrigoPreview({ consultation, sections, client, onCl
 
   const handleExport = async () => {
     const editedMeals = getEditedData();
-    await exportFicheFrigoPDF(consultation, client, editedMeals);
-    onClose();
+    try {
+      await exportFridgeToWord(client, consultation, editedMeals);
+      onClose();
+    } catch (e) {
+      console.error('[exportFridgeToWord]', e);
+      alert('Erreur export Word Fiche Frigo : ' + (e?.message || e));
+    }
   };
 
   const cardData = getEditedData();
@@ -323,7 +329,7 @@ export default function FicheFrigoPreview({ consultation, sections, client, onCl
 
         {mode !== 'client' && (
           <div className="ffp-actions">
-            <button className="btn btn-anissa-primary" onClick={handleExport}>Exporter en PDF</button>
+            <button className="btn btn-anissa-primary" onClick={handleExport}>📄 Exporter en Word</button>
             <button className="btn btn-anissa-secondary" onClick={onClose}>Fermer</button>
           </div>
         )}
