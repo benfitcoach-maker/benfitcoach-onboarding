@@ -31,9 +31,17 @@ import {
   Header,
   PageOrientation,
   LevelFormat,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  ShadingType,
   convertInchesToTwip,
 } from "docx";
 import { saveAs } from "file-saver";
+// V92.4 : reuse extraction logique fiche frigo (depuis le PDF jsPDF — code partagé temporaire)
+import { extractFridgeDataFromSections } from "../nutritionPdf";
 
 // ─── Palette brand Anissa (cohérente avec PDF actuel) ────────────────
 const COLORS = {
@@ -45,6 +53,37 @@ const COLORS = {
 };
 
 // ─── Helpers de parsing markdown ──────────────────────────────────────
+
+/**
+ * V92.4 : parse markdown en sections {title, content} pour reuser
+ * extractFridgeDataFromSections du PDF jsPDF (qui attend ce format).
+ */
+function parseMarkdownToFlatSections(markdown) {
+  if (!markdown?.trim()) return [];
+  const lines = markdown.split('\n');
+  const sections = [];
+  let currentTitle = '';
+  let currentLines = [];
+  const flush = () => {
+    if (currentTitle || currentLines.length > 0) {
+      sections.push({ title: currentTitle, content: currentLines.join('\n').trim() });
+    }
+    currentLines = [];
+  };
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const hashMatch = line.match(/^#{2,3}\s+(.+)$/);
+    const isAllCapsHeader = !hashMatch && line === line.toUpperCase() && line.length > 5 && line.length < 80;
+    if (hashMatch || isAllCapsHeader) {
+      flush();
+      currentTitle = hashMatch ? hashMatch[1].trim() : line;
+    } else {
+      currentLines.push(rawLine);
+    }
+  }
+  flush();
+  return sections;
+}
 
 /**
  * Parse le markdown finalText en blocs structurés (sections + paragraphes + bullets).
@@ -209,6 +248,217 @@ function pCoverEyebrow(text) {
   });
 }
 
+// ─── Builders Fiche Frigo enrichie (V92.4) ─────────────────────────
+
+/** Cell d'en-tete de colonne repas (vert sapin sur fond clair) */
+function frigoMealHeaderCell(label, widthPct) {
+  return new TableCell({
+    width: { size: widthPct, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: COLORS.green, fill: COLORS.green },
+    margins: { top: 100, bottom: 100, left: 120, right: 120 },
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({
+            text: label.toUpperCase(),
+            font: "Calibri",
+            size: 18,
+            bold: true,
+            color: "FAF9F6",
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+/** Cell de contenu repas (liste d'items, bg blanc cassé) */
+function frigoMealBodyCell(items, widthPct) {
+  const children = items?.length
+    ? items.map((item) =>
+        new Paragraph({
+          spacing: { before: 30, after: 30 },
+          children: [
+            new TextRun({ text: "• ", font: "Calibri", size: 18, color: COLORS.gold }),
+            new TextRun({ text: item, font: "Calibri", size: 18, color: COLORS.text }),
+          ],
+        })
+      )
+    : [
+        new Paragraph({
+          children: [new TextRun({ text: "—", font: "Calibri", size: 16, color: COLORS.textMute })],
+        }),
+      ];
+
+  return new TableCell({
+    width: { size: widthPct, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: "FAF9F6", fill: "FAF9F6" },
+    margins: { top: 140, bottom: 140, left: 140, right: 140 },
+    children,
+  });
+}
+
+/** Bloc "À PRIVILÉGIER" / "À LIMITER" — couleur de fond + items en pills */
+function frigoListBlock(label, items, accentColor, bgColor) {
+  if (!items?.length) return [];
+  return [
+    new Paragraph({
+      spacing: { before: 220, after: 80 },
+      children: [
+        new TextRun({
+          text: label.toUpperCase(),
+          font: "Calibri",
+          size: 18,
+          bold: true,
+          color: accentColor,
+          characterSpacing: 60,
+        }),
+      ],
+    }),
+    new Paragraph({
+      shading: { type: ShadingType.SOLID, color: bgColor, fill: bgColor },
+      spacing: { before: 0, after: 0, line: 320 },
+      children: [
+        new TextRun({
+          text: "  " + items.join(" · ") + "  ",
+          font: "Calibri",
+          size: 20,
+          color: COLORS.text,
+        }),
+      ],
+    }),
+  ];
+}
+
+/**
+ * Construit la page Fiche Frigo enrichie : header + table 3 colonnes
+ * repas + blocs À PRIVILÉGIER / À LIMITER + hydratation.
+ * Retourne null si pas assez de data pour faire un rendu utile.
+ */
+function buildFridgePage(fridgeData, prenom) {
+  if (!fridgeData) return null;
+  const hasMeals = fridgeData.breakfast?.length || fridgeData.lunch?.length || fridgeData.dinner?.length;
+  if (!hasMeals && !fridgeData.toFavor?.length && !fridgeData.toLimit?.length) return null;
+
+  const children = [];
+
+  // Page break + titre
+  children.push(
+    new Paragraph({
+      pageBreakBefore: true,
+      spacing: { before: 0, after: 80 },
+      children: [
+        new TextRun({
+          text: "FICHE FRIGO",
+          font: "Calibri",
+          size: 36,
+          bold: true,
+          color: COLORS.green,
+          characterSpacing: 80,
+        }),
+      ],
+      border: {
+        bottom: { color: COLORS.gold, size: 12, space: 6, style: "single" },
+      },
+    })
+  );
+  children.push(
+    new Paragraph({
+      spacing: { before: 60, after: 240 },
+      children: [
+        new TextRun({
+          text: `Repères du quotidien pour ${prenom}.`,
+          font: "Calibri",
+          size: 18,
+          italics: true,
+          color: COLORS.textSoft,
+        }),
+      ],
+    })
+  );
+
+  // Table 3 colonnes repas
+  if (hasMeals) {
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 6, color: "FAF9F6" },
+        insideVertical: { style: BorderStyle.SINGLE, size: 6, color: "FAF9F6" },
+      },
+      rows: [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            frigoMealHeaderCell("Petit-déjeuner", 33),
+            frigoMealHeaderCell("Déjeuner", 34),
+            frigoMealHeaderCell("Dîner", 33),
+          ],
+        }),
+        new TableRow({
+          children: [
+            frigoMealBodyCell(fridgeData.breakfast || [], 33),
+            frigoMealBodyCell(fridgeData.lunch || [], 34),
+            frigoMealBodyCell(fridgeData.dinner || [], 33),
+          ],
+        }),
+      ],
+    });
+    children.push(table);
+  }
+
+  // Collation + hydratation (compact)
+  if (fridgeData.snack || fridgeData.hydration) {
+    children.push(
+      new Paragraph({
+        spacing: { before: 240, after: 60 },
+        children: [
+          new TextRun({
+            text: "ESSENTIELS DU JOUR",
+            font: "Calibri",
+            size: 18,
+            bold: true,
+            color: COLORS.gold,
+            characterSpacing: 80,
+          }),
+        ],
+      })
+    );
+    if (fridgeData.snack) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 40, after: 40 },
+          children: [
+            new TextRun({ text: "Collation : ", font: "Calibri", size: 20, bold: true, color: COLORS.green }),
+            new TextRun({ text: fridgeData.snack, font: "Calibri", size: 20, color: COLORS.text }),
+          ],
+        })
+      );
+    }
+    if (fridgeData.hydration) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 40, after: 40 },
+          children: [
+            new TextRun({ text: "Hydratation : ", font: "Calibri", size: 20, bold: true, color: COLORS.green }),
+            new TextRun({ text: fridgeData.hydration, font: "Calibri", size: 20, color: COLORS.text }),
+          ],
+        })
+      );
+    }
+  }
+
+  // À privilégier (vert tonal) / À limiter (ambre tonal)
+  children.push(...frigoListBlock("À privilégier", fridgeData.toFavor, "2E4E38", "EAEFE9"));
+  children.push(...frigoListBlock("À limiter", fridgeData.toLimit, "B85C00", "FBEFD9"));
+
+  return children;
+}
+
 // ─── Document builder principal ────────────────────────────────────
 
 /**
@@ -222,6 +472,19 @@ export async function exportPlanToWord(client, consultation, finalText) {
   const objectif = (consultation?.objective || client?.form?.objectifPrincipalNutrition || '').trim();
 
   const blocks = parseMarkdownToBlocks(finalText || '');
+
+  // V92.4 : extraction Fiche Frigo enrichie depuis le markdown source
+  // (réutilise extractFridgeDataFromSections du PDF jsPDF — même logique de parsing).
+  // Si fridgeData est exploitable, on filtre la section "FICHE FRIGO" basique du
+  // contenu principal (pour éviter doublon) et on ajoute une page Fiche Frigo
+  // enrichie en fin de document.
+  const flatSections = parseMarkdownToFlatSections(finalText || '');
+  let fridgeData = null;
+  try {
+    fridgeData = extractFridgeDataFromSections(flatSections);
+  } catch {
+    fridgeData = null;
+  }
 
   // ─── COVER PAGE ─────────────────────────────────────────────────
   const coverChildren = [
@@ -280,6 +543,10 @@ export async function exportPlanToWord(client, consultation, finalText) {
   const contentChildren = [];
   for (const block of blocks) {
     if (block.type === 'section') {
+      // V92.4 : si on va rendre une page Fiche Frigo enrichie, on saute la
+      // section basique pour éviter doublon visuel.
+      if (fridgeData && /fiche\s*frigo|frigo/i.test(block.title)) continue;
+
       contentChildren.push(pHeading(block.title));
       for (const child of block.children) {
         if (child.type === 'bullet') {
@@ -290,6 +557,12 @@ export async function exportPlanToWord(client, consultation, finalText) {
       }
       contentChildren.push(pSpacer(120));
     }
+  }
+
+  // V92.4 : page Fiche Frigo enrichie (table 3 colonnes + sections couleur)
+  const fridgePageChildren = buildFridgePage(fridgeData, prenom);
+  if (fridgePageChildren) {
+    contentChildren.push(...fridgePageChildren);
   }
 
   // ─── HEADER / FOOTER (pages 2+) ───────────────────────────────
