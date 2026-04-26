@@ -153,9 +153,13 @@ function pCover(text, opts = {}) {
 }
 
 function pHeading(text) {
+  // V93.0 : signature visuelle Anissa = liseré doré vertical à gauche du titre
+  // (reproduit le rectangle doré du PDF jsPDF). Word ne supporte pas les vrais
+  // shapes, on simule avec un border left épais + indent.
   return new Paragraph({
     heading: HeadingLevel.HEADING_1,
-    spacing: { before: 360, after: 180 },
+    spacing: { before: 400, after: 180 },
+    indent: { left: 240 },
     children: [
       new TextRun({
         text: text.toUpperCase(),
@@ -163,10 +167,12 @@ function pHeading(text) {
         size: 28,
         bold: true,
         color: COLORS.green,
+        characterSpacing: 20,
       }),
     ],
     border: {
-      bottom: { color: COLORS.gold, size: 8, space: 4, style: "single" },
+      left: { color: COLORS.gold, size: 36, space: 18, style: "single" },
+      bottom: { color: "EEEAD9", size: 6, space: 6, style: "single" },
     },
   });
 }
@@ -1076,61 +1082,167 @@ export async function exportPlanToWord(client, consultation, finalText) {
   // imprimée + plastifiée + collée sur le frigo, indépendamment du plan.
 
   // ─── HEADER / FOOTER (pages 2+) ───────────────────────────────
+  // V93.0 : header layout 3 colonnes (prénom · titre · date) + ligne séparatrice
+  // pour matcher le PDF jsPDF.
   const docHeader = new Header({
     children: [
-      new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        children: [
-          new TextRun({
-            text: `${prenom} · Plan nutrition personnalisé · ${date}`,
-            font: "Calibri",
-            size: 16,
-            color: COLORS.textMute,
-          }),
-        ],
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          bottom: { style: BorderStyle.SINGLE, size: 6, color: "EEEAD9" },
+          left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        },
+        rows: [new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 33, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              },
+              margins: { top: 0, bottom: 60, left: 0, right: 0 },
+              children: [new Paragraph({
+                alignment: AlignmentType.LEFT,
+                children: [new TextRun({
+                  text: prenom.toLowerCase(),
+                  font: "Calibri", size: 16, color: COLORS.textMute,
+                })],
+              })],
+            }),
+            new TableCell({
+              width: { size: 34, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              },
+              margins: { top: 0, bottom: 60, left: 0, right: 0 },
+              children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({
+                  text: "Plan nutrition personnalisé",
+                  font: "Calibri", size: 16, color: COLORS.textMute,
+                })],
+              })],
+            }),
+            new TableCell({
+              width: { size: 33, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+                right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              },
+              margins: { top: 0, bottom: 60, left: 0, right: 0 },
+              children: [new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                children: [new TextRun({
+                  text: date,
+                  font: "Calibri", size: 16, color: COLORS.textMute,
+                })],
+              })],
+            }),
+          ],
+        })],
       }),
     ],
   });
 
+  // V93.0 : footer 3 colonnes (signature à gauche · pagination centre · "Confidentiel" droite)
   const docFooter = new Footer({
     children: [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [
-          new TextRun({
-            text: "Anissa Deroubaix Nutrition · ",
-            font: "Calibri",
-            size: 16,
-            color: COLORS.textMute,
-          }),
-          new TextRun({
-            children: [PageNumber.CURRENT],
-            font: "Calibri",
-            size: 16,
-            color: COLORS.textMute,
-          }),
-          new TextRun({
-            text: "/",
-            font: "Calibri",
-            size: 16,
-            color: COLORS.textMute,
-          }),
-          new TextRun({
-            children: [PageNumber.TOTAL_PAGES],
-            font: "Calibri",
-            size: 16,
-            color: COLORS.textMute,
-          }),
-          new TextRun({
-            text: " · Confidentiel",
-            font: "Calibri",
-            size: 16,
-            color: COLORS.textMute,
-          }),
-        ],
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 6, color: "EEEAD9" },
+          bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        },
+        rows: [new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 33, type: WidthType.PERCENTAGE },
+              borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } },
+              margins: { top: 100, bottom: 0, left: 0, right: 0 },
+              children: [new Paragraph({
+                alignment: AlignmentType.LEFT,
+                children: [new TextRun({
+                  text: "Anissa Deroubaix Nutrition",
+                  font: "Calibri", size: 16, color: COLORS.textMute,
+                })],
+              })],
+            }),
+            new TableCell({
+              width: { size: 34, type: WidthType.PERCENTAGE },
+              borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } },
+              margins: { top: 100, bottom: 0, left: 0, right: 0 },
+              children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({ children: [PageNumber.CURRENT], font: "Calibri", size: 16, color: COLORS.textMute }),
+                  new TextRun({ text: " / ", font: "Calibri", size: 16, color: COLORS.textMute }),
+                  new TextRun({ children: [PageNumber.TOTAL_PAGES], font: "Calibri", size: 16, color: COLORS.textMute }),
+                ],
+              })],
+            }),
+            new TableCell({
+              width: { size: 33, type: WidthType.PERCENTAGE },
+              borders: { top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" }, right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } },
+              margins: { top: 100, bottom: 0, left: 0, right: 0 },
+              children: [new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                children: [new TextRun({
+                  text: "Confidentiel",
+                  font: "Calibri", size: 16, color: COLORS.textMute,
+                })],
+              })],
+            }),
+          ],
+        })],
       }),
     ],
   });
+
+  // ─── V93.0 : CLOSING PAGE (signature + message) ───────────────────
+  const closingChildren = [
+    pSpacer(3000),
+    // Petit séparateur doré centré
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      indent: { left: convertInchesToTwip(2.5), right: convertInchesToTwip(2.5) },
+      border: { bottom: { color: COLORS.gold, size: 6, space: 6, style: "single" } },
+      children: [new TextRun({ text: "" })],
+    }),
+    pSpacer(300),
+    pCover("Ce plan a été élaboré spécifiquement pour vous", { size: 22, italic: true, color: COLORS.text }),
+    pCover("par Anissa Deroubaix, nutritionniste spécialisée", { size: 22, italic: true, color: COLORS.text }),
+    pCover("en longévité et génétique.", { size: 22, italic: true, color: COLORS.text }),
+    pSpacer(280),
+    pCover("Il est recommandé de suivre ce plan pendant 4 semaines", { size: 18, color: COLORS.textMute }),
+    pCover("avant d'envisager des ajustements.", { size: 18, color: COLORS.textMute }),
+    pSpacer(500),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      indent: { left: convertInchesToTwip(2.5), right: convertInchesToTwip(2.5) },
+      border: { bottom: { color: COLORS.gold, size: 6, space: 6, style: "single" } },
+      children: [new TextRun({ text: "" })],
+    }),
+    pSpacer(280),
+    pCover("Anissa Deroubaix Nutrition", { size: 22, bold: true, color: COLORS.green }),
+    pCover("AB Coaching Sarl · Rue de Rive 28, 1260 Nyon", { size: 16, color: COLORS.textMute }),
+    pSpacer(280),
+    pCover("Document confidentiel — usage personnel uniquement", { size: 14, color: COLORS.textMute }),
+  ];
 
   // ─── DOCUMENT ASSEMBLY ────────────────────────────────────────
   // Section 1 : cover (sans header/footer)
@@ -1170,6 +1282,22 @@ export async function exportPlanToWord(client, consultation, finalText) {
         headers: { default: docHeader },
         footers: { default: docFooter },
         children: contentChildren,
+      },
+      // V93.0 : section 3 = closing page (sans header/footer pour effet "fin")
+      {
+        properties: {
+          page: {
+            margin: {
+              top: convertInchesToTwip(1),
+              right: convertInchesToTwip(1),
+              bottom: convertInchesToTwip(1),
+              left: convertInchesToTwip(1),
+            },
+            size: { orientation: PageOrientation.PORTRAIT },
+          },
+          titlePage: false,
+        },
+        children: closingChildren,
       },
     ],
   });
