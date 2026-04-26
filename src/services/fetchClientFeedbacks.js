@@ -56,6 +56,9 @@ export async function fetchClientFeedbacks(client, days = 7) {
     feedbacks: body.feedbacks || [],
     current_plan_id: body.current_plan_id ?? null,
     current_plan_published_at: body.current_plan_published_at ?? null,
+    previous_plan_id: body.previous_plan_id ?? null,
+    previous_plan_published_at: body.previous_plan_published_at ?? null,
+    previous_feedbacks: body.previous_feedbacks || [],
   };
 }
 

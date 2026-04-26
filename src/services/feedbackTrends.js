@@ -181,5 +181,44 @@ export function computeFeedbackTrends(feedbacks = []) {
   };
 }
 
+// ─── Comparaison d'évolution entre 2 trends d'un même axe ─────────────────
+// Sert pour le sous-bloc "vs plan précédent" du panel Ressenti :
+// on compare le statut actuel à celui du plan archivé précédent et on en
+// tire un signal direction + label lisible.
+//
+// Statuts ordonnés du meilleur au pire : stable < watch < adjust
+//
+// Direction :
+//   - 'improved'  : statut meilleur qu'avant  (↗)
+//   - 'same'      : statut identique          (→)
+//   - 'degraded'  : statut moins bon qu'avant (↘)
+//   - 'unknown'   : pas de data exploitable côté précédent (UI cache la flèche)
+
+const STATUS_RANK = { stable: 0, watch: 1, adjust: 2 };
+
+export function compareAxisTrend(currentTrend, previousTrend) {
+  if (!currentTrend) return { direction: 'unknown', fromStatus: null, toStatus: null };
+  if (!previousTrend || (previousTrend.counts?.total ?? 0) === 0) {
+    // Pas de feedbacks sur le plan précédent → pas de base de comparaison.
+    return { direction: 'unknown', fromStatus: null, toStatus: currentTrend.status };
+  }
+
+  const fromRank = STATUS_RANK[previousTrend.status] ?? -1;
+  const toRank = STATUS_RANK[currentTrend.status] ?? -1;
+
+  let direction = 'same';
+  if (toRank < fromRank) direction = 'improved';
+  else if (toRank > fromRank) direction = 'degraded';
+
+  return {
+    direction,
+    fromStatus: previousTrend.status,
+    toStatus: currentTrend.status,
+    fromLabel: STATUS_LABELS[previousTrend.status],
+    toLabel: STATUS_LABELS[currentTrend.status],
+    fromCounts: previousTrend.counts,
+  };
+}
+
 // Réexports pour consommation côté UI
 export { STATUS_LABELS, AXIS_LABELS };

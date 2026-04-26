@@ -19,13 +19,24 @@ import {
   SuggestHttpError,
 } from "./services/aiSuggestAdjustment";
 import { sendCoachMessage, CoachMessageError } from "./services/sendCoachMessage";
-import { computeFeedbackTrends } from "./services/feedbackTrends";
+import { computeFeedbackTrends, compareAxisTrend } from "./services/feedbackTrends";
 
 // Palette badges tendance (cohérente avec VALUE_META existant)
 const TREND_STATUS_STYLE = {
   stable: { bg: "rgba(130,195,158,.10)", border: "rgba(130,195,158,.35)", color: "#82c39e" },
   watch:  { bg: "rgba(201,169,106,.12)", border: "rgba(201,169,106,.40)", color: "#c9a96a" },
   adjust: { bg: "rgba(232,144,144,.12)", border: "rgba(232,144,144,.40)", color: "#e89090" },
+};
+
+// Indicateur d'évolution vs plan précédent — UX pro :
+//   - improved : ↗ vert doux  (stable couleur cohérente avec badge stable)
+//   - same     : → gris neutre (pas de drama si statut inchangé)
+//   - degraded : ↘ ambre/orange doux (signal léger sans alarme)
+//   - unknown  : pas affiché du tout (évite "—" qui ferait sale)
+const EVOLUTION_STYLE = {
+  improved: { arrow: "↗", color: "#82c39e", short: "amélioration" },
+  same:     { arrow: "→", color: "#8a8a7a", short: "inchangé"     },
+  degraded: { arrow: "↘", color: "#e89090", short: "dégradation"  },
 };
 
 const AXIS_EMOJI = {
@@ -132,6 +143,9 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
         found: res.found,
         currentPlanId: res.current_plan_id ?? null,
         currentPlanPublishedAt: res.current_plan_published_at ?? null,
+        previousPlanId: res.previous_plan_id ?? null,
+        previousPlanPublishedAt: res.previous_plan_published_at ?? null,
+        previousFeedbacks: res.previous_feedbacks || [],
       });
     });
     return () => { cancelled = true; };
@@ -148,6 +162,15 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
     () => (state.status === "ready" ? computeFeedbackTrends(state.feedbacks || []) : null),
     [state],
   );
+
+  // Tendance du plan précédent (pour la comparaison "vs plan préc.").
+  // Calculée uniquement si on a effectivement des feedbacks précédents
+  // pour économiser un calcul inutile.
+  const previousTrends = useMemo(() => {
+    if (state.status !== "ready") return null;
+    if (!state.previousFeedbacks?.length) return null;
+    return computeFeedbackTrends(state.previousFeedbacks);
+  }, [state]);
 
   // Auto-expand si au moins 1 signal "act" — Anissa voit immédiatement
   // les pistes d'action sans avoir à cliquer.
@@ -364,6 +387,15 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
         {trends?.axisTrends.map((t) => {
           const style = TREND_STATUS_STYLE[t.status];
           const total = t.counts.total;
+
+          // Évolution vs plan précédent (UX pro : caché si unknown)
+          const prev = previousTrends?.axisTrends.find((p) => p.axis === t.axis) || null;
+          const evo = compareAxisTrend(t, prev);
+          const evoStyle = evo.direction !== "unknown" ? EVOLUTION_STYLE[evo.direction] : null;
+          const evoTooltip = evoStyle && state.previousPlanPublishedAt
+            ? `${evo.fromLabel} → ${evo.toLabel} (plan publié le ${formatDate(state.previousPlanPublishedAt)})`
+            : null;
+
           return (
             <div
               key={t.axis}
@@ -400,6 +432,31 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
                   ? "Pas encore de données"
                   : `${t.counts.positive}+  ·  ${t.counts.neutral}=  ·  ${t.counts.negative}−`}
               </span>
+
+              {evoStyle && (
+                <span
+                  title={evoTooltip || undefined}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "2px 6px",
+                    borderRadius: 6,
+                    background: "rgba(255,255,255,.03)",
+                    border: "1px solid rgba(255,255,255,.06)",
+                    color: evoStyle.color,
+                    fontSize: ".72rem",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    cursor: "help",
+                  }}
+                >
+                  <span style={{ fontSize: ".88rem", lineHeight: 1 }}>{evoStyle.arrow}</span>
+                  <span style={{ color: "#8a8a7a", fontWeight: 400, fontSize: ".68rem" }}>
+                    vs plan préc.
+                  </span>
+                </span>
+              )}
             </div>
           );
         })}
