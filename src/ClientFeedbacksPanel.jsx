@@ -19,6 +19,21 @@ import {
   SuggestHttpError,
 } from "./services/aiSuggestAdjustment";
 import { sendCoachMessage, CoachMessageError } from "./services/sendCoachMessage";
+import { computeFeedbackTrends } from "./services/feedbackTrends";
+
+// Palette badges tendance (cohérente avec VALUE_META existant)
+const TREND_STATUS_STYLE = {
+  stable: { bg: "rgba(130,195,158,.10)", border: "rgba(130,195,158,.35)", color: "#82c39e" },
+  watch:  { bg: "rgba(201,169,106,.12)", border: "rgba(201,169,106,.40)", color: "#c9a96a" },
+  adjust: { bg: "rgba(232,144,144,.12)", border: "rgba(232,144,144,.40)", color: "#e89090" },
+};
+
+const AXIS_EMOJI = {
+  fatigue:   "😴",
+  digestion: "🌿",
+  faim:      "🍽",
+  energie:   "⚡",
+};
 
 // ─── Error Boundary défensif ────────────────────────────────────────────
 // Évite qu'une erreur dans le bloc IA fasse écran noir dans tout le SaaS.
@@ -123,6 +138,12 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
   // Calcul des suggestions (pure fonction des données)
   const adjustments = useMemo(
     () => (state.status === "ready" && state.summary ? suggestAdjustments(state.summary) : null),
+    [state],
+  );
+
+  // Tendance 7j par axe + statut global (pure fonction, pas d'IA)
+  const trends = useMemo(
+    () => (state.status === "ready" ? computeFeedbackTrends(state.feedbacks || []) : null),
     [state],
   );
 
@@ -276,31 +297,57 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
         border: "1px solid rgba(212,201,168,.18)",
       }}
     >
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+      {/* ─── Bloc Tendance 7 jours (pure data, pas d'IA) ─── */}
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, gap: 12 }}>
         <h3 style={{ margin: 0, color: "#d4c9a8", fontSize: ".95rem", fontWeight: 700 }}>
-          💬 Ressenti — {feedbacks.length} jour{feedbacks.length > 1 ? "s" : ""}
+          💬 Ressenti — 7 derniers jours
         </h3>
-        <span style={{ fontSize: ".72rem", color: "#8a8a7a" }}>
-          Dernier : {formatDate(summary.last_date)}
-        </span>
+        {trends && (
+          <span
+            title={`Statut global basé sur ${trends.dataPoints} retour${trends.dataPoints > 1 ? "s" : ""}`}
+            style={{
+              padding: "3px 10px",
+              borderRadius: 999,
+              fontSize: ".7rem",
+              fontWeight: 600,
+              background: TREND_STATUS_STYLE[trends.globalStatus].bg,
+              border: `1px solid ${TREND_STATUS_STYLE[trends.globalStatus].border}`,
+              color: TREND_STATUS_STYLE[trends.globalStatus].color,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {trends.globalLabel}
+          </span>
+        )}
       </header>
+      <p style={{
+        margin: "0 0 12px 0",
+        fontSize: ".74rem",
+        color: "#8a8a7a",
+        lineHeight: 1.45,
+      }}>
+        Lecture basée sur les retours récents de la cliente. À interpréter comme une tendance, pas un jour isolé.
+        <span style={{ marginLeft: 8, color: "#7a7a6a" }}>
+          · Dernier : {formatDate(summary.last_date)}
+        </span>
+      </p>
 
-      {/* Grille 4 axes */}
+      {/* 4 lignes axe + badge statut + compteurs compacts */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 10,
-          marginBottom: notes(summary).length ? 14 : 0,
+          gridTemplateColumns: "1fr",
+          gap: 6,
+          marginBottom: (summary.weight_last || notes(summary).length || adjustments) ? 14 : 0,
         }}
       >
-        {Object.keys(AXIS_META).map((axis) => {
-          const v = summary[axis];
-          const meta = AXIS_META[axis];
-          const valMeta = v ? VALUE_META[v] : null;
+        {trends?.axisTrends.map((t) => {
+          const style = TREND_STATUS_STYLE[t.status];
+          const total = t.counts.total;
           return (
             <div
-              key={axis}
+              key={t.axis}
+              title={t.summary}
               style={{
                 padding: "8px 10px",
                 background: "rgba(0,0,0,.15)",
@@ -308,22 +355,30 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
                 border: "1px solid rgba(255,255,255,.05)",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
+                gap: 10,
               }}
             >
-              <span style={{ color: "#cfcfc4", fontSize: ".82rem" }}>
-                {meta.emoji} {meta.label}
+              <span style={{ color: "#cfcfc4", fontSize: ".82rem", minWidth: 96 }}>
+                {AXIS_EMOJI[t.axis]} {t.label}
               </span>
               <span
                 style={{
-                  fontSize: ".78rem",
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  fontSize: ".68rem",
                   fontWeight: 600,
-                  color: valMeta?.color || "#666",
-                  fontStyle: valMeta ? "normal" : "italic",
+                  background: style.bg,
+                  border: `1px solid ${style.border}`,
+                  color: style.color,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {valMeta?.label || "—"}
+                {t.statusLabel}
+              </span>
+              <span style={{ color: "#8a8a7a", fontSize: ".72rem", flex: 1, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                {total === 0
+                  ? "Pas encore de données"
+                  : `${t.counts.positive}+  ·  ${t.counts.neutral}=  ·  ${t.counts.negative}−`}
               </span>
             </div>
           );
