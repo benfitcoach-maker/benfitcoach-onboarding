@@ -24,6 +24,7 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  ImageRun,
   HeadingLevel,
   AlignmentType,
   PageNumber,
@@ -249,6 +250,34 @@ function pCoverEyebrow(text) {
         bold: true,
         color: COLORS.gold,
         characterSpacing: 60,
+      }),
+    ],
+  });
+}
+
+// V93.1 : helper pour charger le logo Anissa depuis /public et l'embed dans le .docx
+async function loadLogoBytes() {
+  try {
+    const response = await fetch('/logo-anissa.png');
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  } catch (e) {
+    console.warn('[exportToWord] logo non chargé:', e?.message || e);
+    return null;
+  }
+}
+
+function pCoverLogo(logoBytes) {
+  if (!logoBytes) return null;
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 200 },
+    children: [
+      new ImageRun({
+        data: logoBytes,
+        transformation: { width: 110, height: 130 },
       }),
     ],
   });
@@ -1004,16 +1033,25 @@ export async function exportPlanToWord(client, consultation, finalText) {
     fridgeData = null;
   }
 
+  // V93.1 : charger le logo Anissa pour l'embed cover (PNG depuis /public)
+  const logoBytes = await loadLogoBytes();
+
   // ─── COVER PAGE ─────────────────────────────────────────────────
   const coverChildren = [
-    // espace haut
-    pSpacer(2400),
-    pCoverEyebrow("Plan nutritionnel"),
-    pCoverBigTitle("Personnalisé"),
-    pSpacer(200),
-    pCover(prenom, { size: 48, bold: true, color: COLORS.green }),
-    pSpacer(120),
+    // espace haut réduit pour laisser de la place au logo
+    pSpacer(1200),
   ];
+  // Logo en haut (si disponible)
+  const logoPara = pCoverLogo(logoBytes);
+  if (logoPara) {
+    coverChildren.push(logoPara);
+    coverChildren.push(pSpacer(200));
+  }
+  coverChildren.push(pCoverEyebrow("Plan nutritionnel"));
+  coverChildren.push(pCoverBigTitle("Personnalisé"));
+  coverChildren.push(pSpacer(200));
+  coverChildren.push(pCover(prenom, { size: 48, bold: true, color: COLORS.green }));
+  coverChildren.push(pSpacer(120));
 
   if (objectif) {
     coverChildren.push(pCoverEyebrow("Objectif"));
