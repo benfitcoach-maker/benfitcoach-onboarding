@@ -17,6 +17,9 @@ import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 // V76 : extractFridgeDataFromSections / extractMeals / extractSupplements retires (utilises seulement dans la modale Apercu PDF supprimee)
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, buildConsultationPdfBlob } from './nutritionPdf';
+import ClientAppPreviewModal from './ClientAppPreviewModal';
+import ClientFeedbacksPanel from './ClientFeedbacksPanel';
+import ClientAppSettingsCard from './ClientAppSettingsCard';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
@@ -2757,6 +2760,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   const [showCoverForm, setShowCoverForm] = useState(false);
+  const [showClientAppPreview, setShowClientAppPreview] = useState(false);
   const [coverFields, setCoverFields] = useState(() => ({
     prenom: form?.prenom || client?.prenom || '',
     objectif: form?.objectifPrincipalNutrition || form?.objectifPrincipal || '',
@@ -2994,15 +2998,24 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   };
 
   const handleApplyExpertMode = () => {
-    const newPlanParts = sectionResults.map(r => {
+    // V88.16 : les sections type 'supplements' sont routees vers supplementsDraft
+    // (pas re-injectees dans planDraft) pour eviter un doublon visible dans l'editeur
+    // (filter FR-only de parsePlanToSections ne matche pas les titres EN).
+    let newSupps = supplementsDraft;
+    const newPlanParts = [];
+    for (const r of sectionResults) {
       const accepted = acceptedSections[r.id] !== false;
       const content = accepted ? r.improved : r.original;
-      if (!content?.trim()) return '';
-      return `${r.title.toUpperCase()}\n${content}`;
-    }).filter(Boolean);
+      if (!content?.trim()) continue;
+      if (classifySection(r.title) === 'supplements') {
+        if (accepted) newSupps = content;
+        continue;
+      }
+      newPlanParts.push(`${r.title.toUpperCase()}\n${content}`);
+    }
 
     const newPlan = newPlanParts.join('\n\n');
-    reseedEditor(newPlan, supplementsDraft, recipesDraft);
+    reseedEditor(newPlan, newSupps, recipesDraft);
     setExpertMode(false);
     setSectionResults([]);
     setAcceptedSections({});
@@ -5150,28 +5163,39 @@ ${suppText}`;
           if (editorTab === 'plan') {
             if (hasPlan) {
               return (
-                <NutritionEditor
-                  key={`editor-${editorSeed}`}
-                  planText={planDraft}
-                  supplementsText={supplementsDraft}
-                  recipesText={recipesDraft}
-                  form={form}
-                  client={client}
-                  getEditedDataRef={editorGetDataRef}
-                  onDraftChange={handleDraftChange}
-                  hideActions
-                  flashSectionType={flashSectionType}
-                  readOnly={isReviewMode}
-                  onSave={(plan, supplements, recipes) => {
-                    setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements, recipes }));
-                    setPlanDraft(plan);
-                    setSupplementsDraft(supplements);
-                    setRecipesDraft(recipes);
-                  }}
-                  onExportPDF={() => doExportPdf()}
-                  onExportCover={() => setShowCoverForm(true)}
-                  onExportPack={() => doExportPack()}
-                />
+                <>
+                  {/* Ressenti 7 jours de la cliente — lecture seule. Visible
+                      en haut pour qu'Anissa l'ait sous les yeux avant de
+                      modifier le plan. Auto-collapse si pas de feedbacks. */}
+                  <ClientFeedbacksPanel client={client} consultation={consultation} />
+
+                  {/* Réglages app cliente (toggles par-cliente : suivi poids, etc.).
+                      Ne s'affiche que si la cliente est en staging (plan publié). */}
+                  <ClientAppSettingsCard client={client} />
+
+                  <NutritionEditor
+                    key={`editor-${editorSeed}`}
+                    planText={planDraft}
+                    supplementsText={supplementsDraft}
+                    recipesText={recipesDraft}
+                    form={form}
+                    client={client}
+                    getEditedDataRef={editorGetDataRef}
+                    onDraftChange={handleDraftChange}
+                    hideActions
+                    flashSectionType={flashSectionType}
+                    readOnly={isReviewMode}
+                    onSave={(plan, supplements, recipes) => {
+                      setConsultation(prev => ({ ...prev, nutrition_plan: plan, supplements, recipes }));
+                      setPlanDraft(plan);
+                      setSupplementsDraft(supplements);
+                      setRecipesDraft(recipes);
+                    }}
+                    onExportPDF={() => doExportPdf()}
+                    onExportCover={() => setShowCoverForm(true)}
+                    onExportPack={() => doExportPack()}
+                  />
+                </>
               );
             }
             return (
@@ -5875,6 +5899,18 @@ ${suppText}`;
                   <span style={{ flex: 1 }} />
                   {/* V76 : Apercu PDF retire — l'editeur est deja un apercu premium.
                       Cover accessible directement via un bouton dedie. */}
+                  {/* V88.5 : bouton Apercu app cliente remonte ici pour rester visible
+                      en permanence dans la barre d'actions de l'editeur. */}
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={() => setShowClientAppPreview(true)}
+                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
+                    title="Voir le JSON envoyé à l'app cliente premium (lecture seule, à blanc)"
+                  >
+                    📱 Aperçu app cliente
+                  </button>
                   {/* V83 : bouton Mode relecture — transforme toggle selon l'etat. */}
                   <button
                     type="button"
@@ -5978,6 +6014,23 @@ ${suppText}`;
             })()}
 
             {/* ─── Modales (remontees depuis l'editeur) ─── */}
+            {showClientAppPreview && (() => {
+              const { plan, supplements, recipes } = readEdited();
+              const liveConsultation = {
+                ...consultation,
+                nutrition_plan: plan,
+                supplements,
+                recipes,
+              };
+              return (
+                <ClientAppPreviewModal
+                  client={client}
+                  consultation={liveConsultation}
+                  onClose={() => setShowClientAppPreview(false)}
+                />
+              );
+            })()}
+
             {showFrigoModal && (() => {
               const { plan, supplements, recipes } = readEdited();
               return (

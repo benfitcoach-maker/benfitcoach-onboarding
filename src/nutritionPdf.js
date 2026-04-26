@@ -1888,12 +1888,19 @@ export async function exportConsultationPDF(consultation, client, { output = 'sa
         case 'protocol':
         case 'adjustments':
         case 'coach': {
-          // Rendu en bullets propres si possible
+          // V88.17 : ne basculer en bullet-list pure que si la section ne contient
+          // QUE des bullets. Si elle contient aussi des intros / paragraphes structurels
+          // (ex: "Pour stabiliser ta glycemie :", "Ce qu'on vise cote digestion :"),
+          // on utilise le parser standard pour preserver la structure de l'editeur.
           const bullets = parseBulletLines(sec.content);
-          if (bullets.length >= 2) {
+          const nonBulletTextLines = (sec.content || '').split('\n')
+            .map(l => l.trim())
+            .filter(l => l && !/^([—\-•*·]|\d+[\.\)])\s+/.test(l));
+          const hasStructuralText = nonBulletTextLines.length > 0;
+          if (bullets.length >= 2 && !hasStructuralText) {
             y = drawBulletList(doc, bullets, margin + 2, y, cw - 2);
           } else {
-            // Mix labels + bullets : utiliser parser standard
+            // Mix labels + bullets / intros : utiliser parser standard
             const tokens = parseNutritionPlan(sec.content);
             y = renderTokens(doc, tokens, margin, y, cw);
           }

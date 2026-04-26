@@ -3,6 +3,7 @@ import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations, saveClient } from './store';
 import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
+import ClientStatusBadge from './ClientStatusBadge';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
 import { getClientNutritionLocale } from './services/nutritionLocale';
@@ -168,9 +169,16 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
 
       {/* Zone 2 — Infos */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {client.prenom || 'Sans nom'}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+        }}>
+          <span style={{
+            fontWeight: 700, fontSize: '1rem', color: 'var(--text)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {client.prenom || 'Sans nom'}
+          </span>
+          <ClientStatusBadge email={client.form?.email} />
         </div>
         <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
           {consultations.length > 0

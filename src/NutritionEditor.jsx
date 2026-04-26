@@ -93,7 +93,9 @@ function parsePlanToSections(planText, supplementsText, recipesText) {
 
   if (supplementsText?.trim()) {
     // V67 : si suppText dedie existe, RETIRER les sections supplements du plan pour eviter doublon
-    const SUPP_RE = /^(suppl[eé]ments?|compl[eé]ments?|recommandations?\s+compl[eé]mentaires?|alternatives?\s+naturelles?)/i;
+    // V88.16 : alternatives EN ajoutees pour capter "Recommended supplements" / "RECOMMENDED SUPPLEMENTS"
+    // generes par Mode Expert / plans EN. Additif, zero impact sur plans FR.
+    const SUPP_RE = /^(suppl[eé]ments?|compl[eé]ments?|recommandations?\s+compl[eé]mentaires?|alternatives?\s+naturelles?|recommended\s+supplements?|recommended\s+complement(s|ary)?|natural\s+alternatives?)/i;
     sections = sections.filter(s => !SUPP_RE.test(s.title));
     sections.push({
       id: crypto.randomUUID(),
