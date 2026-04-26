@@ -19,6 +19,8 @@ import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 import { exportConsultationPDF, exportFicheFrigoPDF, exportCoverPDF, exportClientPackPDF, buildConsultationPdfBlob } from './nutritionPdf';
 // V91.0 : detectSectionType depuis le canonical (remplace classifySection local)
 import { detectSectionType } from './services/nutritionParsers';
+// V92.0 : export Word natif (Anissa peaufine dans Word puis exporte PDF)
+import { exportPlanToWord } from './services/exportToWord';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import ClientFeedbacksPanel from './ClientFeedbacksPanel';
 import ClientAppSettingsCard from './ClientAppSettingsCard';
@@ -5981,6 +5983,26 @@ ${suppText}`;
                     title="Personnaliser la cover du PDF"
                   >
                     🎨 Cover
+                  </button>
+                  {/* V92.0 : export Word — Anissa peaufine puis exporte PDF natif Word */}
+                  <button
+                    type="button"
+                    className="btn btn-anissa-secondary"
+                    disabled={!hasPlan}
+                    onClick={async () => {
+                      try {
+                        const planSource = (isFinal && finalText?.trim()) ? finalText : (planDraft || consultation.nutrition_plan || '');
+                        await exportPlanToWord(client, consultation, planSource);
+                      } catch (e) {
+                        // eslint-disable-next-line no-console
+                        console.error('[exportPlanToWord]', e);
+                        alert("Erreur lors de l'export Word : " + (e?.message || e));
+                      }
+                    }}
+                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
+                    title="Exporter en Word (.docx) — peaufine puis exporte PDF natif Word"
+                  >
+                    📄 Word
                   </button>
                   <button
                     type="button"
