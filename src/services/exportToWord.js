@@ -583,21 +583,364 @@ function buildFridgePage(fridgeData, prenom) {
   return children;
 }
 
-// ─── V92.6 : Export standalone Fiche Frigo ────────────────────────
-// Génère un .docx contenant uniquement la Fiche Frigo, à imprimer + plastifier
-// + coller sur le frigo de la cliente. Indépendant du plan alimentaire principal.
-// Utilise les données déjà éditées dans la modal FicheFrigoPreview (getEditedData)
-// pour respecter les modifs d'Anissa.
-export async function exportFridgeToWord(client, consultation, fridgeData) {
-  const prenom = (client?.prenom || 'Cliente').trim();
-  const fridgePageChildren = buildFridgePage(fridgeData, prenom);
-  if (!fridgePageChildren) {
-    throw new Error('Fiche Frigo vide — rien à exporter.');
+// ─── V92.7 : Builder magazine layout (paysage, style PDF jsPDF d'origine) ────
+// Reproduit le visuel du PDF Fiche Frigo jsPDF : paysage, 3 cards repas en
+// haut, MES COMPLÉMENTS pleine largeur en milieu, À PRIVILÉGIER + À LIMITER
+// côte à côte, footer foncé avec hydratation/collation/contact.
+
+const MAG_COLORS = {
+  darkGreen: "1A2E1F",      // header bands, footer
+  cardBody: "FFFFFF",        // body cards repas
+  suppHeader: "1A2E1F",      // bandeau MES COMPLÉMENTS
+  suppSubBody: "D5E1CF",     // fond pâle vert pour items compléments
+  favorBg: "E8F0E5",         // À PRIVILÉGIER pâle
+  favorAccent: "1A2E1F",     // titre vert foncé
+  limitBg: "F5E5E5",         // À LIMITER pâle
+  limitAccent: "8B2D2D",     // titre rouge foncé
+  text: "333330",
+  textSoft: "555550",
+  textWhite: "FAF9F6",
+};
+
+function magCardHeaderCell(label, widthPct) {
+  return new TableCell({
+    width: { size: widthPct, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: MAG_COLORS.darkGreen, fill: MAG_COLORS.darkGreen },
+    margins: { top: 140, bottom: 140, left: 100, right: 100 },
+    borders: noBorders(),
+    children: [new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({
+        text: label.toUpperCase(),
+        font: "Calibri", size: 22, bold: true, color: MAG_COLORS.textWhite, characterSpacing: 30,
+      })],
+    })],
+  });
+}
+
+function magCardBodyCell(items, widthPct) {
+  const children = [];
+  if (items?.length) {
+    items.forEach((item, idx) => {
+      // Option N label en italique gras
+      children.push(new Paragraph({
+        spacing: { before: idx === 0 ? 120 : 200, after: 40 },
+        children: [new TextRun({
+          text: `Option ${idx + 1}`,
+          font: "Calibri", size: 18, bold: true, italics: true, color: MAG_COLORS.darkGreen,
+        })],
+      }));
+      // Texte de l'option
+      children.push(new Paragraph({
+        spacing: { before: 0, after: 40 },
+        children: [new TextRun({
+          text: item, font: "Calibri", size: 18, color: MAG_COLORS.text,
+        })],
+      }));
+    });
+  } else {
+    children.push(new Paragraph({
+      spacing: { before: 120, after: 120 },
+      children: [new TextRun({ text: "—", font: "Calibri", size: 18, color: MAG_COLORS.textSoft })],
+    }));
+  }
+  return new TableCell({
+    width: { size: widthPct, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: MAG_COLORS.cardBody, fill: MAG_COLORS.cardBody },
+    margins: { top: 100, bottom: 220, left: 200, right: 200 },
+    borders: noBorders(),
+    children,
+  });
+}
+
+function noBorders() {
+  return {
+    top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+  };
+}
+
+function magSuppSubHeaderCell(label, widthPct) {
+  return new TableCell({
+    width: { size: widthPct, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: MAG_COLORS.suppSubBody, fill: MAG_COLORS.suppSubBody },
+    margins: { top: 80, bottom: 60, left: 80, right: 80 },
+    borders: noBorders(),
+    children: [new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({
+        text: label.toUpperCase(),
+        font: "Calibri", size: 16, bold: true, color: MAG_COLORS.darkGreen, characterSpacing: 30,
+      })],
+    })],
+  });
+}
+
+function magSuppBodyCell(items, widthPct) {
+  const children = items?.length
+    ? items.map((it, idx) => new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: idx === 0 ? 60 : 30, after: 30 },
+        children: [new TextRun({ text: it, font: "Calibri", size: 16, color: MAG_COLORS.text })],
+      }))
+    : [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: "—", font: "Calibri", size: 16, color: MAG_COLORS.textSoft })],
+      })];
+  return new TableCell({
+    width: { size: widthPct, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: MAG_COLORS.suppSubBody, fill: MAG_COLORS.suppSubBody },
+    margins: { top: 40, bottom: 200, left: 80, right: 80 },
+    borders: noBorders(),
+    children,
+  });
+}
+
+function magFavLimCell(title, items, bg, accent) {
+  const children = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 160, after: 100 },
+      children: [new TextRun({
+        text: title.toUpperCase(),
+        font: "Calibri", size: 22, bold: true, color: accent, characterSpacing: 40,
+      })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: 200, line: 320 },
+      children: [new TextRun({
+        text: items?.length ? items.join(", ") : "—",
+        font: "Calibri", size: 18, color: MAG_COLORS.text,
+      })],
+    }),
+  ];
+  return new TableCell({
+    width: { size: 50, type: WidthType.PERCENTAGE },
+    shading: { type: ShadingType.SOLID, color: bg, fill: bg },
+    margins: { top: 100, bottom: 100, left: 200, right: 200 },
+    borders: noBorders(),
+    children,
+  });
+}
+
+function buildFridgeMagazinePage(fridgeData, prenom, dateStr) {
+  if (!fridgeData) return null;
+  const children = [];
+
+  // ─── 1. Titre + date (table 3 cellules pour positionnement) ─────────
+  const titleTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders(),
+    rows: [new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 25, type: WidthType.PERCENTAGE },
+          borders: noBorders(),
+          children: [new Paragraph({ children: [new TextRun({ text: "" })] })],
+        }),
+        new TableCell({
+          width: { size: 50, type: WidthType.PERCENTAGE },
+          borders: noBorders(),
+          children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({
+              text: `FICHE NUTRITION  —  ${prenom.toUpperCase()}`,
+              font: "Calibri", size: 32, bold: true, color: MAG_COLORS.darkGreen, characterSpacing: 40,
+            })],
+          })],
+        }),
+        new TableCell({
+          width: { size: 25, type: WidthType.PERCENTAGE },
+          borders: noBorders(),
+          children: [new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [new TextRun({
+              text: dateStr || "",
+              font: "Calibri", size: 18, color: MAG_COLORS.textSoft,
+            })],
+          })],
+        }),
+      ],
+    })],
+  });
+  children.push(titleTable);
+
+  // ─── 2. Séparateur ───────────────────────────────────────────────
+  children.push(new Paragraph({
+    spacing: { before: 60, after: 200 },
+    border: { bottom: { color: "CCCCBB", size: 6, space: 4, style: "single" } },
+    children: [new TextRun({ text: "" })],
+  }));
+
+  // ─── 3. Table 3 cards repas ──────────────────────────────────────
+  const repasTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [3200, 3200, 3200],
+    borders: {
+      ...noBorders(),
+      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 24, color: "FFFFFF" },
+    },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          magCardHeaderCell("PETIT-DEJEUNER", 33),
+          magCardHeaderCell("DEJEUNER", 34),
+          magCardHeaderCell("DINER", 33),
+        ],
+      }),
+      new TableRow({
+        children: [
+          magCardBodyCell(fridgeData.breakfast || [], 33),
+          magCardBodyCell(fridgeData.lunch || [], 34),
+          magCardBodyCell(fridgeData.dinner || [], 33),
+        ],
+      }),
+    ],
+  });
+  children.push(repasTable);
+
+  // ─── 4. MES COMPLÉMENTS (header pleine largeur + 5 sous-cols) ─────
+  const supp = fridgeData.supplements || {};
+  const hasSupp = supp.morningFasting?.length || supp.breakfast?.length || supp.lunch?.length || supp.dinner?.length || supp.bedtime?.length;
+  if (hasSupp) {
+    children.push(new Paragraph({ spacing: { before: 240 }, children: [new TextRun({ text: "" })] }));
+    const suppTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        ...noBorders(),
+        insideVertical: { style: BorderStyle.SINGLE, size: 6, color: MAG_COLORS.suppSubBody },
+      },
+      rows: [
+        // Header band pleine largeur
+        new TableRow({
+          tableHeader: true,
+          children: [new TableCell({
+            columnSpan: 5,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            shading: { type: ShadingType.SOLID, color: MAG_COLORS.suppHeader, fill: MAG_COLORS.suppHeader },
+            margins: { top: 140, bottom: 140, left: 100, right: 100 },
+            borders: noBorders(),
+            children: [new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [new TextRun({
+                text: "MES COMPLÉMENTS",
+                font: "Calibri", size: 22, bold: true, color: MAG_COLORS.textWhite, characterSpacing: 40,
+              })],
+            })],
+          })],
+        }),
+        // Sous-headers
+        new TableRow({
+          children: [
+            magSuppSubHeaderCell("Matin à jeun", 20),
+            magSuppSubHeaderCell("Petit-déjeuner", 20),
+            magSuppSubHeaderCell("Midi", 20),
+            magSuppSubHeaderCell("Soir", 20),
+            magSuppSubHeaderCell("Coucher", 20),
+          ],
+        }),
+        // Body items
+        new TableRow({
+          children: [
+            magSuppBodyCell(supp.morningFasting || [], 20),
+            magSuppBodyCell(supp.breakfast || [], 20),
+            magSuppBodyCell(supp.lunch || [], 20),
+            magSuppBodyCell(supp.dinner || [], 20),
+            magSuppBodyCell(supp.bedtime || [], 20),
+          ],
+        }),
+      ],
+    });
+    children.push(suppTable);
   }
 
-  // Premier paragraphe sans pageBreakBefore (sinon page blanche au début)
-  const first = fridgePageChildren[0];
-  if (first && first.options) first.options.pageBreakBefore = false;
+  // ─── 5. À PRIVILÉGIER + À LIMITER (2 cols) ─────────────────────
+  if (fridgeData.toFavor?.length || fridgeData.toLimit?.length) {
+    children.push(new Paragraph({ spacing: { before: 240 }, children: [new TextRun({ text: "" })] }));
+    const flTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        ...noBorders(),
+        insideVertical: { style: BorderStyle.SINGLE, size: 24, color: "FFFFFF" },
+      },
+      rows: [new TableRow({
+        children: [
+          magFavLimCell("À PRIVILÉGIER", fridgeData.toFavor || [], MAG_COLORS.favorBg, MAG_COLORS.favorAccent),
+          magFavLimCell("À LIMITER", fridgeData.toLimit || [], MAG_COLORS.limitBg, MAG_COLORS.limitAccent),
+        ],
+      })],
+    });
+    children.push(flTable);
+  }
+
+  // ─── 6. Footer foncé : Hydratation + Collation + Contact ─────────
+  children.push(new Paragraph({ spacing: { before: 240 }, children: [new TextRun({ text: "" })] }));
+  const footerTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders(),
+    rows: [new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 60, type: WidthType.PERCENTAGE },
+          shading: { type: ShadingType.SOLID, color: MAG_COLORS.darkGreen, fill: MAG_COLORS.darkGreen },
+          margins: { top: 140, bottom: 140, left: 200, right: 100 },
+          borders: noBorders(),
+          children: [
+            ...(fridgeData.hydration ? [new Paragraph({
+              spacing: { before: 0, after: 40 },
+              children: [
+                new TextRun({ text: "HYDRATATION   ", font: "Calibri", size: 16, bold: true, color: MAG_COLORS.textWhite, characterSpacing: 30 }),
+                new TextRun({ text: fridgeData.hydration, font: "Calibri", size: 16, color: MAG_COLORS.textWhite }),
+              ],
+            })] : []),
+            ...(fridgeData.snack ? [new Paragraph({
+              spacing: { before: 40, after: 0 },
+              children: [
+                new TextRun({ text: "COLLATION     ", font: "Calibri", size: 16, bold: true, color: MAG_COLORS.textWhite, characterSpacing: 30 }),
+                new TextRun({ text: fridgeData.snack, font: "Calibri", size: 16, color: MAG_COLORS.textWhite }),
+              ],
+            })] : []),
+          ],
+        }),
+        new TableCell({
+          width: { size: 40, type: WidthType.PERCENTAGE },
+          shading: { type: ShadingType.SOLID, color: MAG_COLORS.darkGreen, fill: MAG_COLORS.darkGreen },
+          margins: { top: 140, bottom: 140, left: 100, right: 200 },
+          borders: noBorders(),
+          children: [new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 60 },
+            children: [new TextRun({
+              text: "anissa.nutri@gmail.com  ·  www.anissanutrition.ch  ·  076 621 02 05",
+              font: "Calibri", size: 16, color: MAG_COLORS.textWhite,
+            })],
+          })],
+        }),
+      ],
+    })],
+  });
+  children.push(footerTable);
+
+  return children;
+}
+
+// ─── V92.6 : Export standalone Fiche Frigo ────────────────────────
+// V92.7 : layout magazine paysage (style PDF jsPDF d'origine).
+// Génère un .docx contenant uniquement la Fiche Frigo, à imprimer + plastifier
+// + coller sur le frigo de la cliente. Indépendant du plan alimentaire principal.
+export async function exportFridgeToWord(client, consultation, fridgeData) {
+  const prenom = (client?.prenom || 'Cliente').trim();
+  const dateStr = formatFrDate(consultation?.date);
+
+  const pageChildren = buildFridgeMagazinePage(fridgeData, prenom, dateStr);
+  if (!pageChildren) {
+    throw new Error('Fiche Frigo vide — rien à exporter.');
+  }
 
   const doc = new Document({
     creator: "Anissa Deroubaix Nutrition",
@@ -611,20 +954,20 @@ export async function exportFridgeToWord(client, consultation, fridgeData) {
       properties: {
         page: {
           margin: {
-            top: convertInchesToTwip(0.6),
-            bottom: convertInchesToTwip(0.6),
-            left: convertInchesToTwip(0.6),
-            right: convertInchesToTwip(0.6),
+            top: convertInchesToTwip(0.5),
+            bottom: convertInchesToTwip(0.4),
+            left: convertInchesToTwip(0.5),
+            right: convertInchesToTwip(0.5),
           },
-          size: { orientation: PageOrientation.PORTRAIT },
+          size: { orientation: PageOrientation.LANDSCAPE },
         },
       },
-      children: fridgePageChildren,
+      children: pageChildren,
     }],
   });
 
   const blob = await Packer.toBlob(doc);
-  const safeDate = formatFrDate(consultation?.date).replace(/[\/\\:*?"<>|.]/g, '-');
+  const safeDate = dateStr.replace(/[\/\\:*?"<>|.]/g, '-');
   saveAs(blob, `Fiche-Frigo-${prenom}-${safeDate}.docx`);
 }
 
