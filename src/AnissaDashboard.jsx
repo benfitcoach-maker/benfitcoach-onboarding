@@ -5,6 +5,7 @@ import { getCurrentUser } from './supabaseClient';
 import CycleReviewPanel from './CycleReviewPanel';
 import ClientStatusBadge from './ClientStatusBadge';
 import ClientEngagementBadge from './ClientEngagementBadge';
+import ClientNewFeedbacksBadge from './ClientNewFeedbacksBadge';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
 import { getClientNutritionLocale } from './services/nutritionLocale';
@@ -181,6 +182,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           </span>
           <ClientStatusBadge email={client.form?.email} />
           <ClientEngagementBadge email={client.form?.email} />
+          <ClientNewFeedbacksBadge email={client.form?.email} />
         </div>
         <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
           {consultations.length > 0

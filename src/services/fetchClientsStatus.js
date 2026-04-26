@@ -75,13 +75,15 @@ export async function fetchClientsStatus(emails) {
       status: "absent",
       last_login_at: null,
       last_activity_at: null,
+      last_reviewed_at: null,
       feedbacks_7d_count: 0,
+      new_feedbacks_count: 0,
       found: false,
     };
-    // Defensive : si l'API ne retourne pas le champ (vieux deploy), default 0
-    if (typeof entry.feedbacks_7d_count !== "number") {
-      entry.feedbacks_7d_count = 0;
-    }
+    // Defensive : si l'API est sur une vieille version, default les nouveaux champs.
+    if (typeof entry.feedbacks_7d_count !== "number") entry.feedbacks_7d_count = 0;
+    if (typeof entry.new_feedbacks_count !== "number") entry.new_feedbacks_count = 0;
+    if (entry.last_reviewed_at === undefined) entry.last_reviewed_at = null;
     cache.set(email, { entry, ts: now });
     result[email] = entry;
   }

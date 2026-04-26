@@ -20,6 +20,8 @@ import {
 } from "./services/aiSuggestAdjustment";
 import { sendCoachMessage, CoachMessageError } from "./services/sendCoachMessage";
 import { computeFeedbackTrends, compareAxisTrend } from "./services/feedbackTrends";
+import { markClientReviewed } from "./services/markClientReviewed";
+import { fetchLatestAiSuggestion, saveAiSuggestion } from "./services/clientAiSuggestion";
 
 // Palette badges tendance (cohérente avec VALUE_META existant)
 const TREND_STATUS_STYLE = {
@@ -178,6 +180,36 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
     if (adjustments?.tone === "act") setShowSuggestions(true);
   }, [adjustments?.tone]);
 
+  // ─── V90.0 : auto-mark "lu par coach" 3s après affichage du panel ──
+  // Le délai de 3s évite de marquer si Anissa rebondit immédiatement.
+  // Le service a son propre cache 5 min côté SaaS (pas de spam endpoint).
+  useEffect(() => {
+    if (state.status !== "ready") return;
+    const t = setTimeout(() => {
+      markClientReviewed(client).catch(() => { /* best-effort, pas bloquant */ });
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [state.status, client]);
+
+  // ─── V90.0 : chargement de la dernière suggestion IA persistée ─────
+  // Si trouvée, pré-remplit aiResult pour qu'Anissa retrouve sa réflexion
+  // sans re-cliquer. is_stale → bandeau d'invitation à régénérer.
+  const [aiPersistedStale, setAiPersistedStale] = useState(false);
+  useEffect(() => {
+    if (state.status !== "ready") return;
+    let cancelled = false;
+    fetchLatestAiSuggestion(client).then((res) => {
+      if (cancelled || !res.ok || !res.suggestion) return;
+      setAiResult({
+        summary: res.suggestion.summary,
+        suggestions: res.suggestion.suggestions || [],
+        coach_note: res.suggestion.coach_note,
+      });
+      setAiPersistedStale(!!res.is_stale);
+    });
+    return () => { cancelled = true; };
+  }, [state.status, client?.id]);
+
   // ─── Handlers IA ─────────────────────────────────────────────────
   const canCallAi = state.status === "ready" && !!state.summary && !!consultation;
 
@@ -185,10 +217,15 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
     if (!canCallAi || aiLoading) return;
     setAiError(null);
     setAiResult(null);
+    setAiPersistedStale(false);
     setAiLoading(true);
     try {
       const result = await aiSuggestAdjustment(client, consultation, state.summary, adjustments);
       setAiResult(result);
+      // V90.0 : persiste en background pour les prochaines sessions.
+      // On ignore l'erreur de sauvegarde (la suggestion reste utilisable
+      // dans la session courante même si la persistence échoue).
+      saveAiSuggestion(client, consultation, result).catch(() => { /* best-effort */ });
     } catch (e) {
       if (e instanceof SuggestConfigError) setAiError(`Config : ${e.message}`);
       else if (e instanceof SuggestHttpError) setAiError(`Erreur IA (${e.status}) : ${e.message}`);
@@ -201,6 +238,7 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
   function handleAiIgnore() {
     setAiResult(null);
     setAiError(null);
+    setAiPersistedStale(false);
   }
 
   function handleOpenSendModal() {
@@ -532,6 +570,7 @@ export default function ClientFeedbacksPanel({ client, consultation }) {
             result={aiResult}
             error={aiError}
             copyToast={copyToast}
+            isStale={aiPersistedStale}
             onSuggest={handleAiSuggest}
             onIgnore={handleAiIgnore}
             onCopyAsNote={handleAiCopyAsNote}
@@ -615,11 +654,32 @@ function miniBtn(variant) {
   };
 }
 
-function AiAdjustmentBlock({ loading, result, error, copyToast, onSuggest, onIgnore, onCopyAsNote, onSendToClient }) {
+function AiAdjustmentBlock({ loading, result, error, copyToast, isStale, onSuggest, onIgnore, onCopyAsNote, onSendToClient }) {
   const purple = { bg: "rgba(120,80,200,.08)", border: "rgba(180,140,255,.3)", text: "#cba8ff", textMuted: "#9d7cd8" };
 
   return (
     <div style={{ marginTop: 12 }}>
+      {/* V90.0 : bandeau "stale" si la suggestion persistée a > 7j ou si
+          un nouveau feedback est arrivé depuis. Encourage Anissa à régénérer. */}
+      {result && isStale && !loading && (
+        <div
+          style={{
+            marginBottom: 8,
+            padding: "6px 10px",
+            borderRadius: 6,
+            background: "rgba(201,169,106,.12)",
+            border: "1px solid rgba(201,169,106,.32)",
+            color: "#c9a96a",
+            fontSize: ".72rem",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span aria-hidden>⚠</span>
+          <span>Suggestion obsolète (nouveau feedback ou &gt;7j). Pense à régénérer pour avoir l'IA à jour.</span>
+        </div>
+      )}
       {/* Bouton déclencheur (toujours visible) */}
       {!result && !error && (
         <button
