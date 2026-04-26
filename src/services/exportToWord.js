@@ -40,8 +40,8 @@ import {
   convertInchesToTwip,
 } from "docx";
 import { saveAs } from "file-saver";
-// V92.4 : reuse extraction logique fiche frigo (depuis le PDF jsPDF — code partagé temporaire)
-import { extractFridgeDataFromSections } from "../nutritionPdf";
+// V92.5 : reuse extraction logique fiche frigo (sources multiples comme FicheFrigoPreview)
+import { extractFridgeDataFromSections, extractMeals, extractSupplements } from "../nutritionPdf";
 
 // ─── Palette brand Anissa (cohérente avec PDF actuel) ────────────────
 const COLORS = {
@@ -248,7 +248,80 @@ function pCoverEyebrow(text) {
   });
 }
 
-// ─── Builders Fiche Frigo enrichie (V92.4) ─────────────────────────
+// ─── Source merge fiche frigo (V92.5) ─────────────────────────────
+// Replique la logique de FicheFrigoPreview.jsx : merge sections > fiche_frigo_json
+// > regex extraction. Source primaire = consultation.fiche_frigo_json (edite par
+// Anissa dans la modal Fiche frigo). Fallback sur sections markdown puis regex.
+function fromFicheJson(json, supplementsText) {
+  if (!json || typeof json !== 'object') return null;
+  const repas = json.repas || {};
+  const supp = json.supplements || {};
+  const textSupp = extractSupplements(supplementsText || '');
+  const pick = (arr, fallback) => (Array.isArray(arr) && arr.length > 0 ? arr : fallback);
+  return {
+    breakfast: Array.isArray(repas.petit_dejeuner) ? repas.petit_dejeuner : [],
+    lunch: Array.isArray(repas.dejeuner) ? repas.dejeuner : [],
+    dinner: Array.isArray(repas.diner) ? repas.diner : [],
+    snack: typeof repas.collation === 'string' ? repas.collation : '',
+    toFavor: Array.isArray(json.a_privilegier) ? json.a_privilegier : [],
+    toLimit: Array.isArray(json.a_limiter) ? json.a_limiter : [],
+    hydration: typeof json.hydratation === 'string' ? json.hydratation : '',
+    supplements: {
+      morningFasting: pick(supp.matin_a_jeun, textSupp.morningFasting),
+      breakfast: pick(supp.petit_dejeuner, textSupp.breakfast),
+      lunch: pick(supp.midi, textSupp.lunch),
+      dinner: pick(supp.soir, textSupp.dinner),
+      bedtime: pick(supp.coucher, textSupp.bedtime),
+    },
+  };
+}
+
+function buildFridgeData(consultation, sections, client) {
+  const ficheJson = consultation?.ficheFrigoJson || consultation?.fiche_frigo_json || null;
+  const fromJson = fromFicheJson(ficheJson, consultation?.supplements);
+  const fromSections = extractFridgeDataFromSections(sections || []);
+  const regexMeals = extractMeals(consultation?.nutritionPlan || consultation?.nutrition_plan || '');
+  const regexSupp = extractSupplements(consultation?.supplements || '');
+  const form = client?.form || {};
+
+  const pickArr = (...sources) => {
+    for (const s of sources) if (Array.isArray(s) && s.length > 0) return s;
+    return [];
+  };
+  const pickStr = (...sources) => {
+    for (const s of sources) if (typeof s === 'string' && s.trim()) return s;
+    return '';
+  };
+
+  const s = fromSections || {};
+  const j = fromJson || {};
+  const jSupp = j.supplements || {};
+
+  // Forbidden = aliments allergies + alimentsEvites du form (comme FicheFrigoPreview)
+  const extractFormList = (field) =>
+    (form[field] || '').split(/[,;/]+/).map(x => x.trim()).filter(x => x.length > 1);
+  const forbidden = [...new Set([...extractFormList('allergies'), ...extractFormList('alimentsEvites')])];
+
+  return {
+    breakfast: pickArr(s.breakfast, j.breakfast, regexMeals.breakfast),
+    lunch: pickArr(s.lunch, j.lunch, regexMeals.lunch),
+    dinner: pickArr(s.dinner, j.dinner, regexMeals.dinner),
+    snack: pickStr(s.snack, j.snack, regexMeals.snack),
+    toFavor: pickArr(s.toFavor, j.toFavor, regexMeals.toFavor),
+    toLimit: pickArr(s.toLimit, j.toLimit, regexMeals.toLimit),
+    forbidden,
+    hydration: pickStr(s.hydration, j.hydration, regexMeals.hydration, form.hydratation),
+    supplements: {
+      morningFasting: pickArr(jSupp.morningFasting, regexSupp.morningFasting),
+      breakfast: pickArr(jSupp.breakfast, regexSupp.breakfast),
+      lunch: pickArr(jSupp.lunch, regexSupp.lunch),
+      dinner: pickArr(jSupp.dinner, regexSupp.dinner),
+      bedtime: pickArr(jSupp.bedtime, regexSupp.bedtime),
+    },
+  };
+}
+
+// ─── Builders Fiche Frigo enrichie (V92.4 → V92.5 fix) ─────────────────────
 
 /** Cell d'en-tete de colonne repas (vert sapin sur fond clair) */
 function frigoMealHeaderCell(label, widthPct) {
@@ -339,7 +412,10 @@ function frigoListBlock(label, items, accentColor, bgColor) {
 function buildFridgePage(fridgeData, prenom) {
   if (!fridgeData) return null;
   const hasMeals = fridgeData.breakfast?.length || fridgeData.lunch?.length || fridgeData.dinner?.length;
-  if (!hasMeals && !fridgeData.toFavor?.length && !fridgeData.toLimit?.length) return null;
+  const hasTags = fridgeData.toFavor?.length || fridgeData.toLimit?.length || fridgeData.forbidden?.length;
+  const supp = fridgeData.supplements || {};
+  const hasSupp = supp.morningFasting?.length || supp.breakfast?.length || supp.lunch?.length || supp.dinner?.length || supp.bedtime?.length;
+  if (!hasMeals && !hasTags && !hasSupp) return null;
 
   const children = [];
 
@@ -452,9 +528,57 @@ function buildFridgePage(fridgeData, prenom) {
     }
   }
 
-  // À privilégier (vert tonal) / À limiter (ambre tonal)
+  // À privilégier (vert) / À limiter (ambre) / Interdit (rouge)
   children.push(...frigoListBlock("À privilégier", fridgeData.toFavor, "2E4E38", "EAEFE9"));
   children.push(...frigoListBlock("À limiter", fridgeData.toLimit, "B85C00", "FBEFD9"));
+  children.push(...frigoListBlock("Interdit", fridgeData.forbidden, "A12D2D", "F7DCDC"));
+
+  // V92.5 : MES COMPLEMENTS — table 5 colonnes (matin à jeun / petit-déj / midi / soir / coucher)
+  if (hasSupp) {
+    children.push(
+      new Paragraph({
+        spacing: { before: 280, after: 100 },
+        children: [
+          new TextRun({
+            text: "MES COMPLÉMENTS",
+            font: "Calibri",
+            size: 18,
+            bold: true,
+            color: COLORS.gold,
+            characterSpacing: 80,
+          }),
+        ],
+      })
+    );
+
+    const moments = [
+      { label: "Matin à jeun", items: supp.morningFasting || [] },
+      { label: "Petit-déjeuner", items: supp.breakfast || [] },
+      { label: "Midi", items: supp.lunch || [] },
+      { label: "Soir", items: supp.dinner || [] },
+      { label: "Coucher", items: supp.bedtime || [] },
+    ];
+
+    const headerCells = moments.map((m) => frigoMealHeaderCell(m.label, 20));
+    const bodyCells = moments.map((m) => frigoMealBodyCell(m.items, 20));
+
+    const suppTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 6, color: "FAF9F6" },
+        insideVertical: { style: BorderStyle.SINGLE, size: 6, color: "FAF9F6" },
+      },
+      rows: [
+        new TableRow({ tableHeader: true, children: headerCells }),
+        new TableRow({ children: bodyCells }),
+      ],
+    });
+    children.push(suppTable);
+  }
 
   return children;
 }
@@ -473,15 +597,15 @@ export async function exportPlanToWord(client, consultation, finalText) {
 
   const blocks = parseMarkdownToBlocks(finalText || '');
 
-  // V92.4 : extraction Fiche Frigo enrichie depuis le markdown source
-  // (réutilise extractFridgeDataFromSections du PDF jsPDF — même logique de parsing).
-  // Si fridgeData est exploitable, on filtre la section "FICHE FRIGO" basique du
-  // contenu principal (pour éviter doublon) et on ajoute une page Fiche Frigo
-  // enrichie en fin de document.
+  // V92.5 : extraction Fiche Frigo enrichie via buildFridgeData (merge sources :
+  // sections markdown > consultation.fiche_frigo_json > regex fallback).
+  // Reproduit fidelement la logique de FicheFrigoPreview.jsx pour avoir la
+  // MEME donnee structuree que la modal "Fiche Frigo" du SaaS et le PDF jsPDF.
+  // Inclut aussi forbidden (form.allergies + alimentsEvites) + supplements 5 moments.
   const flatSections = parseMarkdownToFlatSections(finalText || '');
   let fridgeData = null;
   try {
-    fridgeData = extractFridgeDataFromSections(flatSections);
+    fridgeData = buildFridgeData(consultation, flatSections, client);
   } catch {
     fridgeData = null;
   }
