@@ -89,11 +89,19 @@ PREFERER les chiffres concrets aux adjectifs vagues :
 - Aliments eviter : 3-5 items, virgule-separes. FILTRER les phrases longues du formulaire
   (ex: "pas d'allergie connue mais soupcons betterave" --> garder UNIQUEMENT "betterave").
 
-- Supplements : 5-6 max. Format strict.
-  - "name" : NOM EN MAJ (ex: "VITAMINE D3 + K2", "MAGNESIUM GLYCINATE")
-  - "dosage" : dose precise + marque suisse si possible
+- Supplements : RECOPIE STRICTE des supplements presents dans le bloc
+  "=== SUPPLEMENTS BRUTS ===" et/ou "=== PLAN NUTRITION ===" du message utilisateur.
+  REGLE ABSOLUE : N'INVENTE AUCUN supplement qui n'apparait pas dans ces blocs.
+  Si la liste contient 4 supplements, ta sortie aura exactement 4 supplements.
+  Si elle en contient 6, ta sortie en aura 6. Pas plus, pas moins.
+  Tu peux uniquement reformater le NOM (en majuscules) et resumer le DOSAGE.
+  Format strict :
+  - "name" : NOM EN MAJ tel qu'il apparait dans la source (ex: "VITAMINE D3 + K2",
+    "MAGNESIUM GLYCINATE")
+  - "dosage" : dose precise + marque suisse si presente dans la source
     (ex: "2000 UI D3 + 100 µg K2 (Burgerstein)")
-  - "raison" : 1 phrase, max 15 mots, qui lie le supplement a un fait du patient.
+  - "raison" : 1 phrase, max 15 mots, qui lie le supplement a un fait du patient
+    (taux sanguin, pathologie, symptome documente dans le profil).
     EXEMPLE OK : "Vitamine D 50.8 nmol/L, soutien immunite et fixation calcique."
     EXEMPLE NON : "Aide a renforcer le systeme immunitaire et joue un role cle..."
 
@@ -101,6 +109,17 @@ PREFERER les chiffres concrets aux adjectifs vagues :
   selon les pathologies (glycemie si diabete, INR si AVK, TSH si Levothyrox, etc.).
   Pas de "Nous vous serions reconnaissants...". Plutot : "Merci de valider la compatibilite
   avec le traitement en cours. Surveillance [specifique] recommandee."
+
+----- REGLE ABSOLUE FINALE -----
+
+INTERDICTION TOTALE d'inventer ou d'ajouter des supplements qui ne figurent pas
+dans les sections "=== SUPPLEMENTS BRUTS ===" ou "=== PLAN NUTRITION ===" du
+message utilisateur. Si tu n'es pas sur qu'un supplement est dans la source,
+ne l'inclus PAS. Mieux vaut une fiche avec 3 supplements correctement extraits
+qu'une fiche avec 6 supplements dont 2 inventes.
+
+Le medecin va relire et verifier la compatibilite avec le traitement reel du
+patient. Un supplement invente = risque medical et perte de credibilite d'Anissa.
 
 ----- OUTPUT -----
 
@@ -162,7 +181,11 @@ function buildUserMessage(form, consultation) {
 
   lines.push('\n=== TACHE ===');
   lines.push('Genere le resume medical en JSON strict selon le format specifie.');
-  lines.push('Pour CHAQUE supplement extrait du plan : remplis OBLIGATOIREMENT le champ "raison" (jamais vide).');
+  lines.push('REGLE ABSOLUE : la liste "supplements" doit contenir EXACTEMENT les supplements');
+  lines.push('presents dans les sections SUPPLEMENTS BRUTS et/ou PLAN NUTRITION ci-dessus.');
+  lines.push('NE PAS inventer de supplements. NE PAS ajouter de supplements "logiques" non listes.');
+  lines.push('Si aucun supplement n est trouve, renvoie supplements: [].');
+  lines.push('Pour CHAQUE supplement extrait : remplis OBLIGATOIREMENT le champ "raison" (jamais vide).');
   lines.push('La raison doit lier le supplement a un element factuel du profil du patient.');
 
   return lines.join('\n');
