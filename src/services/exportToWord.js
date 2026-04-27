@@ -43,6 +43,8 @@ import {
 import { saveAs } from "file-saver";
 // V92.5 : reuse extraction logique fiche frigo (sources multiples comme FicheFrigoPreview)
 import { extractFridgeDataFromSections, extractMeals, extractSupplements } from "../nutritionPdf";
+// V94.3 : parser canonical pour les entrees supplements (meme que jsPDF)
+import { parseSupplementEntriesStructured } from "./nutritionParsers";
 
 // ─── Palette brand Anissa (cohérente avec PDF actuel) ────────────────
 const COLORS = {
@@ -255,46 +257,22 @@ function pCoverEyebrow(text) {
   });
 }
 
-// V94.2 : detection sections "supplement" pour rendu en cards structurees.
-// Match les 2 formats PDF jsPDF observes :
-//   Format A (V93.0+) : "Moment : Le soir...", "Dose : 300 mg", "Pourquoi : ...", "Attention : ..."
-//   Format B (legacy) : "Dosage 3000 UI...", "Sources saumon 150g...", "Justification ...", "Interactions ..."
-const SUPPLEMENT_FIELD_LABELS = [
-  'dosage', 'dose', 'moment', 'sources', 'justification',
-  'pourquoi', 'interactions', 'attention', 'duree',
-];
+// V94.3 : detection des supplements via le parser canonical (meme que jsPDF).
+// On extrait toutes les entries du markdown source, puis on identifie les blocks
+// qui correspondent par leur titre. Garantit la compatibilite parfaite avec le PDF.
+//
+// Mapping entre cles canonical (k) et labels affiches dans le card :
+const SUPP_FIELD_KEY_TO_LABEL = {
+  moment: 'Moment',
+  dosage: 'Dose',
+  sources: 'Sources',
+  justification: 'Pourquoi',
+  interactions: 'Attention',
+  duree: 'Durée',
+};
 
-function normalizeLabel(s) {
-  return s.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .trim();
-}
-
-function tryParseSupplementField(text) {
-  // Match "Label[:] value" — label = 1 mot du vocabulaire connu
-  const m = (text || '').match(/^\s*([A-Za-z\u00C0-\u017F]+)\s*[:：]?\s+(.+)$/);
-  if (!m) return null;
-  const labelNorm = normalizeLabel(m[1]);
-  if (!SUPPLEMENT_FIELD_LABELS.includes(labelNorm)) return null;
-  return { label: m[1], value: m[2].trim() };
-}
-
-function parseSupplementFields(block) {
-  const fields = [];
-  for (const child of block.children || []) {
-    if (child.type !== 'bullet' && child.type !== 'paragraph') continue;
-    const f = tryParseSupplementField(child.text);
-    if (f) fields.push(f);
-  }
-  return fields;
-}
-
-function isSupplementSection(block) {
-  if (!block?.children?.length) return false;
-  // Min 2 fields reconnus AVEC un titre court (nom de complement style)
-  if (!block.title || block.title.length > 40) return false;
-  const fields = parseSupplementFields(block);
-  return fields.length >= 2;
+function normalizeName(s) {
+  return (s || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function noBordersTable() {
@@ -1217,24 +1195,36 @@ export async function exportPlanToWord(client, consultation, finalText) {
   );
 
   // ─── CONTENU PRINCIPAL ────────────────────────────────────────
-  // V94.2 : detection sections "supplement" → rendu en cards structurees
-  // (signature visuelle PDF jsPDF : liseré or à gauche, fond beige clair,
-  // header nom du complement, body 2-cols Label or / Value gris).
+  // V94.3 : detection sections "supplement" via parser canonical (meme que jsPDF).
+  // Strategie : extraire TOUS les supplement entries du markdown via le parser
+  // canonical, puis identifier les blocks dont le titre correspond a une entry —
+  // ces blocks sont rendus en card, les autres en pHeading classique.
+  const supplementEntries = parseSupplementEntriesStructured(finalText || '');
+  const supplementByName = new Map();
+  for (const entry of supplementEntries) {
+    supplementByName.set(normalizeName(entry.name), entry);
+  }
+
   const contentChildren = [];
   for (const block of blocks) {
     if (block.type === 'section') {
       // V92.4 : skip section Fiche Frigo si fridgeData (rendu enrichi separe)
       if (fridgeData && /fiche\s*frigo|frigo/i.test(block.title)) continue;
 
-      // V94.2 : si la section ressemble a un complement (titre court +
-      // au moins 2 fields reconnus comme Dosage/Moment/Sources/etc.)
-      // → render en card structuree au lieu du heading + bullets standard.
-      if (isSupplementSection(block)) {
-        const fields = parseSupplementFields(block);
-        contentChildren.push(pSpacer(180));
-        contentChildren.push(pSupplementCard(block.title, fields));
-        contentChildren.push(pSpacer(120));
-        continue;
+      // V94.3 : block dont le titre matche une entry supplement → render en card
+      const matchedSupp = supplementByName.get(normalizeName(block.title));
+      if (matchedSupp) {
+        const fields = [];
+        for (const [key, value] of Object.entries(matchedSupp.fields || {})) {
+          if (!value) continue;
+          fields.push({ label: SUPP_FIELD_KEY_TO_LABEL[key] || key, value: String(value) });
+        }
+        if (fields.length >= 2) {
+          contentChildren.push(pSpacer(180));
+          contentChildren.push(pSupplementCard(matchedSupp.name, fields));
+          contentChildren.push(pSpacer(120));
+          continue;
+        }
       }
 
       contentChildren.push(pHeading(block.title));
