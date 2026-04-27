@@ -255,6 +255,127 @@ function pCoverEyebrow(text) {
   });
 }
 
+// V94.2 : detection sections "supplement" pour rendu en cards structurees.
+// Match les 2 formats PDF jsPDF observes :
+//   Format A (V93.0+) : "Moment : Le soir...", "Dose : 300 mg", "Pourquoi : ...", "Attention : ..."
+//   Format B (legacy) : "Dosage 3000 UI...", "Sources saumon 150g...", "Justification ...", "Interactions ..."
+const SUPPLEMENT_FIELD_LABELS = [
+  'dosage', 'dose', 'moment', 'sources', 'justification',
+  'pourquoi', 'interactions', 'attention', 'duree',
+];
+
+function normalizeLabel(s) {
+  return s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function tryParseSupplementField(text) {
+  // Match "Label[:] value" — label = 1 mot du vocabulaire connu
+  const m = (text || '').match(/^\s*([A-Za-z\u00C0-\u017F]+)\s*[:：]?\s+(.+)$/);
+  if (!m) return null;
+  const labelNorm = normalizeLabel(m[1]);
+  if (!SUPPLEMENT_FIELD_LABELS.includes(labelNorm)) return null;
+  return { label: m[1], value: m[2].trim() };
+}
+
+function parseSupplementFields(block) {
+  const fields = [];
+  for (const child of block.children || []) {
+    if (child.type !== 'bullet' && child.type !== 'paragraph') continue;
+    const f = tryParseSupplementField(child.text);
+    if (f) fields.push(f);
+  }
+  return fields;
+}
+
+function isSupplementSection(block) {
+  if (!block?.children?.length) return false;
+  // Min 2 fields reconnus AVEC un titre court (nom de complement style)
+  if (!block.title || block.title.length > 40) return false;
+  const fields = parseSupplementFields(block);
+  return fields.length >= 2;
+}
+
+function noBordersTable() {
+  return {
+    top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+  };
+}
+
+function pSupplementCard(name, fields) {
+  const headerRow = new TableRow({
+    children: [new TableCell({
+      columnSpan: 2,
+      shading: { type: ShadingType.SOLID, color: "F5F0E0", fill: "F5F0E0" },
+      margins: { top: 160, bottom: 100, left: 240, right: 240 },
+      borders: noBordersTable(),
+      children: [new Paragraph({
+        children: [new TextRun({
+          text: name.toUpperCase(),
+          font: "Calibri", size: 22, bold: true, color: COLORS.green, characterSpacing: 30,
+        })],
+      })],
+    })],
+  });
+
+  const fieldRows = fields.map(f => new TableRow({
+    children: [
+      new TableCell({
+        width: { size: 22, type: WidthType.PERCENTAGE },
+        shading: { type: ShadingType.SOLID, color: "F5F0E0", fill: "F5F0E0" },
+        margins: { top: 60, bottom: 60, left: 240, right: 80 },
+        borders: noBordersTable(),
+        children: [new Paragraph({
+          children: [new TextRun({
+            text: f.label,
+            font: "Calibri", size: 18, bold: true, color: COLORS.gold,
+          })],
+        })],
+      }),
+      new TableCell({
+        width: { size: 78, type: WidthType.PERCENTAGE },
+        shading: { type: ShadingType.SOLID, color: "F5F0E0", fill: "F5F0E0" },
+        margins: { top: 60, bottom: 60, left: 80, right: 240 },
+        borders: noBordersTable(),
+        children: [new Paragraph({
+          children: [new TextRun({
+            text: f.value,
+            font: "Calibri", size: 18, color: COLORS.text,
+          })],
+        })],
+      }),
+    ],
+  }));
+
+  // Padding bas du card
+  const padBottomRow = new TableRow({
+    children: [new TableCell({
+      columnSpan: 2,
+      shading: { type: ShadingType.SOLID, color: "F5F0E0", fill: "F5F0E0" },
+      margins: { top: 0, bottom: 100, left: 0, right: 0 },
+      borders: noBordersTable(),
+      children: [new Paragraph({ children: [new TextRun({ text: "" })] })],
+    })],
+  });
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      left: { style: BorderStyle.SINGLE, size: 36, color: COLORS.gold },
+      right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    },
+    rows: [headerRow, ...fieldRows, padBottomRow],
+  });
+}
+
 // V93.1 : helper pour charger le logo Anissa depuis /public et l'embed dans le .docx
 async function loadLogoBytes() {
   try {
@@ -1096,12 +1217,25 @@ export async function exportPlanToWord(client, consultation, finalText) {
   );
 
   // ─── CONTENU PRINCIPAL ────────────────────────────────────────
+  // V94.2 : detection sections "supplement" → rendu en cards structurees
+  // (signature visuelle PDF jsPDF : liseré or à gauche, fond beige clair,
+  // header nom du complement, body 2-cols Label or / Value gris).
   const contentChildren = [];
   for (const block of blocks) {
     if (block.type === 'section') {
-      // V92.4 : si on va rendre une page Fiche Frigo enrichie, on saute la
-      // section basique pour éviter doublon visuel.
+      // V92.4 : skip section Fiche Frigo si fridgeData (rendu enrichi separe)
       if (fridgeData && /fiche\s*frigo|frigo/i.test(block.title)) continue;
+
+      // V94.2 : si la section ressemble a un complement (titre court +
+      // au moins 2 fields reconnus comme Dosage/Moment/Sources/etc.)
+      // → render en card structuree au lieu du heading + bullets standard.
+      if (isSupplementSection(block)) {
+        const fields = parseSupplementFields(block);
+        contentChildren.push(pSpacer(180));
+        contentChildren.push(pSupplementCard(block.title, fields));
+        contentChildren.push(pSpacer(120));
+        continue;
+      }
 
       contentChildren.push(pHeading(block.title));
       for (const child of block.children) {
