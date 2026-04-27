@@ -285,9 +285,12 @@ function noBordersTable() {
 }
 
 function pSupplementCard(name, fields) {
+  // V94.4 : width OBLIGATOIRE sur cellules columnSpan sinon Word reporte
+  // "contenu illisible" (OOXML grid invalide).
   const headerRow = new TableRow({
     children: [new TableCell({
       columnSpan: 2,
+      width: { size: 100, type: WidthType.PERCENTAGE },
       shading: { type: ShadingType.SOLID, color: "F5F0E0", fill: "F5F0E0" },
       margins: { top: 160, bottom: 100, left: 240, right: 240 },
       borders: noBordersTable(),
@@ -329,10 +332,11 @@ function pSupplementCard(name, fields) {
     ],
   }));
 
-  // Padding bas du card
+  // Padding bas du card (cellule fusionnee — width OBLIGATOIRE V94.4)
   const padBottomRow = new TableRow({
     children: [new TableCell({
       columnSpan: 2,
+      width: { size: 100, type: WidthType.PERCENTAGE },
       shading: { type: ShadingType.SOLID, color: "F5F0E0", fill: "F5F0E0" },
       margins: { top: 0, bottom: 100, left: 0, right: 0 },
       borders: noBordersTable(),
@@ -342,6 +346,8 @@ function pSupplementCard(name, fields) {
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    // V94.4 : columnWidths explicit pour le grid OOXML (22%/78% sur ~9000 twips)
+    columnWidths: [1980, 7020],
     borders: {
       top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
       bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
