@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { jsPDF } from 'jspdf';
+import { generateMedicalSummary } from './services/aiMedicalSummary';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 const GREEN = [26, 46, 31];
@@ -213,8 +214,36 @@ async function generateMedicalPDF(data) {
 export default function MedicalSummary({ form, consultation, onClose }) {
   const [data, setData] = useState(() => buildInitialData(form, consultation));
   const [exporting, setExporting] = useState(false);
+  // V94.5 : generation IA pour pre-remplir antecedents, approche, suppl. raisons, etc.
+  const [generating, setGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   const update = (field, value) => setData(prev => ({ ...prev, [field]: value }));
+
+  // V94.5 : appel IA Claude Haiku qui remplit tous les champs (raisons suppl. inclus)
+  const handleAIGenerate = async () => {
+    setGenerating(true);
+    setAiError('');
+    try {
+      const aiData = await generateMedicalSummary(form, consultation);
+      // Merge : on garde patient/objectif (deja deduits du form) + on remplace le reste
+      setData(prev => ({
+        ...prev,
+        antecedents: aiData.antecedents || prev.antecedents,
+        bilans: aiData.bilans || prev.bilans,
+        approche: aiData.approche || prev.approche,
+        alimentsCles: aiData.alimentsCles || prev.alimentsCles,
+        alimentsEviter: aiData.alimentsEviter || prev.alimentsEviter,
+        supplements: aiData.supplements?.length ? aiData.supplements : prev.supplements,
+        coordination: aiData.coordination || prev.coordination,
+      }));
+    } catch (err) {
+      console.error('[MedicalSummary AI]', err);
+      setAiError(err?.message || 'Erreur generation IA');
+    } finally {
+      setGenerating(false);
+    }
+  };
   const updateSupplement = (idx, field, value) => {
     setData(prev => {
       const s = [...prev.supplements];
@@ -249,6 +278,29 @@ export default function MedicalSummary({ form, consultation, onClose }) {
           <button className="ffp-close" onClick={onClose}>&times;</button>
         </div>
         <div className="ffp-body">
+          {/* V94.5 : bouton de generation IA en haut de la modal */}
+          <div style={{ marginBottom: 14, padding: '10px 12px', background: 'rgba(106,191,138,.06)', border: '1px solid rgba(106,191,138,.18)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontSize: '.78rem', color: '#8abf9a', lineHeight: 1.4 }}>
+              {generating
+                ? 'Generation IA en cours... (raisons suppl., approche, antecedents)'
+                : 'Pre-remplis tous les champs avec une analyse IA du profil + plan + bilans.'}
+            </div>
+            <button
+              type="button"
+              className="btn btn-anissa-primary"
+              onClick={handleAIGenerate}
+              disabled={generating || exporting}
+              style={{ padding: '6px 14px', fontSize: '.78rem', whiteSpace: 'nowrap' }}
+            >
+              {generating ? 'Generation...' : '✨ Generer avec IA'}
+            </button>
+          </div>
+          {aiError && (
+            <div style={{ marginBottom: 12, padding: '8px 10px', background: 'rgba(212,92,76,.1)', border: '1px solid rgba(212,92,76,.3)', borderRadius: 8, fontSize: '.75rem', color: '#d4806c' }}>
+              {aiError}
+            </div>
+          )}
+
           <div className="ffp-field">
             <label>Patient</label>
             <input value={data.patient} onChange={e => update('patient', e.target.value)} />
