@@ -17,6 +17,12 @@ import MedicalSummary from './MedicalSummary';
 import FollowUpStep, { buildFollowupSummary } from './FollowUpStep';
 // V76 : extractFridgeDataFromSections / extractMeals / extractSupplements retires (utilises seulement dans la modale Apercu PDF supprimee)
 // V92.1 : exportCoverPDF retire (Word gere sa cover). Autres exports conserves pour rétrocompat.
+// V94.1 : ⚠️ jsPDF est legacy / fallback only — Word V92+ est le path principal pour le plan
+// alimentaire (peaufinage Anissa + PDF natif Word 1 clic). jsPDF reste utilise pour :
+//   - exportFicheFrigoPDF : modal Fiche Frigo (V92.8 — design pixel-perfect a plastifier)
+//   - exportClientPackPDF : bouton Dossier complet
+//   - exportConsultationPDF : page History (re-telecharger ancien plan)
+//   - buildConsultationPdfBlob : import dormant (V94 nettoyage modal Finaliser)
 import { exportConsultationPDF, exportFicheFrigoPDF, exportClientPackPDF, buildConsultationPdfBlob } from './nutritionPdf';
 // V91.0 : detectSectionType depuis le canonical (remplace classifySection local)
 import { detectSectionType } from './services/nutritionParsers';
@@ -2673,62 +2679,17 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const confirmDialog = useConfirmDialog();
   // V83 : mode relecture — l'editeur passe en read-only pour simuler la lecture du PDF
   const [isReviewMode, setIsReviewMode] = useState(false);
-  // V88 : couche de finalisation humaine. `finalText` est la version editee manuellement
-  // par Anissa, stockee separement du plan IA (nutrition_plan). Le PDF prime finalText
-  // si isFinal est true. Sinon, fallback sur le plan IA standard.
-  // V88.1 : UI devient une modal plein ecran. finalDraft = buffer d'edition non persiste
-  // (remis a jour a l'ouverture, ecrit dans finalText uniquement sur Enregistrer).
-  const [isFinalMode, setIsFinalMode] = useState(false);
-  // V92.2 : finalText/isFinal forces a vide/false par defaut. Le bouton Finaliser
-  // est supprime — Anissa peaufine dans Word apres export. On garde les states
-  // pour ne pas casser le code dormant (modal, handlers) qui reste en place
-  // pour rollback rapide. Les anciennes consultations avec finalText defini
-  // ne sont plus utilisees par le PDF/Word (qui prend planDraft).
+  // V88 / V92.2 / V94 : couche finalisation humaine (rollback safety net).
+  // finalText = version editee manuellement par Anissa, stockee separement du plan IA.
+  // Le PDF prime finalText si isFinal=true. Modal Finaliser supprimee V92.3 et code
+  // orphelin (handlers, effects, ~210 lignes) nettoye V94. Anissa peaufine maintenant
+  // directement dans Word apres export. Ces states restent dormants pour ne pas casser
+  // les anciennes consultations finalisees + rollback rapide si revert necessaire.
   const [finalText, setFinalText] = useState('');
   const [isFinal, setIsFinal] = useState(false);
-  const [finalDraft, setFinalDraft] = useState('');
-  // V88.12 : historique versions finales
   const [finalVersions, setFinalVersions] = useState(
     Array.isArray(initialConsultation?.finalVersions) ? initialConsultation.finalVersions : []
   );
-  // V88.12 : renomme showFinalVersions pour ne pas clash avec showVersions
-  // (deja utilise L2748 par la feature planVersions history).
-  const [showFinalVersions, setShowFinalVersions] = useState(false);
-  // V88.3 : modal Preview PDF \u2014 affiche exactement ce qui ira dans le PDF.
-  // Source unique : finalText si isFinal sinon planDraft. Reutilise NutritionEditor en readOnly.
-  // V92.1 : isPdfPreviewOpen supprime — Word V92.0 prime
-  // V88.5 : debounced text pour le preview live du split-screen Finaliser.
-  // NutritionEditor parse planText au mount uniquement (useState lazy init). Pour que
-  // le preview suive le textarea, on remount avec un key derive d'un texte debounce 400ms.
-  const [finalPreviewText, setFinalPreviewText] = useState('');
-  const [finalPreviewKey, setFinalPreviewKey] = useState(0);
-  // V88.6 \u2192 V88.7 : 3 modes de preview dans la modal Finaliser.
-  //   'premium' = NutritionEditor readOnly (rapide, pas pagination)
-  //   'pdf'     = iframe du VRAI PDF (genere via buildConsultationPdfBlob)
-  //   'diff'    = diff simple ligne par ligne entre plan IA et finalDraft
-  const [previewMode, setPreviewMode] = useState('pdf');
-  // Derived pour compat avec code existant V88.6
-  const isDiffMode = previewMode === 'diff';
-  // V88.7 : vrai PDF live preview (iframe blob). Genere via buildConsultationPdfBlob.
-  // V88.8 : refresh semi-manuel pour le mode PDF \u2014 ne pas regenerer a chaque frappe
-  // (sinon retour page 1 en permanence, perte du scroll). 1800ms apres la derniere frappe
-  // OU clic sur \u21bb Rafraichir \u2192 pdfRefreshTick incremente \u2192 generation blob.
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
-  const [isPdfPreviewLoading, setIsPdfPreviewLoading] = useState(false);
-  const [pdfPreviewError, setPdfPreviewError] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [pdfRefreshTick, setPdfRefreshTick] = useState(0);
-  // V88.10 : le refresh auto 1800ms remontait le PDF en cover car le viewer natif
-  // Chrome ne permet pas la restauration du scroll. Strategie simplifiee :
-  // refresh UNIQUEMENT au clic manuel sur \u21bb Rafraichir. Indicateur 'Modifie'
-  // (pdfNeedsRefresh) previent qu'un draft plus recent existe.
-  const [pdfNeedsRefresh, setPdfNeedsRefresh] = useState(false);
-  const pdfIframeRef = useRef(null);
-  const pdfSavedScrollRef = useRef({ scrollY: 0, hash: '' });
-  // V88.11 : scroll sync gauche \u2194 droite (Premium + Diff uniquement, pas PDF iframe).
-  const leftScrollRef = useRef(null);
-  const rightScrollRef = useRef(null);
-  const isSyncingScrollRef = useRef(false);
   // V79.3 : map { winText: sectionType } des quickWins deja inserees
   // → permet de re-afficher "✓ Revoir" au lieu de "Inserer" et d'eviter les doublons.
   const [insertedWinsMap, setInsertedWinsMap] = useState({});
@@ -3038,138 +2999,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     setConsultation(prev => ({ ...prev, [field]: value }));
   };
 
-  // V88.1 : modal plein ecran pour finalisation.
-  // finalText vit en parallele de nutrition_plan. Jamais d'ecrasement du plan IA.
-  // finalDraft = buffer d'edition qui ne touche a rien avant Enregistrer.
-  const openFinalModal = () => {
-    // Pre-remplir le draft : priorite a la version finale existante, sinon plan IA courant.
-    const base = (finalText?.trim()) || (planDraft || '').trim() || '';
-    setFinalDraft(base);
-    setFinalPreviewText(base); // V88.5 : init preview synchrone
-    setFinalPreviewKey(k => k + 1);
-    setIsFinalMode(true);
-  };
-
-  const closeFinalModal = () => {
-    setIsFinalMode(false);
-  };
-
-  const handleSaveFinalVersion = () => {
-    const trimmed = (finalDraft || '').trim();
-    // V88.12 : archiver l'ancienne version finale AVANT ecrasement.
-    // Evite toute perte de texte. Limite a 15 entrees max.
-    let nextVersions = [...finalVersions];
-    const prevText = (finalText || '').trim();
-    if (prevText && prevText !== trimmed) {
-      nextVersions.push({
-        text: prevText,
-        createdAt: consultation?.finalUpdatedAt || new Date().toISOString(),
-      });
-      if (nextVersions.length > 15) nextVersions = nextVersions.slice(-15);
-    }
-
-    if (trimmed) {
-      setFinalText(trimmed);
-      setIsFinal(true);
-      setFinalVersions(nextVersions);
-      setConsultation(prev => ({
-        ...prev,
-        finalText: trimmed,
-        isFinal: true,
-        finalUpdatedAt: new Date().toISOString(),
-        finalVersions: nextVersions,
-      }));
-      showSaveToast('Version finale enregistree');
-    } else {
-      // draft vide = equivalent a une suppression (mais on garde l'historique)
-      setFinalText('');
-      setIsFinal(false);
-      setFinalVersions(nextVersions);
-      setConsultation(prev => ({
-        ...prev,
-        finalText: null,
-        isFinal: false,
-        finalUpdatedAt: null,
-        finalVersions: nextVersions,
-      }));
-      showSaveToast('Finalisation vide \u2014 supprimee (historique conserve)');
-    }
-    isDirtyRef.current = true;
-    setAutoSaveStatus('unsaved');
-    setIsFinalMode(false);
-    setShowFinalVersions(false);
-  };
-
-  const handleClearFinalVersion = () => {
-    // V88.12 : archiver la version finale courante si presente avant de la supprimer
-    let nextVersions = [...finalVersions];
-    const prevText = (finalText || '').trim();
-    if (prevText) {
-      nextVersions.push({
-        text: prevText,
-        createdAt: consultation?.finalUpdatedAt || new Date().toISOString(),
-      });
-      if (nextVersions.length > 15) nextVersions = nextVersions.slice(-15);
-    }
-    setFinalText('');
-    setIsFinal(false);
-    setFinalDraft('');
-    setFinalVersions(nextVersions);
-    setConsultation(prev => ({
-      ...prev,
-      finalText: null,
-      isFinal: false,
-      finalUpdatedAt: null,
-      finalVersions: nextVersions,
-    }));
-    isDirtyRef.current = true;
-    setAutoSaveStatus('unsaved');
-    setIsFinalMode(false);
-    setShowFinalVersions(false);
-    showSaveToast('Finalisation supprimee (historique conserve)');
-  };
-
-  // V88.12 : restaurer une version = la rendre active immediatement, sans perdre
-  // les autres. Archive la version courante avant de restaurer (double filet).
-  const handleRestoreVersion = (version) => {
-    if (!version?.text) return;
-    let nextVersions = [...finalVersions];
-    const prevText = (finalText || '').trim();
-    if (prevText && prevText !== version.text) {
-      nextVersions.push({
-        text: prevText,
-        createdAt: consultation?.finalUpdatedAt || new Date().toISOString(),
-      });
-      if (nextVersions.length > 15) nextVersions = nextVersions.slice(-15);
-    }
-    setFinalText(version.text);
-    setIsFinal(true);
-    setFinalDraft(version.text);
-    setFinalVersions(nextVersions);
-    setConsultation(prev => ({
-      ...prev,
-      finalText: version.text,
-      isFinal: true,
-      finalUpdatedAt: new Date().toISOString(),
-      finalVersions: nextVersions,
-    }));
-    isDirtyRef.current = true;
-    setAutoSaveStatus('unsaved');
-    setShowFinalVersions(false);
-    setPdfNeedsRefresh(true);
-    showSaveToast('Version restauree');
-  };
-
-  // V88.12 : charger une version dans la textarea sans la rendre active.
-  // Permet a Anissa de l'editer avant de la valider.
-  const handleLoadVersionAsDraft = (version) => {
-    if (!version?.text) return;
-    setFinalDraft(version.text);
-    setShowFinalVersions(false);
-    setPdfNeedsRefresh(true);
-    showSaveToast('Version chargee dans le brouillon');
-  };
-
   // V88.3 : renvoie le texte qui ira REELLEMENT dans le PDF.
   // Meme logique que doExportPdf : prime finalText si la finalisation est active.
   const getEffectivePlanText = () => {
@@ -3177,197 +3006,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     if (planDraft && planDraft.trim()) return planDraft.trim();
     return consultation?.nutrition_plan || '';
   };
-
-  // V88.5 : debounce 400ms du texte utilise par le preview live (split-screen
-  // Finaliser). NutritionEditor ne reparse pas planText apres mount, on force
-  // donc un remount via un key qui change a chaque mise a jour debouncee.
-  useEffect(() => {
-    if (!isFinalMode) return undefined;
-    const effective = (finalDraft && finalDraft.trim()) || planDraft || '';
-    const t = setTimeout(() => {
-      setFinalPreviewText(effective);
-      setFinalPreviewKey(k => k + 1);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [finalDraft, planDraft, isFinalMode]);
-
-  // V88.10 : pas d'auto-refresh. La frappe marque pdfNeedsRefresh=true mais
-  // ne regenere pas. L'utilisateur clique \u21bb Rafraichir quand il veut voir.
-  // Evite le reset scroll dans le viewer PDF natif (impossible a preserver).
-
-  // V88.8 : generation blob PDF live. Depend UNIQUEMENT de pdfRefreshTick pour
-  // eviter le reset page 1 a chaque frappe. Le tick incremente apres 1800ms sans
-  // frappe OU au clic manuel sur \u21bb Rafraichir. Lecture de finalDraft/planDraft/
-  // supplementsDraft/recipesDraft via closure au moment du trigger.
-  // V88.9 : capture scrollY + URL hash avant generation, restore au onLoad.
-  useEffect(() => {
-    if (!isFinalMode || previewMode !== 'pdf') return undefined;
-    let cancelled = false;
-    // Capture de l'etat scroll AVANT qu'on change le blob URL (same-origin blob)
-    try {
-      const cw = pdfIframeRef.current?.contentWindow;
-      if (cw) {
-        pdfSavedScrollRef.current = {
-          scrollY: cw.scrollY || cw.pageYOffset || 0,
-          hash: cw.location?.hash || '',
-        };
-      }
-    } catch {
-      // Cross-origin ou pas encore monte \u2014 on ignore
-    }
-    (async () => {
-      try {
-        setIsPdfPreviewLoading(true);
-        setPdfPreviewError('');
-        const effectivePlan = (finalDraft && finalDraft.trim()) || planDraft || '';
-        const sectionsPreview = structurePlanSections(
-          effectivePlan,
-          supplementsDraft,
-          { isFollowup, locale: getClientNutritionLocale(client) }
-        );
-        const previewConsultation = {
-          ...consultation,
-          nutritionPlan: effectivePlan,
-          supplements: supplementsDraft,
-          recipes: recipesDraft,
-          date: consultation?.date || new Date().toISOString(),
-          isFollowup,
-          followupData: isFollowup ? followupData : null,
-          sections: sectionsPreview,
-          finalText: effectivePlan,
-          isFinal: true,
-        };
-        const blob = await buildConsultationPdfBlob(previewConsultation, client);
-        if (cancelled) return;
-        // V88.9 : appliquer le hash sauve (ex: #page=3) pour que le viewer PDF
-        // ouvre directement a la bonne page.
-        const rawUrl = URL.createObjectURL(blob);
-        const hash = pdfSavedScrollRef.current?.hash || '';
-        const blobUrl = hash ? `${rawUrl}${hash}` : rawUrl;
-        setPdfPreviewUrl(old => {
-          if (old) {
-            // Nettoyer l'ancien rawUrl (pas celui avec hash)
-            try { URL.revokeObjectURL(old.split('#')[0]); } catch { /* noop */ }
-          }
-          return blobUrl;
-        });
-      } catch (err) {
-        if (!cancelled) {
-          console.error('[PDF live preview] error:', err);
-          setPdfPreviewError('Impossible de generer l\u2019apercu PDF.');
-        }
-      } finally {
-        if (!cancelled) {
-          setIsPdfPreviewLoading(false);
-          setPdfNeedsRefresh(false); // V88.10 : le PDF reflete maintenant le draft courant
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfRefreshTick, isFinalMode, previewMode]);
-
-  // V88.8 : initialiser le tick a l'ouverture de la modal / changement de mode PDF
-  useEffect(() => {
-    if (isFinalMode && previewMode === 'pdf') {
-      setPdfNeedsRefresh(false);
-      setPdfRefreshTick(x => x + 1);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinalMode, previewMode]);
-
-  // Cleanup du blob URL a la fermeture de la modal ou au demontage du composant
-  useEffect(() => {
-    if (!isFinalMode && pdfPreviewUrl) {
-      URL.revokeObjectURL(pdfPreviewUrl);
-      setPdfPreviewUrl('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinalMode]);
-
-  // V88.11 : scroll sync gauche \u2194 droite (Premium + Diff uniquement).
-  // Ratio-based via requestAnimationFrame. Flag isSyncing pour eviter boucle.
-  // Skip PDF car iframe natif impossible a synchroniser.
-  useEffect(() => {
-    if (!isFinalMode || previewMode === 'pdf') return undefined;
-    const left = leftScrollRef.current;
-    const right = rightScrollRef.current;
-    if (!left || !right) return undefined;
-
-    const getRatio = (el) => {
-      const max = el.scrollHeight - el.clientHeight;
-      if (max <= 0) return 0;
-      return el.scrollTop / max;
-    };
-    const setRatio = (el, ratio) => {
-      const max = el.scrollHeight - el.clientHeight;
-      el.scrollTop = ratio * max;
-    };
-
-    let rafId = null;
-    const onLeftScroll = () => {
-      if (isSyncingScrollRef.current) return;
-      isSyncingScrollRef.current = true;
-      const ratio = getRatio(left);
-      rafId = requestAnimationFrame(() => {
-        setRatio(right, ratio);
-        isSyncingScrollRef.current = false;
-      });
-    };
-    const onRightScroll = () => {
-      if (isSyncingScrollRef.current) return;
-      isSyncingScrollRef.current = true;
-      const ratio = getRatio(right);
-      rafId = requestAnimationFrame(() => {
-        setRatio(left, ratio);
-        isSyncingScrollRef.current = false;
-      });
-    };
-
-    left.addEventListener('scroll', onLeftScroll, { passive: true });
-    right.addEventListener('scroll', onRightScroll, { passive: true });
-    return () => {
-      left.removeEventListener('scroll', onLeftScroll);
-      right.removeEventListener('scroll', onRightScroll);
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [isFinalMode, previewMode, finalPreviewKey]);
-
-  // V88.6 : diff simple ligne par ligne (index-aligne). Zero dep externe.
-  // Retourne un tableau de { type, base?, draft? } ou type \u2208 { same, added, removed, changed }
-  const buildSimpleLineDiff = (base, draft) => {
-    const baseLines = String(base || '').split('\n');
-    const draftLines = String(draft || '').split('\n');
-    const maxLen = Math.max(baseLines.length, draftLines.length);
-    const out = [];
-    for (let i = 0; i < maxLen; i++) {
-      const b = baseLines[i];
-      const d = draftLines[i];
-      if (b === undefined) {
-        out.push({ type: 'added', draft: d });
-      } else if (d === undefined) {
-        out.push({ type: 'removed', base: b });
-      } else if (b === d) {
-        out.push({ type: 'same', base: b, draft: d });
-      } else {
-        out.push({ type: 'changed', base: b, draft: d });
-      }
-    }
-    return out;
-  };
-
-  // Stats rapides pour le header du diff
-  const diffStats = useMemo(() => {
-    if (!isFinalMode || !isDiffMode) return { added: 0, removed: 0, changed: 0 };
-    const diff = buildSimpleLineDiff(planDraft || '', finalDraft || '');
-    return diff.reduce((acc, r) => {
-      if (r.type === 'added') acc.added += 1;
-      if (r.type === 'removed') acc.removed += 1;
-      if (r.type === 'changed') acc.changed += 1;
-      return acc;
-    }, { added: 0, removed: 0, changed: 0 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planDraft, finalDraft, isFinalMode, isDiffMode]);
 
   // Map step index to content type based on followup
   const getStepType = (s) => {
@@ -5936,15 +5574,10 @@ ${suppText}`;
                   >
                     📄 Word
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-anissa-primary"
-                    disabled={!hasPlan}
-                    onClick={() => doExportPdf()}
-                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
-                  >
-                    ⬇ Telecharger
-                  </button>
+                  {/* V94.1 : bouton "Telecharger" PDF jsPDF supprime du header editeur.
+                      Word V92+ est le path principal — Anissa peaufine dans Word puis
+                      "Enregistrer sous PDF natif" en 1 clic. jsPDF reste utilise pour
+                      Fiche Frigo (V92.8 modal), Pack client et Historique. */}
                 </header>
                 <div className="nc-panel__body">
                   {generating && (
@@ -6233,7 +5866,7 @@ ${suppText}`;
           des modifications non sauvees. Evite de remonter en haut de page.
           V88.0.2 : masque en mode Finaliser (les boutons Enregistrer/Supprimer
           version finale sont deja presents en bas du textarea, evite le chevauchement). */}
-      {currentStepType === 'plan' && autoSaveStatus === 'unsaved' && !isFinalMode && (
+      {currentStepType === 'plan' && autoSaveStatus === 'unsaved' && (
         <button
           type="button"
           onClick={handleSave}
