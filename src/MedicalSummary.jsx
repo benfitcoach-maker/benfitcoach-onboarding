@@ -20,27 +20,50 @@ function calcIMC(poids, taille) {
   return (Number(poids) / (h * h)).toFixed(1);
 }
 
+// V94.10 : extrait les supplements avec 5 champs structures
+// (matche le format genere par parseSupplementEntriesStructured du Word).
+// Pour chaque supplement, on essaie de capturer Moment/Dose/Pourquoi/Duree/Attention.
 function extractSupplementsTable(text) {
   if (!text) return [];
   const rows = [];
   const lines = text.split('\n');
-  let currentName = '';
-  for (const line of lines) {
-    const trimmed = line.replace(/\*\*/g, '').replace(/#{1,3}\s*/g, '').trim();
-    if (!trimmed) continue;
-    // Detect supplement name (all caps or starts with uppercase word)
-    if (/^[A-Z][A-Z\s\-\/]{2,}/.test(trimmed) && trimmed.length < 50) {
-      currentName = trimmed;
+  let current = null;
+
+  const isHeader = (l) => {
+    if (!l || l.length > 50) return false;
+    if (l.includes(':') && l.indexOf(':') < l.length - 3) return false;
+    const upperChars = (l.match(/[A-Z0-9 +\-/()]/g) || []).length;
+    return l.length >= 4 && upperChars >= l.length * 0.7;
+  };
+
+  const parseField = (l) => {
+    const m = l.replace(/^[—\-•*·]\s*/, '').match(/^([A-Za-zéè][^:]{0,30}?)\s*:\s*(.+)$/);
+    if (!m) return null;
+    const lab = m[1].toLowerCase().trim();
+    const val = m[2].trim();
+    if (/dose|dosage/.test(lab)) return { key: 'dose', val };
+    if (/moment|quand|horaire|timing|when/.test(lab)) return { key: 'moment', val };
+    if (/justif|raison|pourquoi|why|reason|sources?/.test(lab)) return { key: 'pourquoi', val };
+    if (/interact|attention|eviter|caution|warning|avoid/.test(lab)) return { key: 'attention', val };
+    if (/duree|pendant|cure|duration|length/.test(lab)) return { key: 'duree', val };
+    return null;
+  };
+
+  for (const rawLine of lines) {
+    const t = rawLine.replace(/\*\*/g, '').replace(/#{1,3}\s*/g, '').trim();
+    if (!t) continue;
+    if (isHeader(t)) {
+      if (current) rows.push(current);
+      current = { name: t, moment: '', dose: '', pourquoi: '', duree: '', attention: '' };
       continue;
     }
-    // Detect dosage lines
-    const doseMatch = trimmed.match(/(\d+[\d.,]*\s*(?:mg|g|mcg|µg|UI|ug|ml)[^\n]*)/i);
-    if (doseMatch && currentName && rows.length < 8) {
-      rows.push({ name: currentName, dosage: doseMatch[1].substring(0, 40), reason: '' });
-      currentName = '';
+    if (current) {
+      const f = parseField(t);
+      if (f) current[f.key] = current[f.key] ? current[f.key] + ' ' + f.val : f.val;
     }
   }
-  return rows;
+  if (current) rows.push(current);
+  return rows.slice(0, 8);
 }
 
 function buildInitialData(form, consultation) {
@@ -111,11 +134,13 @@ async function generateMedicalPDF(data) {
   y += 6;
 
   const addTitle = (title) => {
+    // V94.10 : plus de breathing room au-dessus du titre + sous le titre
+    y += 1;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...GREEN);
     doc.text(title, m, y);
-    y += 5;
+    y += 6;
   };
 
   const addText = (text, maxW) => {
@@ -157,55 +182,102 @@ async function generateMedicalPDF(data) {
   addText('A eviter : ' + data.alimentsEviter);
   addSep();
 
-  // Section 5 — Supplements (table)
-  // V94.7 : wrapping multi-lignes au lieu de truncate. Les 3 colonnes utilisent
-  // splitTextToSize pour wrapper proprement, et chaque ligne occupe la hauteur
-  // du texte le plus long (max des 3 colonnes).
+  // Section 5 — Supplements (cards style miroir du Word V94.4)
+  // V94.10 : chaque supplement = card avec liseré doré gauche + fond beige
+  // + nom MAJ vert + fields (Moment/Dose/Pourquoi/Durée/Attention) labels or.
   addTitle('5. SUPPLEMENTS RECOMMANDES');
+  y += 2; // breathing room avant les cards
+
   if (data.supplements.length > 0) {
-    // Table header
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...GREY);
-    const colNameX = m + 2;
-    const colDoseX = m + 55;
-    const colReasonX = m + 105;
-    const colNameW = 50;   // mm
-    const colDoseW = 48;   // mm
-    const colReasonW = pw - m - colReasonX - 2; // reste
-    doc.text('Supplement', colNameX, y);
-    doc.text('Dosage', colDoseX, y);
-    doc.text('Raison', colReasonX, y);
-    y += 3.5;
-    doc.setDrawColor(...SEP);
-    doc.line(m, y - 1, pw - m, y - 1);
-    y += 1;
+    const PAGE_H = doc.internal.pageSize.getHeight();
+    const FOOTER_RESERVE = 28; // mm reserves pour le footer + signature
+    const CARD_PAD_TOP = 3;
+    const CARD_PAD_BOT = 3;
+    const CARD_PAD_LEFT = 7; // espace pour le liseré doré
+    const CARD_PAD_RIGHT = 4;
+    const CARD_GAP = 3; // espace entre cards
+    const LABEL_W = 22; // largeur reservee pour les labels MOMENT/DOSE/...
+    const LH = 3.5; // line height
 
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...DARK);
-    const lh = 3.2; // line height
-    for (const row of data.supplements) {
-      const nameLines = doc.splitTextToSize(row.name || '', colNameW);
-      const doseLines = doc.splitTextToSize(row.dosage || '', colDoseW);
-      const reasonLines = doc.splitTextToSize(row.reason || '', colReasonW);
-      const maxLines = Math.max(nameLines.length, doseLines.length, reasonLines.length);
+    const drawCard = (supp) => {
+      // Mesurer la hauteur totale de la card
+      const fields = [
+        { label: 'MOMENT', value: supp.moment },
+        { label: 'DOSE', value: supp.dose },
+        { label: 'POURQUOI', value: supp.pourquoi },
+        { label: 'DURÉE', value: supp.duree },
+        { label: 'ATTENTION', value: supp.attention },
+      ].filter(f => f.value && f.value.trim());
 
-      // Render chaque colonne avec ses lignes
-      for (let i = 0; i < nameLines.length; i++) {
-        doc.text(nameLines[i], colNameX, y + i * lh);
+      const nameW = pw - m * 2 - CARD_PAD_LEFT - CARD_PAD_RIGHT;
+      const valueW = nameW - LABEL_W;
+
+      doc.setFontSize(9);
+      const nameLines = doc.splitTextToSize((supp.name || '').toUpperCase(), nameW);
+      doc.setFontSize(7.8);
+      const fieldsHeights = fields.map(f => doc.splitTextToSize(f.value, valueW).length * LH);
+
+      let cardH = CARD_PAD_TOP + nameLines.length * 4 + 1.5; // titre + petite separation
+      cardH += fieldsHeights.reduce((a, b) => a + b, 0);
+      cardH += fields.length * 1; // petit interligne entre fields
+      cardH += CARD_PAD_BOT;
+
+      // Page break si necessaire
+      if (y + cardH > PAGE_H - FOOTER_RESERVE) {
+        doc.addPage();
+        y = 15;
       }
-      for (let i = 0; i < doseLines.length; i++) {
-        doc.text(doseLines[i], colDoseX, y + i * lh);
+
+      // Background card (beige)
+      doc.setFillColor(245, 240, 224); // F5F0E0
+      doc.rect(m, y, pw - m * 2, cardH, 'F');
+
+      // Liseré doré gauche
+      doc.setFillColor(196, 160, 80); // gold
+      doc.rect(m, y, 1.2, cardH, 'F');
+
+      // Nom du supplement (vert sapin, bold)
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      let yy = y + CARD_PAD_TOP + 3;
+      for (const ln of nameLines) {
+        doc.text(ln, m + CARD_PAD_LEFT, yy);
+        yy += 4;
       }
-      for (let i = 0; i < reasonLines.length; i++) {
-        doc.text(reasonLines[i], colReasonX, y + i * lh);
+      yy += 1.5;
+
+      // Fields
+      doc.setFontSize(7.8);
+      for (let i = 0; i < fields.length; i++) {
+        const f = fields[i];
+        const valueLines = doc.splitTextToSize(f.value, valueW);
+
+        // Label (gold, bold)
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(196, 160, 80); // gold
+        doc.text(f.label, m + CARD_PAD_LEFT, yy);
+
+        // Value (dark, normal)
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...DARK);
+        for (let j = 0; j < valueLines.length; j++) {
+          doc.text(valueLines[j], m + CARD_PAD_LEFT + LABEL_W, yy + j * LH);
+        }
+        yy += valueLines.length * LH + 1;
       }
-      y += maxLines * lh + 1.5;
+
+      y += cardH + CARD_GAP;
+    };
+
+    for (const supp of data.supplements) {
+      if (!supp || !supp.name) continue;
+      drawCard(supp);
     }
   } else {
     addText('Voir le plan nutrition detaille.');
   }
-  y += 2;
+  y += 3;
   addSep();
 
   // Section 6 — Coordination
@@ -276,7 +348,10 @@ export default function MedicalSummary({ form, consultation, onClose }) {
   };
   const addSupplement = () => {
     if (data.supplements.length >= 8) return;
-    setData(prev => ({ ...prev, supplements: [...prev.supplements, { name: '', dosage: '', reason: '' }] }));
+    setData(prev => ({
+      ...prev,
+      supplements: [...prev.supplements, { name: '', moment: '', dose: '', pourquoi: '', duree: '', attention: '' }],
+    }));
   };
   const removeSupplement = (idx) => {
     setData(prev => ({ ...prev, supplements: prev.supplements.filter((_, i) => i !== idx) }));
@@ -355,19 +430,51 @@ export default function MedicalSummary({ form, consultation, onClose }) {
             </div>
           </div>
 
+          {/* V94.10 : cards eclatees avec 5 champs (Moment / Dose / Pourquoi / Duree / Attention) */}
           <div className="ffp-field">
             <label>Supplements recommandes</label>
-            <div className="med-supp-table">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {data.supplements.map((s, i) => (
-                <div key={i} className="med-supp-row">
-                  <input placeholder="Supplement" value={s.name} onChange={e => updateSupplement(i, 'name', e.target.value)} />
-                  <input placeholder="Dosage" value={s.dosage} onChange={e => updateSupplement(i, 'dosage', e.target.value)} />
-                  <input placeholder="Raison" value={s.reason} onChange={e => updateSupplement(i, 'reason', e.target.value)} />
-                  <button type="button" className="ne-action-btn ne-delete-btn" onClick={() => removeSupplement(i)}>&times;</button>
+                <div
+                  key={i}
+                  style={{
+                    border: '1px solid rgba(196,160,80,.25)',
+                    borderLeft: '3px solid rgba(196,160,80,.7)',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    background: 'rgba(245,240,224,.04)',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <input
+                      placeholder="NOM SUPPLEMENT"
+                      value={s.name}
+                      onChange={e => updateSupplement(i, 'name', e.target.value)}
+                      style={{ flex: 1, fontWeight: 700, textTransform: 'uppercase', fontSize: '.85rem' }}
+                    />
+                    <button
+                      type="button"
+                      className="ne-action-btn ne-delete-btn"
+                      onClick={() => removeSupplement(i)}
+                      title="Supprimer"
+                    >&times;</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', gap: '4px 8px', alignItems: 'center', fontSize: '.78rem' }}>
+                    <span style={{ color: '#c4a050', fontWeight: 600, fontSize: '.7rem' }}>MOMENT</span>
+                    <input value={s.moment || ''} onChange={e => updateSupplement(i, 'moment', e.target.value)} placeholder="Le matin avec le repas..." style={{ fontSize: '.78rem' }} />
+                    <span style={{ color: '#c4a050', fontWeight: 600, fontSize: '.7rem' }}>DOSE</span>
+                    <input value={s.dose || ''} onChange={e => updateSupplement(i, 'dose', e.target.value)} placeholder="2000 UI (Burgerstein)" style={{ fontSize: '.78rem' }} />
+                    <span style={{ color: '#c4a050', fontWeight: 600, fontSize: '.7rem' }}>POURQUOI</span>
+                    <input value={s.pourquoi || ''} onChange={e => updateSupplement(i, 'pourquoi', e.target.value)} placeholder="Lien factuel au profil" style={{ fontSize: '.78rem' }} />
+                    <span style={{ color: '#c4a050', fontWeight: 600, fontSize: '.7rem' }}>DURÉE</span>
+                    <input value={s.duree || ''} onChange={e => updateSupplement(i, 'duree', e.target.value)} placeholder="3 mois puis pause" style={{ fontSize: '.78rem' }} />
+                    <span style={{ color: '#c4a050', fontWeight: 600, fontSize: '.7rem' }}>ATTENTION</span>
+                    <input value={s.attention || ''} onChange={e => updateSupplement(i, 'attention', e.target.value)} placeholder="Interaction / surveillance" style={{ fontSize: '.78rem' }} />
+                  </div>
                 </div>
               ))}
               {data.supplements.length < 8 && (
-                <button type="button" className="btn btn-xs btn-anissa-secondary" onClick={addSupplement} style={{ marginTop: 6 }}>+ Ajouter</button>
+                <button type="button" className="btn btn-xs btn-anissa-secondary" onClick={addSupplement} style={{ marginTop: 4, alignSelf: 'flex-start' }}>+ Ajouter un supplement</button>
               )}
             </div>
           </div>

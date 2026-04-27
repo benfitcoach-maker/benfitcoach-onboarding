@@ -140,16 +140,22 @@ PREFERER les chiffres concrets aux adjectifs vagues :
   REGLE ABSOLUE : N'INVENTE AUCUN supplement qui n'apparait pas dans ces blocs.
   Si la liste contient 4 supplements, ta sortie aura exactement 4 supplements.
   Si elle en contient 6, ta sortie en aura 6. Pas plus, pas moins.
-  Tu peux uniquement reformater le NOM (en majuscules) et resumer le DOSAGE.
-  Format strict :
-  - "name" : NOM EN MAJ tel qu'il apparait dans la source (ex: "VITAMINE D3 + K2",
-    "MAGNESIUM GLYCINATE")
-  - "dosage" : dose precise + marque suisse si presente dans la source
-    (ex: "2000 UI D3 + 100 µg K2 (Burgerstein)")
-  - "raison" : 1 phrase, max 15 mots, qui lie le supplement a un fait du patient
-    (taux sanguin, pathologie, symptome documente dans le profil).
+
+  Pour chaque supplement, tu dois extraire TOUS les champs disponibles dans la source
+  (Moment, Dose, Pourquoi, Duree, Attention). Si un champ n'est pas dans la source,
+  laisse-le vide (chaine vide). Format strict :
+  - "name" : NOM EN MAJ tel qu'il apparait dans la source
+  - "moment" : timing tire de la source (ex: "Le matin avec le petit-dejeuner")
+  - "dose" : dose precise + marque suisse si presente
+    (ex: "2000 UI D3 + 100 mcg K2 (Burgerstein)")
+  - "pourquoi" : 1 phrase, max 18 mots, qui lie le supplement a un fait du patient.
     EXEMPLE OK : "Vitamine D 50.8 nmol/L, soutien immunite et fixation calcique."
     EXEMPLE NON : "Aide a renforcer le systeme immunitaire et joue un role cle..."
+  - "duree" : duree si mentionnee dans la source (ex: "Pendant toute la grossesse",
+    "3 mois puis pause"). Si pas precise, vide.
+  - "attention" : interaction / surveillance / contre-indication si pertinent
+    (ex: "A distance du fer et du calcium 2h", "Surveillance glycemique renforcee").
+    Si rien de pertinent, vide.
 
 - Coordination : 3-4 phrases adressees au medecin. Structure imposee :
   1. Demande de validation de la compatibilite des supplements avec le traitement en cours.
@@ -179,13 +185,20 @@ UNIQUEMENT du JSON valide, sans texte avant/apres, sans markdown, sans backticks
 {
   "antecedents": "string multi-lignes (avec \\n)",
   "bilans": "string multi-lignes",
-  "approche": "string 1 phrase courte",
+  "approche": "string 2 phrases (mention disclaimer + axe nutritionnel)",
   "alimentsCles": "string virgule-separes",
   "alimentsEviter": "string virgule-separes",
   "supplements": [
-    {"name": "NOM MAJ", "dosage": "dose + marque", "raison": "1 phrase max 15 mots"}
+    {
+      "name": "NOM MAJ",
+      "moment": "timing court",
+      "dose": "dose + marque",
+      "pourquoi": "1 phrase max 18 mots, factuelle",
+      "duree": "duree si mentionnee, sinon vide",
+      "attention": "interaction/surveillance si pertinent, sinon vide"
+    }
   ],
-  "coordination": "string 2-3 phrases"
+  "coordination": "string 3-4 phrases (validation + interactions + surveillance + dispo)"
 }`;
 
 function buildUserMessage(form, consultation) {
@@ -305,11 +318,16 @@ export async function generateMedicalSummary(form, consultation) {
     approche: parsed.approche || '',
     alimentsCles: normalizeListField(parsed.alimentsCles),
     alimentsEviter: normalizeListField(parsed.alimentsEviter),
+    // V94.10 : 5 champs (moment/dose/pourquoi/duree/attention) au lieu de 3.
+    // Compat backward : si l'IA retourne encore "dosage"/"raison", on map.
     supplements: Array.isArray(parsed.supplements)
       ? parsed.supplements.slice(0, 8).map(s => ({
           name: (s.name || '').toString().trim(),
-          dosage: (s.dosage || '').toString().trim(),
-          reason: (s.raison || s.reason || '').toString().trim(),
+          moment: (s.moment || '').toString().trim(),
+          dose: (s.dose || s.dosage || '').toString().trim(),
+          pourquoi: (s.pourquoi || s.raison || s.reason || '').toString().trim(),
+          duree: (s.duree || s.durée || '').toString().trim(),
+          attention: (s.attention || '').toString().trim(),
         }))
       : [],
     coordination: parsed.coordination || '',
