@@ -158,26 +158,49 @@ async function generateMedicalPDF(data) {
   addSep();
 
   // Section 5 — Supplements (table)
+  // V94.7 : wrapping multi-lignes au lieu de truncate. Les 3 colonnes utilisent
+  // splitTextToSize pour wrapper proprement, et chaque ligne occupe la hauteur
+  // du texte le plus long (max des 3 colonnes).
   addTitle('5. SUPPLEMENTS RECOMMANDES');
   if (data.supplements.length > 0) {
     // Table header
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...GREY);
-    doc.text('Supplement', m + 2, y);
-    doc.text('Dosage', m + 65, y);
-    doc.text('Raison', m + 110, y);
-    y += 4;
+    const colNameX = m + 2;
+    const colDoseX = m + 55;
+    const colReasonX = m + 105;
+    const colNameW = 50;   // mm
+    const colDoseW = 48;   // mm
+    const colReasonW = pw - m - colReasonX - 2; // reste
+    doc.text('Supplement', colNameX, y);
+    doc.text('Dosage', colDoseX, y);
+    doc.text('Raison', colReasonX, y);
+    y += 3.5;
     doc.setDrawColor(...SEP);
     doc.line(m, y - 1, pw - m, y - 1);
+    y += 1;
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...DARK);
+    const lh = 3.2; // line height
     for (const row of data.supplements) {
-      doc.text((row.name || '').substring(0, 30), m + 2, y + 1);
-      doc.text((row.dosage || '').substring(0, 25), m + 65, y + 1);
-      doc.text((row.reason || '').substring(0, 25), m + 110, y + 1);
-      y += 4;
+      const nameLines = doc.splitTextToSize(row.name || '', colNameW);
+      const doseLines = doc.splitTextToSize(row.dosage || '', colDoseW);
+      const reasonLines = doc.splitTextToSize(row.reason || '', colReasonW);
+      const maxLines = Math.max(nameLines.length, doseLines.length, reasonLines.length);
+
+      // Render chaque colonne avec ses lignes
+      for (let i = 0; i < nameLines.length; i++) {
+        doc.text(nameLines[i], colNameX, y + i * lh);
+      }
+      for (let i = 0; i < doseLines.length; i++) {
+        doc.text(doseLines[i], colDoseX, y + i * lh);
+      }
+      for (let i = 0; i < reasonLines.length; i++) {
+        doc.text(reasonLines[i], colReasonX, y + i * lh);
+      }
+      y += maxLines * lh + 1.5;
     }
   } else {
     addText('Voir le plan nutrition detaille.');
