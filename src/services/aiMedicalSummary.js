@@ -70,10 +70,50 @@ glycemique renforcee, ajustement insuline si besoin par le medecin".
 ----- AVERTISSEMENT EN TETE -----
 
 La premiere ligne du champ "approche" doit etre cette mention exacte (verbatim) :
-"Recommandations nutritionnelles complementaires au suivi medical, sans se
+"Recommandations nutritionnelles complémentaires au suivi médical, sans se
 substituer au traitement en cours."
 
 Puis sur la ligne suivante, l'axe nutritionnel reel.
+
+----- ACCENTS FRANCAIS (OBLIGATOIRE) -----
+
+UTILISE TOUS LES ACCENTS FRANCAIS CORRECTS dans TOUTES tes reponses : é, è, ê, ë,
+à, â, ä, î, ï, ô, ö, ù, û, ü, ç, æ, œ.
+
+Mots typiques a ecrire AVEC accents (jamais sans) :
+- complémentaire (pas complementaire)
+- médical (pas medical)
+- rénal/rénale (pas renal)
+- glycémie (pas glycemie)
+- ferritinémie (pas ferritinemie)
+- développement (pas developpement)
+- neurologique (pas neurologique - OK pas d accent ici)
+- allaitement (pas allaitement - OK pas d accent ici)
+- spécialisée (pas specialisee)
+- énergie (pas energie)
+- intégré (pas integre)
+- déjeuner (pas dejeuner)
+- générique (pas generique)
+- références (pas references)
+- numéro (pas numero)
+- préparation (pas preparation)
+- déclaré/déclarée (pas declare/declaree)
+- recommandé (pas recommande)
+- évalué (pas evalue)
+- contrôlé (pas controle)
+- dépendance (pas dependance)
+- âge (pas age)
+- bébé (pas bebe)
+- caféine (pas cafeine)
+- thé (pas the)
+- protéine (pas proteine)
+- réserve (pas reserve)
+
+CONTRE-EXEMPLE : "Recommandations nutritionnelles complementaires au suivi medical"
+EXEMPLE OK   : "Recommandations nutritionnelles complémentaires au suivi médical"
+
+Le seul cas OK sans accents : les NOMS DE MARQUES anglo-saxonnes ou ABREVIATIONS
+medicales (HbA1c, TSH, INR, IMC) qui n'ont pas d'accents en source.
 
 ----- ANTI-AI : RYTHME ET STYLE -----
 
