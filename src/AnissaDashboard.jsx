@@ -517,14 +517,45 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           + Nouvelle consultation
         </button>
         <div style={{ position: 'relative' }}>
+          {/* V94.13 : bouton menu actions plus explicite (bordure + label + chevron)
+              Anissa ne voyait pas la croix 3-points isolee, on lui donne un vrai
+              bouton 'Plus' avec chevron qui rotates a l'ouverture. */}
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+            title="Plus d'actions (historique, modifier, supprimer...)"
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-muted)', fontSize: '1.2rem', padding: '4px 8px',
-              borderRadius: 6, lineHeight: 1,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(255,255,255,.04)',
+              border: '1px solid rgba(255,255,255,.18)',
+              borderRadius: 8,
+              padding: '7px 12px',
+              cursor: 'pointer',
+              color: 'var(--text)',
+              fontSize: '.78rem',
+              fontWeight: 500,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              transition: 'background .15s, border-color .15s',
             }}
-          >{'\u22ee'}</button>
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(106,191,138,.1)';
+              e.currentTarget.style.borderColor = 'rgba(106,191,138,.4)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,.04)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,.18)';
+            }}
+          >
+            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{'\u22ef'}</span>
+            <span>Plus</span>
+            <span style={{
+              fontSize: '.65rem',
+              transform: menuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform .15s',
+              opacity: .7,
+            }}>{'\u25be'}</span>
+          </button>
           {menuOpen && (
             <div style={{
               position: 'absolute', right: 0, top: '100%', zIndex: 50,
