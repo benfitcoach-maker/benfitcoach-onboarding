@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { jsPDF } from 'jspdf';
 import { generateMedicalSummary } from './services/aiMedicalSummary';
+import { CharCounter } from './App';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 const GREEN = [26, 46, 31];
@@ -410,10 +411,12 @@ export default function MedicalSummary({ form, consultation, onClose }) {
           <div className="ffp-field">
             <label>Antecedents releves</label>
             <textarea value={data.antecedents} onChange={e => update('antecedents', e.target.value)} rows={4} />
+            <CharCounter value={data.antecedents} soft={300} max={600} />
           </div>
           <div className="ffp-field">
             <label>Bilans effectues</label>
             <textarea value={data.bilans} onChange={e => update('bilans', e.target.value)} rows={3} />
+            <CharCounter value={data.bilans} soft={250} max={500} />
           </div>
           <div className="ffp-field">
             <label>Approche nutritionnelle</label>
@@ -482,6 +485,7 @@ export default function MedicalSummary({ form, consultation, onClose }) {
           <div className="ffp-field">
             <label>Message de coordination</label>
             <textarea value={data.coordination} onChange={e => update('coordination', e.target.value)} rows={3} />
+            <CharCounter value={data.coordination} soft={400} max={700} />
           </div>
         </div>
         <div className="ffp-actions">

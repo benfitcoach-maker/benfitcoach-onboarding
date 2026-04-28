@@ -3,6 +3,7 @@ import { getNutritionConsultations, getClient, softDeleteConsultation } from './
 import { exportConsultationPDF, exportFicheFrigoPDF } from './nutritionPdf';
 import ProgressionCharts from './ProgressionCharts';
 import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
+import { EmptyState } from './App';
 
 function formatDate(iso) {
   if (!iso) return '-';
@@ -223,9 +224,18 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
       ) : (
         <>
           {consultations.length === 0 ? (
-            <div className="dashboard-empty">
-              <p>Aucune consultation nutrition pour ce client.</p>
-            </div>
+            <EmptyState
+              icon={'\ud83c\udf3f'}
+              title="Aucune consultation pour ce client"
+              description={`Commence par une consultation initiale (anamnèse + bilans + plan nutrition + suppléments). Tu pourras ensuite faire des suivis et exporter en Word ou PDF.`}
+              action={
+                <button
+                  className="btn btn-anissa-primary"
+                  onClick={onBack}
+                  style={{ padding: '8px 18px' }}
+                >Retour au dashboard pour démarrer</button>
+              }
+            />
           ) : (
             <div className="history-list">
               {consultations.map(c => (
@@ -250,18 +260,26 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
                       {isAnissa && (
                         <>
                           {onEditConsultation && (
-                            <button className="btn btn-xs btn-anissa-primary" onClick={(e) => { e.stopPropagation(); onEditConsultation(c); }} style={{ marginRight: 4 }}>
-                              Modifier
-                            </button>
+                            <button
+                              className="btn btn-xs btn-anissa-primary"
+                              onClick={(e) => { e.stopPropagation(); onEditConsultation(c); }}
+                              style={{ marginRight: 4 }}
+                              title="Reprendre l'édition de cette consultation"
+                            >Modifier</button>
                           )}
                           {c.nutritionPlan && (
                             <>
-                              <button className="btn btn-xs btn-anissa-secondary" onClick={(e) => handleExportPDF(c, e)}>
-                                PDF
-                              </button>
-                              <button className="btn btn-xs btn-anissa-secondary" onClick={(e) => handleExportFrigo(c, e)} style={{ marginLeft: 4 }}>
-                                Fiche Frigo
-                              </button>
+                              <button
+                                className="btn btn-xs btn-anissa-secondary"
+                                onClick={(e) => handleExportPDF(c, e)}
+                                title="Télécharger le plan en PDF"
+                              >PDF</button>
+                              <button
+                                className="btn btn-xs btn-anissa-secondary"
+                                onClick={(e) => handleExportFrigo(c, e)}
+                                style={{ marginLeft: 4 }}
+                                title="Télécharger la fiche frigo en PDF (à plastifier)"
+                              >Fiche Frigo</button>
                             </>
                           )}
                           {/* V94.12 : croix de suppression avec confirmation */}

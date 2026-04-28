@@ -91,18 +91,114 @@ function getStepIcons(cat) {
 }
 
 // Toast component
-function Toast({ message, visible }) {
+// V94.14 : support type (success/info/warning/error) + icone + style sémantique
+function Toast({ message, visible, type = 'success' }) {
   if (!visible) return null;
+  const COLORS = {
+    success: { bg: 'rgba(106,191,138,.95)', icon: '\u2713', border: 'rgba(106,191,138,1)' },
+    info:    { bg: 'rgba(96,165,250,.95)',  icon: 'i', border: 'rgba(96,165,250,1)' },
+    warning: { bg: 'rgba(232,160,64,.95)',  icon: '!', border: 'rgba(232,160,64,1)' },
+    error:   { bg: 'rgba(212,92,76,.95)',   icon: '\u2715', border: 'rgba(212,92,76,1)' },
+  };
+  const c = COLORS[type] || COLORS.success;
   return (
-    <div className="toast-notification">
-      {message}
+    <div
+      className="toast-notification"
+      style={{
+        background: c.bg,
+        borderLeft: `4px solid ${c.border}`,
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}
+    >
+      <span style={{
+        width: 22, height: 22, borderRadius: '50%',
+        background: 'rgba(255,255,255,.25)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700, fontSize: '.85rem', flexShrink: 0,
+      }}>{c.icon}</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+// V94.14 : avertissement bandeau si Anissa ouvre le SaaS sur un ecran < 1024px
+// (l'editeur est desktop-only, mobile casse l'experience)
+function DesktopOnlyBanner() {
+  const [show, setShow] = useState(false);
+  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('bfc_dismiss_desktop_warn') === '1');
+  useEffect(() => {
+    const check = () => setShow(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  if (!show || dismissed) return null;
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000,
+      background: 'rgba(232,160,64,.95)', color: '#1a1a14',
+      padding: '10px 16px', fontSize: '.85rem', fontWeight: 500,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: 12, boxShadow: '0 2px 12px rgba(0,0,0,.3)',
+    }}>
+      <span>
+        <span style={{ marginRight: 8 }}>{'\u26a0\ufe0f'}</span>
+        Cet espace est conçu pour ordinateur. Sur tablette/téléphone certaines fonctions sont limitées.
+      </span>
+      <button
+        type="button"
+        onClick={() => { setDismissed(true); sessionStorage.setItem('bfc_dismiss_desktop_warn', '1'); }}
+        style={{
+          background: 'rgba(0,0,0,.15)', border: 'none', borderRadius: 6,
+          padding: '4px 10px', cursor: 'pointer', color: '#1a1a14',
+          fontSize: '.8rem', fontWeight: 500,
+        }}
+      >Compris</button>
+    </div>
+  );
+}
+
+// V94.14 : compteur de caracteres reutilisable pour textareas longs
+// Usage: <CharCounter value={text} max={500} />
+export function CharCounter({ value, max = null, soft = null }) {
+  const len = (value || '').length;
+  let color = 'rgba(255,255,255,.35)';
+  let label = `${len}${max ? ` / ${max}` : ''} caractères`;
+  if (max && len > max) { color = '#d4806c'; label = `${len} / ${max} (dépassé)`; }
+  else if (soft && len > soft) { color = '#e8a040'; }
+  return (
+    <span style={{ fontSize: '.7rem', color, marginTop: 3, display: 'block' }}>
+      {label}
+    </span>
+  );
+}
+
+// V94.14 : empty state reutilisable avec icone + titre + description + CTA optionnel
+export function EmptyState({ icon = '\ud83d\udcdd', title, description, action }) {
+  return (
+    <div style={{
+      padding: '48px 24px', textAlign: 'center',
+      background: 'rgba(255,255,255,.02)', borderRadius: 12,
+      border: '1px dashed rgba(255,255,255,.08)',
+    }}>
+      <div style={{ fontSize: '2.4rem', marginBottom: 12, opacity: .5 }}>{icon}</div>
+      <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>{title}</div>
+      {description && (
+        <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', marginBottom: 16, maxWidth: 380, margin: '0 auto 16px' }}>
+          {description}
+        </div>
+      )}
+      {action}
     </div>
   );
 }
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V94.13';
+const APP_VERSION = 'V94.14';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (
@@ -195,7 +291,7 @@ function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [convertMode, setConvertMode] = useState(null);
   const [editingConsultation, setEditingConsultation] = useState(null);
-  const [toast, setToast] = useState({ message: '', visible: false });
+  const [toast, setToast] = useState({ message: '', visible: false, type: 'success' });
   const [showReminders, setShowReminders] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -280,9 +376,10 @@ function App() {
   const refreshClients = useCallback(() => setClients(getClients()), []);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
 
-  const showToast = useCallback((message) => {
-    setToast({ message, visible: true });
-    setTimeout(() => setToast({ message: '', visible: false }), 3000);
+  // V94.14 : showToast accepte (message, type) - rétrocompat positionnel
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, visible: true, type });
+    setTimeout(() => setToast({ message: '', visible: false, type }), 3500);
   }, []);
 
   // Purge expired drafts on boot (covers !isCloudEnabled case)
@@ -349,6 +446,7 @@ function App() {
   if (!authenticated) {
     return (
       <>
+        <DesktopOnlyBanner />
         <LoginScreen onLogin={handleLogin} />
         <VersionBadge />
       </>
@@ -788,7 +886,8 @@ function App() {
 
     return (
       <div className={`app anissa-theme${page === 'nutritionConsultation' ? ' app-wide' : ''}`}>
-        <Toast message={toast.message} visible={toast.visible} />
+        <DesktopOnlyBanner />
+        <Toast message={toast.message} visible={toast.visible} type={toast.type} />
         <VersionBadge />
 
         {/* Header */}
@@ -1082,7 +1181,8 @@ function App() {
 
   return (
     <div className="app">
-      <Toast message={toast.message} visible={toast.visible} />
+      <DesktopOnlyBanner />
+      <Toast message={toast.message} visible={toast.visible} type={toast.type} />
 
       {/* Header */}
       <div className="header">
