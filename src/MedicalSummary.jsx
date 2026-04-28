@@ -400,6 +400,53 @@ export default function MedicalSummary({ form, consultation, onClose }) {
             </div>
           )}
 
+          {/* V94.16 : skeleton loader pendant generation IA — meilleur UX qu un spinner */}
+          {generating && (
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <style>{`
+                @keyframes bfcShimmer {
+                  0% { background-position: -200px 0; }
+                  100% { background-position: calc(200px + 100%) 0; }
+                }
+                .bfc-skeleton {
+                  background: linear-gradient(90deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.04) 100%);
+                  background-size: 200px 100%;
+                  background-repeat: no-repeat;
+                  animation: bfcShimmer 1.4s ease-in-out infinite;
+                  border-radius: 6px;
+                }
+              `}</style>
+              {/* Patient skeleton */}
+              <div className="bfc-skeleton" style={{ height: 14, width: '40%' }} />
+              <div className="bfc-skeleton" style={{ height: 32 }} />
+              {/* Antecedents skeleton (4 lignes) */}
+              <div className="bfc-skeleton" style={{ height: 14, width: '30%', marginTop: 6 }} />
+              <div className="bfc-skeleton" style={{ height: 12 }} />
+              <div className="bfc-skeleton" style={{ height: 12, width: '92%' }} />
+              <div className="bfc-skeleton" style={{ height: 12, width: '88%' }} />
+              <div className="bfc-skeleton" style={{ height: 12, width: '70%' }} />
+              {/* Approche skeleton */}
+              <div className="bfc-skeleton" style={{ height: 14, width: '32%', marginTop: 6 }} />
+              <div className="bfc-skeleton" style={{ height: 12 }} />
+              <div className="bfc-skeleton" style={{ height: 12, width: '85%' }} />
+              {/* Supplements skeletons (3 cards) */}
+              <div className="bfc-skeleton" style={{ height: 14, width: '38%', marginTop: 6 }} />
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{
+                  border: '1px solid rgba(196,160,80,.18)',
+                  borderLeft: '3px solid rgba(196,160,80,.4)',
+                  borderRadius: 8, padding: '10px 12px',
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  <div className="bfc-skeleton" style={{ height: 14, width: '45%' }} />
+                  <div className="bfc-skeleton" style={{ height: 11, width: '70%' }} />
+                  <div className="bfc-skeleton" style={{ height: 11, width: '90%' }} />
+                  <div className="bfc-skeleton" style={{ height: 11, width: '60%' }} />
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="ffp-field">
             <label>Patient</label>
             <input value={data.patient} onChange={e => update('patient', e.target.value)} />

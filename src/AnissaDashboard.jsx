@@ -780,6 +780,8 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
 
 export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan, onReturnPlan, onSendPackReview }) {
   const [search, setSearch] = useState('');
+  // V94.16 : filtre rapide par statut client (all / active / hors_app / recontact)
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedReviewClient, setSelectedReviewClient] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -806,6 +808,27 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
     filteredShared = sharedClients.filter(c => (c.prenom || '').toLowerCase().includes(q));
     filteredOwn = ownClients.filter(c => (c.prenom || '').toLowerCase().includes(q));
   }
+
+  // V94.16 : filtre par statut (active = a au moins 1 conso, hors_app = aucune,
+  // recontact = clientsToRecontact contient cet id)
+  if (statusFilter !== 'all') {
+    const recontactIds = new Set(clientsToRecontact.map(c => c.id));
+    const passes = (c) => {
+      const consCount = getNutritionConsultations(c.id).length;
+      if (statusFilter === 'active') return consCount > 0;
+      if (statusFilter === 'hors_app') return consCount === 0;
+      if (statusFilter === 'recontact') return recontactIds.has(c.id);
+      return true;
+    };
+    filteredShared = filteredShared.filter(passes);
+    filteredOwn = filteredOwn.filter(passes);
+  }
+
+  // V94.16 : compteurs pour les pills
+  const allClientsCount = ownClients.length + sharedClients.length;
+  const activeCount = [...ownClients, ...sharedClients].filter(c => getNutritionConsultations(c.id).length > 0).length;
+  const horsAppCount = allClientsCount - activeCount;
+  const recontactCount = clientsToRecontact.length;
 
   const totalFiltered = filteredShared.length + filteredOwn.length;
 
@@ -903,6 +926,44 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           placeholder="Rechercher par prenom..."
           className="search-input"
         />
+      </div>
+
+      {/* V94.16 : pills de filtre rapide par statut */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, marginTop: -4 }}>
+        {[
+          { id: 'all', label: 'Tous', count: allClientsCount, color: 'rgba(255,255,255,.18)' },
+          { id: 'active', label: 'Active', count: activeCount, color: 'rgba(106,191,138,.4)' },
+          { id: 'hors_app', label: 'Hors app', count: horsAppCount, color: 'rgba(255,255,255,.25)' },
+          { id: 'recontact', label: 'À recontacter', count: recontactCount, color: 'rgba(232,160,64,.5)' },
+        ].map(p => {
+          const active = statusFilter === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setStatusFilter(p.id)}
+              title={`Filtrer : ${p.label}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', borderRadius: 999,
+                border: `1px solid ${active ? p.color : 'rgba(255,255,255,.1)'}`,
+                background: active ? `${p.color.replace('.4)', '.1)').replace('.5)', '.12)').replace('.25)', '.06)').replace('.18)', '.05)')}` : 'transparent',
+                color: active ? 'var(--text)' : 'rgba(255,255,255,.55)',
+                fontSize: '.78rem', fontWeight: active ? 600 : 500,
+                cursor: 'pointer',
+                transition: 'all .15s',
+              }}
+            >
+              <span>{p.label}</span>
+              <span style={{
+                fontSize: '.7rem',
+                background: 'rgba(0,0,0,.25)',
+                padding: '1px 8px', borderRadius: 999,
+                color: 'rgba(255,255,255,.6)',
+              }}>{p.count}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Clients to re-contact alert */}
