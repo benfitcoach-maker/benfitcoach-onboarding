@@ -9,6 +9,8 @@ import ClientNewFeedbacksBadge from './ClientNewFeedbacksBadge';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
 import { getClientNutritionLocale } from './services/nutritionLocale';
+import { getAllClientAlerts } from './services/clientAlerts';
+import { COLORS, badgeStyle } from './services/uxColors';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -60,6 +62,91 @@ function formatDate(iso) {
 
 function getInitial(name) {
   return (name || '?').charAt(0).toUpperCase();
+}
+
+// V94.15 : panel "À faire aujourd'hui" — agregat des alertes prioritaires
+// (clients sans news depuis 3 mois, bilans S4 dus, suivis 2 mois)
+// Calcul a chaque montage du dashboard, pas live mais suffisant.
+function TodaysTasks({ onClickClient, refreshTick }) {
+  const [alerts, setAlerts] = useState([]);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setAlerts(getAllClientAlerts(8));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
+
+  if (!alerts.length) return null;
+
+  const dangerCount = alerts.filter(a => a.level === 'danger').length;
+  const warningCount = alerts.filter(a => a.level === 'warning').length;
+
+  return (
+    <div style={{
+      marginBottom: 18,
+      background: 'rgba(232,160,64,.04)',
+      border: '1px solid rgba(232,160,64,.2)',
+      borderLeft: '3px solid #e8a040',
+      borderRadius: 12,
+      padding: '14px 18px',
+    }}>
+      <div
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          cursor: 'pointer', userSelect: 'none',
+          marginBottom: collapsed ? 0 : 10,
+        }}
+        title={collapsed ? 'Afficher les actions' : 'Masquer'}
+      >
+        <span style={{ fontSize: '1.1rem' }}>{'\u2728'}</span>
+        <span style={{ fontWeight: 700, fontSize: '.9rem', color: '#e9b876' }}>
+          À faire aujourd&apos;hui
+        </span>
+        <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.5)' }}>
+          {alerts.length} action{alerts.length > 1 ? 's' : ''}
+          {dangerCount > 0 && ` · ${dangerCount} urgente${dangerCount > 1 ? 's' : ''}`}
+          {warningCount > 0 && ` · ${warningCount} à surveiller`}
+        </span>
+        <span style={{
+          marginLeft: 'auto', fontSize: '.7rem', color: 'rgba(255,255,255,.4)',
+          transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)',
+          transition: 'transform .15s',
+        }}>{'\u25be'}</span>
+      </div>
+      {!collapsed && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {alerts.map((a, i) => {
+            const c = COLORS[a.level] || COLORS.neutral;
+            return (
+              <div
+                key={i}
+                onClick={() => onClickClient && onClickClient(a.clientId)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 12px',
+                  background: c.bg,
+                  border: `1px solid ${c.border}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  transition: 'background .12s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = c.bgStrong}
+                onMouseLeave={e => e.currentTarget.style.background = c.bg}
+                title={`Aller voir ${a.prenom}`}
+              >
+                <span style={{ fontSize: '1rem', flexShrink: 0 }}>{a.icon}</span>
+                <span style={{ fontSize: '.82rem', color: 'var(--text)', flex: 1 }}>
+                  {a.label}
+                </span>
+                <span style={badgeStyle(a.level)}>{a.level === 'danger' ? 'urgent' : a.level === 'warning' ? 'à surveiller' : 'info'}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getFollowUpStatus(clientId) {
@@ -774,6 +861,12 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           <span className="stat-label">A recontacter</span>
         </div>
       </div>
+
+      {/* V94.15 : À faire aujourd'hui — alerts prioritaires inter-clients */}
+      <TodaysTasks
+        onClickClient={onOpenClient}
+        refreshTick={ownClients.length + sharedClients.length}
+      />
 
       <div className="dashboard-header">
         <h2>Mes clients</h2>
