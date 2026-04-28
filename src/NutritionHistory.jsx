@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { getNutritionConsultations, getClient } from './store';
+import { getNutritionConsultations, getClient, softDeleteConsultation } from './store';
 import { exportConsultationPDF, exportFicheFrigoPDF } from './nutritionPdf';
 import ProgressionCharts from './ProgressionCharts';
+import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 
 function formatDate(iso) {
   if (!iso) return '-';
@@ -10,14 +11,34 @@ function formatDate(iso) {
 
 export default function NutritionHistory({ clientId, onBack, isAnissa, onEditConsultation }) {
   const client = getClient(clientId);
+  const [reloadKey, setReloadKey] = useState(0);
+  // V94.12 : reloadKey force la relecture apres suppression d'une consultation
+  // eslint-disable-next-line no-unused-vars
+  const _ = reloadKey;
   const consultations = getNutritionConsultations(clientId);
   const [expanded, setExpanded] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'progression'
+  const confirmDialog = useConfirmDialog();
 
   const hasFollowups = consultations.some(c => c.isFollowup && c.followupData);
 
   const toggle = (id) => setExpanded(expanded === id ? null : id);
+
+  // V94.12 : Anissa supprime une consultation (soft delete)
+  const handleDeleteConsultation = async (consultation, e) => {
+    e.stopPropagation();
+    const dateStr = formatDate(consultation.date);
+    const ok = await confirmDialog.ask({
+      title: 'Supprimer cette consultation ?',
+      message: `La consultation du ${dateStr} sera supprimée. Cette action peut être annulée techniquement (soft delete) mais la consultation disparaîtra de la liste.`,
+      danger: true,
+      confirmLabel: 'Supprimer',
+    });
+    if (!ok) return;
+    softDeleteConsultation(consultation.id, 'anissa');
+    setReloadKey(k => k + 1);
+  };
 
   const handleExportPDF = async (consultation, e) => {
     e.stopPropagation();
@@ -195,6 +216,8 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
         </div>
       )}
 
+      <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
+
       {activeTab === 'progression' && hasFollowups ? (
         <ProgressionCharts consultations={consultations} />
       ) : (
@@ -241,6 +264,29 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
                               </button>
                             </>
                           )}
+                          {/* V94.12 : croix de suppression avec confirmation */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteConsultation(c, e)}
+                            title="Supprimer cette consultation"
+                            style={{
+                              marginLeft: 6,
+                              width: 22, height: 22,
+                              border: '1px solid rgba(212,92,76,.4)',
+                              background: 'rgba(212,92,76,.08)',
+                              color: '#d4806c',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: '.85rem',
+                              lineHeight: 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                          >
+                            ×
+                          </button>
                         </>
                       )}
                       <span className="history-toggle">{expanded === c.id ? 'Fermer' : 'Voir'}</span>
