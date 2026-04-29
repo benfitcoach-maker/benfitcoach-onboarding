@@ -39,6 +39,9 @@ import { exportPlanToWord } from './services/exportToWord';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import ClientFeedbacksPanel from './ClientFeedbacksPanel';
 import ClientAppSettingsCard from './ClientAppSettingsCard';
+// V94.41 : hub centralise pour la gestion app cliente (vue d'ensemble,
+// messages, ressources, signaux). Affiche dans un onglet dedie de l'editeur.
+import ClientAppPanel from './ClientAppPanel';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
@@ -1896,7 +1899,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // ─── Cockpit (single editor view) ───
   // V76 : previewTab supprime — Apercu PDF modal retiree, l'editeur est l'apercu.
-  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp'
+  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'app' (V94.41)
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   // V92.1 : showCoverForm + coverFields supprimes — Word V92.0 prime
@@ -4072,6 +4075,14 @@ ${suppText}`;
               </div>
             );
           }
+          // V94.41 : Hub app cliente (vue d'ensemble, messages, ressources, signaux)
+          if (editorTab === 'app') {
+            return (
+              <div style={{ padding: 12 }}>
+                <ClientAppPanel client={client} consultation={consultation} />
+              </div>
+            );
+          }
           return null;
         };
 
@@ -4678,6 +4689,10 @@ ${suppText}`;
                   <Tab active={editorTab === 'frigo'} onClick={() => setEditorTab('frigo')}>Fiche frigo</Tab>
                   <Tab active={editorTab === 's1s4'} onClick={() => setEditorTab('s1s4')}>Plan S1-S4</Tab>
                   <Tab active={editorTab === 'supp'} onClick={() => setEditorTab('supp')}>Supplements</Tab>
+                  {/* V94.41 : nouvel onglet hub app cliente (vue d'ensemble, messages,
+                      ressources, signaux). Separe du peaufinage plan pour clarifier
+                      les 2 mindsets (creation plan vs interaction post-publication). */}
+                  <Tab active={editorTab === 'app'} onClick={() => setEditorTab('app')}>📱 App cliente</Tab>
                   <span style={{ flex: 1 }} />
                   {/* V76 : Apercu PDF retire — l'editeur est deja un apercu premium.
                       Cover accessible directement via un bouton dedie. */}
