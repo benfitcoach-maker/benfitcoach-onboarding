@@ -596,13 +596,73 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
 
       {/* Zone 3 — Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-        <button
-          className="btn btn-sm btn-anissa-primary"
-          style={{ width: 'auto', padding: '8px 18px', whiteSpace: 'nowrap' }}
-          onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
-        >
-          + Nouvelle consultation
-        </button>
+        {/* V94.23 : bouton CTA contextuel selon next pack step.
+            - Si etape proche (< 7j) ou en retard : bouton specifique 'Bilan S4'
+              avec couleur d urgence (rouge si retard, ambre si du, vert si proche)
+            - Sinon : '+ Nouvelle consultation' standard */}
+        {(() => {
+          const next = isFollowupPack ? nextStep : null;
+          const dueDate = next ? new Date(next.dueDate) : null;
+          const daysUntilDue = dueDate ? Math.floor((dueDate.getTime() - Date.now()) / 86400000) : null;
+          const isLate = next?.isLate;
+          const isImminent = !isLate && daysUntilDue !== null && daysUntilDue <= 7;
+
+          if (next && (isLate || isImminent)) {
+            // Bouton contextuel pour l etape proche/en retard
+            const shortLabel = next.label.replace(/^Bilan\s+/, '').replace(/\s+—.*$/, '');
+            const urgencyText = isLate
+              ? `EN RETARD ${Math.abs(daysUntilDue)}j`
+              : daysUntilDue === 0
+                ? 'aujourd\u2019hui'
+                : `dans ${daysUntilDue}j`;
+            const bgColor = isLate
+              ? 'rgba(212,92,76,.15)'
+              : daysUntilDue <= 3
+                ? 'rgba(232,160,64,.15)'
+                : 'rgba(106,191,138,.15)';
+            const borderColor = isLate
+              ? 'rgba(212,92,76,.5)'
+              : daysUntilDue <= 3
+                ? 'rgba(232,160,64,.5)'
+                : 'rgba(106,191,138,.5)';
+            const textColor = isLate ? '#e09c8e' : daysUntilDue <= 3 ? '#e9b876' : '#8abf9a';
+
+            return (
+              <button
+                className="btn btn-sm"
+                style={{
+                  width: 'auto', padding: '8px 16px', whiteSpace: 'nowrap',
+                  background: bgColor,
+                  border: `1px solid ${borderColor}`,
+                  color: textColor,
+                  fontWeight: 600, fontSize: '.78rem',
+                  borderRadius: 8,
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}
+                onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
+                title={`Cree la consultation ${next.label}`}
+              >
+                <span>{isLate ? '\u23f0' : '\ud83d\udcc5'}</span>
+                <span>+ {shortLabel}</span>
+                <span style={{
+                  fontSize: '.7rem', opacity: .85, fontWeight: 500,
+                  background: 'rgba(0,0,0,.2)', padding: '2px 8px', borderRadius: 999,
+                }}>{urgencyText}</span>
+              </button>
+            );
+          }
+
+          // Bouton standard
+          return (
+            <button
+              className="btn btn-sm btn-anissa-primary"
+              style={{ width: 'auto', padding: '8px 18px', whiteSpace: 'nowrap' }}
+              onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
+            >
+              + Nouvelle consultation
+            </button>
+          );
+        })()}
         <div style={{ position: 'relative' }}>
           {/* V94.13 : bouton menu actions plus explicite (bordure + label + chevron)
               Anissa ne voyait pas la croix 3-points isolee, on lui donne un vrai

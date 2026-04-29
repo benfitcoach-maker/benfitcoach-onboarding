@@ -1,8 +1,10 @@
 // V94.15 : agrégateur d'alertes/actions à faire pour Anissa.
 // Parcourt les clients + consultations + feedbacks et retourne une liste
 // d'actions prioritaires triées par urgence.
+// V94.23 : ajout des alertes pack steps (Bilan S4/S8/S12 dus selon planning).
 
 import { getClients, getNutritionConsultations } from '../store';
+import { getNextPendingStep } from './packSystem';
 
 const DAY = 1000 * 60 * 60 * 24;
 
@@ -65,17 +67,59 @@ export function computeClientAlerts(client) {
     });
   }
 
-  // Bilan S4 (4 semaines = 28 jours) post dernière conso non-suivi
-  const isInitial = !last.isFollowup;
-  if (isInitial && since >= 25 && since <= 35) {
-    alerts.push({
-      level: 'info',
-      icon: '\ud83d\udcca',
-      label: `${prenom} : bilan S4 à envoyer (${since}j depuis plan initial)`,
-      clientId: client.id,
-      prenom,
-      priority: 80,
-    });
+  // V94.23 : alerte pack step (Bilan S4/S8/S12 selon le planning du pack client)
+  // Plus precis et generique que l ancien check S4 brut, supporte tous les packs.
+  try {
+    const nextStep = getNextPendingStep(client);
+    if (nextStep && nextStep.type === 'review') {
+      const dueDate = new Date(nextStep.dueDate);
+      const daysUntilDue = Math.floor((dueDate.getTime() - Date.now()) / DAY);
+
+      if (nextStep.isLate) {
+        // Etape passee non realisee
+        const daysLate = -daysUntilDue;
+        alerts.push({
+          level: 'danger',
+          icon: '\u23f0',
+          label: `${prenom} : ${nextStep.label} EN RETARD (${daysLate}j)`,
+          clientId: client.id,
+          prenom,
+          priority: 250 + daysLate,
+        });
+      } else if (daysUntilDue <= 0) {
+        // Du aujourd hui
+        alerts.push({
+          level: 'warning',
+          icon: '\ud83d\udcc5',
+          label: `${prenom} : ${nextStep.label} dû aujourd'hui`,
+          clientId: client.id,
+          prenom,
+          priority: 180,
+        });
+      } else if (daysUntilDue <= 3) {
+        // Du dans <= 3 jours
+        alerts.push({
+          level: 'warning',
+          icon: '\ud83d\udd14',
+          label: `${prenom} : ${nextStep.label} dans ${daysUntilDue}j`,
+          clientId: client.id,
+          prenom,
+          priority: 150,
+        });
+      } else if (daysUntilDue <= 7) {
+        // Du dans la semaine
+        alerts.push({
+          level: 'info',
+          icon: '\ud83d\udcc6',
+          label: `${prenom} : ${nextStep.label} dans ${daysUntilDue}j`,
+          clientId: client.id,
+          prenom,
+          priority: 100,
+        });
+      }
+    }
+  } catch {
+    // Pack system non configure pour ce client : on ignore
   }
 
   return alerts;
