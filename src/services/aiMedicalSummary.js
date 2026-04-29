@@ -8,6 +8,7 @@
 // actuels causés par l'extraction regex bugguée).
 
 import { ANISSA_IDENTITY_CORE } from './anissaIdentity';
+import { analyzeAnamnese, formatAnamneseForPrompt } from './anamneseAnalyzer';
 
 const SYSTEM_PROMPT = `${ANISSA_IDENTITY_CORE}
 
@@ -165,9 +166,21 @@ PREFERER les chiffres concrets aux adjectifs vagues :
 - Bilans : 2-3 lignes. Bilan sanguin Oui/Non. ADN Oui/Non. 1 observation clinique
   saillante si pertinente (ex: HbA1c 8%, T4 basse, ferritine 18).
 
-- Examens proposes (analysesProposees) : LISTE de 3 a 6 examens biologiques pertinents
+- Examens proposes (analysesProposees) : LISTE de 4 a 6 examens biologiques pertinents
   a PROPOSER au medecin pour affiner l accompagnement nutritionnel. Anissa NE PRESCRIT
   PAS — elle SUGGERE des examens que SEUL le medecin peut prescrire et signer.
+
+  V94.18 - SOURCE PRIORITAIRE : Le user message contient une section "=== TESTS PRE-CALCULES ==="
+  generee par l'analyseur d'anamnese. Tu DOIS te baser sur ces suggestions pre-calculees
+  comme matiere premiere :
+  * Conserve les tests marques [ESSENTIEL] sauf raison forte (deja fait recemment selon Bilans).
+  * Selectionne 2-3 tests [RECOMMANDE] les plus pertinents pour ce profil precis.
+  * Ignore les [OPTIONNEL] sauf cas vraiment specifique.
+  * Pour CHAQUE test retenu, reformule la "justification" en liant explicitement au
+    PROFIL REEL du patient (ex: "Diabete T1 sous pompe + retinopathie active" au lieu de
+    "Diabete T1, suivi du controle glycemique").
+  * Tu peux retirer un test pre-calcule si redondant avec un examen DEJA fait (cf Bilans),
+    ou ajouter un test si le contexte le justifie (mais reste dans les listes ci-dessous).
 
   Format strict pour chaque examen :
   - "analyse" : nom de l examen (ex: "Vitamine D 25-OH", "Ferritine + bilan martial",
@@ -319,6 +332,19 @@ function buildUserMessage(form, consultation) {
   lines.push('\n=== SUPPLEMENTS BRUTS ===');
   const supp = consultation.supplements || '';
   lines.push(supp.substring(0, 2000));
+
+  // V94.18 : injection de l'analyse anamnese (contextes pre-calcules + tests pre-suggeres)
+  // Permet a l'IA de baser sa selection de tests sur des regles deterministes
+  // (pathologies actives, traitements en cours, antecedents familiaux, demographie, lifestyle).
+  try {
+    const analysis = analyzeAnamnese(form);
+    const analysisBlock = formatAnamneseForPrompt(analysis);
+    if (analysisBlock) {
+      lines.push('\n' + analysisBlock);
+    }
+  } catch {
+    // Si echec analyse, on continue sans (l'IA aura juste le profil brut).
+  }
 
   lines.push('\n=== TACHE ===');
   lines.push('Genere le resume medical en JSON strict selon le format specifie.');
