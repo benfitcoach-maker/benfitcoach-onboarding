@@ -524,6 +524,8 @@ function buildRedFlags(ctx) {
  * @returns {object} Contexte structure pour generation tests + recommandations
  */
 export function analyzeAnamnese(form = {}) {
+  // V94.24 : null safety (les default params ne s appliquent pas si null explicit)
+  if (!form || typeof form !== 'object') form = {};
   const pathologies = detectPathologies(form);
   const traitements = detectTreatments(form);
   const familyHistory = detectFamilyHistory(form);

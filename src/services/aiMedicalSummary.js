@@ -417,7 +417,8 @@ function buildUserMessage(form, consultation, destinataire) {
   return lines.join('\n');
 }
 
-function safeParseJson(text) {
+// V94.24 : exporté pour les tests unitaires
+export function safeParseJson(text) {
   if (!text) throw new Error('Reponse IA vide');
   // Strip markdown fences si presentes
   let t = text.trim();
