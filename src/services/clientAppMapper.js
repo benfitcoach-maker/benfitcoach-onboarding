@@ -23,6 +23,7 @@ import {
   parseSupplementEntriesStructured,
 } from "../nutritionEditorParsers";
 import { getNutritionPlanMode } from "./nutritionPlanMode";
+import { mealKey } from "./extractMealsFromPlan";
 
 // ─── Helpers généraux ─────────────────────────────────────────────────────
 
@@ -501,6 +502,18 @@ function buildWeekMeals(client, consultation, sections) {
   const dayShort = locale === "fr" ? DAY_SHORT_FR : DAY_SHORT_EN;
   const usedDayIds = new Set();
 
+  // V94.42 : injection des recettes detaillees dans chaque meal.
+  // mealRecipes est une map { mealKey → Recipe } stockee dans la consultation.
+  // On injecte uniquement si l'IA/Anissa a effectivement enrichi le repas.
+  const mealRecipes = (consultation && consultation.meal_recipes) || {};
+  const attachRecipe = (m) => {
+    const r = mealRecipes[mealKey(m.slot, m.title)];
+    if (r && (r.ingredients?.length || r.preparation?.length)) {
+      return { ...m, recipe: r };
+    }
+    return m;
+  };
+
   // Mode A — JOUR PAR JOUR
   // Le plan contient des sections nommées LUNDI/MARDI/.../DIMANCHE (format
   // sport ou plan détaillé). On construit chaque jour à partir de sa section.
@@ -527,7 +540,7 @@ function buildWeekMeals(client, consultation, sections) {
         label,
         short_label: dayShort[i],
         meals: (daysByIndex.get(idx) || []).map((m, j) => ({
-          ...m,
+          ...attachRecipe(m),
           id: `day-${idx}-meal-${j + 1}`,
         })),
       };
@@ -547,7 +560,7 @@ function buildWeekMeals(client, consultation, sections) {
     label,
     short_label: dayShort[i],
     meals: baseMeals.map((m, j) => ({
-      ...m,
+      ...attachRecipe(m),
       id: `day-${i + 1}-meal-${j + 1}`,
     })),
   }));
