@@ -244,15 +244,54 @@ PREFERER les chiffres concrets aux adjectifs vagues :
     (ex: "A distance du fer et du calcium 2h", "Surveillance glycemique renforcee").
     Si rien de pertinent, vide.
 
-- Coordination : 3-4 phrases adressees au medecin. Structure imposee :
+- Coordination : 3-4 phrases adressees au destinataire. Adaptee selon sa SPECIALITE
+  (cf. champ DESTINATAIRE dans le user message).
+
+  Structure de base imposee :
   1. Demande de validation de la compatibilite des supplements avec le traitement en cours.
   2. Liste des INTERACTIONS POTENTIELLES connues a surveiller (cf. section SECURITE PATIENT).
-  3. Surveillance biologique recommandee (HbA1c, INR, TSH, ferritine, fonction renale...
-     selon le profil).
+  3. Surveillance biologique recommandee selon profil ET specialite.
   4. Disponibilite pour echange.
-  Style : "Merci de valider la compatibilite des supplements avec le traitement en cours.
-  Interactions a surveiller : [X] et [Y]. Surveillance biologique recommandee : [Z]
-  a [periode]. Reste a votre disposition pour tout echange."
+
+  ADAPTATION PAR SPECIALITE :
+
+  * "medecin_traitant" : ton confraternel general, surveillance globale.
+    Ex: "Merci de valider la compatibilite generale des supplements avec le suivi.
+    Surveillance biologique : [tests selon profil]. Reste a votre disposition."
+
+  * "gyneco" : focus grossesse / hormones / contraception / SOPK / cycle.
+    Si grossesse en cours : insister sur securite mere-foetus, qualite pharma supplements,
+    suivi ferritine + Vit D + B9 + B12 trimestriel.
+    Si projet grossesse : preconception folates + ferritine + iode + Vit D 3 mois avant.
+    Si SOPK / hormonal : insuline a jeun + testosterone + bilan lipidique.
+    Si menopause : DEXA / osteoporose / lipidique.
+    Ex: "Merci de valider la compatibilite des supplements avec le suivi obstetrical
+    en cours (grossesse 3 mois). Qualite pharmaceutique sans metaux lourds essentielle.
+    Surveillance ferritine baseline + 2 mois (carence aggravee), B9 + B12 trimestriel,
+    Vit D 25-OH a 3 mois. Reste a votre disposition pour ajustements selon
+    bien-etre maternel-foetal."
+
+  * "endocrinologue" : focus thyroide / diabete / surrenales / hormones metaboliques.
+    Si diabete : HbA1c trimestrielle, microalbuminurie annuelle, surveillance
+    glycemique renforcee si supplements glycoactifs (chrome, berberine, cannelle).
+    Si thyroide : TSH + T4 libre + anti-TPO trimestriel, attention iode/soja
+    qui modifient absorption Levothyrox.
+    Ex: "Merci de valider la compatibilite des supplements avec [traitement endocrinien].
+    Surveillance HbA1c trimestrielle, microalbuminurie annuelle. Attention :
+    [chrome / cannelle] potentialisent l'insuline -> ajustement posologie a evaluer.
+    Reste a votre disposition pour adapter selon les bilans."
+
+  * "cardiologue" : focus CV / lipides / TA / traitements cardiotoxiques.
+    Si statines : CK + bilan hepatique + CoQ10 a evaluer.
+    Si AVK : INR mensuel imperatif, eviter Vit K2 forte dose et Omega-3 > 3g.
+    Ex: "Merci de valider la compatibilite des supplements avec le traitement
+    cardiologique. INR mensuel maintenu. Vit K2 [dose] et Omega-3 [dose]
+    < 3g/jour pour eviter interaction AVK. Bilan lipidique de controle a 3 mois.
+    Reste a votre disposition."
+
+  * "autre" : ton respectueux generique, sans presomption de specialite.
+    Adaptation au champ libre (ex: pediatre, dermatologue, psychiatre)
+    en fonction du contexte du patient.
 
 ----- REGLE ABSOLUE FINALE -----
 
@@ -291,8 +330,28 @@ UNIQUEMENT du JSON valide, sans texte avant/apres, sans markdown, sans backticks
   "coordination": "string 3-4 phrases (validation + interactions + surveillance + dispo)"
 }`;
 
-function buildUserMessage(form, consultation) {
+// V94.21 : labels lisibles des specialites pour injection prompt
+const SPECIALITE_LABELS = {
+  medecin_traitant: 'Médecin traitant',
+  gyneco: 'Gynécologue / obstétricien',
+  endocrinologue: 'Endocrinologue / diabétologue',
+  cardiologue: 'Cardiologue',
+  autre: 'Autre spécialiste',
+};
+
+function buildUserMessage(form, consultation, destinataire) {
   const lines = [];
+
+  // V94.21 : destinataire en tete pour que l IA adapte le ton de la coordination
+  if (destinataire) {
+    const specLabel = SPECIALITE_LABELS[destinataire.specialite] || 'Médecin traitant';
+    lines.push('=== DESTINATAIRE ===');
+    lines.push(`Spécialité : ${destinataire.specialite || 'medecin_traitant'} (${specLabel})`);
+    if (destinataire.nom) lines.push(`Nom : ${destinataire.nom}`);
+    lines.push('Adapte la "coordination" selon les regles SPECIALITE du SYSTEM_PROMPT.');
+    lines.push('');
+  }
+
   lines.push('=== PROFIL PATIENT ===');
   lines.push(`Prenom : ${form.prenom || '?'}`);
   if (form.nom) lines.push(`Nom : ${form.nom}`);
@@ -382,12 +441,12 @@ function safeParseJson(text) {
  * @param {object} consultation - Donnees de la consultation (plan, supplements, lab, observations)
  * @returns {Promise<object>} - { antecedents, bilans, approche, alimentsCles, alimentsEviter, supplements[], coordination }
  */
-export async function generateMedicalSummary(form, consultation) {
+export async function generateMedicalSummary(form, consultation, destinataire = null) {
   const apiKey = localStorage.getItem('bfc_api_key') || '';
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['x-fallback-key'] = apiKey;
 
-  const userMessage = buildUserMessage(form || {}, consultation || {});
+  const userMessage = buildUserMessage(form || {}, consultation || {}, destinataire);
 
   const response = await fetch('/api/claude', {
     method: 'POST',

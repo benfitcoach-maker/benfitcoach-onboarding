@@ -72,6 +72,8 @@ function buildInitialData(form, consultation) {
   const supplements = extractSupplementsTable(consultation.supplements || consultation.nutritionPlan);
 
   return {
+    // V94.21 : destinataire de la fiche (medecin traitant / gyneco / endocrino / autre)
+    destinataire: { specialite: 'medecin_traitant', nom: '' },
     // V94.17 : analyses biologiques proposees au medecin — vide par defaut, l IA remplit
     analysesProposees: [],
     patient: `${nr(form.prenom)} ${form.nom || ''}`.trim() + ` — ${form.age ? form.age + ' ans' : '?'}, ${form.genre || '?'}, ${form.poids ? form.poids + ' kg' : '?'}, ${form.taille ? form.taille + ' cm' : '?'}${imc ? ', IMC ' + imc : ''}`,
@@ -161,6 +163,29 @@ async function generateMedicalPDF(data) {
     doc.line(m, y, pw - m, y);
     y += 4;
   };
+
+  // V94.21 : "A l'attention de Dr. X (specialite)" sous le header si destinataire renseigne
+  const dest = data.destinataire || {};
+  const SPECIALITE_LABELS_PDF = {
+    medecin_traitant: 'Médecin traitant',
+    gyneco: 'Gynécologue / obstétricien',
+    endocrinologue: 'Endocrinologue / diabétologue',
+    cardiologue: 'Cardiologue',
+    autre: 'Spécialiste',
+  };
+  if (dest.nom || (dest.specialite && dest.specialite !== 'medecin_traitant')) {
+    const specLabel = SPECIALITE_LABELS_PDF[dest.specialite] || 'Médecin traitant';
+    const destLine = dest.nom
+      ? `À l\u2019attention de ${dest.nom} (${specLabel})`
+      : `À l\u2019attention du ${specLabel}`;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...DARK);
+    doc.text(destLine, m + 2, y);
+    y += 5;
+    addSep();
+    y += 1;
+  }
 
   // Section 1 — Patient
   addTitle('1. PATIENT');
@@ -374,7 +399,7 @@ export default function MedicalSummary({ form, consultation, onClose }) {
     setGenerating(true);
     setAiError('');
     try {
-      const aiData = await generateMedicalSummary(form, consultation);
+      const aiData = await generateMedicalSummary(form, consultation, data.destinataire);
       // Merge : on garde patient/objectif (deja deduits du form) + on remplace le reste
       setData(prev => ({
         ...prev,
@@ -476,6 +501,35 @@ export default function MedicalSummary({ form, consultation, onClose }) {
               {aiError}
             </div>
           )}
+
+          {/* V94.21 : destinataire de la fiche (specialite + nom) — adapte la coordination IA */}
+          <div className="ffp-field">
+            <label>
+              Destinataire
+              <span style={{ fontWeight: 400, fontSize: '.7rem', color: 'rgba(255,255,255,.4)', marginLeft: 8 }}>
+                (adapte le ton de la coordination)
+              </span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 8 }}>
+              <select
+                value={data.destinataire?.specialite || 'medecin_traitant'}
+                onChange={e => update('destinataire', { ...(data.destinataire || {}), specialite: e.target.value })}
+                style={{ fontSize: '.82rem' }}
+              >
+                <option value="medecin_traitant">Médecin traitant</option>
+                <option value="gyneco">Gynécologue / obstétricien</option>
+                <option value="endocrinologue">Endocrinologue / diabétologue</option>
+                <option value="cardiologue">Cardiologue</option>
+                <option value="autre">Autre spécialiste</option>
+              </select>
+              <input
+                placeholder="Nom (ex : Dr. Dupont) — optionnel"
+                value={data.destinataire?.nom || ''}
+                onChange={e => update('destinataire', { ...(data.destinataire || {}), nom: e.target.value })}
+                style={{ fontSize: '.82rem' }}
+              />
+            </div>
+          </div>
 
           {/* V94.16 : skeleton loader pendant generation IA — meilleur UX qu un spinner */}
           {generating && (
