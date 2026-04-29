@@ -47,6 +47,8 @@ import { GENE_CATALOG, buildGeneticSectionForPrompt, getActiveGeneticAdjustments
 import { SmartTextarea } from './KeywordHints';
 import ContraIndicationAlert, { detectContraIndications } from './ContraIndicationAlert';
 import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
+// V94.18 : Anamnese Analyzer Premium pour generation tests biologiques deterministe
+import { analyzeAnamnese } from './services/anamneseAnalyzer';
 import { analyzeLabResults } from './labInterpretationEngine';
 import { buildMGDCorrelation, formatCorrelationForPrompt } from './mgd/mgdCorrelation';
 
@@ -2480,65 +2482,32 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+// V94.18 : remplace l ancienne logique par l Anamnese Analyzer Premium qui scrute
+// pathologies + traitements + antecedents familiaux + demographie + lifestyle + symptomes.
+// Garde le SAME interface (string newline-separated) pour compat avec le textarea
+// "Analyses recommandees (MGD)", mais format enrichi : "Test : justification".
 function buildRecommendedBloodTests(form) {
-  const tests = new Set();
-  const f = form || {};
+  try {
+    const analysis = analyzeAnamnese(form || {});
+    if (!analysis.suggestedTests.length) {
+      // Fallback minimal si analyzer ne detecte rien
+      return [
+        'Vitamine D 25-OH : statut general',
+        'Ferritine + bilan martial : statut fer',
+        'TSH : fonction thyroidienne',
+        'CRP ultrasensible : inflammation chronique',
+      ].join('\n');
+    }
 
-  if (f.energieJournee && Number(f.energieJournee) <= 2) {
-    tests.add('Ferritine');
-    tests.add('Vitamine D');
-    tests.add('TSH');
+    // On garde uniquement [essentiel] et [recommande], skip [optionnel] (le medecin valide)
+    const filtered = analysis.suggestedTests
+      .filter(t => t.priority !== 'optionnel')
+      .slice(0, 8);
+
+    return filtered.map(t => `${t.test} : ${t.reason}`).join('\n');
+  } catch {
+    return 'Vitamine D 25-OH\nFerritine\nTSH\nCRP ultrasensible';
   }
-
-  if (f.frequenceBallonnements && Number(f.frequenceBallonnements) <= 2) {
-    tests.add('CRP ultrasensible');
-  }
-
-  if (f.fringalesSucre && /oui|souvent|regulier/i.test(f.fringalesSucre)) {
-    tests.add('Glycémie à jeun');
-    tests.add('Insuline à jeun');
-  }
-
-  const obj = (f.objectifPrincipalNutrition || '').toLowerCase();
-  if (/poids|perte|metabol/.test(obj)) {
-    tests.add('Glycémie à jeun');
-    tests.add('Insuline à jeun');
-    tests.add('TSH');
-  }
-
-  if (f.douleursInflammations && f.douleursInflammations.trim()) {
-    tests.add('CRP ultrasensible');
-    tests.add('Ferritine');
-  }
-
-  if (f.niveauStressActuel && Number(f.niveauStressActuel) >= 7) {
-    tests.add('TSH');
-  }
-
-  if (f.emotional_shock === 'Oui') {
-    tests.add('Cortisol (matin)');
-    tests.add('Magnésium');
-  }
-
-  if (f.pathologies && /thyro[iï]d|hashimoto/i.test(f.pathologies)) {
-    tests.add('TSH');
-    tests.add('T3 libre');
-    tests.add('T4 libre');
-  }
-
-  if (f.spm && /oui|fort/i.test(f.spm)) {
-    tests.add('Ferritine');
-    tests.add('Vitamine D');
-  }
-
-  if (tests.size === 0) {
-    tests.add('Vitamine D');
-    tests.add('Ferritine');
-    tests.add('TSH');
-    tests.add('CRP ultrasensible');
-  }
-
-  return [...tests].slice(0, 6).join('\n');
 }
 
 export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation }) {
