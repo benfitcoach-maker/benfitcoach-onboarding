@@ -9,7 +9,7 @@ const DARK = [51, 51, 51];
 const GREY = [136, 136, 136];
 const SEP = [220, 220, 215];
 
-function nr(v) { return v || 'Non renseigne'; }
+function nr(v) { return v || 'Non renseigné'; }
 function formatDate(iso) {
   if (!iso) return '-';
   return new Date(iso).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -81,7 +81,7 @@ function buildInitialData(form, consultation) {
       form.traitements ? `Traitements : ${form.traitements}` : '',
       form.allergies ? `Allergies : ${form.allergies}` : '',
       form.antecedentsFamiliaux ? `Famille : ${form.antecedentsFamiliaux}` : '',
-    ].filter(Boolean).join('\n') || 'Aucun antecedent renseigne',
+    ].filter(Boolean).join('\n') || 'Aucun antécédent renseigné',
     bilans: [
       `Bilan sanguin : ${consultation.bloodTestDone || consultation.blood_test_done ? 'Oui' : 'Non'}`,
       `Analyse ADN : ${consultation.dnaTestDone || consultation.dna_test_done ? 'Oui' : 'Non'}`,
@@ -125,7 +125,7 @@ async function generateMedicalPDF(data) {
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GREEN);
-  doc.text('RESUME NUTRITIONNEL — COORDINATION MEDICALE', pw / 2, y + 3, { align: 'center' });
+  doc.text('RÉSUMÉ NUTRITIONNEL — COORDINATION MÉDICALE', pw / 2, y + 3, { align: 'center' });
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GREY);
@@ -168,25 +168,25 @@ async function generateMedicalPDF(data) {
   addText('Objectif : ' + data.objectif);
   addSep();
 
-  // Section 2 — Antecedents
-  addTitle('2. ANTECEDENTS RELEVES');
+  // Section 2 — Antécédents
+  addTitle('2. ANTÉCÉDENTS RELEVÉS');
   addText(data.antecedents);
   addSep();
 
   // Section 3 — Bilans
-  addTitle('3. BILANS EFFECTUES');
+  addTitle('3. BILANS EFFECTUÉS');
   addText(data.bilans);
   addSep();
 
   // V94.17 : Section 4 — Examens biologiques proposes (a valider/prescrire par le medecin)
   const analyses = data.analysesProposees || [];
   if (analyses.length > 0) {
-    addTitle('4. EXAMENS BIOLOGIQUES PROPOSES');
+    addTitle('4. EXAMENS BIOLOGIQUES PROPOSÉS');
     // Sous-titre explicatif gris
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'italic');
     doc.setTextColor(...GREY);
-    doc.text('A valider et prescrire par le medecin pour affiner l accompagnement nutritionnel.', m + 2, y);
+    doc.text('À valider et prescrire par le médecin pour affiner l\u2019accompagnement nutritionnel.', m + 2, y);
     y += 4.5;
     doc.setFont('helvetica', 'normal');
 
@@ -232,14 +232,14 @@ async function generateMedicalPDF(data) {
   // Section 5 — Recommandations
   addTitle('5. RECOMMANDATIONS NUTRITIONNELLES');
   addText('Approche : ' + data.approche);
-  addText('Aliments cles : ' + data.alimentsCles);
-  addText('A eviter : ' + data.alimentsEviter);
+  addText('Aliments clés : ' + data.alimentsCles);
+  addText('À éviter : ' + data.alimentsEviter);
   addSep();
 
   // Section 6 — Supplements (cards style miroir du Word V94.4)
   // V94.10 : chaque supplement = card avec liseré doré gauche + fond beige
   // + nom MAJ vert + fields (Moment/Dose/Pourquoi/Durée/Attention) labels or.
-  addTitle('6. SUPPLEMENTS RECOMMANDES');
+  addTitle('6. SUPPLÉMENTS RECOMMANDÉS');
   y += 2; // breathing room avant les cards
 
   if (data.supplements.length > 0) {
@@ -335,12 +335,12 @@ async function generateMedicalPDF(data) {
   addSep();
 
   // Section 6 — Coordination
-  addTitle('7. COORDINATION DEMANDEE');
+  addTitle('7. COORDINATION DEMANDÉE');
   addText(data.coordination);
   y += 4;
   doc.setFontSize(8);
   doc.setTextColor(...GREY);
-  doc.text('Medecin traitant : ____________________________', m + 2, y);
+  doc.text('Médecin traitant : ____________________________', m + 2, y);
   y += 5;
   doc.text('Signature / Commentaires : ____________________________', m + 2, y);
 
@@ -351,9 +351,9 @@ async function generateMedicalPDF(data) {
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GREY);
-  doc.text('Anissa Deroubaix — Nutritionniste specialisee en longevite et genetique', pw / 2, fy + 4, { align: 'center' });
+  doc.text('Anissa Deroubaix — Nutritionniste spécialisée en longévité et génétique', pw / 2, fy + 4, { align: 'center' });
   doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, fy + 8, { align: 'center' });
-  doc.text('Document confidentiel — usage medical uniquement', pw / 2, fy + 12, { align: 'center' });
+  doc.text('Document confidentiel — usage médical uniquement', pw / 2, fy + 12, { align: 'center' });
 
   return doc;
 }
@@ -450,7 +450,7 @@ export default function MedicalSummary({ form, consultation, onClose }) {
     <div className="ffp-overlay">
       <div className="ffp-modal" style={{ maxWidth: 700 }}>
         <div className="ffp-header">
-          <span className="ffp-title">Resume medecin — Previsualisation</span>
+          <span className="ffp-title">Résumé médecin — Prévisualisation</span>
           <button className="ffp-close" onClick={onClose}>&times;</button>
         </div>
         <div className="ffp-body">
@@ -533,12 +533,12 @@ export default function MedicalSummary({ form, consultation, onClose }) {
             <input value={data.objectif} onChange={e => update('objectif', e.target.value)} />
           </div>
           <div className="ffp-field">
-            <label>Antecedents releves</label>
+            <label>Antécédents relevés</label>
             <textarea value={data.antecedents} onChange={e => update('antecedents', e.target.value)} rows={4} />
             <CharCounter value={data.antecedents} soft={300} max={600} />
           </div>
           <div className="ffp-field">
-            <label>Bilans effectues</label>
+            <label>Bilans effectués</label>
             <textarea value={data.bilans} onChange={e => update('bilans', e.target.value)} rows={3} />
             <CharCounter value={data.bilans} soft={250} max={500} />
           </div>
@@ -607,11 +607,11 @@ export default function MedicalSummary({ form, consultation, onClose }) {
           </div>
           <div className="ffp-row-2">
             <div className="ffp-field">
-              <label>Aliments cles</label>
+              <label>Aliments clés</label>
               <textarea value={data.alimentsCles} onChange={e => update('alimentsCles', e.target.value)} rows={2} />
             </div>
             <div className="ffp-field">
-              <label>A eviter</label>
+              <label>À éviter</label>
               <textarea value={data.alimentsEviter} onChange={e => update('alimentsEviter', e.target.value)} rows={2} />
             </div>
           </div>

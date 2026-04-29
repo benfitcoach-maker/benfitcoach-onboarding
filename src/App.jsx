@@ -198,7 +198,7 @@ export function EmptyState({ icon = '\ud83d\udcdd', title, description, action }
 
 // Version badge — discret en bas a droite, utile pour verifier le cache
 // Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V94.19';
+const APP_VERSION = 'V94.20';
 const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
 function VersionBadge() {
   return (
