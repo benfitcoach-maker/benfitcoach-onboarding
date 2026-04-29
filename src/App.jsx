@@ -196,14 +196,20 @@ export function EmptyState({ icon = '\ud83d\udcdd', title, description, action }
   );
 }
 
-// Version badge — discret en bas a droite, utile pour verifier le cache
-// Pour bumper : changer uniquement APP_VERSION ci-dessous avant chaque deploy.
-const APP_VERSION = 'V94.24';
-const BUILD_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
+// Version badge — discret en bas a droite, utile pour verifier le cache.
+// V94.25 : injection automatique au build (vite.config.js define).
+//   __APP_VERSION__ = 'V' + package.json.version  (bump via `npm version patch`)
+//   __BUILD_HASH__  = git rev-parse --short HEAD   (commit hash court)
+//   __BUILD_DATE__  = YYYY-MM-DD                   (date du build)
+// Plus besoin de bump APP_VERSION manuellement.
+// Globals declares dans .eslintrc.js + remplaces au build par Vite.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'Vdev';
+const BUILD_HASH = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev';
+const BUILD_DATE = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '';
 function VersionBadge() {
   return (
     <div
-      title={`Build ${BUILD_AT} UTC`}
+      title={`Build ${BUILD_DATE} · commit ${BUILD_HASH}`}
       style={{
         position: 'fixed',
         bottom: 6,
