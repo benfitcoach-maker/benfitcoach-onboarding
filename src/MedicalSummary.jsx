@@ -385,14 +385,22 @@ async function generateMedicalPDF(data) {
 
 // ─── PREVIEW MODAL ───
 
-export default function MedicalSummary({ form, consultation, onClose }) {
-  const [data, setData] = useState(() => buildInitialData(form, consultation));
+export default function MedicalSummary({ form, consultation, onClose, savedData, onSave }) {
+  // V94.22 : si une fiche a deja ete sauvegardee dans la consultation, on la recharge
+  // au lieu de tout regenerer depuis le formulaire (Anissa retrouve son edition).
+  const [data, setData] = useState(() => savedData || buildInitialData(form, consultation));
   const [exporting, setExporting] = useState(false);
   // V94.5 : generation IA pour pre-remplir antecedents, approche, suppl. raisons, etc.
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
+  // V94.22 : indicateur de sauvegarde (pour le badge sauvegarde sur le bouton)
+  const [savedAt, setSavedAt] = useState(savedData ? new Date() : null);
+  const [isDirty, setIsDirty] = useState(false);
 
-  const update = (field, value) => setData(prev => ({ ...prev, [field]: value }));
+  const update = (field, value) => {
+    setData(prev => ({ ...prev, [field]: value }));
+    setIsDirty(true);
+  };
 
   // V94.5 : appel IA Claude Haiku qui remplit tous les champs (raisons suppl. inclus)
   const handleAIGenerate = async () => {
@@ -413,6 +421,7 @@ export default function MedicalSummary({ form, consultation, onClose }) {
         supplements: aiData.supplements?.length ? aiData.supplements : prev.supplements,
         coordination: aiData.coordination || prev.coordination,
       }));
+      setIsDirty(true);
     } catch (err) {
       console.error('[MedicalSummary AI]', err);
       setAiError(err?.message || 'Erreur generation IA');
@@ -426,6 +435,7 @@ export default function MedicalSummary({ form, consultation, onClose }) {
       s[idx] = { ...s[idx], [field]: value };
       return { ...prev, supplements: s };
     });
+    setIsDirty(true);
   };
   const addSupplement = () => {
     if (data.supplements.length >= 8) return;
@@ -433,9 +443,11 @@ export default function MedicalSummary({ form, consultation, onClose }) {
       ...prev,
       supplements: [...prev.supplements, { name: '', moment: '', dose: '', pourquoi: '', duree: '', attention: '' }],
     }));
+    setIsDirty(true);
   };
   const removeSupplement = (idx) => {
     setData(prev => ({ ...prev, supplements: prev.supplements.filter((_, i) => i !== idx) }));
+    setIsDirty(true);
   };
 
   // V94.17 : helpers analyses biologiques proposees
@@ -445,6 +457,7 @@ export default function MedicalSummary({ form, consultation, onClose }) {
       a[idx] = { ...a[idx], [field]: value };
       return { ...prev, analysesProposees: a };
     });
+    setIsDirty(true);
   };
   const addAnalyse = () => {
     setData(prev => {
@@ -452,12 +465,14 @@ export default function MedicalSummary({ form, consultation, onClose }) {
       if (list.length >= 8) return prev;
       return { ...prev, analysesProposees: [...list, { analyse: '', justification: '' }] };
     });
+    setIsDirty(true);
   };
   const removeAnalyse = (idx) => {
     setData(prev => ({
       ...prev,
       analysesProposees: (prev.analysesProposees || []).filter((_, i) => i !== idx),
     }));
+    setIsDirty(true);
   };
 
   const handleExport = async () => {
@@ -725,7 +740,44 @@ export default function MedicalSummary({ form, consultation, onClose }) {
             <CharCounter value={data.coordination} soft={400} max={700} />
           </div>
         </div>
-        <div className="ffp-actions">
+        <div className="ffp-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* V94.22 : bouton Sauvegarder + indicateur etat */}
+          {onSave && (
+            <button
+              type="button"
+              onClick={() => {
+                onSave(data);
+                setSavedAt(new Date());
+                setIsDirty(false);
+              }}
+              disabled={!isDirty && !!savedAt}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: `1px solid ${isDirty ? 'rgba(106,191,138,.5)' : 'rgba(255,255,255,.18)'}`,
+                background: isDirty ? 'rgba(106,191,138,.15)' : 'rgba(255,255,255,.05)',
+                color: isDirty ? '#8abf9a' : 'rgba(255,255,255,.55)',
+                cursor: (!isDirty && savedAt) ? 'default' : 'pointer',
+                fontSize: '.82rem',
+                fontWeight: 600,
+                transition: 'all .15s',
+              }}
+              title={isDirty ? 'Modifications non sauvegardées' : (savedAt ? 'Tout est à jour' : 'Sauvegarder')}
+            >
+              {isDirty ? '💾 Sauvegarder' : (savedAt ? '✓ Sauvegardé' : '💾 Sauvegarder')}
+            </button>
+          )}
+          {savedAt && !isDirty && (
+            <span style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.4)', fontStyle: 'italic' }}>
+              {(() => {
+                const mins = Math.round((Date.now() - savedAt.getTime()) / 60000);
+                if (mins < 1) return 'à l\u2019instant';
+                if (mins < 60) return `il y a ${mins} min`;
+                return `${savedAt.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}`;
+              })()}
+            </span>
+          )}
+          <div style={{ flex: 1 }} />
           <button className="btn btn-anissa-primary" onClick={handleExport} disabled={exporting}>
             {exporting ? 'Export...' : 'Exporter en PDF'}
           </button>

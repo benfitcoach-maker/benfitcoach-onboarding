@@ -5619,8 +5619,27 @@ ${suppText}`;
               return (
                 <MedicalSummary
                   form={form}
-                  consultation={{ plan, supplements, recipes, bloodTestDone: consultation.blood_test_done, dnaTestDone: consultation.dna_test_done }}
+                  consultation={{
+                    plan, supplements, recipes,
+                    bloodTestDone: consultation.blood_test_done,
+                    dnaTestDone: consultation.dna_test_done,
+                    nutritionPlan: plan,
+                    nutritional_observations: consultation.nutritional_observations,
+                    lab_results: consultation.lab_results,
+                  }}
                   onClose={() => setShowMedicalSummary(false)}
+                  // V94.22 : sauvegarde des edits dans la consultation pour persistance
+                  savedData={consultation.medical_summary || null}
+                  onSave={(data) => {
+                    setConsultation(prev => ({
+                      ...prev,
+                      medical_summary: data,
+                      medical_summary_updated_at: new Date().toISOString(),
+                    }));
+                    isDirtyRef.current = true;
+                    setAutoSaveStatus('unsaved');
+                    showSaveToast('Fiche médecin sauvegardée');
+                  }}
                 />
               );
             })()}
