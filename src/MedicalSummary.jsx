@@ -72,6 +72,8 @@ function buildInitialData(form, consultation) {
   const supplements = extractSupplementsTable(consultation.supplements || consultation.nutritionPlan);
 
   return {
+    // V94.17 : analyses biologiques proposees au medecin — vide par defaut, l IA remplit
+    analysesProposees: [],
     patient: `${nr(form.prenom)} ${form.nom || ''}`.trim() + ` — ${form.age ? form.age + ' ans' : '?'}, ${form.genre || '?'}, ${form.poids ? form.poids + ' kg' : '?'}, ${form.taille ? form.taille + ' cm' : '?'}${imc ? ', IMC ' + imc : ''}`,
     objectif: nr(form.objectifPrincipalNutrition || form.objectifSport || form.objectifPrincipal),
     antecedents: [
@@ -176,17 +178,68 @@ async function generateMedicalPDF(data) {
   addText(data.bilans);
   addSep();
 
-  // Section 4 — Recommandations
-  addTitle('4. RECOMMANDATIONS NUTRITIONNELLES');
+  // V94.17 : Section 4 — Examens biologiques proposes (a valider/prescrire par le medecin)
+  const analyses = data.analysesProposees || [];
+  if (analyses.length > 0) {
+    addTitle('4. EXAMENS BIOLOGIQUES PROPOSES');
+    // Sous-titre explicatif gris
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...GREY);
+    doc.text('A valider et prescrire par le medecin pour affiner l accompagnement nutritionnel.', m + 2, y);
+    y += 4.5;
+    doc.setFont('helvetica', 'normal');
+
+    // Liste avec puce + nom examen + justification en italique
+    const colNameW = 60;
+    const colJustifX = m + 2 + colNameW + 4;
+    const colJustifW = pw - m - colJustifX - 2;
+    const lh = 3.2;
+
+    for (const a of analyses) {
+      const nameLines = doc.splitTextToSize(a.analyse || '', colNameW);
+      const justifLines = doc.splitTextToSize(a.justification || '', colJustifW);
+      const maxLines = Math.max(nameLines.length, justifLines.length);
+
+      // Puce or
+      doc.setFontSize(8);
+      doc.setTextColor(196, 160, 80);
+      doc.text('\u2022', m + 2, y + 1);
+
+      // Nom examen (vert sapin, bold)
+      doc.setFontSize(8.2);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...GREEN);
+      for (let i = 0; i < nameLines.length; i++) {
+        doc.text(nameLines[i], m + 6, y + 1 + i * lh);
+      }
+
+      // Justification (gris fonce, italic)
+      doc.setFontSize(7.8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(...DARK);
+      for (let i = 0; i < justifLines.length; i++) {
+        doc.text(justifLines[i], colJustifX, y + 1 + i * lh);
+      }
+
+      y += maxLines * lh + 1.8;
+    }
+    doc.setFont('helvetica', 'normal');
+    y += 2;
+    addSep();
+  }
+
+  // Section 5 — Recommandations
+  addTitle('5. RECOMMANDATIONS NUTRITIONNELLES');
   addText('Approche : ' + data.approche);
   addText('Aliments cles : ' + data.alimentsCles);
   addText('A eviter : ' + data.alimentsEviter);
   addSep();
 
-  // Section 5 — Supplements (cards style miroir du Word V94.4)
+  // Section 6 — Supplements (cards style miroir du Word V94.4)
   // V94.10 : chaque supplement = card avec liseré doré gauche + fond beige
   // + nom MAJ vert + fields (Moment/Dose/Pourquoi/Durée/Attention) labels or.
-  addTitle('5. SUPPLEMENTS RECOMMANDES');
+  addTitle('6. SUPPLEMENTS RECOMMANDES');
   y += 2; // breathing room avant les cards
 
   if (data.supplements.length > 0) {
@@ -282,7 +335,7 @@ async function generateMedicalPDF(data) {
   addSep();
 
   // Section 6 — Coordination
-  addTitle('6. COORDINATION DEMANDEE');
+  addTitle('7. COORDINATION DEMANDEE');
   addText(data.coordination);
   y += 4;
   doc.setFontSize(8);
@@ -327,6 +380,8 @@ export default function MedicalSummary({ form, consultation, onClose }) {
         ...prev,
         antecedents: aiData.antecedents || prev.antecedents,
         bilans: aiData.bilans || prev.bilans,
+        // V94.17 : analyses biologiques proposees au medecin
+        analysesProposees: aiData.analysesProposees?.length ? aiData.analysesProposees : prev.analysesProposees,
         approche: aiData.approche || prev.approche,
         alimentsCles: aiData.alimentsCles || prev.alimentsCles,
         alimentsEviter: aiData.alimentsEviter || prev.alimentsEviter,
@@ -356,6 +411,28 @@ export default function MedicalSummary({ form, consultation, onClose }) {
   };
   const removeSupplement = (idx) => {
     setData(prev => ({ ...prev, supplements: prev.supplements.filter((_, i) => i !== idx) }));
+  };
+
+  // V94.17 : helpers analyses biologiques proposees
+  const updateAnalyse = (idx, field, value) => {
+    setData(prev => {
+      const a = [...(prev.analysesProposees || [])];
+      a[idx] = { ...a[idx], [field]: value };
+      return { ...prev, analysesProposees: a };
+    });
+  };
+  const addAnalyse = () => {
+    setData(prev => {
+      const list = prev.analysesProposees || [];
+      if (list.length >= 8) return prev;
+      return { ...prev, analysesProposees: [...list, { analyse: '', justification: '' }] };
+    });
+  };
+  const removeAnalyse = (idx) => {
+    setData(prev => ({
+      ...prev,
+      analysesProposees: (prev.analysesProposees || []).filter((_, i) => i !== idx),
+    }));
   };
 
   const handleExport = async () => {
@@ -465,6 +542,65 @@ export default function MedicalSummary({ form, consultation, onClose }) {
             <textarea value={data.bilans} onChange={e => update('bilans', e.target.value)} rows={3} />
             <CharCounter value={data.bilans} soft={250} max={500} />
           </div>
+
+          {/* V94.17 : Examens biologiques proposes au medecin (anchois pour le bilan complementaire) */}
+          <div className="ffp-field">
+            <label>
+              Examens biologiques proposés au médecin
+              <span style={{ fontWeight: 400, fontSize: '.7rem', color: 'rgba(255,255,255,.4)', marginLeft: 8 }}>
+                (à valider et prescrire par le médecin)
+              </span>
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(data.analysesProposees || []).map((a, i) => (
+                <div
+                  key={i}
+                  style={{
+                    border: '1px solid rgba(96,165,250,.25)',
+                    borderLeft: '3px solid rgba(96,165,250,.7)',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    background: 'rgba(96,165,250,.04)',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                    <input
+                      placeholder="Nom de l'examen (ex: Vitamine D 25-OH)"
+                      value={a.analyse || ''}
+                      onChange={e => updateAnalyse(i, 'analyse', e.target.value)}
+                      style={{ flex: 1, fontWeight: 600, fontSize: '.82rem' }}
+                    />
+                    <button
+                      type="button"
+                      className="ne-action-btn ne-delete-btn"
+                      onClick={() => removeAnalyse(i)}
+                      title="Retirer cet examen"
+                    >&times;</button>
+                  </div>
+                  <input
+                    placeholder="Justification (lien factuel au profil patient)"
+                    value={a.justification || ''}
+                    onChange={e => updateAnalyse(i, 'justification', e.target.value)}
+                    style={{ fontSize: '.78rem' }}
+                  />
+                </div>
+              ))}
+              {(data.analysesProposees || []).length < 8 && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-anissa-secondary"
+                  onClick={addAnalyse}
+                  style={{ alignSelf: 'flex-start' }}
+                >+ Ajouter un examen</button>
+              )}
+              {(data.analysesProposees || []).length === 0 && (
+                <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.35)', fontStyle: 'italic' }}>
+                  Aucun examen proposé. Clique sur ✨ Generer avec IA pour suggérer des examens pertinents selon le profil.
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="ffp-field">
             <label>Approche nutritionnelle</label>
             <input value={data.approche} onChange={e => update('approche', e.target.value)} />

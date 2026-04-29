@@ -165,6 +165,40 @@ PREFERER les chiffres concrets aux adjectifs vagues :
 - Bilans : 2-3 lignes. Bilan sanguin Oui/Non. ADN Oui/Non. 1 observation clinique
   saillante si pertinente (ex: HbA1c 8%, T4 basse, ferritine 18).
 
+- Examens proposes (analysesProposees) : LISTE de 3 a 6 examens biologiques pertinents
+  a PROPOSER au medecin pour affiner l accompagnement nutritionnel. Anissa NE PRESCRIT
+  PAS — elle SUGGERE des examens que SEUL le medecin peut prescrire et signer.
+
+  Format strict pour chaque examen :
+  - "analyse" : nom de l examen (ex: "Vitamine D 25-OH", "Ferritine + bilan martial",
+    "HbA1c", "Homocysteine", "TSH + T4 libre", "Magnesium erythrocytaire", "Cortisol matin",
+    "B12 + folates", "Bilan lipidique complet (LDL, HDL, TG)", "CRP ultra-sensible")
+  - "justification" : 1 phrase courte (max 15 mots) qui lie l examen a un element factuel
+    du profil du patient (symptome, supplementation envisagee, pathologie, age, etc.)
+    EXEMPLE OK : "Suspicion carence avec fatigue et sommeil 6h, oriente la supplementation D3."
+    EXEMPLE OK : "Stress chronique 8/10, evaluer l axe HPA avant adaptogenes."
+    EXEMPLE NON : "Important pour la sante" (trop vague, pas factuel).
+
+  CHOIX DES EXAMENS selon profil :
+  - Fatigue / pre-menopause / regles abondantes -> Ferritine + bilan martial
+  - Stress chronique 7+/10 / sommeil < 7h -> Cortisol matin (sans rien de plus)
+  - Diabete (T1 ou T2) -> HbA1c, microalbuminurie si non recente
+  - TDAH / fatigue cognitive / supplementation folates -> Homocysteine, B12
+  - Supplementation Vitamine D3 envisagee -> Vitamine D 25-OH (status)
+  - Pathologies cardio / dyslipidemie familiale -> Bilan lipidique
+  - Suspicion thyroide (fatigue, prise/perte poids, frilosite) -> TSH + T4 libre
+  - Inflammation chronique / dermatite -> CRP us
+  - Age > 50 + perte poids -> Albumine, prealbumine
+  - Vegan / vegetarien -> B12, ferritine, omega-3 index, vitamine D
+
+  REGLES :
+  - Ne pas redonder avec un examen DEJA fait (cf. section Bilans). Si Bilan sanguin = Oui
+    et le profil donne un taux deja mesure (ex: Vit D 50 nmol/L) -> NE PAS reproposer
+    l examen pour ce parametre. Mentionner plutot "controle a 3 mois" dans coordination.
+  - Pas de bilans tres specialises (ex: panel auto-immun complet, IgG alimentaires)
+    qui sortent du scope nutritionnel basic.
+  - Pas plus de 6 examens (le medecin doit pouvoir tout valider).
+
 - Approche : 1 phrase, max 20 mots. Style direct.
   EXEMPLE OK : "Stabilisation glycemique par association proteines-fibres avant glucides,
   reduction de l'inflammation, soutien microbiote."
@@ -225,6 +259,9 @@ UNIQUEMENT du JSON valide, sans texte avant/apres, sans markdown, sans backticks
 {
   "antecedents": "string multi-lignes (avec \\n)",
   "bilans": "string multi-lignes",
+  "analysesProposees": [
+    { "analyse": "Nom examen", "justification": "1 phrase max 15 mots" }
+  ],
   "approche": "string 2 phrases (mention disclaimer + axe nutritionnel)",
   "alimentsCles": "string virgule-separes",
   "alimentsEviter": "string virgule-separes",
@@ -355,6 +392,13 @@ export async function generateMedicalSummary(form, consultation) {
   return {
     antecedents: parsed.antecedents || '',
     bilans: parsed.bilans || '',
+    // V94.17 : examens biologiques proposes au medecin (pour qu il prescrive)
+    analysesProposees: Array.isArray(parsed.analysesProposees)
+      ? parsed.analysesProposees.slice(0, 8).map(a => ({
+          analyse: (a.analyse || a.examen || a.nom || '').toString().trim(),
+          justification: (a.justification || a.pourquoi || a.raison || '').toString().trim(),
+        })).filter(a => a.analyse)
+      : [],
     approche: parsed.approche || '',
     alimentsCles: normalizeListField(parsed.alimentsCles),
     alimentsEviter: normalizeListField(parsed.alimentsEviter),
