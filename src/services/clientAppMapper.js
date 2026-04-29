@@ -22,6 +22,7 @@ import {
   parseRotationGroups,
   parseSupplementEntriesStructured,
 } from "../nutritionEditorParsers";
+import { getNutritionPlanMode } from "./nutritionPlanMode";
 
 // ─── Helpers généraux ─────────────────────────────────────────────────────
 
@@ -174,8 +175,14 @@ function resolveLocale(client) {
   return lang === "EN" ? "en" : "fr";
 }
 
-function resolveMode(consultation) {
-  return consultation?.is_followup ? "followup" : "oneshot";
+// V94.36 : le mode app cliente doit refleter le PACK du client (oneshot_180,
+// suivi_6m...) et NON pas le type de la consultation actuelle (initiale vs
+// follow-up). Une cliente en pack suivi 6 mois dont la 1ere consultation a
+// is_followup=false etait incorrectement mappee en 'oneshot'. Fix: on delegue
+// a getNutritionPlanMode(client) qui lit client.packType (deja fiable cote
+// SaaS depuis V80).
+function resolveMode(client) {
+  return getNutritionPlanMode(client);
 }
 
 // ─── 1. intro_data ────────────────────────────────────────────────────────
@@ -878,7 +885,7 @@ export function buildClientAppPlanFromConsultation(client, consultation) {
     client_id: client.id,
     status: "draft",
     locale: resolveLocale(client),
-    mode: resolveMode(consultation),
+    mode: resolveMode(client),
     title: client.prenom
       ? (resolveLocale(client) === "fr"
           ? `Plan de ${client.prenom}`
