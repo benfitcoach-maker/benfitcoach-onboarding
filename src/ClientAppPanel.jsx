@@ -12,7 +12,7 @@
 // (fetchClientsStatus, services existants). Aucun acces direct SaaS → DB cliente.
 // ───────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchClientsStatus } from "./services/fetchClientsStatus";
 import { getNutritionPlanMode, planModeLabel } from "./services/nutritionPlanMode";
 import { fetchCoachMessages, sendCoachMessage, CoachMessageError } from "./services/sendCoachMessage";
@@ -30,11 +30,13 @@ import RecipesTab from "./RecipesTab";
 // V94.49 : Reglages app cliente (toggles par-cliente : suivi poids, etc.)
 // regroupes ici pour eliminer le doublon avec l'onglet 'App cliente'.
 import ClientAppSettingsCard from "./ClientAppSettingsCard";
+// V94.51 : helper pour compter les meals uniques du plan (pour badge Recettes)
+import { extractUniqueMealsFromPlan } from "./services/extractMealsFromPlan";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
-  { id: "letter", label: "✉️ Lettre" },
-  { id: "recipes", label: "🍳 Recettes" },
+  { id: "letter", label: "Lettre", icon: "✉️" },
+  { id: "recipes", label: "Recettes", icon: "🍳" },
   { id: "messages", label: "Messages" },
   { id: "resources", label: "Ressources" },
   { id: "signals", label: "Signaux" },
@@ -50,6 +52,31 @@ export default function ClientAppPanel({
 }) {
   const [activeTab, setActiveTab] = useState("overview");
 
+  // V94.51 : badges computed pour chaque sub-tab. Etat local pas
+  // d'API call (les counters fetched sont alimentes par les sub-tabs
+  // eux-memes lorsqu'ils sont actives).
+  const planText = consultation?.nutrition_plan || consultation?.nutritionPlan || "";
+  const totalMeals = useMemo(() => extractUniqueMealsFromPlan(planText).length, [planText]);
+  const recipesFilledCount = useMemo(() => {
+    const r = consultation?.meal_recipes || {};
+    return Object.values(r).filter((rec) => rec?.ingredients?.length || rec?.preparation?.length).length;
+  }, [consultation?.meal_recipes]);
+  const letterFilled = !!(consultation?.intro_letter?.body?.length);
+
+  // Compute badge content per tab
+  const badges = useMemo(() => ({
+    overview: null,
+    letter: letterFilled ? { kind: "ok", label: "✓" } : { kind: "todo", label: "·" },
+    recipes: totalMeals === 0
+      ? null
+      : recipesFilledCount === totalMeals
+        ? { kind: "ok", label: "✓" }
+        : { kind: "count", label: `${recipesFilledCount}/${totalMeals}` },
+    messages: null,
+    resources: null,
+    signals: null,
+  }), [letterFilled, recipesFilledCount, totalMeals]);
+
   if (!client) {
     return (
       <div style={emptyStyle}>
@@ -62,29 +89,40 @@ export default function ClientAppPanel({
     <div style={panelStyle}>
       {/* Sub-tabs nav */}
       <div style={subTabsStyle}>
-        {SUB_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-            style={{
-              ...subTabBtnStyle,
-              ...(activeTab === t.id ? subTabBtnActiveStyle : {}),
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+        {SUB_TABS.map((t) => {
+          const isActive = activeTab === t.id;
+          const badge = badges[t.id];
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              style={{
+                ...subTabBtnStyle,
+                ...(isActive ? subTabBtnActiveStyle : {}),
+              }}
+            >
+              {t.icon && <span style={{ marginRight: 4 }}>{t.icon}</span>}
+              {t.label}
+              {badge && <SubTabBadge {...badge} />}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Content */}
-      <div style={contentStyle}>
+      {/* Content avec transition fade-in subtile a chaque switch */}
+      <div key={activeTab} style={{ ...contentStyle, animation: "ccap-fadein 200ms ease-out" }}>
+        <style>{`@keyframes ccap-fadein { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         {activeTab === "overview" && (
           <OverviewTab
             client={client}
             consultation={consultation}
             hasPlan={hasPlan}
             onOpenPreview={onOpenPreview}
+            recipesFilledCount={recipesFilledCount}
+            totalMeals={totalMeals}
+            letterFilled={letterFilled}
+            onJumpTo={setActiveTab}
           />
         )}
         {/* V94.48 : Lettre + Recettes regroupees ici (composantes app cliente) */}
@@ -112,7 +150,16 @@ export default function ClientAppPanel({
 
 // ─── Vue d'ensemble ─────────────────────────────────────────────────────
 
-function OverviewTab({ client, consultation, hasPlan, onOpenPreview }) {
+function OverviewTab({
+  client,
+  consultation,
+  hasPlan,
+  onOpenPreview,
+  recipesFilledCount = 0,
+  totalMeals = 0,
+  letterFilled = false,
+  onJumpTo,
+}) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -151,7 +198,7 @@ function OverviewTab({ client, consultation, hasPlan, onOpenPreview }) {
   const newFeedbacks = status?.new_feedbacks_count || 0;
 
   if (loading) {
-    return <div style={loadingStyle}>Chargement…</div>;
+    return <SkeletonGroup rows={5} />;
   }
 
   // Cas reel "pas d'app" : ni l'API ni le flag SaaS ne signalent un acces.
@@ -184,14 +231,11 @@ function OverviewTab({ client, consultation, hasPlan, onOpenPreview }) {
             <span style={{ fontSize: "1rem", color: "#82c39e" }}>→</span>
           </button>
         )}
-        <div style={emptyStateStyle}>
-          <div style={{ fontSize: "1rem", marginBottom: 6, color: "#cfcfc4" }}>
-            Cette cliente n&apos;a pas encore d&apos;acces a l&apos;app.
-          </div>
-          <div style={{ fontSize: ".8rem", color: "#8a8a7a" }}>
-            Publiez son plan ci-dessus pour activer son compte.
-          </div>
-        </div>
+        <EmptyState
+          icon="📱"
+          title="Cette cliente n'a pas encore d'acces a l'app."
+          hint="Publiez son plan ci-dessus pour activer son compte."
+        />
       </div>
     );
   }
@@ -236,6 +280,18 @@ function OverviewTab({ client, consultation, hasPlan, onOpenPreview }) {
           <span style={{ fontSize: "1rem", color: "#82c39e" }}>→</span>
         </button>
       )}
+
+      {/* V94.51 : Workflow checklist — guide etape-par-etape pour Anissa.
+          Aide a ne rien oublier (lettre, recettes, publication) avant
+          d'envoyer le plan. Chaque etape est cliquable → jump au sous-onglet. */}
+      <WorkflowChecklist
+        hasPlan={hasPlan}
+        letterFilled={letterFilled}
+        recipesFilledCount={recipesFilledCount}
+        totalMeals={totalMeals}
+        clientPublished={!!status?.found || !!(client?.app_enabled ?? client?.appEnabled)}
+        onJumpTo={onJumpTo}
+      />
 
       {/* Statut connexion */}
       <Row label="Statut">
@@ -409,9 +465,11 @@ function MessagesTab({ client }) {
 
   if (!client?.email) {
     return (
-      <div style={emptyStateStyle}>
-        Cette cliente n&apos;a pas d&apos;email enregistre.
-      </div>
+      <EmptyState
+        icon="✉️"
+        title="Cette cliente n'a pas d'email enregistre."
+        hint="Renseignez l'email dans la fiche cliente pour debloquer l'envoi de messages."
+      />
     );
   }
 
@@ -594,14 +652,14 @@ function MessagesTab({ client }) {
           <div style={errorStyle}>⚠ {error}</div>
         )}
 
-        {messages === null && (
-          <div style={loadingStyle}>Chargement…</div>
-        )}
+        {messages === null && <SkeletonGroup rows={3} />}
 
         {messages && messages.length === 0 && !error && (
-          <div style={emptyStateStyle}>
-            Aucun message envoye pour le moment.
-          </div>
+          <EmptyState
+            icon="💬"
+            title="Aucun message envoye pour le moment."
+            hint="Composez votre premier message ci-dessus pour ouvrir le canal."
+          />
         )}
 
         {messages && messages.length > 0 && (
@@ -836,17 +894,14 @@ function ResourcesTab() {
       {/* Liste */}
       {error && <div style={errorStyle}>⚠ {error}</div>}
 
-      {resources === null && <div style={loadingStyle}>Chargement…</div>}
+      {resources === null && <SkeletonGroup rows={3} />}
 
       {resources && resources.length === 0 && !error && (
-        <div style={emptyStateStyle}>
-          <div style={{ fontSize: "1.4rem", marginBottom: 8 }}>📚</div>
-          <div style={{ fontSize: ".9rem", color: "#cfcfc4" }}>Aucune ressource pour le moment.</div>
-          <div style={{ fontSize: ".72rem", color: "#8a8a7a", marginTop: 4 }}>
-            Ajoutez vos guides PDFs reutilisables (anti-inflammatoire, sommeil, etc.)
-            pour les selectionner facilement dans les messages.
-          </div>
-        </div>
+        <EmptyState
+          icon="📚"
+          title="Aucune ressource pour le moment."
+          hint="Ajoutez vos guides PDFs reutilisables (anti-inflammatoire, sommeil, etc.) pour les selectionner facilement dans les messages."
+        />
       )}
 
       {resources && resources.length > 0 && (
@@ -933,14 +988,16 @@ function SignalsTab({ client }) {
 
   if (!client?.email) {
     return (
-      <div style={emptyStateStyle}>
-        Cette cliente n&apos;a pas d&apos;email enregistre.
-      </div>
+      <EmptyState
+        icon="🔍"
+        title="Cette cliente n'a pas d'email enregistre."
+        hint="Renseignez l'email dans la fiche cliente pour collecter ses signaux d'engagement."
+      />
     );
   }
 
   if (signals === null) {
-    return <div style={loadingStyle}>Chargement…</div>;
+    return <SkeletonGroup rows={4} />;
   }
 
   const interests = signals.upgrade_interests || [];
@@ -1430,6 +1487,244 @@ const archiveBtnStyle = {
   flexShrink: 0,
 };
 
+// V94.51 : EmptyState helper — design coherent partout
+function EmptyState({ icon = "📭", title, hint }) {
+  return (
+    <div
+      style={{
+        padding: "28px 16px",
+        textAlign: "center",
+        background: "rgba(255,255,255,.015)",
+        border: "1px dashed rgba(255,255,255,.06)",
+        borderRadius: 10,
+      }}
+    >
+      <div style={{ fontSize: "1.6rem", marginBottom: 8, opacity: 0.7 }}>{icon}</div>
+      <div style={{ fontSize: ".9rem", color: "#cfcfc4", marginBottom: hint ? 4 : 0 }}>
+        {title}
+      </div>
+      {hint && <div style={{ fontSize: ".72rem", color: "#8a8a7a", lineHeight: 1.5, maxWidth: 360, margin: "0 auto" }}>{hint}</div>}
+    </div>
+  );
+}
+
+// V94.51 : Skeleton loader — placeholder anime au chargement
+function Skeleton({ height = 12, width = "100%", radius = 6 }) {
+  return (
+    <div
+      style={{
+        height,
+        width,
+        borderRadius: radius,
+        background: "linear-gradient(90deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.04) 100%)",
+        backgroundSize: "200% 100%",
+        animation: "ccap-shimmer 1.4s infinite linear",
+      }}
+    />
+  );
+}
+
+function SkeletonGroup({ rows = 4 }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 0" }}>
+      <style>{`@keyframes ccap-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Skeleton height={14} width="160px" />
+          <Skeleton height={20} width="80px" radius={999} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// V94.51 : Workflow checklist — guide visuel des etapes d'authoring app cliente
+function WorkflowChecklist({
+  hasPlan,
+  letterFilled,
+  recipesFilledCount,
+  totalMeals,
+  clientPublished,
+  onJumpTo,
+}) {
+  // Aucun plan = pas de checklist (rien a faire ici)
+  if (!hasPlan) return null;
+
+  const recipesDone = totalMeals === 0 ? false : recipesFilledCount === totalMeals;
+
+  const steps = [
+    {
+      id: "letter",
+      label: "Lettre d'intro personnalisee",
+      hint: letterFilled
+        ? "Lettre redigee — relisez ou regenerez"
+        : "Generer la lettre d'ouverture du plan",
+      done: letterFilled,
+      icon: "✉️",
+      action: () => onJumpTo?.("letter"),
+    },
+    totalMeals > 0 && {
+      id: "recipes",
+      label: "Recettes detaillees",
+      hint: totalMeals === 0
+        ? "Aucun repas detecte"
+        : recipesDone
+          ? `Toutes les ${totalMeals} recettes enrichies`
+          : `${recipesFilledCount}/${totalMeals} recettes enrichies — completer`,
+      done: recipesDone,
+      icon: "🍳",
+      action: () => onJumpTo?.("recipes"),
+    },
+    {
+      id: "publish",
+      label: clientPublished ? "Republier les modifications" : "Publier dans l'app",
+      hint: clientPublished
+        ? "Les changements ne sont visibles qu'apres une nouvelle publication"
+        : "Activer le compte cliente en publiant le plan",
+      done: clientPublished && letterFilled && (totalMeals === 0 || recipesDone),
+      icon: "👁️",
+      action: null, // l'action principale est le bouton "Apercu & Publier" au-dessus
+    },
+  ].filter(Boolean);
+
+  const completed = steps.filter((s) => s.done).length;
+  const progress = Math.round((completed / steps.length) * 100);
+
+  return (
+    <div style={checklistContainerStyle}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: ".82rem", color: "#cfcfc4", fontWeight: 600 }}>
+            Parcours app cliente
+          </div>
+          <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 2 }}>
+            {completed === steps.length
+              ? "Toutes les etapes faites — pret a publier"
+              : `${completed} / ${steps.length} etapes completees`}
+          </div>
+        </div>
+        <div style={{ fontSize: ".75rem", color: "#82c39e", fontWeight: 600 }}>
+          {progress}%
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 4, background: "rgba(255,255,255,.05)", borderRadius: 2, overflow: "hidden", marginBottom: 12 }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${progress}%`,
+            background: "linear-gradient(90deg, #82c39e, #5fa178)",
+            borderRadius: 2,
+            transition: "width 240ms ease-out",
+          }}
+        />
+      </div>
+
+      <ul style={{ display: "flex", flexDirection: "column", gap: 4, listStyle: "none", padding: 0, margin: 0 }}>
+        {steps.map((step) => {
+          const clickable = !!step.action;
+          return (
+            <li key={step.id}>
+              <button
+                type="button"
+                onClick={step.action || undefined}
+                disabled={!clickable}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 10px",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: 6,
+                  cursor: clickable ? "pointer" : "default",
+                  textAlign: "left",
+                  transition: "background 120ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (clickable) e.currentTarget.style.background = "rgba(255,255,255,.025)";
+                }}
+                onMouseLeave={(e) => {
+                  if (clickable) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <span
+                  style={{
+                    flexShrink: 0,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 999,
+                    background: step.done ? "#82c39e" : "rgba(255,255,255,.06)",
+                    border: step.done ? "1px solid #82c39e" : "1px solid rgba(255,255,255,.1)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: ".7rem",
+                    color: step.done ? "#0e1f15" : "#8a8a7a",
+                    fontWeight: 700,
+                  }}
+                >
+                  {step.done ? "✓" : ""}
+                </span>
+                <span style={{ flexShrink: 0, fontSize: "1rem" }}>{step.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: ".82rem",
+                      color: step.done ? "#8a8a7a" : "#cfcfc4",
+                      fontWeight: 500,
+                      textDecoration: step.done ? "line-through" : "none",
+                    }}
+                  >
+                    {step.label}
+                  </div>
+                  <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 1 }}>
+                    {step.hint}
+                  </div>
+                </div>
+                {clickable && (
+                  <span style={{ color: "#8a8a7a", fontSize: ".85rem", flexShrink: 0 }}>→</span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// V94.51 : badge sur sous-onglet — '✓' (ok) / 'X/Y' (count) / '·' (todo)
+function SubTabBadge({ kind, label }) {
+  const colors = {
+    ok: { bg: "rgba(130,195,158,0.18)", border: "rgba(130,195,158,0.35)", text: "#82c39e" },
+    count: { bg: "rgba(232,160,64,0.12)", border: "rgba(232,160,64,0.3)", text: "#e8a040" },
+    todo: { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)", text: "#8a8a7a" },
+  };
+  const c = colors[kind] || colors.todo;
+  return (
+    <span
+      style={{
+        marginLeft: 6,
+        padding: "1px 6px",
+        fontSize: ".62rem",
+        fontWeight: 600,
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        color: c.text,
+        borderRadius: 999,
+        lineHeight: 1.2,
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 // V94.50 : style du bouton 'Apercu & Publier' (CTA principale du hub)
 function publishButtonStyle(enabled) {
   return {
@@ -1453,6 +1748,14 @@ function publishButtonStyle(enabled) {
     width: "100%",
   };
 }
+
+// V94.51 : container de la WorkflowChecklist (parcours app cliente)
+const checklistContainerStyle = {
+  padding: 12,
+  background: "rgba(130,195,158,0.04)",
+  border: "1px solid rgba(130,195,158,0.15)",
+  borderRadius: 10,
+};
 
 // V94.45 : item de signal (interet upsell ou ouverture attachment)
 const signalItemStyle = {
