@@ -32,6 +32,9 @@ import RecipesTab from "./RecipesTab";
 import ClientAppSettingsCard from "./ClientAppSettingsCard";
 // V94.51 : helper pour compter les meals uniques du plan (pour badge Recettes)
 import { extractUniqueMealsFromPlan } from "./services/extractMealsFromPlan";
+// V94.52 : signal SaaS-side de publication (fallback si l'API clients-status
+// est en cache stale ou trouve pas l'email apres update DB cote staging).
+import { hasBeenPublishedLocally } from "./services/publishToClientApp";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -185,13 +188,16 @@ function OverviewTab({
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);
-  // V94.46 : check plus permissif. La precedente version montrait "pas
-  // d'acces" des que l'API renvoyait found=false (ex. cache stale, propagation
-  // pas finie). On utilise la source de verite SaaS (client.app_enabled) en
-  // priorite, et on traite found comme une indication secondaire.
+  // V94.46 → V94.52 : 3 sources de verite combinees pour determiner si la
+  // cliente a acces a l'app, du plus fiable au moins fiable :
+  //   1. apiFound : l'API distante confirme (canonique mais peut etre stale)
+  //   2. appEnabled : flag SaaS cote profil cliente
+  //   3. publishedLocally : trace SaaS de publication reussie (V94.52)
+  //      → resout les cas ou l'API rate (email mismatch, cache, etc.)
   const apiFound = !!status?.found;
   const appEnabled = !!(client?.app_enabled ?? client?.appEnabled);
-  const hasAppAccess = apiFound || appEnabled;
+  const publishedLocally = hasBeenPublishedLocally(client?.id);
+  const hasAppAccess = apiFound || appEnabled || publishedLocally;
   const lastLoginAt = status?.last_login_at || null;
   const lastActivityAt = status?.last_activity_at || null;
   const feedbacks7d = status?.feedbacks_7d_count || 0;
@@ -240,9 +246,10 @@ function OverviewTab({
     );
   }
 
-  // V94.46 : warning discret si l'API n'a pas confirme mais SaaS dit OK.
-  // Aide au debug (cache stale, deploy en cours, etc.).
-  const apiUnsynced = !apiFound && appEnabled;
+  // V94.46 → V94.52 : warning discret si l'API n'a pas confirme mais on a
+  // au moins un signal SaaS (appEnabled ou publishedLocally).
+  // Aide au debug (cache stale, email mismatch staging, etc.).
+  const apiUnsynced = !apiFound && (appEnabled || publishedLocally);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

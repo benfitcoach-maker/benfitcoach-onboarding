@@ -143,5 +143,37 @@ export async function publishConsultationToClientApp(client, consultation, enric
     throw new PublishHttpError(msg, res.status, body);
   }
 
+  // V94.52 : trace SaaS-side de la publication. Permet a ClientAppPanel
+  // de presumer que la cliente a acces a l'app meme si /api/admin/clients-status
+  // retourne found:false (cache stale, email mismatch, etc.).
+  try {
+    if (client?.id) {
+      const KEY = "bfc_published_client_ids";
+      const raw = localStorage.getItem(KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const set = new Set(Array.isArray(arr) ? arr : []);
+      set.add(String(client.id));
+      localStorage.setItem(KEY, JSON.stringify([...set]));
+    }
+  } catch {
+    /* silent : pas grave si quota plein */
+  }
+
   return body;
+}
+
+/**
+ * V94.52 : Verifie si une cliente a ete publiee au moins une fois cote SaaS.
+ * Utilise par ClientAppPanel.OverviewTab pour determiner l'acces.
+ */
+export function hasBeenPublishedLocally(clientId) {
+  if (!clientId) return false;
+  try {
+    const raw = localStorage.getItem("bfc_published_client_ids");
+    if (!raw) return false;
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) && arr.includes(String(clientId));
+  } catch {
+    return false;
+  }
 }
