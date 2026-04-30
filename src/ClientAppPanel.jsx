@@ -318,10 +318,11 @@ function OverviewTab({
     );
   }
 
-  // V94.46 → V94.52 : warning discret si l'API n'a pas confirme mais on a
-  // au moins un signal SaaS (appEnabled ou publishedLocally).
-  // Aide au debug (cache stale, email mismatch staging, etc.).
-  const apiUnsynced = !apiFound && (appEnabled || publishedLocally);
+  // V94.46 → V94.65 : avant on affichait "Synchronisation en cours" quand
+  // l'API ne confirmait pas, mais ce warning restait a vie si la cliente
+  // n'avait jamais visite l'app (cas normal). Plus de warning desormais —
+  // le statut "INVITEE" + "Derniere connexion: —" est explicite et juste.
+  const apiUnsynced = false;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
