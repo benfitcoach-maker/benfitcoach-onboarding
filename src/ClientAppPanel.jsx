@@ -102,7 +102,13 @@ function OverviewTab({ client, consultation }) {
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);
-  const found = !!status?.found;
+  // V94.46 : check plus permissif. La precedente version montrait "pas
+  // d'acces" des que l'API renvoyait found=false (ex. cache stale, propagation
+  // pas finie). On utilise la source de verite SaaS (client.app_enabled) en
+  // priorite, et on traite found comme une indication secondaire.
+  const apiFound = !!status?.found;
+  const appEnabled = !!(client?.app_enabled ?? client?.appEnabled);
+  const hasAppAccess = apiFound || appEnabled;
   const lastLoginAt = status?.last_login_at || null;
   const lastActivityAt = status?.last_activity_at || null;
   const feedbacks7d = status?.feedbacks_7d_count || 0;
@@ -112,7 +118,8 @@ function OverviewTab({ client, consultation }) {
     return <div style={loadingStyle}>Chargement…</div>;
   }
 
-  if (!found) {
+  // Cas reel "pas d'app" : ni l'API ni le flag SaaS ne signalent un acces.
+  if (!hasAppAccess) {
     return (
       <div style={emptyStateStyle}>
         <div style={{ fontSize: "1rem", marginBottom: 6, color: "#cfcfc4" }}>
@@ -125,8 +132,18 @@ function OverviewTab({ client, consultation }) {
     );
   }
 
+  // V94.46 : warning discret si l'API n'a pas confirme mais SaaS dit OK.
+  // Aide au debug (cache stale, deploy en cours, etc.).
+  const apiUnsynced = !apiFound && appEnabled;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {apiUnsynced && (
+        <div style={{ fontSize: ".7rem", color: "#e8a040", padding: "6px 10px", background: "rgba(232,160,64,.06)", border: "1px solid rgba(232,160,64,.2)", borderRadius: 6 }}>
+          ⚠ Donnees API en cours de synchronisation. Le statut connexion peut etre incomplet.
+        </div>
+      )}
+
       {/* Statut connexion */}
       <Row label="Statut">
         <Pill color={lastLoginAt ? "#82c39e" : "#8a8a7a"}>

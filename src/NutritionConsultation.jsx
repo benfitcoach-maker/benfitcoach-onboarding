@@ -4718,18 +4718,22 @@ ${suppText}`;
                   <span style={{ flex: 1 }} />
                   {/* V76 : Apercu PDF retire — l'editeur est deja un apercu premium.
                       Cover accessible directement via un bouton dedie. */}
-                  {/* V88.5 : bouton Apercu app cliente remonte ici pour rester visible
-                      en permanence dans la barre d'actions de l'editeur. */}
-                  <button
-                    type="button"
-                    className="btn btn-anissa-secondary"
-                    disabled={!hasPlan}
-                    onClick={() => setShowClientAppPreview(true)}
-                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
-                    title="Voir le JSON envoyé à l'app cliente premium (lecture seule, à blanc)"
-                  >
-                    📱 Aperçu app cliente
-                  </button>
+                  {/* V88.5 : bouton Apercu app cliente — JSON debug.
+                      V94.46 : masque quand on est deja dans l'onglet App cliente
+                      (doublon visuel). Le contenu de la modale (JSON brut) reste
+                      utile pour debug, mais redondant cote UI quand le hub est ouvert. */}
+                  {editorTab !== 'app' && (
+                    <button
+                      type="button"
+                      className="btn btn-anissa-secondary"
+                      disabled={!hasPlan}
+                      onClick={() => setShowClientAppPreview(true)}
+                      style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
+                      title="Voir le JSON envoyé à l'app cliente premium (lecture seule, à blanc)"
+                    >
+                      📱 Aperçu JSON
+                    </button>
+                  )}
                   {/* V83 : bouton Mode relecture — transforme toggle selon l'etat. */}
                   <button
                     type="button"
