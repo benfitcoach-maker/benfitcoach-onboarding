@@ -1782,6 +1782,13 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         fiche_frigo_json: initialConsultation.ficheFrigoJson || initialConsultation.fiche_frigo_json || null,
         lab_results: initialConsultation.labResults || initialConsultation.lab_results || {},
         genetic_results: initialConsultation.geneticResults || initialConsultation.genetic_results || {},
+        // V94.61 : composantes app cliente (lettre IA + recettes IA).
+        // Manquaient au state init → meme si persistees (V94.59), elles
+        // etaient droppees au mount → onglet Lettre/Recettes vide au reload.
+        intro_letter: initialConsultation.intro_letter || null,
+        meal_recipes: initialConsultation.meal_recipes || null,
+        // Garder l'id de la consultation pour pouvoir update au save
+        id: initialConsultation.id,
       };
     }
     // Pre-fill observations from questionnaire data
