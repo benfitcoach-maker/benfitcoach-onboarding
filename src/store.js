@@ -343,6 +343,12 @@ async function cloudSyncNutritionConsultation(consultation) {
     deleted_at: consultation.deletedAt || null,
     deleted_by: consultation.deletedBy || null,
     created_at: consultation.createdAt || new Date().toISOString(),
+    // V94.59 : composantes app cliente (lettre IA + recettes IA).
+    // Necessite 2 colonnes JSONB dans nutrition_consultations Supabase :
+    //   alter table nutrition_consultations add column intro_letter jsonb;
+    //   alter table nutrition_consultations add column meal_recipes jsonb;
+    intro_letter: consultation.intro_letter || null,
+    meal_recipes: consultation.meal_recipes || null,
   };
   supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
@@ -402,6 +408,9 @@ export async function forceSyncAllConsultations() {
       status: c.status || 'questionnaire_recu',
       label: c.label || null,
       created_at: c.createdAt || new Date().toISOString(),
+      // V94.59 : composantes app cliente
+      intro_letter: c.intro_letter || null,
+      meal_recipes: c.meal_recipes || null,
     };
     const { error } = await supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' });
     if (error) {
@@ -491,6 +500,9 @@ export async function pullFromCloud() {
       isDeleted: n.is_deleted || false,
       deletedAt: n.deleted_at || null,
       deletedBy: n.deleted_by || null,
+      // V94.59 : composantes app cliente (lettre IA + recettes IA)
+      intro_letter: n.intro_letter || null,
+      meal_recipes: n.meal_recipes || null,
       createdAt: n.created_at,
     }));
     // Merge with existing local nutrition consultations
@@ -892,6 +904,10 @@ export function saveNutritionConsultation(consultation) {
     // V88.12 : historique des versions finales. Archive a chaque save.
     // Tableau de { text, createdAt }. Limite a 15 entrees via slice(-15).
     finalVersions: Array.isArray(consultation.finalVersions) ? consultation.finalVersions : [],
+    // V94.59 : composantes app cliente persistees. Etaient ignorees du
+    // whitelist du saveNutritionConsultation → perte au reload (bug user).
+    intro_letter: consultation.intro_letter || null,
+    meal_recipes: consultation.meal_recipes || null,
   };
   // V78 : si une consultation avec ce id existe deja et est soft-delete,
   // preserver le flag pour eviter un "undelete" silencieux via edit.
