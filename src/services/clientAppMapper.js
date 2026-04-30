@@ -619,22 +619,50 @@ function buildWeekMeals(client, consultation, sections) {
     return { days };
   }
 
-  // Mode B — SEMAINE TYPE
-  // Section unique de type "meals" (format Anissa nutrition standard).
-  // On duplique les mêmes repas sur les 7 jours.
+  // Mode B — SEMAINE TYPE (avec rotation si plusieurs variantes)
+  // V94.71 : on alterne entre la "JOURNEE TYPE" (section meals) et la
+  // "JOURNEE TYPE ALTERNATIVE" (section meals_alt) pour eviter que la
+  // cliente voie 7x les memes repas du Lundi au Dimanche. Si l'IA produit
+  // plusieurs variantes alt, on rotate entre toutes (modulo).
+  // S'il n'y a qu'une variante (cas plan minimal), comportement classique.
   const mealsSection = findSection(sections, "meals");
   const baseMeals = buildMealsFromBody(mealsSection?.body || "", locale);
 
-  const days = dayLabels.map((label, i) => ({
-    id: uniqueId(`day-${i + 1}`, usedDayIds),
-    index: i + 1,
-    label,
-    short_label: dayShort[i],
-    meals: baseMeals.map((m, j) => ({
-      ...attachRecipe(m),
-      id: `day-${i + 1}-meal-${j + 1}`,
-    })),
-  }));
+  const altSections = findAllSections(sections, "meals_alt");
+  const altVariants = altSections
+    .map((s) => buildMealsFromBody(s.body, locale))
+    .filter((m) => m.length > 0);
+
+  const variants = [baseMeals, ...altVariants].filter((v) => v.length > 0);
+
+  // Aucune variante : retour squelette vide (le diagnostic UI affichera
+  // "0 repas" comme avant).
+  if (variants.length === 0) {
+    const days = dayLabels.map((label, i) => ({
+      id: uniqueId(`day-${i + 1}`, usedDayIds),
+      index: i + 1,
+      label,
+      short_label: dayShort[i],
+      meals: [],
+    }));
+    return { days };
+  }
+
+  // Rotation : Lun/Mer/Ven/Dim = variant 0, Mar/Jeu/Sam = variant 1, etc.
+  // Modulo permet d'absorber 1, 2 ou N variantes uniformement.
+  const days = dayLabels.map((label, i) => {
+    const variant = variants[i % variants.length];
+    return {
+      id: uniqueId(`day-${i + 1}`, usedDayIds),
+      index: i + 1,
+      label,
+      short_label: dayShort[i],
+      meals: variant.map((m, j) => ({
+        ...attachRecipe(m),
+        id: `day-${i + 1}-meal-${j + 1}`,
+      })),
+    };
+  });
 
   return { days };
 }

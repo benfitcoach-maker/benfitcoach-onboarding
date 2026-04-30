@@ -399,8 +399,16 @@ Categories : Proteines, Feculents, Legumes, Matieres grasses.
 IMPORTANT : separer les options par " / " (avec espaces) — jamais "1/2 avocat" sans espaces.
 
 ## 5. JOURNEE TYPE ALTERNATIVE
-UNE seule variante, meme format que SEMAINE 1.
-Cohérente avec les aliments de la rotation.
+UNE journee complete DIFFERENTE de la SEMAINE 1, meme format (petit-dejeuner / dejeuner / collation / diner).
+Aliments differents de la Semaine 1 (utilise les options de la rotation pour varier).
+Pas de repetition des memes repas — l'app cliente alterne automatiquement entre les 2 variantes pour eviter
+que la cliente voie 7x la meme assiette du Lundi au Dimanche.
+
+Format attendu (exemple — adapte au profil) :
+Petit-dejeuner : porridge 40g flocons avoine + 1 c.s. beurre amande + 100g fruits rouges + tisane
+Dejeuner : 130g tofu ferme + 80g sarrasin cuit + poelee ratatouille + 1 c.s. huile olive
+Collation : 30g noix + 1 pomme
+Diner : 100g dinde + 150g haricots verts + 1/2 patate douce
 
 ## 6. FICHE FRIGO (PRIORITAIRE)
 Cette section est LA boussole quotidienne du client.
