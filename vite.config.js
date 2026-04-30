@@ -48,5 +48,13 @@ export default defineConfig(({ mode }) => {
       __BUILD_HASH__: JSON.stringify(gitHash),
       __BUILD_DATE__: JSON.stringify(buildDate),
     },
+    // V94.68 : sourcemap prod pour stack traces lisibles. Le SaaS est admin-only
+    // (login Anissa/Benoit), pas un site public — exposer le source nous permet
+    // de diagnostiquer en 30s au lieu de bisecter manuellement les 77 .split du
+    // mapper. Cout : +200 KB de .map files servies cote client uniquement quand
+    // DevTools est ouvert.
+    build: {
+      sourcemap: true,
+    },
   }
 })
