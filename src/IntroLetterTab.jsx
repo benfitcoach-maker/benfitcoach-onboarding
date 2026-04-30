@@ -23,6 +23,8 @@ export default function IntroLetterTab({ consultation, form, onSave }) {
   );
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // V94.55 : feedback visuel apres clic Sauvegarder
+  const [savedFlash, setSavedFlash] = useState(false);
 
   const filled = body.length > 0;
 
@@ -78,6 +80,9 @@ export default function IntroLetterTab({ consultation, form, onSave }) {
       pull_quote: cleanQuote,
       tailored_points: cleanPoints,
     });
+    // V94.55 : flash visuel pour confirmer l'action
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 2500);
   }
 
   return (
@@ -111,14 +116,43 @@ export default function IntroLetterTab({ consultation, form, onSave }) {
             className="btn btn-anissa-secondary"
             onClick={handleSave}
             disabled={generating || !filled}
-            style={secondaryBtnStyle}
+            style={{
+              ...secondaryBtnStyle,
+              ...(savedFlash
+                ? {
+                    background: "rgba(130,195,158,0.18)",
+                    border: "1px solid rgba(130,195,158,0.4)",
+                    color: "#82c39e",
+                  }
+                : {}),
+              transition: "all 200ms ease",
+            }}
+            title="Applique la lettre a la consultation. Pensez a 'Sauvegarder' en haut pour persister."
           >
-            💾 Sauvegarder
+            {savedFlash ? "✓ Applique" : "💾 Sauvegarder"}
           </button>
         </div>
       </div>
 
       {error && <div style={errorStyle}>⚠ {error}</div>}
+
+      {/* V94.55 : flash de confirmation apres save (s'affiche aussi en bas
+          au cas ou Anissa scroll en bas du formulaire) + hint persistance */}
+      {savedFlash && (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 12px",
+            background: "rgba(130,195,158,0.08)",
+            border: "1px solid rgba(130,195,158,0.25)",
+            color: "#82c39e",
+            fontSize: ".75rem",
+            borderRadius: 8,
+          }}
+        >
+          ✓ Lettre appliquee a la consultation. Cliquez sur &quot;Sauvegarder&quot; en haut a droite pour persister.
+        </div>
+      )}
 
       {!filled && !generating && !error && (
         <div style={emptyStyle}>

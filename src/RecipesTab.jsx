@@ -25,6 +25,8 @@ export default function RecipesTab({ consultation, form, onSave }) {
   const [recipes, setRecipes] = useState(() => consultation?.meal_recipes || {});
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  // V94.55 : feedback visuel apres clic Sauvegarder
+  const [savedFlash, setSavedFlash] = useState(false);
 
   // Re-sync avec la consultation si elle change (changement de cliente, etc.)
   useEffect(() => {
@@ -84,6 +86,9 @@ export default function RecipesTab({ consultation, form, onSave }) {
 
   function handleSaveAll() {
     persistRecipes(recipes);
+    // V94.55 : flash visuel pour confirmer l'action
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 2500);
   }
 
   const filledCount = meals.filter((m) => recipes[m.key]?.ingredients?.length).length;
@@ -113,12 +118,40 @@ export default function RecipesTab({ consultation, form, onSave }) {
             className="btn btn-anissa-secondary"
             onClick={handleSaveAll}
             disabled={generating}
-            style={secondaryBtnStyle}
+            style={{
+              ...secondaryBtnStyle,
+              ...(savedFlash
+                ? {
+                    background: "rgba(130,195,158,0.18)",
+                    border: "1px solid rgba(130,195,158,0.4)",
+                    color: "#82c39e",
+                  }
+                : {}),
+              transition: "all 200ms ease",
+            }}
+            title="Applique les recettes a la consultation. Pensez a 'Sauvegarder' en haut pour persister."
           >
-            💾 Sauvegarder
+            {savedFlash ? "✓ Applique" : "💾 Sauvegarder"}
           </button>
         </div>
       </div>
+
+      {/* V94.55 : flash de confirmation + hint persistance globale */}
+      {savedFlash && (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 12px",
+            background: "rgba(130,195,158,0.08)",
+            border: "1px solid rgba(130,195,158,0.25)",
+            color: "#82c39e",
+            fontSize: ".75rem",
+            borderRadius: 8,
+          }}
+        >
+          ✓ Recettes appliquees a la consultation. Cliquez sur &quot;Sauvegarder&quot; en haut a droite pour persister.
+        </div>
+      )}
 
       {error && (
         <div style={errorStyle}>
