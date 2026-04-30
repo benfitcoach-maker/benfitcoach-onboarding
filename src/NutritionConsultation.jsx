@@ -392,46 +392,66 @@ Diner : [idem]
 PORTIONS PRECISES OBLIGATOIRES (grammages ou mesures).
 Pas de "selon appetit", pas de "quantite raisonnable".
 
-## 4. ROTATION DES REPAS
-4 categories maximum, 3-4 options chacune.
-Format : chaque categorie sur une ligne "Categorie : option1 / option2 / option3".
-Categories : Proteines, Feculents, Legumes, Matieres grasses.
-IMPORTANT : separer les options par " / " (avec espaces) — jamais "1/2 avocat" sans espaces.
+## 4. ALTERNATIVES PAR REPAS
+Pour chaque slot de la SEMAINE 1, donne 3 a 5 RECETTES COMPLETES alternatives,
+autosuffisantes et adaptees au profil. La cliente pourra swap entre ces options
+selon ce qu'elle a sous la main, depuis l'app cliente.
 
-## 5. JOURNEE TYPE ALTERNATIVE
-UNE journee complete DIFFERENTE de la SEMAINE 1, meme format (petit-dejeuner / dejeuner / collation / diner).
-Aliments differents de la Semaine 1 (utilise les options de la rotation pour varier).
-Pas de repetition des memes repas — l'app cliente alterne automatiquement entre les 2 variantes pour eviter
-que la cliente voie 7x la meme assiette du Lundi au Dimanche.
+Format strict (subheader puis bullets) :
 
-Format attendu (exemple — adapte au profil) :
-Petit-dejeuner : porridge 40g flocons avoine + 1 c.s. beurre amande + 100g fruits rouges + tisane
-Dejeuner : 130g tofu ferme + 80g sarrasin cuit + poelee ratatouille + 1 c.s. huile olive
-Collation : 30g noix + 1 pomme
-Diner : 100g dinde + 150g haricots verts + 1/2 patate douce
+### Petit-dejeuner
+- Titre court de la recette — hint avec aliments cles + portions
+- Titre — hint
+- Titre — hint
 
-## 6. FICHE FRIGO (PRIORITAIRE)
+### Dejeuner
+- Titre — hint
+- Titre — hint
+- Titre — hint
+
+### Collation
+- Titre — hint
+- Titre — hint
+
+### Diner
+- Titre — hint
+- Titre — hint
+- Titre — hint
+
+Exemple petit-dejeuner :
+- Porridge avoine & fruits rouges — 40g flocons, lait amande, 100g myrtilles
+- Smoothie banane & beurre amande — 1 banane, 200ml lait vegetal, 1 c.s. beurre amande
+- Yaourt grec & granola — 150g yaourt, 30g granola maison, 1 c.c. miel
+
+Regles :
+- 3 a 5 alternatives par slot, repas COMPLETS et autosuffisants — pas un ingredient seul
+- Slots strictement alignes sur ceux de la section 3 (memes libelles)
+- Format strict : ### <Slot> puis bullets "- Titre — hint", PAS de tableau, PAS de prose
+- Hint avec portions concretes (grammage ou unite familiere) pour rester applicable
+- Aliments coherents avec les contraintes/objectifs du profil
+
+## 5. FICHE FRIGO (PRIORITAIRE)
 Cette section est LA boussole quotidienne du client.
 4 a 6 regles MAXIMUM — pas 7, pas 10.
 Format bullet, phrases courtes, action directe.
 Lisible en 10 secondes sur le frigo.
 Pas de jargon, pas d'explications.
 
-## 7. PROTOCOLES CIBLES
+## 6. PROTOCOLES CIBLES
 MAX 3 protocoles. Pas plus.
 Chacun au format : "problem → action → benefice attendu" en UNE phrase.
 
-## 8. AJUSTEMENTS ENVIRONNEMENTAUX
+## 7. AJUSTEMENTS ENVIRONNEMENTAUX
 MAX 3-4 conseils concrets.
 Hydratation, sommeil, mouvement, stress.
 Formulations breves, actionnables.
 
-## 9. RECOMMANDATIONS COACH
+## 8. RECOMMANDATIONS COACH
 Structure en 2 blocs :
 A GARDER : 3 actions cles a maintenir
 A EVITER : 3 erreurs frequentes a ne pas reproduire
 
-## 10. CLOTURE DU PLAN
+## 9. CLOTURE DU PLAN
 Ton rassurant, autonome.
 Le client doit se dire "je comprends, je peux, je commence demain".
 PAS de reference a un futur suivi.
@@ -539,44 +559,56 @@ Regles portions :
 Portions absentes UNIQUEMENT dans : aliments autorises, aliments limites/interdits,
 recommandations coach, protocoles (ces sections n'ont pas besoin de grammage).
 
-## 4. ROTATION DES REPAS
+## 4. ALTERNATIVES PAR REPAS
 
-Objectif : permettre au client de varier ses repas sans changer la structure.
+Objectif : permettre a la cliente de varier ses repas en swappant directement
+depuis l'app cliente, sans changer la structure du plan. Au lieu de lui
+laisser recombiner mentalement des ingredients, on lui donne des recettes
+COMPLETES substituables, repas par repas.
 
-- Donner des groupes d'aliments interchangeables
-- Organiser par categories : proteines / feculents / legumes / matieres grasses
-- Donner 3 a 5 options par categorie
-- Inclure quelques exemples de substitutions concretes
-- Le client doit comprendre comment construire ses repas seul
+Pour chaque slot de la SEMAINE 1, donne 3 a 5 RECETTES COMPLETES alternatives,
+autosuffisantes et adaptees au profil.
 
-Format attendu :
+Format strict (subheader puis bullets) :
 
-Proteines (3-5 options) : 120g saumon / 100g poulet / 2 oeufs + 1 blanc / 130g tofu ferme / 100g dinde
-Feculents (3-5 options) : 80g quinoa cuit / 80g riz complet / 150g patate douce / 1 tranche pain complet 40g / 80g sarrasin cuit
-Legumes (3-5 options) : courgettes vapeur / haricots verts / brocolis / epinards / poelee ratatouille
-Matieres grasses (3-5 options) : 1 c.s. huile olive / 1/2 avocat / 30g amandes / 30g noix / 1 c.s. tahini
+### Petit-dejeuner
+- Titre court de la recette — hint avec aliments cles + portions
+- Titre — hint
+- Titre — hint
 
-Exemples de substitutions :
-- Saumon du midi → tofu ferme ou dinde (meme grammage)
-- Quinoa → riz complet ou sarrasin (meme grammage)
-- Amandes → noix ou graines de courge (meme grammage)
+### Dejeuner
+- Titre — hint
+- Titre — hint
+- Titre — hint
 
-## 5. JOURNEE TYPE ALTERNATIVE
+### Collation
+- Titre — hint
+- Titre — hint
 
-- Donner UNE journee complete differente de la Semaine 1
-- Meme structure (4 moments : petit-dejeuner / dejeuner / collation / diner)
-- Aliments differents de la Semaine 1
-- Toujours coherent avec les objectifs et contraintes du client
-- Pas de repetition des memes repas qu'en Semaine 1
-- Portions visibles (memes regles qu'en Semaine 1)
+### Diner
+- Titre — hint
+- Titre — hint
+- Titre — hint
 
-Format attendu :
-Petit-dejeuner : porridge 40g flocons avoine + 1 c.s. beurre amande + 100g fruits rouges + tisane
-Dejeuner : 130g tofu ferme + 80g sarrasin cuit + poelee ratatouille + 1 c.s. huile olive
-Collation : 30g noix + 1 pomme
-Diner : 100g dinde + 150g haricots verts + 1/2 patate douce
+Exemple petit-dejeuner :
+- Porridge avoine & fruits rouges — 40g flocons, lait amande, 100g myrtilles
+- Smoothie banane & beurre amande — 1 banane, 200ml lait vegetal, 1 c.s. beurre amande
+- Yaourt grec & granola — 150g yaourt, 30g granola maison, 1 c.c. miel
 
-## 6. FICHE FRIGO
+Exemple dejeuner :
+- Saumon vapeur & quinoa — 120g saumon, 80g quinoa, brocolis vapeur
+- Bowl tofu & sarrasin — 130g tofu ferme, 80g sarrasin, ratatouille
+- Cabillaud & legumes rotis — 150g cabillaud, courgettes, poivrons rotis
+
+Regles :
+- 3 a 5 alternatives par slot, repas COMPLETS et autosuffisants — pas un ingredient seul
+- Slots strictement alignes sur ceux de la section 3 (memes libelles)
+- Format strict : ### <Slot> puis bullets "- Titre — hint", PAS de tableau, PAS de prose
+- Hint avec portions concretes (grammage ou unite familiere) pour rester applicable
+- Aliments coherents avec les contraintes/objectifs du profil
+- Pas de repetition exacte des repas de la section 3
+
+## 5. FICHE FRIGO
 
 Objectif : donner des regles simples a retenir au quotidien.
 
@@ -594,7 +626,7 @@ Format attendu (exemple pour cliente T1 + stress + digestion) :
 - Pas de diner apres 20h, sinon collation proteinee
 - Eau filtree loin des repas (30 min avant / 1h apres)
 
-## 7. PROTOCOLES CIBLES
+## 6. PROTOCOLES CIBLES
 
 Toujours partir du probleme reel du client. Ne jamais faire une liste generique.
 
@@ -640,7 +672,7 @@ INTERDIT :
 - Phrases generiques sans lien au profil
 - Repeter le meme verbe 3+ fois dans la meme section
 
-## 8. AJUSTEMENTS ENVIRONNEMENTAUX
+## 7. AJUSTEMENTS ENVIRONNEMENTAUX
 4-5 ajustements maximum, adaptes aux contraintes reelles du client.
 
 Chaque ajustement = 2 a 3 phrases qui enchainent naturellement :
@@ -679,7 +711,7 @@ INTERDIT :
 - Conseils generiques ("boire plus", "mieux dormir", "gerer le stress")
 - Regles universelles sans contexte client
 
-## 9. RECOMMANDATIONS COACH
+## 8. RECOMMANDATIONS COACH
 3 regles directes + 3 erreurs a eviter + 1 focus prioritaire.
 
 Chaque phrase reliee au client, sans pattern d'amorce repete.
@@ -721,7 +753,7 @@ Interdit :
 Objectif : le client doit sentir qu'Anissa parle vraiment et que chaque
 ligne est faite pour lui, pas pour un autre.
 
-## 10. PLAN D'ACTION (4 SEMAINES)
+## 9. PLAN D'ACTION (4 SEMAINES)
 
 Objectif : donner une progression claire sans refaire 4 semaines completes.
 
@@ -733,21 +765,21 @@ Objectif : donner une progression claire sans refaire 4 semaines completes.
   S3 = optimisation (affiner timing, quantites, protocoles)
   S4 = automatisation (autonome, preparer la suite)
 - Format court, lisible
-- NE PAS repeter les menus (la Semaine 1 et la Journee alternative suffisent)
+- NE PAS repeter les menus (la Semaine 1 et les alternatives par repas suffisent)
 - Chaque semaine doit refleter une progression sur le probleme principal
 
 Format attendu :
 S1 — Mise en place : poser les 3 repas fixes + installer la collation proteinee 16h
 S2 — Stabilisation : ancrer les portions + tester la tisane fenouil post-diner
 S3 — Optimisation : affiner timing dinner (avant 20h) + respiration carree matin/soir
-S4 — Automatisation : repas construits en autonomie via la rotation + bilan avant RDV
+S4 — Automatisation : repas construits en autonomie via les alternatives + bilan avant RDV
 
 Interdit :
 - Progression generique ou interchangeable
 - Plus de 2 actions par semaine
 - Reprendre les menus dans chaque semaine
 
-## 11. CLOTURE DU PLAN (OBLIGATOIRE)
+## 10. CLOTURE DU PLAN (OBLIGATOIRE)
 4 a 6 lignes maximum. Vraie fin de consultation ecrite : rassurante, simple,
 engageante, orientee progression.
 

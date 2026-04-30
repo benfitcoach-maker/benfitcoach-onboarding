@@ -20,6 +20,8 @@ import {
   parseLabeledLines,
   parseBulletLines,
   parseRotationGroups,
+  parseSlotAlternatives,
+  normalizeSlotLabelToSlot,
   parseSupplementEntriesStructured,
 } from "../nutritionEditorParsers";
 import { getNutritionPlanMode } from "./nutritionPlanMode";
@@ -567,6 +569,39 @@ function buildMealsFromBody(body, locale) {
   return mealsB;
 }
 
+// V95 : Construit un index { slot → AlternativeMeal[] } à partir de la
+// section "## 4. ALTERNATIVES PAR REPAS" du plan. Utilisé par buildWeekMeals
+// pour décorer chaque meal.alternatives. Map vide si la section est absente
+// (plans pré-V95) → backward compat naturelle.
+function buildAlternativesIndex(sections, locale) {
+  const altSection = findSection(sections, "alternatives");
+  if (!altSection?.body) return new Map();
+
+  const groups = parseSlotAlternatives(altSection.body);
+  const index = new Map();
+
+  for (const group of groups) {
+    const slot = normalizeSlotLabelToSlot(group.slotLabel, locale);
+    if (!slot) continue; // libellé non reconnu → drop ce groupe
+
+    const usedAltIds = new Set();
+    const items = group.items
+      .map((it) => {
+        if (!it.title || it.title.length < 3) return null;
+        return {
+          id: uniqueId(slugify(it.title), usedAltIds),
+          title: it.title,
+          ...(it.hint ? { hint: it.hint } : {}),
+        };
+      })
+      .filter(Boolean);
+
+    if (items.length > 0) index.set(slot, items);
+  }
+
+  return index;
+}
+
 function buildWeekMeals(client, consultation, sections) {
   const locale = resolveLocale(client);
   const dayLabels = locale === "fr" ? DAY_LABELS_FR : DAY_LABELS_EN;
@@ -582,6 +617,16 @@ function buildWeekMeals(client, consultation, sections) {
     if (r && (r.ingredients?.length || r.preparation?.length)) {
       return { ...m, recipe: r };
     }
+    return m;
+  };
+
+  // V95 : injection des alternatives par slot. Map vide si la section
+  // "ALTERNATIVES PAR REPAS" n'a pas été produite par le prompt (plans pré-V95)
+  // → meal.alternatives reste undefined, l'app cliente cache le bouton.
+  const altsBySlot = buildAlternativesIndex(sections, locale);
+  const attachAlternatives = (m) => {
+    const alts = altsBySlot.get(m.slot);
+    if (alts && alts.length > 0) return { ...m, alternatives: alts };
     return m;
   };
 
@@ -611,7 +656,7 @@ function buildWeekMeals(client, consultation, sections) {
         label,
         short_label: dayShort[i],
         meals: (daysByIndex.get(idx) || []).map((m, j) => ({
-          ...attachRecipe(m),
+          ...attachAlternatives(attachRecipe(m)),
           id: `day-${idx}-meal-${j + 1}`,
         })),
       };
@@ -658,7 +703,7 @@ function buildWeekMeals(client, consultation, sections) {
       label,
       short_label: dayShort[i],
       meals: variant.map((m, j) => ({
-        ...attachRecipe(m),
+        ...attachAlternatives(attachRecipe(m)),
         id: `day-${i + 1}-meal-${j + 1}`,
       })),
     };

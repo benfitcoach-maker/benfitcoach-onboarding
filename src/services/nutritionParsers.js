@@ -43,6 +43,11 @@ export function detectSectionType(title) {
   if (/semaine\s*1.*structure|structure\s*alimentaire|plan\s*alimentaire|menus?|week\s*1.*meal\s*structure/.test(k)) return 'meals';
   if (/semaine\s*\d|week\s*\d/.test(k)) return 'week';
   if (/journee\s*type\s*alternative|journee\s*alternative|variante|alternative\s*day/.test(k)) return 'meals_alt';
+  // V95 : nouvelle section "ALTERNATIVES PAR REPAS" produite par le prompt
+  // (3-5 recettes substituables par slot). Doit etre detectee AVANT 'rotation'
+  // pour eviter qu'un titre type "alternatives par repas" matche d'abord la
+  // regex rotation (substitutions).
+  if (/alternatives?\s*par\s*repas|meal\s*alternatives|alternatives?\s*par\s*slot/.test(k)) return 'alternatives';
   if (/rotation|substitutions?|meal\s*rotation/.test(k)) return 'rotation';
   if (/aliments?\s*autorises|aliments?\s*favoris|allowed\s*foods/.test(k)) return 'food_yes';
   if (/aliments?\s*limites|aliments?\s*moderes|limited\s*foods/.test(k)) return 'food_limit';
@@ -86,6 +91,88 @@ export function parseBulletLines(text) {
     .filter(l => l && /^([—\-•*·]|\d+[\.\)])\s+/.test(l))
     .map(l => l.replace(/^([—\-•*·]|\d+[\.\)])\s+/, '').trim())
     .filter(Boolean);
+}
+
+// V95 : Parse la section "ALTERNATIVES PAR REPAS" produite par le prompt.
+// Format attendu (subheader-per-slot + bullet list) :
+//
+//   ### Petit-dejeuner
+//   - Porridge avoine & fruits rouges — 40g flocons · lait amande
+//   - Smoothie banane & beurre amande — 1 banane · 200ml lait
+//
+//   ### Dejeuner
+//   - Saumon vapeur & quinoa — 120g saumon · brocolis
+//
+// Sortie : [{ slotLabel: 'Petit-dejeuner', items: [{ title, hint? }, ...] }, ...]
+//
+// State machine simple. Style fail-soft cohérent avec parseRotationGroups :
+// si une section est mal formattée, on drop silencieusement (pas d'exception).
+export function parseSlotAlternatives(text) {
+  if (!text) return [];
+  const lines = text.split('\n');
+  const groups = [];
+  let current = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // ### Header → ouvre un nouveau groupe
+    const headerMatch = line.match(/^#{2,4}\s+(.+)$/);
+    if (headerMatch) {
+      const slotLabel = headerMatch[1].trim();
+      current = { slotLabel, items: [] };
+      groups.push(current);
+      continue;
+    }
+
+    // Bullet line dans le groupe courant
+    if (!current) continue;
+    if (!/^[—\-•*·]\s+/.test(line)) continue;
+    const stripped = line.replace(/^[—\-•*·]\s+/, '').trim();
+    if (!stripped) continue;
+
+    // Split sur le 1er séparateur visuel " — " / " – " / " - " (espaces autour
+    // pour éviter de splitter "1/2", "feta-cabillaud", etc.).
+    const splitMatch = stripped.match(/^(.+?)\s+[—–-]\s+(.+)$/);
+    if (splitMatch) {
+      current.items.push({
+        title: splitMatch[1].trim(),
+        hint: splitMatch[2].trim(),
+      });
+    } else {
+      current.items.push({ title: stripped });
+    }
+  }
+
+  return groups.filter((g) => g.items.length > 0);
+}
+
+// V95 : Normalise un libellé de slot (FR ou EN, accents, casse variable) en
+// MealSlot canonique. Aligné sur le mapping inline de buildMealsFromBody dans
+// clientAppMapper.js — exporté ici pour réutilisation par parseSlotAlternatives
+// + buildAlternativesIndex. Sans cette normalisation commune, alternatives.slot
+// pourrait diverger de meal.slot et casser la lookup mealKey(slot, title).
+//
+// Le param locale est gardé pour extension future (DE, ES, IT). FR et EN
+// couverts par une regex unifiée.
+// eslint-disable-next-line no-unused-vars
+export function normalizeSlotLabelToSlot(label, locale = 'fr') {
+  const k = (label || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/petit[\s-]?dejeuner|breakfast/.test(k)) return 'breakfast';
+  if (/d[i\u00ee]ner|dinner|souper/.test(k)) return 'dinner';
+  // "déjeuner" sans "petit" → lunch. Test placé après dîner pour ne pas matcher
+  // les libellés "déjeuner" qui sont en réalité des dîners EN UK ; on assume
+  // ici la convention française (déjeuner = midi).
+  if (/(?<!petit[\s-])dejeuner|lunch/.test(k)) return 'lunch';
+  if (/collation|snack|gouter/.test(k)) {
+    if (/matin/.test(k)) return 'morning_snack';
+    if (/soir/.test(k)) return 'evening_snack';
+    return 'afternoon_snack';
+  }
+  return null;
 }
 
 // Parse une section rotation "Proteines : A / B / C" → groups

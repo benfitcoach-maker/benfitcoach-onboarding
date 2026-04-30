@@ -11,6 +11,8 @@ export {
   parseLabeledLines,
   parseBulletLines,
   parseRotationGroups,
+  parseSlotAlternatives,
+  normalizeSlotLabelToSlot,
   parseTimelineSteps,
   parseSupplementEntriesStructured,
 } from './services/nutritionParsers';

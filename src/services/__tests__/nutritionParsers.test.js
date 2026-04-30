@@ -3,7 +3,11 @@
 // + cas limites (vide, malformé, redondant header)
 
 import { describe, it, expect } from 'vitest';
-import { parseSupplementEntriesStructured } from '../nutritionParsers';
+import {
+  parseSupplementEntriesStructured,
+  parseSlotAlternatives,
+  normalizeSlotLabelToSlot,
+} from '../nutritionParsers';
 
 describe('parseSupplementEntriesStructured', () => {
 
@@ -147,5 +151,146 @@ Pourquoi : Stress chronique`;
     expect(entries[0].fields.moment).toBeDefined();
     // pourquoi/why mappés vers justification
     expect(entries[0].fields.justification).toBeDefined();
+  });
+});
+
+// V95 : tests pour le parser des "## 4. ALTERNATIVES PAR REPAS"
+describe('parseSlotAlternatives', () => {
+
+  it('Cas nominal : 4 slots, 3 alternatives chacun', () => {
+    const text = `### Petit-dejeuner
+- Porridge avoine & fruits rouges — 40g flocons, lait amande, 100g myrtilles
+- Smoothie banane & beurre amande — 1 banane, 200ml lait vegetal, 1 c.s. beurre amande
+- Yaourt grec & granola — 150g yaourt, 30g granola maison, 1 c.c. miel
+
+### Dejeuner
+- Saumon vapeur & quinoa — 120g saumon, 80g quinoa, brocolis vapeur
+- Bowl tofu & sarrasin — 130g tofu ferme, 80g sarrasin, ratatouille
+- Cabillaud & legumes rotis — 150g cabillaud, courgettes, poivrons rotis
+
+### Collation
+- Yaourt grec & noix — 150g yaourt, 20g noix
+- Carre chocolat noir & noisettes — 70% cacao, 15g noisettes
+
+### Diner
+- Veloute potimarron & oeuf — graines de courge, curcuma
+- Omelette aux herbes & salade — 3 oeufs, ciboulette, roquette
+- Dahl de lentilles & riz basmati — lait de coco, epices douces`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toHaveLength(4);
+    expect(groups[0].slotLabel).toBe('Petit-dejeuner');
+    expect(groups[0].items).toHaveLength(3);
+    expect(groups[0].items[0].title).toBe('Porridge avoine & fruits rouges');
+    expect(groups[0].items[0].hint).toMatch(/40g flocons/);
+    expect(groups[1].slotLabel).toBe('Dejeuner');
+    expect(groups[2].items).toHaveLength(2); // collation a 2 alts
+  });
+
+  it('Em-dash variants : —, –, - acceptes comme separateurs', () => {
+    const text = `### Petit-dejeuner
+- Recette A — hint avec em-dash
+- Recette B – hint avec en-dash
+- Recette C - hint avec hyphen-minus`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].items).toHaveLength(3);
+    expect(groups[0].items[0].title).toBe('Recette A');
+    expect(groups[0].items[1].title).toBe('Recette B');
+    expect(groups[0].items[2].title).toBe('Recette C');
+    expect(groups[0].items[0].hint).toBe('hint avec em-dash');
+  });
+
+  it('Bullets sans hint : title seulement', () => {
+    const text = `### Dejeuner
+- Salade complete
+- Bowl proteine
+- Wrap legumes`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups[0].items).toHaveLength(3);
+    expect(groups[0].items[0].title).toBe('Salade complete');
+    expect(groups[0].items[0].hint).toBeUndefined();
+  });
+
+  it('Section vide : input null/undefined → tableau vide', () => {
+    expect(parseSlotAlternatives('')).toEqual([]);
+    expect(parseSlotAlternatives(null)).toEqual([]);
+    expect(parseSlotAlternatives(undefined)).toEqual([]);
+  });
+
+  it('Header sans bullets : groupe filtre (drop)', () => {
+    const text = `### Petit-dejeuner
+
+### Dejeuner
+- Une seule recette — avec hint`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].slotLabel).toBe('Dejeuner');
+  });
+
+  it('Bullets en dehors d\'un header : ignores', () => {
+    const text = `- Recette flottante avant header
+
+### Petit-dejeuner
+- Recette legitime — hint`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].items).toHaveLength(1);
+    expect(groups[0].items[0].title).toBe('Recette legitime');
+  });
+
+  it('Em-dash dans le titre (pas de split sur premier match) : split sur premier separateur entoure d\'espaces', () => {
+    const text = `### Dejeuner
+- Bowl saumon-avocat — riz basmati, sesame`;
+
+    // "saumon-avocat" sans espaces autour du - → ne doit pas splitter
+    // Le split se fait sur " — " (em-dash entoure d'espaces)
+    const groups = parseSlotAlternatives(text);
+    expect(groups[0].items[0].title).toBe('Bowl saumon-avocat');
+    expect(groups[0].items[0].hint).toBe('riz basmati, sesame');
+  });
+});
+
+describe('normalizeSlotLabelToSlot', () => {
+
+  it('FR : libellés canoniques', () => {
+    expect(normalizeSlotLabelToSlot('Petit-dejeuner')).toBe('breakfast');
+    expect(normalizeSlotLabelToSlot('Dejeuner')).toBe('lunch');
+    expect(normalizeSlotLabelToSlot('Diner')).toBe('dinner');
+    expect(normalizeSlotLabelToSlot('Collation')).toBe('afternoon_snack');
+  });
+
+  it('FR : avec accents', () => {
+    expect(normalizeSlotLabelToSlot('Petit-déjeuner')).toBe('breakfast');
+    expect(normalizeSlotLabelToSlot('Déjeuner')).toBe('lunch');
+    expect(normalizeSlotLabelToSlot('Dîner')).toBe('dinner');
+  });
+
+  it('FR : casse variable', () => {
+    expect(normalizeSlotLabelToSlot('PETIT-DEJEUNER')).toBe('breakfast');
+    expect(normalizeSlotLabelToSlot('petit dejeuner')).toBe('breakfast');
+    expect(normalizeSlotLabelToSlot('DÎNER')).toBe('dinner');
+  });
+
+  it('EN : breakfast/lunch/dinner', () => {
+    expect(normalizeSlotLabelToSlot('Breakfast')).toBe('breakfast');
+    expect(normalizeSlotLabelToSlot('Lunch')).toBe('lunch');
+    expect(normalizeSlotLabelToSlot('Dinner')).toBe('dinner');
+    expect(normalizeSlotLabelToSlot('Snack')).toBe('afternoon_snack');
+  });
+
+  it('Collation matin/soir : raffinement', () => {
+    expect(normalizeSlotLabelToSlot('Collation matinale')).toBe('morning_snack');
+    expect(normalizeSlotLabelToSlot('Collation du soir')).toBe('evening_snack');
+  });
+
+  it('Libellé inconnu : null', () => {
+    expect(normalizeSlotLabelToSlot('Aperitif')).toBeNull();
+    expect(normalizeSlotLabelToSlot('')).toBeNull();
+    expect(normalizeSlotLabelToSlot(null)).toBeNull();
   });
 });
