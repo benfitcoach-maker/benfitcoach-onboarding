@@ -39,15 +39,12 @@ import { exportPlanToWord } from './services/exportToWord';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import ClientFeedbacksPanel from './ClientFeedbacksPanel';
 import ClientAppSettingsCard from './ClientAppSettingsCard';
-// V94.41 : hub centralise pour la gestion app cliente (vue d'ensemble,
-// messages, ressources, signaux). Affiche dans un onglet dedie de l'editeur.
+// V94.41 → V94.48 : hub complet app cliente (vue d'ensemble, lettre, recettes,
+// messages, ressources, signaux). Centralise tout ce qui touche a l'experience
+// digitale, separe du peaufinage du plan textuel.
 import ClientAppPanel from './ClientAppPanel';
-// V94.42 : authoring de recettes detaillees IA + validation manuelle.
-// Stockage dans consultation.meal_recipes (map mealKey → Recipe).
-import RecipesTab from './RecipesTab';
-// V94.47 : authoring de la lettre d'intro IA + validation manuelle.
-// Stockage dans consultation.intro_letter (object body[] + pull_quote? + tailored_points?[]).
-import IntroLetterTab from './IntroLetterTab';
+// V94.42/V94.47 : RecipesTab + IntroLetterTab sont importes par ClientAppPanel
+// directement (sous-onglets internes). Plus d'import direct ici.
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
@@ -1905,7 +1902,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // ─── Cockpit (single editor view) ───
   // V76 : previewTab supprime — Apercu PDF modal retiree, l'editeur est l'apercu.
-  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'recettes' (V94.42) | 'lettre' (V94.47) | 'app' (V94.41)
+  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'app' (V94.48 — Lettre & Recettes deplaces dans 'app' comme sous-onglets)
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   // V92.1 : showCoverForm + coverFields supprimes — Word V92.0 prime
@@ -4081,41 +4078,20 @@ ${suppText}`;
               </div>
             );
           }
-          // V94.42 : Authoring recettes detaillees (IA + validation Anissa)
-          if (editorTab === 'recettes') {
-            return (
-              <RecipesTab
-                consultation={consultation}
-                form={form}
-                onSave={(nextRecipes) => {
-                  // Sauvegarde la map mealKey → Recipe dans la consultation.
-                  // Le mapper clientAppMapper l'injecte dans meal.recipe a la
-                  // republication. Pas de migration necessaire (champ JSON).
-                  setConsultation((prev) => ({ ...prev, meal_recipes: nextRecipes }));
-                }}
-              />
-            );
-          }
-          // V94.47 : Authoring lettre d'intro (IA Haiku 4.5 + validation Anissa)
-          if (editorTab === 'lettre') {
-            return (
-              <IntroLetterTab
-                consultation={consultation}
-                form={form}
-                onSave={(letter) => {
-                  // Sauvegarde { body, pull_quote, tailored_points } dans consultation.
-                  // clientAppMapper.buildIntroData lit ce champ en priorite a la
-                  // republication. Pas de migration necessaire (champ JSON).
-                  setConsultation((prev) => ({ ...prev, intro_letter: letter }));
-                }}
-              />
-            );
-          }
-          // V94.41 : Hub app cliente (vue d'ensemble, messages, ressources, signaux)
+          // V94.41 → V94.48 : Hub app cliente complet — vue d'ensemble + Lettre IA
+          // + Recettes IA + Messages + Ressources + Signaux. Separe du peaufinage
+          // plan textuel pour clarifier les 2 mindsets (plan vs publication digitale).
           if (editorTab === 'app') {
             return (
               <div style={{ padding: 12 }}>
-                <ClientAppPanel client={client} consultation={consultation} />
+                <ClientAppPanel
+                  client={client}
+                  consultation={consultation}
+                  form={form}
+                  onUpdateConsultation={(patch) => {
+                    setConsultation((prev) => ({ ...prev, ...patch }));
+                  }}
+                />
               </div>
             );
           }
@@ -4725,17 +4701,9 @@ ${suppText}`;
                   <Tab active={editorTab === 'frigo'} onClick={() => setEditorTab('frigo')}>Fiche frigo</Tab>
                   <Tab active={editorTab === 's1s4'} onClick={() => setEditorTab('s1s4')}>Plan S1-S4</Tab>
                   <Tab active={editorTab === 'supp'} onClick={() => setEditorTab('supp')}>Supplements</Tab>
-                  {/* V94.42 : authoring recettes detaillees (IA + validation Anissa).
-                      Comme Frigo et Supp, c'est une COMPOSANTE du plan exposee
-                      dans l'app cliente via meal.recipe. */}
-                  <Tab active={editorTab === 'recettes'} onClick={() => setEditorTab('recettes')}>🍳 Recettes</Tab>
-                  {/* V94.47 : authoring lettre d'intro (IA + validation).
-                      Composante du plan exposee dans intro_data cote app cliente
-                      (section "Votre lettre" qui ouvre le programme). */}
-                  <Tab active={editorTab === 'lettre'} onClick={() => setEditorTab('lettre')}>✉️ Lettre</Tab>
-                  {/* V94.41 : nouvel onglet hub app cliente (vue d'ensemble, messages,
-                      ressources, signaux). Separe du peaufinage plan pour clarifier
-                      les 2 mindsets (creation plan vs interaction post-publication). */}
+                  {/* V94.48 : Lettre + Recettes deplacees dans 'App cliente' comme
+                      sous-onglets, pour separer mindset 'peaufinage plan textuel'
+                      et 'contenu app digital'. Onglets racines = plan textuel pur. */}
                   <Tab active={editorTab === 'app'} onClick={() => setEditorTab('app')}>📱 App cliente</Tab>
                   <span style={{ flex: 1 }} />
                   {/* V76 : Apercu PDF retire — l'editeur est deja un apercu premium.

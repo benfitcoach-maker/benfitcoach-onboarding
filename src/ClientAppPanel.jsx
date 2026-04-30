@@ -23,15 +23,21 @@ import {
   CoachResourceError,
 } from "./services/coachResources";
 import { fetchClientSignals, ClientSignalsError } from "./services/fetchClientSignals";
+// V94.48 : Lettre + Recettes regroupees ici (composantes app cliente, plus
+// dans les onglets racines de l'editeur — separation mindset plan vs app).
+import IntroLetterTab from "./IntroLetterTab";
+import RecipesTab from "./RecipesTab";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
+  { id: "letter", label: "✉️ Lettre" },
+  { id: "recipes", label: "🍳 Recettes" },
   { id: "messages", label: "Messages" },
   { id: "resources", label: "Ressources" },
   { id: "signals", label: "Signaux" },
 ];
 
-export default function ClientAppPanel({ client, consultation }) {
+export default function ClientAppPanel({ client, consultation, form, onUpdateConsultation }) {
   const [activeTab, setActiveTab] = useState("overview");
 
   if (!client) {
@@ -65,6 +71,21 @@ export default function ClientAppPanel({ client, consultation }) {
       <div style={contentStyle}>
         {activeTab === "overview" && (
           <OverviewTab client={client} consultation={consultation} />
+        )}
+        {/* V94.48 : Lettre + Recettes regroupees ici (composantes app cliente) */}
+        {activeTab === "letter" && (
+          <IntroLetterTab
+            consultation={consultation}
+            form={form}
+            onSave={(letter) => onUpdateConsultation?.({ intro_letter: letter })}
+          />
+        )}
+        {activeTab === "recipes" && (
+          <RecipesTab
+            consultation={consultation}
+            form={form}
+            onSave={(nextRecipes) => onUpdateConsultation?.({ meal_recipes: nextRecipes })}
+          />
         )}
         {activeTab === "messages" && <MessagesTab client={client} />}
         {activeTab === "resources" && <ResourcesTab />}
