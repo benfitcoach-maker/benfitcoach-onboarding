@@ -1,7 +1,7 @@
 {
   "name": "benfitcoach-onboarding",
   "private": true,
-  "version": "94.46",
+  "version": "94.47",
   "type": "module",
   "scripts": {
     "dev": "vite",

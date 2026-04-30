@@ -45,6 +45,9 @@ import ClientAppPanel from './ClientAppPanel';
 // V94.42 : authoring de recettes detaillees IA + validation manuelle.
 // Stockage dans consultation.meal_recipes (map mealKey → Recipe).
 import RecipesTab from './RecipesTab';
+// V94.47 : authoring de la lettre d'intro IA + validation manuelle.
+// Stockage dans consultation.intro_letter (object body[] + pull_quote? + tailored_points?[]).
+import IntroLetterTab from './IntroLetterTab';
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
 import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
@@ -1902,7 +1905,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // ─── Cockpit (single editor view) ───
   // V76 : previewTab supprime — Apercu PDF modal retiree, l'editeur est l'apercu.
-  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'recettes' (V94.42) | 'app' (V94.41)
+  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'recettes' (V94.42) | 'lettre' (V94.47) | 'app' (V94.41)
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   // V92.1 : showCoverForm + coverFields supprimes — Word V92.0 prime
@@ -4093,6 +4096,21 @@ ${suppText}`;
               />
             );
           }
+          // V94.47 : Authoring lettre d'intro (IA Haiku 4.5 + validation Anissa)
+          if (editorTab === 'lettre') {
+            return (
+              <IntroLetterTab
+                consultation={consultation}
+                form={form}
+                onSave={(letter) => {
+                  // Sauvegarde { body, pull_quote, tailored_points } dans consultation.
+                  // clientAppMapper.buildIntroData lit ce champ en priorite a la
+                  // republication. Pas de migration necessaire (champ JSON).
+                  setConsultation((prev) => ({ ...prev, intro_letter: letter }));
+                }}
+              />
+            );
+          }
           // V94.41 : Hub app cliente (vue d'ensemble, messages, ressources, signaux)
           if (editorTab === 'app') {
             return (
@@ -4711,6 +4729,10 @@ ${suppText}`;
                       Comme Frigo et Supp, c'est une COMPOSANTE du plan exposee
                       dans l'app cliente via meal.recipe. */}
                   <Tab active={editorTab === 'recettes'} onClick={() => setEditorTab('recettes')}>🍳 Recettes</Tab>
+                  {/* V94.47 : authoring lettre d'intro (IA + validation).
+                      Composante du plan exposee dans intro_data cote app cliente
+                      (section "Votre lettre" qui ouvre le programme). */}
+                  <Tab active={editorTab === 'lettre'} onClick={() => setEditorTab('lettre')}>✉️ Lettre</Tab>
                   {/* V94.41 : nouvel onglet hub app cliente (vue d'ensemble, messages,
                       ressources, signaux). Separe du peaufinage plan pour clarifier
                       les 2 mindsets (creation plan vs interaction post-publication). */}

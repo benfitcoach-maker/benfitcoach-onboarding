@@ -202,7 +202,36 @@ function buildIntroData(client, consultation, sections) {
     ? (prenom ? `Bonjour ${prenom},` : "Bonjour,")
     : (prenom ? `Hello ${prenom},` : "Hello,");
 
-  // Source d'intro, par ordre de préférence :
+  // V94.47 : SOURCE PRIORITAIRE — intro_letter genere par IA + validee
+  // par Anissa via l'onglet "Lettre" de NutritionConsultation. Si present,
+  // on l'utilise tel quel (pas de filtrage looksLikeRawProfileData : Anissa
+  // a deja valide le contenu).
+  const introLetter = consultation?.intro_letter;
+  if (introLetter && Array.isArray(introLetter.body) && introLetter.body.length > 0) {
+    return {
+      greeting,
+      body: introLetter.body
+        .map((p) => String(p || "").trim())
+        .filter(Boolean),
+      pull_quote: typeof introLetter.pull_quote === "string" && introLetter.pull_quote.trim()
+        ? introLetter.pull_quote.trim()
+        : undefined,
+      tailored_points: Array.isArray(introLetter.tailored_points)
+        ? introLetter.tailored_points
+            .map((p, i) => ({
+              id: `tp-${i + 1}`,
+              title: String(p?.title || "").trim(),
+              detail: String(p?.detail || "").trim(),
+            }))
+            .filter((p) => p.title && p.detail)
+        : undefined,
+      signature: "Anissa",
+      coach_name: "Anissa",
+      coach_role: locale === "fr" ? "Votre nutritionniste" : "Your nutritionist",
+    };
+  }
+
+  // FALLBACK legacy — sources d'intro existantes :
   //   1. Section "intro" du plan (vraie intro narrative écrite par Anissa)
   //   2. nutritional_observations (résumé Anissa, plus narratif)
   //   3. observations (souvent données brutes type profil cliente — fallback)
@@ -229,7 +258,6 @@ function buildIntroData(client, consultation, sections) {
   // Pas de fallback raw : si tous les paragraphes ressemblent à des données
   // sensibles (profil médical), on préfère une intro sobre (greeting +
   // signature seulement) plutôt que d'exposer des informations privées.
-  // Côté UX : l'app cliente affiche déjà un layout propre dans ce cas.
 
   return {
     greeting,
@@ -238,7 +266,7 @@ function buildIntroData(client, consultation, sections) {
     coach_name: "Anissa",
     coach_role: locale === "fr" ? "Votre nutritionniste" : "Your nutritionist",
     // eyebrow, greeting_tagline, pull_quote, tailored_points, coach_avatar_url
-    // → undefined (à enrichir post-migration)
+    // → undefined si pas de intro_letter (V94.47 priorise)
   };
 }
 
