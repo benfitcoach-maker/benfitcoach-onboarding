@@ -2324,13 +2324,23 @@ function extractFoodList(lines, fullText, mode) {
 export function extractFridgeDataFromSections(sections) {
   if (!sections || sections.length === 0) return null;
 
+  // V94.69 : helper de normalisation. Le builder canonique est partage entre
+  // 3 consommateurs qui passent les sections avec des conventions differentes :
+  //   - FicheFrigoPreview / exportToWord : sections avec `.content`
+  //   - clientAppMapper (splitPlanSections) : sections avec `.body`
+  // Avant V94.69, le path "week1 sans fiche frigo dediee" plantait pour le 3e
+  // consommateur (week1.content = undefined → split crash). On normalise ici
+  // pour garder les call sites lisibles.
+  const sectionText = (sec) =>
+    String((sec?.content ?? sec?.body) || "");
+
   // Find the fiche frigo section
   const frigoSection = sections.find(s =>
     /fiche\s*frigo/i.test(s.title)
   );
 
-  if (frigoSection && frigoSection.content?.trim()) {
-    const data = parseFridgeContent(frigoSection.content);
+  if (frigoSection && sectionText(frigoSection).trim()) {
+    const data = parseFridgeContent(sectionText(frigoSection));
     if (data) return data;
   }
 
@@ -2342,23 +2352,23 @@ export function extractFridgeDataFromSections(sections) {
   const result = { breakfast: [], lunch: [], dinner: [], snack: '', hydration: '', toFavor: [], toLimit: [] };
 
   if (week1) {
-    const meals = extractMealsFromContent(week1.content);
+    const meals = extractMealsFromContent(sectionText(week1));
     Object.assign(result, meals);
   }
 
   if (regles) {
-    const hydMatch = regles.content.match(/(?:hydratation|eau)[^.\n]*?(\d[\d.,]*\s*(?:l(?:itres?)?|ml))/i);
+    const hydMatch = sectionText(regles).match(/(?:hydratation|eau)[^.\n]*?(\d[\d.,]*\s*(?:l(?:itres?)?|ml))/i);
     if (hydMatch) result.hydration = hydMatch[1];
   }
 
   // Look for privilegier/limiter in any section
   for (const sec of sections) {
     if (!result.toFavor.length) {
-      const favor = extractListFromContent(sec.content, 'favor');
+      const favor = extractListFromContent(sectionText(sec), 'favor');
       if (favor.length) result.toFavor = favor;
     }
     if (!result.toLimit.length) {
-      const limit = extractListFromContent(sec.content, 'limit');
+      const limit = extractListFromContent(sectionText(sec), 'limit');
       if (limit.length) result.toLimit = limit;
     }
   }
