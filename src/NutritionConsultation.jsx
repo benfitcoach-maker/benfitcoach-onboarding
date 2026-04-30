@@ -366,9 +366,20 @@ Format label : valeur (5 lignes max) :
 - Niveau du plan (modere / exigeant)
 
 ## 2. STRATEGIE NUTRITIONNELLE
-5 puces maximum, claires et directes.
-Chaque puce = un levier action concret (pas de generalite).
-Format label : valeur (Axe principal / Structure imposee / Timing / Aliments refuges / Exclusions).
+3 a 5 paires "Label : description" — UNE par ligne, PAS de bullet (-), PAS de bold (**).
+Chaque description = phrase complete (>= 30 caracteres) et levier action concret.
+
+Labels imposes (utilise au moins 3 sur 5) :
+Axe principal / Structure imposee / Timing / Aliments refuges / Exclusions.
+
+Format attendu (strict) :
+Axe principal : reduire la charge glucidique du soir pour stabiliser l'energie matinale
+Structure imposee : 3 repas + 1 collation, jamais de saut de repas
+Timing : dernier repas avant 20h, fenetre de jeune nocturne >= 12h
+Aliments refuges : oeufs, poisson blanc, legumes verts, riz basmati
+Exclusions : produits ultra-transformes, sodas, alcool en semaine
+
+INTERDIT : "- Axe principal", "**Axe principal** :", listes a puces. UNE paire = UNE ligne plate.
 
 ## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
 Une journee type complete, calibree selon poids/sexe/objectif du client.
@@ -483,12 +494,19 @@ Format tres court. Inclure uniquement :
 Maximum 5 lignes.
 
 ## 2. STRATEGIE NUTRITIONNELLE
-Donner UNE strategie centrale unique. Inclure :
-- Axe principal
-- Structure alimentaire imposee
-- Priorites d'action
-- Ajustements cles
-Maximum 5 puces.
+3 a 5 paires "Label : description" — UNE par ligne, PAS de bullet (-), PAS de bold (**).
+Chaque description = phrase complete (>= 30 caracteres) qui explique COMMENT on agit.
+
+Labels imposes (utilise au moins 3 sur 4) :
+Axe principal / Structure alimentaire imposee / Priorites d'action / Ajustements cles.
+
+Format attendu (strict) :
+Axe principal : reduire la charge glucidique du soir pour stabiliser la glycemie nocturne
+Structure alimentaire imposee : 3 repas equilibres + 1 collation, jamais de saut de repas
+Priorites d'action : densifier les proteines au petit-dejeuner, reduire les sucres rapides
+Ajustements cles : reintroduction progressive des feculents complets selon tolerance
+
+INTERDIT : "- Axe principal", "**Axe principal** :", listes a puces. UNE paire = UNE ligne plate.
 
 ## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
 

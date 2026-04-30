@@ -322,7 +322,7 @@ function buildStrategyData(client, consultation, sections) {
     };
   }).filter((p) => p.description);
 
-  // Fallback : si pas de strategy_extra, on extrait les paires de la section
+  // Fallback 1 : si pas de strategy_extra, on extrait les paires de la section
   // strategy canonique (format Anissa standard).
   if (pillars.length === 0 && main?.body) {
     const pairs = parseLabeledLines(cleanForApp(main.body));
@@ -334,6 +334,45 @@ function buildStrategyData(client, consultation, sections) {
         title: p.label,
         description: cleanForApp(p.value),
       }));
+  }
+
+  // V94.70 : fallback 2 — l'IA peut produire des bullets sans format
+  // "Label : valeur" exploitable par parseLabeledLines (regex strict). Plutot
+  // que d'echouer en "Pas de piliers detectes" cote enrichissement, on
+  // convertit chaque bullet en pilier en splittant sur le 1er separateur
+  // raisonnable (": " > " — " > " - ") ou en utilisant la 1ere phrase courte
+  // comme titre. C'est moins beau qu'un format strict mais ca evite les
+  // crashs d'enrichissement quand le prompt n'a pas ete strictement suivi.
+  if (pillars.length === 0 && main?.body) {
+    const bullets = parseBulletLines(cleanForApp(main.body))
+      .map((b) => cleanForApp(b))
+      .filter((b) => b.length > 10);
+    pillars = bullets.slice(0, 3).map((bullet) => {
+      // Cherche un separateur naturel pour title/description.
+      let title = bullet;
+      let description = "";
+      const sepMatch = bullet.match(/^(.{3,40}?)\s*[:—–-]\s+(.+)$/);
+      if (sepMatch) {
+        title = sepMatch[1].trim();
+        description = sepMatch[2].trim();
+      } else {
+        // Pas de separateur : utilise les 4-6 premiers mots comme titre,
+        // le reste comme description.
+        const words = bullet.split(/\s+/);
+        if (words.length > 6) {
+          title = words.slice(0, 5).join(" ");
+          description = words.slice(5).join(" ");
+        } else {
+          title = bullet;
+          description = bullet; // titre = description si bullet court
+        }
+      }
+      return {
+        id: uniqueId(slugify(title), pillarSeen),
+        title: title.slice(0, 80),
+        description: description || title,
+      };
+    });
   }
 
   // Essential = paragraphes hors bullets/pairs (pris de la section main de
