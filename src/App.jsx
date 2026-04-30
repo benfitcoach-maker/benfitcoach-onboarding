@@ -23,6 +23,11 @@ function ensureCustomRate(form, categorie) {
   if (montant) return { ...form, customRate: String(montant) };
   return form;
 }
+// V94.58 : permet de fetch les statuts clientes (incl. nouveaux ressentis)
+// pour alimenter la cloche de notification d'Anissa, et marquer comme
+// 'reviewed' au clic sur une notif ressenti.
+import { fetchClientsStatus, clearStatusCache } from './services/fetchClientsStatus';
+import { markClientReviewed } from './services/markClientReviewed';
 import StepForm from './StepForm';
 import BenoitPaymentsPanel from './BenoitPaymentsPanel';
 import MassageForm from './MassageForm';
@@ -305,16 +310,58 @@ function App() {
   // V39 : événements agenda partagés (pour alimenter les rappels cloche côté Anissa)
   const [agendaEvents, setAgendaEvents] = useState([]);
 
+  // V94.58 : helper qui calcule les notifs "feedback recu" pour Anissa.
+  // Une notif par cliente avec new_feedbacks_count > 0. Notifs virtuelles
+  // (pas stockees DB) car auto-derives du dernier last_reviewed_at.
+  const buildFeedbackNotifs = async (anissaClients) => {
+    if (!Array.isArray(anissaClients) || anissaClients.length === 0) return [];
+    const emails = anissaClients
+      .map((c) => (c.email || '').trim().toLowerCase())
+      .filter(Boolean);
+    if (emails.length === 0) return [];
+    let statuses = {};
+    try {
+      statuses = await fetchClientsStatus(emails);
+    } catch {
+      return []; // best-effort, pas bloquant
+    }
+    const out = [];
+    for (const c of anissaClients) {
+      const email = (c.email || '').trim().toLowerCase();
+      if (!email) continue;
+      const s = statuses[email];
+      const n = s?.new_feedbacks_count || 0;
+      if (n <= 0) continue;
+      const plural = n > 1;
+      out.push({
+        id: `feedback-${c.id}`,
+        type: 'feedback_received',
+        clientId: c.id,
+        clientName: c.prenom || c.first_name || 'Cliente',
+        message: `${c.prenom || c.first_name || 'Cliente'} : ${n} nouveau${plural ? 'x' : ''} ressenti${plural ? 's' : ''}`,
+        date: s?.last_activity_at || new Date().toISOString(),
+        read: false,
+      });
+    }
+    return out;
+  };
+
   // Load notifications from Supabase + sync local reminders
   const loadNotifications = async () => {
     // Sync local reminder notifications
+    let anissaClients = [];
     if (currentUser === 'Anissa') {
-      const anissaClients = [...getSharedClients(), ...getAnissaOwnClients()];
+      anissaClients = [...getSharedClients(), ...getAnissaOwnClients()];
       syncReminderNotifications(anissaClients);
       syncCompletedStepsFromReviews().then(() => {
         syncPackNotifications(anissaClients);
       });
     }
+
+    // V94.58 : notifs feedback (virtuelles) calculees a partir des statuts
+    // clientes recuperes via l'API admin clients-status. Affichees a cote
+    // des notifs Supabase classiques dans la cloche.
+    const feedbackNotifs = currentUser === 'Anissa' ? await buildFeedbackNotifs(anissaClients) : [];
 
     // Fetch from Supabase
     if (isCloudEnabled) {
@@ -324,7 +371,7 @@ function App() {
         .order('created_at', { ascending: false })
         .limit(30);
       if (!error && data) {
-        // Merge Supabase notifications with local reminders
+        // Merge Supabase notifications with local reminders + feedback notifs
         const localReminders = getNotifications().filter(n => n.type === 'consultation_reminder');
         const merged = [...data.map(n => ({
           id: n.id,
@@ -334,7 +381,7 @@ function App() {
           message: n.message,
           date: n.created_at,
           read: n.read,
-        })), ...localReminders].sort((a, b) => new Date(b.date) - new Date(a.date));
+        })), ...localReminders, ...feedbackNotifs].sort((a, b) => new Date(b.date) - new Date(a.date));
         const newCount = merged.filter(n => !n.read).length;
         setNotifCount(prev => prev === newCount ? prev : newCount);
         setNotifications(merged);
@@ -344,8 +391,9 @@ function App() {
 
     // Fallback: local only
     const local = getNotifications();
-    setNotifications(local);
-    setNotifCount(local.filter(n => !n.read).length);
+    const merged = [...local, ...feedbackNotifs].sort((a, b) => new Date(b.date) - new Date(a.date));
+    setNotifications(merged);
+    setNotifCount(merged.filter(n => !n.read).length);
   };
 
   useEffect(() => {
@@ -920,6 +968,8 @@ function App() {
                 const TAG_STYLES = {
                   questionnaire_completed: { label: 'Questionnaire', color: '#4ade80' },
                   consultation_reminder: { label: 'Rappel', color: '#fbbf24' },
+                  // V94.58 : nouvelle categorie pour les ressentis recus
+                  feedback_received: { label: 'Ressenti', color: '#82c39e' },
                 };
                 return (
                   <div style={{ position: 'absolute', top: '100%', right: 0, width: 360, background: '#1e1e1e', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,.4)', zIndex: 1000, overflow: 'hidden' }}>
@@ -967,9 +1017,21 @@ function App() {
                           <div
                             key={n.id}
                             onClick={async () => {
-                              markNotificationRead(n.id);
-                              if (isCloudEnabled && n.type !== 'consultation_reminder') {
-                                await supabase.from('notifications').update({ read: true }).eq('id', n.id);
+                              // V94.58 : feedback_received est virtuel (id 'feedback-...').
+                              // On declenche markClientReviewed cote API pour
+                              // mettre a jour last_reviewed_at → la notif disparaitra
+                              // au prochain polling.
+                              if (n.type === 'feedback_received' && n.clientId) {
+                                const cl = getClient(n.clientId);
+                                if (cl) {
+                                  markClientReviewed(cl).catch(() => { /* silent */ });
+                                  clearStatusCache(); // force refresh
+                                }
+                              } else {
+                                markNotificationRead(n.id);
+                                if (isCloudEnabled && n.type !== 'consultation_reminder') {
+                                  await supabase.from('notifications').update({ read: true }).eq('id', n.id);
+                                }
                               }
                               loadNotifications();
                               setShowNotifications(false);
