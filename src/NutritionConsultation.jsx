@@ -2711,6 +2711,10 @@ ${suppText}`;
 
   // V92.1 : handleTemplateSelect supprime (feature Templates retiree)
 
+  // V94.57 : ref vers le dernier handleSave (resout closure stale dans
+  // les setTimeout/callbacks qui declenchent la persistance globale).
+  const handleSaveRef = useRef(null);
+
   const handleSave = () => {
     if (!consultation.mgd_recommendation) {
       showSaveToast('Sélectionnez une recommandation biologique avant de sauvegarder');
@@ -2779,11 +2783,20 @@ ${suppText}`;
       finalUpdatedAt: isFinal ? (consultation.finalUpdatedAt || new Date().toISOString()) : null,
       // V88.12 : historique versions finales
       finalVersions: finalVersions,
+      // V94.57 : composantes app cliente persistees aussi (sinon perdues
+      // au reload). Lettre d'intro IA + recettes detaillees IA + tone_*
+      // ne sont pas dans le NutritionEditor mais doivent voyager avec
+      // la consultation.
+      intro_letter: consultation.intro_letter || null,
+      meal_recipes: consultation.meal_recipes || null,
     });
     clearDraft(clientId, consultationId);
     isDirtyRef.current = false;
     setAutoSaveStatus('saved');
   };
+  // V94.57 : sync le ref a chaque render pour pointer vers le handleSave
+  // courant (qui ferme sur le state actuel de consultation).
+  handleSaveRef.current = handleSave;
 
   return (
     <div className="nutrition-consultation">
@@ -4094,6 +4107,14 @@ ${suppText}`;
                     setConsultation((prev) => ({ ...prev, ...patch }));
                   }}
                   onOpenPreview={() => setShowClientAppPreview(true)}
+                  // V94.57 : permet aux sous-onglets (Lettre/Recettes) de
+                  // declencher la persistance globale apres save local.
+                  // setTimeout + handleSaveRef.current : on attend le re-render
+                  // post-setState, puis on appelle la version la plus recente
+                  // de handleSave (avec le state mis a jour).
+                  onPersistGlobally={() => {
+                    setTimeout(() => handleSaveRef.current?.(), 0);
+                  }}
                 />
               </div>
             );

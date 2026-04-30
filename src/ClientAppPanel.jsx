@@ -46,6 +46,8 @@ const SUB_TABS = [
   { id: "signals", label: "Signaux" },
 ];
 
+const ONBOARDING_KEY = "bfc_app_panel_onboarded";
+
 export default function ClientAppPanel({
   client,
   consultation,
@@ -53,8 +55,22 @@ export default function ClientAppPanel({
   hasPlan,
   onUpdateConsultation,
   onOpenPreview,
+  onPersistGlobally,
 }) {
   const [activeTab, setActiveTab] = useState("overview");
+  // V94.57 : banner onboarding affiche au 1er passage. Dismissable definitif
+  // (localStorage flag par appareil/navigateur).
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      return !localStorage.getItem(ONBOARDING_KEY);
+    } catch {
+      return false;
+    }
+  });
+  function dismissOnboarding() {
+    try { localStorage.setItem(ONBOARDING_KEY, "1"); } catch { /* */ }
+    setShowOnboarding(false);
+  }
 
   // V94.51 : badges computed pour chaque sub-tab. Etat local pas
   // d'API call (les counters fetched sont alimentes par les sub-tabs
@@ -91,6 +107,47 @@ export default function ClientAppPanel({
 
   return (
     <div style={panelStyle}>
+      {/* V94.57 : banner onboarding 1ere visite */}
+      {showOnboarding && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 14px",
+            background: "linear-gradient(135deg, rgba(130,195,158,0.1), rgba(130,195,158,0.04))",
+            border: "1px solid rgba(130,195,158,0.25)",
+            borderRadius: 10,
+            display: "flex",
+            gap: 12,
+            alignItems: "flex-start",
+          }}
+        >
+          <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>💡</span>
+          <div style={{ flex: 1, fontSize: ".78rem", color: "#cfcfc4", lineHeight: 1.55 }}>
+            <strong style={{ color: "#82c39e" }}>Bienvenue dans l&apos;espace App cliente.</strong>{" "}
+            Suivez les etapes du <em>Parcours app cliente</em> pour personnaliser
+            (Lettre, Recettes) puis publier le plan dans l&apos;app de votre cliente.
+            Tout y est centralise.
+          </div>
+          <button
+            type="button"
+            onClick={dismissOnboarding}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(130,195,158,0.3)",
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: ".72rem",
+              color: "#82c39e",
+              cursor: "pointer",
+              flexShrink: 0,
+              alignSelf: "center",
+            }}
+          >
+            Compris
+          </button>
+        </div>
+      )}
+
       {/* Sub-tabs nav */}
       <div style={subTabsStyle}>
         {SUB_TABS.map((t) => {
@@ -129,12 +186,14 @@ export default function ClientAppPanel({
             onJumpTo={setActiveTab}
           />
         )}
-        {/* V94.48 : Lettre + Recettes regroupees ici (composantes app cliente) */}
+        {/* V94.48 : Lettre + Recettes regroupees ici (composantes app cliente).
+            V94.57 : onPersistGlobally forward pour fusion des 2 saves. */}
         {activeTab === "letter" && (
           <IntroLetterTab
             consultation={consultation}
             form={form}
             onSave={(letter) => onUpdateConsultation?.({ intro_letter: letter })}
+            onPersistGlobally={onPersistGlobally}
           />
         )}
         {activeTab === "recipes" && (
@@ -142,6 +201,7 @@ export default function ClientAppPanel({
             consultation={consultation}
             form={form}
             onSave={(nextRecipes) => onUpdateConsultation?.({ meal_recipes: nextRecipes })}
+            onPersistGlobally={onPersistGlobally}
           />
         )}
         {activeTab === "messages" && <MessagesTab client={client} />}
@@ -266,8 +326,8 @@ function OverviewTab({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {apiUnsynced && (
-        <div style={{ fontSize: ".7rem", color: "#e8a040", padding: "6px 10px", background: "rgba(232,160,64,.06)", border: "1px solid rgba(232,160,64,.2)", borderRadius: 6 }}>
-          ⚠ Donnees API en cours de synchronisation. Le statut connexion peut etre incomplet.
+        <div style={{ fontSize: ".7rem", color: "#cfcfc4", padding: "6px 10px", background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 6 }}>
+          ⏳ Synchronisation en cours… Les statistiques de connexion s&apos;afficheront dans un instant.
         </div>
       )}
 

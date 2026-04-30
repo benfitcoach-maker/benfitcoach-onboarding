@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { extractUniqueMealsFromPlan } from "./services/extractMealsFromPlan";
 import { generateRecipesForMeals } from "./services/aiRecipeGenerator";
 
-export default function RecipesTab({ consultation, form, onSave }) {
+export default function RecipesTab({ consultation, form, onSave, onPersistGlobally }) {
   const planText = consultation?.nutrition_plan || consultation?.nutritionPlan || "";
 
   // Extraction des repas uniques depuis le plan
@@ -89,6 +89,10 @@ export default function RecipesTab({ consultation, form, onSave }) {
     // V94.55 : flash visuel pour confirmer l'action
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 2500);
+    // V94.57 : declenche la persistance globale automatiquement.
+    if (typeof onPersistGlobally === "function") {
+      onPersistGlobally();
+    }
   }
 
   const filledCount = meals.filter((m) => recipes[m.key]?.ingredients?.length).length;
@@ -129,14 +133,15 @@ export default function RecipesTab({ consultation, form, onSave }) {
                 : {}),
               transition: "all 200ms ease",
             }}
-            title="Applique les recettes a la consultation. Pensez a 'Sauvegarder' en haut pour persister."
+            title="Sauvegarde les recettes dans la consultation"
           >
-            {savedFlash ? "✓ Applique" : "💾 Sauvegarder"}
+            {savedFlash ? "✓ Sauvegarde" : "💾 Sauvegarder"}
           </button>
         </div>
       </div>
 
-      {/* V94.55 : flash de confirmation + hint persistance globale */}
+      {/* V94.55 → V94.57 : flash de confirmation. Avec la fusion V94.57,
+          le clic local sauvegarde aussi globalement. */}
       {savedFlash && (
         <div
           style={{
@@ -149,7 +154,7 @@ export default function RecipesTab({ consultation, form, onSave }) {
             borderRadius: 8,
           }}
         >
-          ✓ Recettes appliquees a la consultation. Cliquez sur &quot;Sauvegarder&quot; en haut a droite pour persister.
+          ✓ Recettes sauvegardees.
         </div>
       )}
 

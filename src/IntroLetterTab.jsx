@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { generateIntroLetter } from "./services/aiIntroLetter";
 
-export default function IntroLetterTab({ consultation, form, onSave }) {
+export default function IntroLetterTab({ consultation, form, onSave, onPersistGlobally }) {
   const initial = consultation?.intro_letter || {};
   const [body, setBody] = useState(Array.isArray(initial.body) ? initial.body : []);
   const [pullQuote, setPullQuote] = useState(initial.pull_quote || "");
@@ -83,6 +83,11 @@ export default function IntroLetterTab({ consultation, form, onSave }) {
     // V94.55 : flash visuel pour confirmer l'action
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 2500);
+    // V94.57 : declenche la persistance globale automatiquement (fusion
+    // des 2 saves pour eviter qu'Anissa oublie le clic Sauvegarder en haut).
+    if (typeof onPersistGlobally === "function") {
+      onPersistGlobally();
+    }
   }
 
   return (
@@ -127,17 +132,17 @@ export default function IntroLetterTab({ consultation, form, onSave }) {
                 : {}),
               transition: "all 200ms ease",
             }}
-            title="Applique la lettre a la consultation. Pensez a 'Sauvegarder' en haut pour persister."
+            title="Sauvegarde la lettre dans la consultation"
           >
-            {savedFlash ? "✓ Applique" : "💾 Sauvegarder"}
+            {savedFlash ? "✓ Sauvegarde" : "💾 Sauvegarder"}
           </button>
         </div>
       </div>
 
       {error && <div style={errorStyle}>⚠ {error}</div>}
 
-      {/* V94.55 : flash de confirmation apres save (s'affiche aussi en bas
-          au cas ou Anissa scroll en bas du formulaire) + hint persistance */}
+      {/* V94.55 → V94.57 : flash de confirmation apres save. Avec la
+          fusion V94.57, le clic local sauvegarde aussi globalement. */}
       {savedFlash && (
         <div
           style={{
@@ -150,7 +155,7 @@ export default function IntroLetterTab({ consultation, form, onSave }) {
             borderRadius: 8,
           }}
         >
-          ✓ Lettre appliquee a la consultation. Cliquez sur &quot;Sauvegarder&quot; en haut a droite pour persister.
+          ✓ Lettre sauvegardee.
         </div>
       )}
 
