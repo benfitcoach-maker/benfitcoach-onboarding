@@ -727,6 +727,29 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
                 </button>
               )}
               <SendQuestionnaireButton client={client} />
+              {/* V94.60 : raccourci direct vers l'onglet 'App cliente' de la
+                  consultation. Set un flag localStorage que NutritionConsultation
+                  lit au mount pour ouvrir direct sur le hub App cliente. */}
+              {consultations.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    try { localStorage.setItem('bfc_open_consultation_tab', 'app'); } catch { /* */ }
+                    onConsultation(client.id);
+                  }}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '10px 16px', background: 'none', border: 'none',
+                    color: '#82c39e', cursor: 'pointer', fontSize: '.85rem',
+                    transition: 'background .15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(130,195,158,.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  📱 Espace app cliente
+                </button>
+              )}
               {/* Séparateur */}
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
 

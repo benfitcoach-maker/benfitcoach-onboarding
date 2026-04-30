@@ -1902,7 +1902,18 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // ─── Cockpit (single editor view) ───
   // V76 : previewTab supprime — Apercu PDF modal retiree, l'editeur est l'apercu.
-  const [editorTab, setEditorTab] = useState('plan'); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'app' (V94.48 — Lettre & Recettes deplaces dans 'app' comme sous-onglets)
+  // V94.60 : si Anissa a clique '📱 Espace app cliente' dans le menu Plus
+  // du dashboard, on ouvre direct sur l'onglet App. Flag one-shot, consume au mount.
+  const [editorTab, setEditorTab] = useState(() => {
+    try {
+      const flag = localStorage.getItem('bfc_open_consultation_tab');
+      if (flag === 'app') {
+        localStorage.removeItem('bfc_open_consultation_tab');
+        return 'app';
+      }
+    } catch { /* */ }
+    return 'plan';
+  }); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'app' (V94.48)
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   // V92.1 : showCoverForm + coverFields supprimes — Word V92.0 prime
