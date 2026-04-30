@@ -22,6 +22,7 @@ import {
   archiveCoachResource,
   CoachResourceError,
 } from "./services/coachResources";
+import { fetchClientSignals, ClientSignalsError } from "./services/fetchClientSignals";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -67,7 +68,7 @@ export default function ClientAppPanel({ client, consultation }) {
         )}
         {activeTab === "messages" && <MessagesTab client={client} />}
         {activeTab === "resources" && <ResourcesTab />}
-        {activeTab === "signals" && <ComingSoon section="Signaux" version="V94.45" />}
+        {activeTab === "signals" && <SignalsTab client={client} />}
       </div>
     </div>
   );
@@ -777,6 +778,191 @@ function ResourcesTab() {
   );
 }
 
+// ─── Signaux (V94.45) ───────────────────────────────────────────────────
+//
+// Affiche les signaux d'engagement de la cliente :
+// 1. Interets pour le suivi (clics CTA "Decouvrir le suivi 6 mois")
+// 2. Ouvertures de pieces jointes
+//
+// Permet a Anissa de detecter les opportunites de conversion et l'engagement
+// reel avec ses ressources.
+
+function SignalsTab({ client }) {
+  const [signals, setSignals] = useState(null); // null = loading
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!client?.email) {
+      setSignals({ upgrade_interests: [], attachment_opens: [] });
+      return;
+    }
+    setSignals(null);
+    setError(null);
+    fetchClientSignals({ email: client.email, limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        setSignals(res);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        const msg = e instanceof ClientSignalsError ? e.message : String(e?.message || e);
+        setError(msg);
+        setSignals({ upgrade_interests: [], attachment_opens: [] });
+      });
+    return () => { cancelled = true; };
+  }, [client?.email, reloadKey]);
+
+  if (!client?.email) {
+    return (
+      <div style={emptyStateStyle}>
+        Cette cliente n&apos;a pas d&apos;email enregistre.
+      </div>
+    );
+  }
+
+  if (signals === null) {
+    return <div style={loadingStyle}>Chargement…</div>;
+  }
+
+  const interests = signals.upgrade_interests || [];
+  const opens = signals.attachment_opens || [];
+  const totalSignals = interests.length + opens.length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: "0.95rem", color: "#cfcfc4", fontWeight: 600 }}>
+            🔍 Signaux d&apos;engagement
+          </div>
+          <div style={{ fontSize: ".72rem", color: "#8a8a7a", marginTop: 2 }}>
+            {totalSignals} signal{totalSignals > 1 ? "s" : ""} au total
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setReloadKey((k) => k + 1)}
+          style={refreshBtnStyle}
+        >
+          ↻ Actualiser
+        </button>
+      </div>
+
+      {error && <div style={errorStyle}>⚠ {error}</div>}
+
+      {/* Interets suivi 6 mois (uniquement si oneshot, mais on affiche quand
+          meme si presents en cas de mode mixte ou backfill) */}
+      <SignalSection
+        title="💚 Interet pour le suivi 6 mois"
+        subtitle={
+          interests.length === 0
+            ? "Aucun clic sur la CTA d'upsell."
+            : `${interests.length} clic${interests.length > 1 ? "s" : ""} sur la CTA "Decouvrir le suivi 6 mois"`
+        }
+        emptyHint="Cette cliente n'a pas encore manifeste d'interet pour passer au suivi."
+        items={interests.map((i) => ({
+          key: i.id,
+          when: i.signaled_at,
+          label: "Clic sur la CTA d'upsell",
+        }))}
+        accent="#82c39e"
+      />
+
+      {/* Ouvertures attachments */}
+      <SignalSection
+        title="📎 Ouvertures de pieces jointes"
+        subtitle={
+          opens.length === 0
+            ? "Aucune piece jointe ouverte pour le moment."
+            : `${opens.length} ouverture${opens.length > 1 ? "s" : ""} (toutes pieces jointes confondues)`
+        }
+        emptyHint="Aucun PDF/image envoye n'a encore ete consulte."
+        items={opens.map((o) => ({
+          key: o.id,
+          when: o.opened_at,
+          label: o.attachment_label || "Piece jointe",
+          icon: o.attachment_type === "image" ? "🖼" : "📄",
+          preview: o.message_body_preview,
+        }))}
+        accent="#82c39e"
+      />
+    </div>
+  );
+}
+
+function SignalSection({ title, subtitle, items, emptyHint, accent }) {
+  return (
+    <div>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: ".82rem", color: "#cfcfc4", fontWeight: 500 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 2 }}>
+          {subtitle}
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div
+          style={{
+            padding: "14px 16px",
+            background: "rgba(255,255,255,.015)",
+            border: "1px solid rgba(255,255,255,.04)",
+            borderRadius: 8,
+            fontSize: ".75rem",
+            color: "#8a8a7a",
+            fontStyle: "italic",
+          }}
+        >
+          {emptyHint}
+        </div>
+      ) : (
+        <ul style={messageListStyle}>
+          {items.map((it) => (
+            <li key={it.key} style={signalItemStyle}>
+              {it.icon && <span style={{ fontSize: "1rem", marginRight: 8 }}>{it.icon}</span>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: ".82rem", color: "#cfcfc4" }}>
+                  {it.label}
+                </div>
+                {it.preview && (
+                  <div
+                    style={{
+                      fontSize: ".7rem",
+                      color: "#8a8a7a",
+                      marginTop: 2,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={it.preview}
+                  >
+                    « {it.preview} »
+                  </div>
+                )}
+              </div>
+              <span
+                style={{
+                  fontSize: ".68rem",
+                  color: accent,
+                  fontWeight: 500,
+                  flexShrink: 0,
+                  marginLeft: 8,
+                }}
+              >
+                {formatMessageDate(it.when)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ─── Coming soon stub ────────────────────────────────────────────────────
 
 function ComingSoon({ section, version }) {
@@ -1125,4 +1311,15 @@ const archiveBtnStyle = {
   fontSize: ".85rem",
   cursor: "pointer",
   flexShrink: 0,
+};
+
+// V94.45 : item de signal (interet upsell ou ouverture attachment)
+const signalItemStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 12px",
+  background: "rgba(255,255,255,.02)",
+  border: "1px solid rgba(255,255,255,.05)",
+  borderRadius: 8,
 };
