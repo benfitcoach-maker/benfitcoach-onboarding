@@ -107,9 +107,9 @@ function FridgeCard({ data, prenom, rules, clientMode = false }) {
       <MealSection title="COLLATION" items={snackItems} />
 
       <div style={{ borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 16, marginTop: 10 }}>
-        <TagList title="AUTORISES" items={data.toFavor} icon="\u2714" tagBg="rgba(106,191,138,.1)" tagColor="#8abf9a" />
-        <TagList title="LIMITER" items={data.toLimit} icon="\u26A0" tagBg="rgba(232,160,64,.1)" tagColor="#e8a040" />
-        <TagList title="INTERDIT" items={data.forbidden} icon="\u2716" tagBg="rgba(212,92,76,.1)" tagColor="#d4806c" />
+        <TagList title="A PRIVILEGIER" items={data.toFavor} icon={"\u2714"} tagBg="rgba(106,191,138,.1)" tagColor="#8abf9a" />
+        <TagList title="A LIMITER" items={data.toLimit} icon={"\u26A0"} tagBg="rgba(232,160,64,.1)" tagColor="#e8a040" />
+        <TagList title="A EVITER" items={data.forbidden} icon={"\u2716"} tagBg="rgba(212,92,76,.1)" tagColor="#d4806c" />
       </div>
     </div>
   );
