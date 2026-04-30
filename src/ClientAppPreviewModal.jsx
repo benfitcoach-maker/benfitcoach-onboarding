@@ -61,6 +61,15 @@ export default function ClientAppPreviewModal({ client, consultation, onClose })
       const p = buildClientAppPlanFromConsultation(client, consultation);
       return { rawPlan: p, error: null };
     } catch (err) {
+      // V94.67 : log le stack complet en console pour diagnostic.
+      // Le message UI seul ("e is undefined at split") ne dit pas QUEL .split
+      // a planté ni avec quel input. Le stack pointe vers la ligne exacte du
+      // mapper, indispensable pour corriger sans patcher a l'aveugle.
+      // eslint-disable-next-line no-console
+      console.error('[ClientAppPreviewModal] mapping error', err, {
+        clientId: client?.id,
+        consultationId: consultation?.id,
+      });
       return { rawPlan: null, error: err?.message || String(err) };
     }
   }, [client, consultation]);
