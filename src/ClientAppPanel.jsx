@@ -16,6 +16,12 @@ import { useEffect, useState } from "react";
 import { fetchClientsStatus } from "./services/fetchClientsStatus";
 import { getNutritionPlanMode, planModeLabel } from "./services/nutritionPlanMode";
 import { fetchCoachMessages, sendCoachMessage, CoachMessageError } from "./services/sendCoachMessage";
+import {
+  fetchCoachResources,
+  createCoachResource,
+  archiveCoachResource,
+  CoachResourceError,
+} from "./services/coachResources";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -60,7 +66,7 @@ export default function ClientAppPanel({ client, consultation }) {
           <OverviewTab client={client} consultation={consultation} />
         )}
         {activeTab === "messages" && <MessagesTab client={client} />}
-        {activeTab === "resources" && <ComingSoon section="Ressources" version="V94.44" />}
+        {activeTab === "resources" && <ResourcesTab />}
         {activeTab === "signals" && <ComingSoon section="Signaux" version="V94.45" />}
       </div>
     </div>
@@ -188,12 +194,17 @@ function MessagesTab({ client }) {
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // V94.44 : ressources reutilisables (bibliotheque)
+  const [library, setLibrary] = useState([]);
+
   // Compose state
   const [draftBody, setDraftBody] = useState("");
   const [attachUrl, setAttachUrl] = useState("");
   const [attachLabel, setAttachLabel] = useState("");
   const [attachType, setAttachType] = useState("pdf");
   const [showAttach, setShowAttach] = useState(false);
+  // V94.44 : 'library' = ressource selectionnee depuis bibliotheque, 'custom' = saisie manuelle
+  const [attachMode, setAttachMode] = useState("library");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState(null);
 
@@ -205,10 +216,15 @@ function MessagesTab({ client }) {
     }
     setMessages(null);
     setError(null);
-    fetchCoachMessages({ email: client.email, limit: 20 })
-      .then((res) => {
+    // V94.44 : on charge en parallele les messages + la bibliotheque
+    Promise.all([
+      fetchCoachMessages({ email: client.email, limit: 20 }),
+      fetchCoachResources().catch(() => []), // bibliotheque optionnelle, pas bloquant
+    ])
+      .then(([msgRes, lib]) => {
         if (cancelled) return;
-        setMessages(res.messages);
+        setMessages(msgRes.messages);
+        setLibrary(Array.isArray(lib) ? lib : []);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -230,12 +246,17 @@ function MessagesTab({ client }) {
     setSendError(null);
     setSending(true);
     try {
+      // V94.44 : determine quelles valeurs envoyer en attachment
+      const finalUrl = showAttach ? attachUrl.trim() : null;
+      const finalLabel = showAttach ? attachLabel.trim() : null;
+      const finalType = showAttach ? attachType : null;
+
       await sendCoachMessage({
         email: client?.email,
         body: draftBody,
-        attachment_url: showAttach ? attachUrl : null,
-        attachment_label: showAttach ? attachLabel : null,
-        attachment_type: showAttach ? attachType : null,
+        attachment_url: finalUrl,
+        attachment_label: finalLabel,
+        attachment_type: finalType,
       });
       // Reset form
       setDraftBody("");
@@ -243,6 +264,7 @@ function MessagesTab({ client }) {
       setAttachLabel("");
       setAttachType("pdf");
       setShowAttach(false);
+      setAttachMode("library");
       reload();
     } catch (err) {
       const msg = err instanceof CoachMessageError ? err.message : String(err?.message || err);
@@ -250,6 +272,21 @@ function MessagesTab({ client }) {
     } finally {
       setSending(false);
     }
+  }
+
+  // V94.44 : applique une ressource de la bibliotheque dans les champs
+  function selectFromLibrary(resourceId) {
+    if (!resourceId) {
+      setAttachUrl("");
+      setAttachLabel("");
+      setAttachType("pdf");
+      return;
+    }
+    const r = library.find((x) => x.id === resourceId);
+    if (!r) return;
+    setAttachUrl(r.url || "");
+    setAttachLabel(r.label || "");
+    setAttachType(r.type || "pdf");
   }
 
   if (!client?.email) {
@@ -299,48 +336,107 @@ function MessagesTab({ client }) {
 
         {showAttach && (
           <div style={attachBlockStyle}>
-            <label style={{ display: "block" }}>
-              <div style={fieldLabelStyle}>URL HTTPS du fichier</div>
-              <input
-                type="url"
-                value={attachUrl}
-                onChange={(e) => setAttachUrl(e.target.value)}
-                placeholder="https://drive.google.com/..."
-                style={inputStyle}
+            {/* V94.44 : 2 modes — depuis la bibliotheque OU saisie custom */}
+            <div style={{ display: "flex", gap: 4 }}>
+              <button
+                type="button"
+                onClick={() => setAttachMode("library")}
+                style={{
+                  ...modeBtnStyle,
+                  ...(attachMode === "library" ? modeBtnActiveStyle : {}),
+                }}
                 disabled={sending}
-              />
-            </label>
-
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8 }}>
-              <label style={{ display: "block" }}>
-                <div style={fieldLabelStyle}>Libelle affiche</div>
-                <input
-                  type="text"
-                  value={attachLabel}
-                  onChange={(e) => setAttachLabel(e.target.value.slice(0, 100))}
-                  placeholder="Guide anti-inflammatoire"
-                  style={inputStyle}
-                  disabled={sending}
-                />
-              </label>
-              <label style={{ display: "block" }}>
-                <div style={fieldLabelStyle}>Type</div>
-                <select
-                  value={attachType}
-                  onChange={(e) => setAttachType(e.target.value)}
-                  style={inputStyle}
-                  disabled={sending}
-                >
-                  <option value="pdf">PDF</option>
-                  <option value="image">Image</option>
-                </select>
-              </label>
+              >
+                📚 Bibliotheque ({library.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttachMode("custom")}
+                style={{
+                  ...modeBtnStyle,
+                  ...(attachMode === "custom" ? modeBtnActiveStyle : {}),
+                }}
+                disabled={sending}
+              >
+                ✏️ URL custom
+              </button>
             </div>
 
-            <p style={hintStyle}>
-              💡 L&apos;URL doit etre publique (Drive partage, Dropbox, S3, Supabase Storage…).
-              La cliente verra un bouton dans le message pour ouvrir le fichier.
-            </p>
+            {attachMode === "library" ? (
+              library.length === 0 ? (
+                <p style={hintStyle}>
+                  Aucune ressource enregistree. Ajoutez-en dans l&apos;onglet
+                  &quot;Ressources&quot; pour les reutiliser ici.
+                </p>
+              ) : (
+                <label style={{ display: "block" }}>
+                  <div style={fieldLabelStyle}>Choisir une ressource</div>
+                  <select
+                    value={library.find((r) => r.url === attachUrl && r.label === attachLabel)?.id || ""}
+                    onChange={(e) => selectFromLibrary(e.target.value)}
+                    style={inputStyle}
+                    disabled={sending}
+                  >
+                    <option value="">— Selectionner —</option>
+                    {library.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.type === "image" ? "🖼" : "📄"} {r.label}
+                      </option>
+                    ))}
+                  </select>
+                  {attachUrl && attachLabel && (
+                    <div style={{ marginTop: 6, fontSize: ".7rem", color: "#8a8a7a" }}>
+                      → {attachLabel} ({attachType})
+                    </div>
+                  )}
+                </label>
+              )
+            ) : (
+              <>
+                <label style={{ display: "block" }}>
+                  <div style={fieldLabelStyle}>URL HTTPS du fichier</div>
+                  <input
+                    type="url"
+                    value={attachUrl}
+                    onChange={(e) => setAttachUrl(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                    style={inputStyle}
+                    disabled={sending}
+                  />
+                </label>
+
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8 }}>
+                  <label style={{ display: "block" }}>
+                    <div style={fieldLabelStyle}>Libelle affiche</div>
+                    <input
+                      type="text"
+                      value={attachLabel}
+                      onChange={(e) => setAttachLabel(e.target.value.slice(0, 100))}
+                      placeholder="Guide anti-inflammatoire"
+                      style={inputStyle}
+                      disabled={sending}
+                    />
+                  </label>
+                  <label style={{ display: "block" }}>
+                    <div style={fieldLabelStyle}>Type</div>
+                    <select
+                      value={attachType}
+                      onChange={(e) => setAttachType(e.target.value)}
+                      style={inputStyle}
+                      disabled={sending}
+                    >
+                      <option value="pdf">PDF</option>
+                      <option value="image">Image</option>
+                    </select>
+                  </label>
+                </div>
+
+                <p style={hintStyle}>
+                  💡 L&apos;URL doit etre publique (Drive partage, Dropbox, S3, Supabase Storage…).
+                  La cliente verra un bouton dans le message pour ouvrir le fichier.
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -457,6 +553,228 @@ function formatMessageDate(iso) {
   } catch {
     return "—";
   }
+}
+
+// ─── Ressources (V94.44) ────────────────────────────────────────────────
+//
+// Bibliotheque de PDFs/images reutilisables. Anissa enregistre une ressource
+// (label + URL HTTPS + type) une fois ici, et peut la reselectionner dans
+// le composer Messages au lieu de re-coller a chaque cliente.
+//
+// Soft delete : archived_at au lieu de DELETE, evite de casser les messages
+// historiques qui referencent l'URL.
+
+function ResourcesTab() {
+  const [resources, setResources] = useState(null);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Add form
+  const [showForm, setShowForm] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newUrl, setNewUrl] = useState("");
+  const [newType, setNewType] = useState("pdf");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(null);
+
+  // Confirm archive
+  const [archivingId, setArchivingId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setResources(null);
+    setError(null);
+    fetchCoachResources()
+      .then((list) => {
+        if (cancelled) return;
+        setResources(list);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        const msg = e instanceof CoachResourceError ? e.message : String(e?.message || e);
+        setError(msg);
+        setResources([]);
+      });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  function reload() {
+    setReloadKey((k) => k + 1);
+  }
+
+  async function handleCreate(e) {
+    e?.preventDefault?.();
+    if (creating) return;
+    setCreateError(null);
+    setCreating(true);
+    try {
+      await createCoachResource({ label: newLabel, url: newUrl, type: newType });
+      setNewLabel("");
+      setNewUrl("");
+      setNewType("pdf");
+      setShowForm(false);
+      reload();
+    } catch (err) {
+      const msg = err instanceof CoachResourceError ? err.message : String(err?.message || err);
+      setCreateError(msg);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleArchive(id, label) {
+    if (archivingId) return;
+    if (!confirm(`Archiver "${label}" ?\n\nCette ressource ne sera plus selectionnable dans les nouveaux messages, mais reste accessible aux clientes qui l'ont deja recue.`)) return;
+    setArchivingId(id);
+    try {
+      await archiveCoachResource(id);
+      reload();
+    } catch (err) {
+      const msg = err instanceof CoachResourceError ? err.message : String(err?.message || err);
+      alert(`Erreur : ${msg}`);
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header + bouton add */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: "0.95rem", color: "#cfcfc4", fontWeight: 600 }}>
+            📚 Bibliotheque de ressources
+          </div>
+          <div style={{ fontSize: ".72rem", color: "#8a8a7a", marginTop: 2 }}>
+            {resources === null ? "Chargement…" : `${resources.length} ressource${resources.length > 1 ? "s" : ""} active${resources.length > 1 ? "s" : ""}`}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          style={primaryBtnStyle}
+          className="btn btn-anissa-primary"
+        >
+          {showForm ? "✖ Annuler" : "+ Ajouter une ressource"}
+        </button>
+      </div>
+
+      {/* Add form */}
+      {showForm && (
+        <form onSubmit={handleCreate} style={composerStyle}>
+          <div style={fieldLabelStyle}>Nouvelle ressource</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            <label style={{ display: "block" }}>
+              <div style={fieldLabelStyle}>Libelle</div>
+              <input
+                type="text"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value.slice(0, 100))}
+                placeholder="Guide anti-inflammatoire"
+                style={inputStyle}
+                disabled={creating}
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <div style={fieldLabelStyle}>URL HTTPS</div>
+              <input
+                type="url"
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                style={inputStyle}
+                disabled={creating}
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <div style={fieldLabelStyle}>Type</div>
+              <select
+                value={newType}
+                onChange={(e) => setNewType(e.target.value)}
+                style={{ ...inputStyle, maxWidth: 200 }}
+                disabled={creating}
+              >
+                <option value="pdf">PDF</option>
+                <option value="image">Image</option>
+              </select>
+            </label>
+          </div>
+
+          {createError && <div style={errorStyle}>⚠ {createError}</div>}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+            <button
+              type="submit"
+              className="btn btn-anissa-primary"
+              disabled={creating || !newLabel.trim() || !newUrl.trim()}
+              style={{ ...primaryBtnStyle, opacity: (creating || !newLabel.trim() || !newUrl.trim()) ? 0.5 : 1 }}
+            >
+              {creating ? "Creation…" : "Creer"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Liste */}
+      {error && <div style={errorStyle}>⚠ {error}</div>}
+
+      {resources === null && <div style={loadingStyle}>Chargement…</div>}
+
+      {resources && resources.length === 0 && !error && (
+        <div style={emptyStateStyle}>
+          <div style={{ fontSize: "1.4rem", marginBottom: 8 }}>📚</div>
+          <div style={{ fontSize: ".9rem", color: "#cfcfc4" }}>Aucune ressource pour le moment.</div>
+          <div style={{ fontSize: ".72rem", color: "#8a8a7a", marginTop: 4 }}>
+            Ajoutez vos guides PDFs reutilisables (anti-inflammatoire, sommeil, etc.)
+            pour les selectionner facilement dans les messages.
+          </div>
+        </div>
+      )}
+
+      {resources && resources.length > 0 && (
+        <ul style={messageListStyle}>
+          {resources.map((r) => (
+            <li key={r.id} style={resourceItemStyle}>
+              <span style={{ fontSize: "1.1rem", marginRight: 8 }}>
+                {r.type === "image" ? "🖼" : "📄"}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: ".88rem", color: "#cfcfc4", fontWeight: 500 }}>
+                  {r.label}
+                </div>
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: ".7rem",
+                    color: "#8a8a7a",
+                    textDecoration: "none",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    display: "block",
+                  }}
+                  title={r.url}
+                >
+                  ↗ {r.url}
+                </a>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleArchive(r.id, r.label)}
+                disabled={archivingId === r.id}
+                style={archiveBtnStyle}
+                title="Archiver"
+              >
+                {archivingId === r.id ? "…" : "🗑"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 // ─── Coming soon stub ────────────────────────────────────────────────────
@@ -766,4 +1084,45 @@ const attachmentLinkStyle = {
   fontSize: ".8rem",
   textDecoration: "none",
   cursor: "pointer",
+};
+
+// V94.44 : modes selecteur attachment (bibliotheque vs custom URL)
+const modeBtnStyle = {
+  padding: "4px 10px",
+  fontSize: ".7rem",
+  fontWeight: 500,
+  color: "#8a8a7a",
+  background: "transparent",
+  border: "1px solid rgba(255,255,255,.06)",
+  borderRadius: 6,
+  cursor: "pointer",
+  transition: "all 120ms ease",
+};
+
+const modeBtnActiveStyle = {
+  color: "#cfcfc4",
+  background: "rgba(130, 195, 158, 0.08)",
+  border: "1px solid rgba(130, 195, 158, 0.2)",
+};
+
+// V94.44 : item de la liste de ressources
+const resourceItemStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "10px 12px",
+  background: "rgba(255,255,255,.025)",
+  border: "1px solid rgba(255,255,255,.06)",
+  borderRadius: 8,
+};
+
+const archiveBtnStyle = {
+  background: "transparent",
+  border: "1px solid rgba(220,80,80,.2)",
+  borderRadius: 6,
+  padding: "4px 8px",
+  color: "#cfcfc4",
+  fontSize: ".85rem",
+  cursor: "pointer",
+  flexShrink: 0,
 };
