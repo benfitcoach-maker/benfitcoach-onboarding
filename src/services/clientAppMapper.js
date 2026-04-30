@@ -26,6 +26,8 @@ import { getNutritionPlanMode } from "./nutritionPlanMode";
 import { mealKey } from "./extractMealsFromPlan";
 // V94.63 : parser unifie aliments interdits (partage avec FicheFrigoPreview + Word)
 import { buildForbiddenList } from "./foodRestrictionsParser";
+// V94.64 : builder canonique partage (coherence E2E avec modal SaaS + Word)
+import { buildCanonicalFridgeData } from "./fridgeDataBuilder";
 
 // ─── Helpers généraux ─────────────────────────────────────────────────────
 
@@ -699,37 +701,23 @@ function buildFridgeFromJson(json, locale) {
   };
 }
 
-function buildFridgeFromText(client, sections, locale) {
+function buildFridgeFromText(client, consultation, sections, locale) {
   const fridgeSection = findSection(sections, "fridge");
-  const yesSection = findSection(sections, "food_yes");
-  // Toutes les sections de type "À limiter" / "À éviter" (parfois plusieurs
-  // dans le format sport : "ALIMENTS À ÉVITER (ALLERGIE CHROME)" + "ALIMENTS
-  // À LIMITER" peuvent coexister).
-  const limitSections = findAllSections(sections, "food_limit");
-  const noSection = findSection(sections, "food_no");
-
   const fridgeBullets = parseBulletLines(fridgeSection?.body || "");
-  const yesBullets = parseBulletLines(yesSection?.body || "");
 
-  // Concatène toutes les sections "limiter/éviter" → un seul lot de bullets
-  const limitAllBody = [
-    ...limitSections.map((s) => s.body || ""),
-    noSection?.body || "",
-  ].filter(Boolean).join("\n");
-  let limitBullets = parseBulletLines(limitAllBody);
-
-  // V94.63 : MERGE des allergies/alimentsEvites du form (parser unifie partage
-  // avec FicheFrigoPreview + Word). Garantit que l'app cliente affiche LES
-  // MEMES aliments a eviter que la modal SaaS d'Anissa et le Word — coherence
-  // E2E. Dedup case-insensitive pour eviter doublons avec sections food_no.
-  const formForbidden = buildForbiddenList(client?.form);
-  if (formForbidden.length > 0) {
-    const seen = new Set(limitBullets.map((l) => l.toLowerCase()));
-    for (const item of formForbidden) {
-      if (!seen.has(item.toLowerCase())) {
-        limitBullets.push(item);
-        seen.add(item.toLowerCase());
-      }
+  // V94.64 : on appelle le builder canonique pour recuperer toFavor / toLimit
+  // / forbidden — meme source de verite que la modal SaaS et le Word.
+  // Ainsi, ce que la cliente voit dans son app = ce qu'Anissa voit dans la
+  // modal Fiche Frigo = ce qui sort dans le Word. Coherence E2E garantie.
+  const canonical = buildCanonicalFridgeData(client, consultation, sections);
+  const yesBullets = canonical.toFavor || [];
+  // limit côté app = toLimit du plan + forbidden (allergies/alimentsEvites form)
+  let limitBullets = [...(canonical.toLimit || [])];
+  const seen = new Set(limitBullets.map((l) => l.toLowerCase()));
+  for (const item of canonical.forbidden || []) {
+    if (!seen.has(item.toLowerCase())) {
+      limitBullets.push(item);
+      seen.add(item.toLowerCase());
     }
   }
 
@@ -775,7 +763,7 @@ function buildFridgeData(client, consultation, sections) {
   if (fromJson && (fromJson.essentials.length || fromJson.favorite.length || fromJson.limit.length)) {
     return fromJson;
   }
-  return buildFridgeFromText(client, sections, locale);
+  return buildFridgeFromText(client, consultation, sections, locale);
 }
 
 // ─── 6. protocols_data ────────────────────────────────────────────────────

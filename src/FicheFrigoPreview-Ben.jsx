@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { extractMeals, extractSupplements, extractFridgeDataFromSections, exportFicheFrigoPDF } from './nutritionPdf';
-// V94.63 : parser unifie partage avec Word + app cliente pour coherence E2E
-import { buildForbiddenList } from './services/foodRestrictionsParser';
+import { exportFicheFrigoPDF } from './nutritionPdf';
+// V94.64 : builder canonique partage (coherence E2E avec Word + app cliente)
+import { buildCanonicalFridgeData } from './services/fridgeDataBuilder';
 
 // Parse structured JSON from Claude (legacy path for saved fiche_frigo_json)
 function fromFicheJson(json, supplementsText) {
@@ -140,68 +140,14 @@ function EditInput({ label, value, onChange, placeholder }) {
 // ─── MAIN COMPONENT ───
 
 export default function FicheFrigoPreview({ consultation, sections, client, onClose }) {
-  // Priority: structured sections > JSON > regex fallback
-  const fromSections = extractFridgeDataFromSections(sections || []);
-  const ficheJson = consultation.ficheFrigoJson || consultation.fiche_frigo_json || null;
-  const fromJson = fromFicheJson(ficheJson, consultation.supplements);
-  const regexMeals = extractMeals(consultation.nutritionPlan);
-  const regexSupp = extractSupplements(consultation.supplements || '');
   const form = client?.form || {};
   const prenom = (form.prenom || 'CLIENT').toUpperCase();
 
-  // Per-field merge: sections > JSON > regex
-  const pickArr = (...sources) => {
-    for (const s of sources) {
-      if (Array.isArray(s) && s.length > 0) return s;
-    }
-    return [];
-  };
-  const pickStr = (...sources) => {
-    for (const s of sources) {
-      if (typeof s === 'string' && s.trim()) return s;
-    }
-    return '';
-  };
-
-  const s = fromSections || {};
-  const j = fromJson || {};
-  const jSupp = j.supplements || {};
-  const source = {
-    breakfast: pickArr(s.breakfast, j.breakfast, regexMeals.breakfast),
-    lunch: pickArr(s.lunch, j.lunch, regexMeals.lunch),
-    dinner: pickArr(s.dinner, j.dinner, regexMeals.dinner),
-    snack: pickStr(s.snack, j.snack, regexMeals.snack),
-    toFavor: pickArr(s.toFavor, j.toFavor, regexMeals.toFavor),
-    toLimit: pickArr(s.toLimit, j.toLimit, regexMeals.toLimit),
-    hydration: pickStr(s.hydration, j.hydration, regexMeals.hydration, form.hydratation),
-    supplements: {
-      morningFasting: pickArr(jSupp.morningFasting, regexSupp.morningFasting),
-      breakfast: pickArr(jSupp.breakfast, regexSupp.breakfast),
-      lunch: pickArr(jSupp.lunch, regexSupp.lunch),
-      dinner: pickArr(jSupp.dinner, regexSupp.dinner),
-      bedtime: pickArr(jSupp.bedtime, regexSupp.bedtime),
-    },
-  };
-
-  // V94.63 : parser unifie (drop phrases longues, extract aliments connus
-  // depuis phrases descriptives, normalize). Source de verite partagee
-  // avec exportToWord + clientAppMapper pour coherence E2E.
-  const forbidden = buildForbiddenList(form);
-
-  // Extract simple rules from plan (RECOMMANDATIONS COACH section, first 3 actionable lines)
-  const buildRules = () => {
-    const coachSection = (sections || []).find(sec => /recommandations?\s*coach/i.test(sec.title));
-    if (!coachSection) return [];
-    const lines = (coachSection.content || '').split('\n')
-      .map(l => l.replace(/^[-–•*]\s*/, '').replace(/^\*\*.*?\*\*\s*:?\s*/, '').trim())
-      .filter(l =>
-        l.length > 10 && l.length < 120 &&
-        !/^(r[eè]gles?|erreurs?|focus|actions?)\s*[:—]/i.test(l) &&
-        !/^(r[eè]gles?\s+(directes?|simples?|coach)|erreurs?\s+[aà]\s+[eé]viter)/i.test(l)
-      );
-    return lines.slice(0, 3);
-  };
-  const rules = buildRules();
+  // V94.64 : tout l'extraction passe par le builder canonique. Coherence E2E
+  // garantie avec Word et app cliente (1 seule logique au lieu de 3).
+  const source = buildCanonicalFridgeData(client, consultation, sections);
+  const forbidden = source.forbidden;
+  const rules = source.rules;
 
   const [mode, setMode] = useState('card'); // 'card' | 'edit' | 'client'
 

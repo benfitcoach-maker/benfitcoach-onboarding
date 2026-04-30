@@ -1,35 +1,9 @@
 import { useState } from 'react';
-import { extractMeals, extractSupplements, extractFridgeDataFromSections, exportFicheFrigoPDF } from './nutritionPdf';
-// V94.63 : parser unifie partage avec Word + app cliente pour coherence E2E
-import { buildForbiddenList } from './services/foodRestrictionsParser';
-
-// Parse structured JSON from Claude (legacy path for saved fiche_frigo_json)
-function fromFicheJson(json, supplementsText) {
-  if (!json || typeof json !== 'object') return null;
-  const repas = json.repas || {};
-  const supp = json.supplements || {};
-
-  const textSupp = extractSupplements(supplementsText || '');
-  const pick = (arr, fallback) =>
-    Array.isArray(arr) && arr.length > 0 ? arr : fallback;
-
-  return {
-    breakfast: Array.isArray(repas.petit_dejeuner) ? repas.petit_dejeuner : [],
-    lunch: Array.isArray(repas.dejeuner) ? repas.dejeuner : [],
-    dinner: Array.isArray(repas.diner) ? repas.diner : [],
-    snack: typeof repas.collation === 'string' ? repas.collation : '',
-    toFavor: Array.isArray(json.a_privilegier) ? json.a_privilegier : [],
-    toLimit: Array.isArray(json.a_limiter) ? json.a_limiter : [],
-    hydration: typeof json.hydratation === 'string' ? json.hydratation : '',
-    supplements: {
-      morningFasting: pick(supp.matin_a_jeun, textSupp.morningFasting),
-      breakfast: pick(supp.petit_dejeuner, textSupp.breakfast),
-      lunch: pick(supp.midi, textSupp.lunch),
-      dinner: pick(supp.soir, textSupp.dinner),
-      bedtime: pick(supp.coucher, textSupp.bedtime),
-    },
-  };
-}
+import { exportFicheFrigoPDF } from './nutritionPdf';
+// V94.64 : builder canonique partage avec Word + app cliente (coherence E2E).
+// Avant, la logique etait dupliquee ici, dans exportToWord.js et clientAppMapper.js.
+// Risque de divergence elimine : une seule source de verite.
+import { buildCanonicalFridgeData } from './services/fridgeDataBuilder';
 
 // ─── CLEAN ITEM: strip parentheses, explanations, leading dashes/bullets ───
 function cleanItem(text) {
@@ -140,68 +114,14 @@ function EditInput({ label, value, onChange, placeholder }) {
 // ─── MAIN COMPONENT ───
 
 export default function FicheFrigoPreview({ consultation, sections, client, onClose }) {
-  // Priority: structured sections > JSON > regex fallback
-  const fromSections = extractFridgeDataFromSections(sections || []);
-  const ficheJson = consultation.ficheFrigoJson || consultation.fiche_frigo_json || null;
-  const fromJson = fromFicheJson(ficheJson, consultation.supplements);
-  const regexMeals = extractMeals(consultation.nutritionPlan);
-  const regexSupp = extractSupplements(consultation.supplements || '');
   const form = client?.form || {};
   const prenom = (form.prenom || 'CLIENT').toUpperCase();
 
-  // Per-field merge: sections > JSON > regex
-  const pickArr = (...sources) => {
-    for (const s of sources) {
-      if (Array.isArray(s) && s.length > 0) return s;
-    }
-    return [];
-  };
-  const pickStr = (...sources) => {
-    for (const s of sources) {
-      if (typeof s === 'string' && s.trim()) return s;
-    }
-    return '';
-  };
-
-  const s = fromSections || {};
-  const j = fromJson || {};
-  const jSupp = j.supplements || {};
-  const source = {
-    breakfast: pickArr(s.breakfast, j.breakfast, regexMeals.breakfast),
-    lunch: pickArr(s.lunch, j.lunch, regexMeals.lunch),
-    dinner: pickArr(s.dinner, j.dinner, regexMeals.dinner),
-    snack: pickStr(s.snack, j.snack, regexMeals.snack),
-    toFavor: pickArr(s.toFavor, j.toFavor, regexMeals.toFavor),
-    toLimit: pickArr(s.toLimit, j.toLimit, regexMeals.toLimit),
-    hydration: pickStr(s.hydration, j.hydration, regexMeals.hydration, form.hydratation),
-    supplements: {
-      morningFasting: pickArr(jSupp.morningFasting, regexSupp.morningFasting),
-      breakfast: pickArr(jSupp.breakfast, regexSupp.breakfast),
-      lunch: pickArr(jSupp.lunch, regexSupp.lunch),
-      dinner: pickArr(jSupp.dinner, regexSupp.dinner),
-      bedtime: pickArr(jSupp.bedtime, regexSupp.bedtime),
-    },
-  };
-
-  // V94.63 : parser unifie (drop phrases longues, extract aliments connus
-  // depuis phrases descriptives, normalize). Source de verite partagee
-  // avec exportToWord + clientAppMapper pour coherence E2E.
-  const forbidden = buildForbiddenList(form);
-
-  // Extract simple rules from plan (RECOMMANDATIONS COACH section, first 3 actionable lines)
-  const buildRules = () => {
-    const coachSection = (sections || []).find(sec => /recommandations?\s*coach/i.test(sec.title));
-    if (!coachSection) return [];
-    const lines = (coachSection.content || '').split('\n')
-      .map(l => l.replace(/^[-–•*]\s*/, '').replace(/^\*\*.*?\*\*\s*:?\s*/, '').trim())
-      .filter(l =>
-        l.length > 10 && l.length < 120 &&
-        !/^(r[eè]gles?|erreurs?|focus|actions?)\s*[:—]/i.test(l) &&
-        !/^(r[eè]gles?\s+(directes?|simples?|coach)|erreurs?\s+[aà]\s+[eé]viter)/i.test(l)
-      );
-    return lines.slice(0, 3);
-  };
-  const rules = buildRules();
+  // V94.64 : tout l'extraction passe par le builder canonique. Coherence E2E
+  // garantie avec Word et app cliente (1 seule logique au lieu de 3).
+  const source = buildCanonicalFridgeData(client, consultation, sections);
+  const forbidden = source.forbidden;
+  const rules = source.rules;
 
   const [mode, setMode] = useState('card'); // 'card' | 'edit' | 'client'
 

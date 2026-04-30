@@ -47,6 +47,8 @@ import { extractFridgeDataFromSections, extractMeals, extractSupplements } from 
 import { parseSupplementEntriesStructured } from "./nutritionParsers";
 // V94.63 : parser unifie aliments interdits (partage avec FicheFrigoPreview + clientAppMapper)
 import { buildForbiddenList } from "./foodRestrictionsParser";
+// V94.64 : builder canonique partage (coherence E2E avec modal SaaS + app cliente)
+import { buildCanonicalFridgeData } from "./fridgeDataBuilder";
 
 // ─── Palette brand Anissa (cohérente avec PDF actuel) ────────────────
 const COLORS = {
@@ -418,49 +420,11 @@ function fromFicheJson(json, supplementsText) {
   };
 }
 
+// V94.64 : delegue au builder canonique partage. Avant, la logique etait
+// dupliquee ici, dans FicheFrigoPreview.jsx et clientAppMapper.js. Risque
+// de divergence elimine : 1 seule source de verite.
 function buildFridgeData(consultation, sections, client) {
-  const ficheJson = consultation?.ficheFrigoJson || consultation?.fiche_frigo_json || null;
-  const fromJson = fromFicheJson(ficheJson, consultation?.supplements);
-  const fromSections = extractFridgeDataFromSections(sections || []);
-  const regexMeals = extractMeals(consultation?.nutritionPlan || consultation?.nutrition_plan || '');
-  const regexSupp = extractSupplements(consultation?.supplements || '');
-  const form = client?.form || {};
-
-  const pickArr = (...sources) => {
-    for (const s of sources) if (Array.isArray(s) && s.length > 0) return s;
-    return [];
-  };
-  const pickStr = (...sources) => {
-    for (const s of sources) if (typeof s === 'string' && s.trim()) return s;
-    return '';
-  };
-
-  const s = fromSections || {};
-  const j = fromJson || {};
-  const jSupp = j.supplements || {};
-
-  // V94.63 : parser unifie (services/foodRestrictionsParser). Drop phrases
-  // longues, extract aliments connus depuis phrases descriptives, normalize.
-  // Source de verite partagee avec FicheFrigoPreview + clientAppMapper.
-  const forbidden = buildForbiddenList(form);
-
-  return {
-    breakfast: pickArr(s.breakfast, j.breakfast, regexMeals.breakfast),
-    lunch: pickArr(s.lunch, j.lunch, regexMeals.lunch),
-    dinner: pickArr(s.dinner, j.dinner, regexMeals.dinner),
-    snack: pickStr(s.snack, j.snack, regexMeals.snack),
-    toFavor: pickArr(s.toFavor, j.toFavor, regexMeals.toFavor),
-    toLimit: pickArr(s.toLimit, j.toLimit, regexMeals.toLimit),
-    forbidden,
-    hydration: pickStr(s.hydration, j.hydration, regexMeals.hydration, form.hydratation),
-    supplements: {
-      morningFasting: pickArr(jSupp.morningFasting, regexSupp.morningFasting),
-      breakfast: pickArr(jSupp.breakfast, regexSupp.breakfast),
-      lunch: pickArr(jSupp.lunch, regexSupp.lunch),
-      dinner: pickArr(jSupp.dinner, regexSupp.dinner),
-      bedtime: pickArr(jSupp.bedtime, regexSupp.bedtime),
-    },
-  };
+  return buildCanonicalFridgeData(client, consultation, sections);
 }
 
 // ─── Builders Fiche Frigo enrichie (V92.4 → V92.5 fix) ─────────────────────
