@@ -32,9 +32,10 @@ import RecipesTab from "./RecipesTab";
 import ClientAppSettingsCard from "./ClientAppSettingsCard";
 // V94.51 : helper pour compter les meals uniques du plan (pour badge Recettes)
 import { extractUniqueMealsFromPlan } from "./services/extractMealsFromPlan";
-// V94.52 : signal SaaS-side de publication (fallback si l'API clients-status
-// est en cache stale ou trouve pas l'email apres update DB cote staging).
-import { hasBeenPublishedLocally } from "./services/publishToClientApp";
+// V94.52 / V94.53 : signal SaaS-side de publication (fallback si l'API
+// clients-status est en cache stale ou trouve pas l'email apres update DB
+// cote staging) + backfill auto quand l'API confirme.
+import { hasBeenPublishedLocally, markPublishedLocally } from "./services/publishToClientApp";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -176,7 +177,15 @@ function OverviewTab({
     fetchClientsStatus([client.email])
       .then((map) => {
         if (cancelled) return;
-        setStatus(map[client.email.toLowerCase()] || null);
+        const entry = map[client.email.toLowerCase()] || null;
+        setStatus(entry);
+        // V94.53 : backfill auto. Si l'API confirme l'existence (found=true),
+        // on hydrate le localStorage. Resultat : toutes les clientes existantes
+        // de Anissa sont automatiquement reconnues au prochain mount du panel,
+        // sans qu'elle ait besoin de re-publier.
+        if (entry?.found && client?.id) {
+          markPublishedLocally(client.id);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -184,20 +193,23 @@ function OverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [client?.email]);
+  }, [client?.email, client?.id]);
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);
-  // V94.46 → V94.52 : 3 sources de verite combinees pour determiner si la
-  // cliente a acces a l'app, du plus fiable au moins fiable :
-  //   1. apiFound : l'API distante confirme (canonique mais peut etre stale)
+  // V94.46 → V94.53 : 4 sources de verite combinees pour determiner l'acces.
+  //   1. apiFound : l'API distante confirme (canonique, mais cache 60s)
   //   2. appEnabled : flag SaaS cote profil cliente
   //   3. publishedLocally : trace SaaS de publication reussie (V94.52)
-  //      → resout les cas ou l'API rate (email mismatch, cache, etc.)
+  //   4. presumedFromPlan : cliente avec plan redige et id → presomption
+  //      raisonnable qu'elle a ete publiee au moins une fois (resout
+  //      tous les edge cases : email mismatch staging, cache stale,
+  //      backfill manuel DB sans repasser par publish, etc.)
   const apiFound = !!status?.found;
   const appEnabled = !!(client?.app_enabled ?? client?.appEnabled);
   const publishedLocally = hasBeenPublishedLocally(client?.id);
-  const hasAppAccess = apiFound || appEnabled || publishedLocally;
+  const presumedFromPlan = !!(hasPlan && client?.id);
+  const hasAppAccess = apiFound || appEnabled || publishedLocally || presumedFromPlan;
   const lastLoginAt = status?.last_login_at || null;
   const lastActivityAt = status?.last_activity_at || null;
   const feedbacks7d = status?.feedbacks_7d_count || 0;

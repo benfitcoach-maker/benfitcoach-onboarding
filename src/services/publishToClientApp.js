@@ -177,3 +177,25 @@ export function hasBeenPublishedLocally(clientId) {
     return false;
   }
 }
+
+/**
+ * V94.53 : Backfill automatique du flag local pour une cliente.
+ * Appele quand on detecte qu'elle a ete publiee via un autre signal
+ * (api found OU app_enabled). Evite de devoir re-publier manuellement
+ * toutes les clientes existantes apres l'update V94.52.
+ */
+export function markPublishedLocally(clientId) {
+  if (!clientId) return;
+  try {
+    const KEY = "bfc_published_client_ids";
+    const raw = localStorage.getItem(KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    const set = new Set(Array.isArray(arr) ? arr : []);
+    if (!set.has(String(clientId))) {
+      set.add(String(clientId));
+      localStorage.setItem(KEY, JSON.stringify([...set]));
+    }
+  } catch {
+    /* silent */
+  }
+}
