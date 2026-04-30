@@ -45,6 +45,8 @@ import { saveAs } from "file-saver";
 import { extractFridgeDataFromSections, extractMeals, extractSupplements } from "../nutritionPdf";
 // V94.3 : parser canonical pour les entrees supplements (meme que jsPDF)
 import { parseSupplementEntriesStructured } from "./nutritionParsers";
+// V94.63 : parser unifie aliments interdits (partage avec FicheFrigoPreview + clientAppMapper)
+import { buildForbiddenList } from "./foodRestrictionsParser";
 
 // ─── Palette brand Anissa (cohérente avec PDF actuel) ────────────────
 const COLORS = {
@@ -437,10 +439,10 @@ function buildFridgeData(consultation, sections, client) {
   const j = fromJson || {};
   const jSupp = j.supplements || {};
 
-  // Forbidden = aliments allergies + alimentsEvites du form (comme FicheFrigoPreview)
-  const extractFormList = (field) =>
-    (form[field] || '').split(/[,;/]+/).map(x => x.trim()).filter(x => x.length > 1);
-  const forbidden = [...new Set([...extractFormList('allergies'), ...extractFormList('alimentsEvites')])];
+  // V94.63 : parser unifie (services/foodRestrictionsParser). Drop phrases
+  // longues, extract aliments connus depuis phrases descriptives, normalize.
+  // Source de verite partagee avec FicheFrigoPreview + clientAppMapper.
+  const forbidden = buildForbiddenList(form);
 
   return {
     breakfast: pickArr(s.breakfast, j.breakfast, regexMeals.breakfast),

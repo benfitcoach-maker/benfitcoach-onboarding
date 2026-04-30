@@ -24,6 +24,8 @@ import {
 } from "../nutritionEditorParsers";
 import { getNutritionPlanMode } from "./nutritionPlanMode";
 import { mealKey } from "./extractMealsFromPlan";
+// V94.63 : parser unifie aliments interdits (partage avec FicheFrigoPreview + Word)
+import { buildForbiddenList } from "./foodRestrictionsParser";
 
 // ─── Helpers généraux ─────────────────────────────────────────────────────
 
@@ -697,7 +699,7 @@ function buildFridgeFromJson(json, locale) {
   };
 }
 
-function buildFridgeFromText(sections, locale) {
+function buildFridgeFromText(client, sections, locale) {
   const fridgeSection = findSection(sections, "fridge");
   const yesSection = findSection(sections, "food_yes");
   // Toutes les sections de type "À limiter" / "À éviter" (parfois plusieurs
@@ -714,7 +716,22 @@ function buildFridgeFromText(sections, locale) {
     ...limitSections.map((s) => s.body || ""),
     noSection?.body || "",
   ].filter(Boolean).join("\n");
-  const limitBullets = parseBulletLines(limitAllBody);
+  let limitBullets = parseBulletLines(limitAllBody);
+
+  // V94.63 : MERGE des allergies/alimentsEvites du form (parser unifie partage
+  // avec FicheFrigoPreview + Word). Garantit que l'app cliente affiche LES
+  // MEMES aliments a eviter que la modal SaaS d'Anissa et le Word — coherence
+  // E2E. Dedup case-insensitive pour eviter doublons avec sections food_no.
+  const formForbidden = buildForbiddenList(client?.form);
+  if (formForbidden.length > 0) {
+    const seen = new Set(limitBullets.map((l) => l.toLowerCase()));
+    for (const item of formForbidden) {
+      if (!seen.has(item.toLowerCase())) {
+        limitBullets.push(item);
+        seen.add(item.toLowerCase());
+      }
+    }
+  }
 
   const usedEssIds = new Set();
   const essentials = fridgeBullets.map((label) => ({
@@ -758,7 +775,7 @@ function buildFridgeData(client, consultation, sections) {
   if (fromJson && (fromJson.essentials.length || fromJson.favorite.length || fromJson.limit.length)) {
     return fromJson;
   }
-  return buildFridgeFromText(sections, locale);
+  return buildFridgeFromText(client, sections, locale);
 }
 
 // ─── 6. protocols_data ────────────────────────────────────────────────────

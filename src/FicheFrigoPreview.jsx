@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { extractMeals, extractSupplements, extractFridgeDataFromSections, exportFicheFrigoPDF } from './nutritionPdf';
+// V94.63 : parser unifie partage avec Word + app cliente pour coherence E2E
+import { buildForbiddenList } from './services/foodRestrictionsParser';
 
 // Parse structured JSON from Claude (legacy path for saved fiche_frigo_json)
 function fromFicheJson(json, supplementsText) {
@@ -181,10 +183,10 @@ export default function FicheFrigoPreview({ consultation, sections, client, onCl
     },
   };
 
-  // Build forbidden list from form allergies + alimentsEvites
-  const extractFormList = (field) =>
-    (form[field] || '').split(/[,;/]+/).map(s => s.trim()).filter(s => s.length > 1);
-  const forbidden = [...new Set([...extractFormList('allergies'), ...extractFormList('alimentsEvites')])];
+  // V94.63 : parser unifie (drop phrases longues, extract aliments connus
+  // depuis phrases descriptives, normalize). Source de verite partagee
+  // avec exportToWord + clientAppMapper pour coherence E2E.
+  const forbidden = buildForbiddenList(form);
 
   // Extract simple rules from plan (RECOMMANDATIONS COACH section, first 3 actionable lines)
   const buildRules = () => {
