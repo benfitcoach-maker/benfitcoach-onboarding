@@ -3965,9 +3965,10 @@ ${suppText}`;
                       modifier le plan. Auto-collapse si pas de feedbacks. */}
                   <ClientFeedbacksPanel client={client} consultation={consultation} />
 
-                  {/* Réglages app cliente (toggles par-cliente : suivi poids, etc.).
-                      Ne s'affiche que si la cliente est en staging (plan publié). */}
-                  <ClientAppSettingsCard client={client} />
+                  {/* V94.49 : ClientAppSettingsCard deplace dans l'onglet
+                      'App cliente' > 'Vue d'ensemble' pour eliminer le doublon
+                      visuel ('📱 App cliente' + '⚙ Reglages app cliente'
+                      coexistaient sur l'onglet 'plan'). */}
 
                   <NutritionEditor
                     key={`editor-${editorSeed}`}

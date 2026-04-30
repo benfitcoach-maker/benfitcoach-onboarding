@@ -27,6 +27,9 @@ import { fetchClientSignals, ClientSignalsError } from "./services/fetchClientSi
 // dans les onglets racines de l'editeur — separation mindset plan vs app).
 import IntroLetterTab from "./IntroLetterTab";
 import RecipesTab from "./RecipesTab";
+// V94.49 : Reglages app cliente (toggles par-cliente : suivi poids, etc.)
+// regroupes ici pour eliminer le doublon avec l'onglet 'App cliente'.
+import ClientAppSettingsCard from "./ClientAppSettingsCard";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -212,6 +215,13 @@ function OverviewTab({ client, consultation }) {
           </span>
         </Row>
       )}
+
+      {/* V94.49 : reglages app cliente integres ici (suivi poids visible/cache,
+          etc.). Avant : sur l'onglet 'plan' au-dessus de l'editeur, ce qui
+          melangeait peaufinage plan et reglages app. */}
+      <div style={{ marginTop: 16 }}>
+        <ClientAppSettingsCard client={client} />
+      </div>
     </div>
   );
 }
