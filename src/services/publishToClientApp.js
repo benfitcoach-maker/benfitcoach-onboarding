@@ -14,6 +14,7 @@
 
 import { buildClientAppPlanFromConsultation } from "./clientAppMapper";
 import { applyEnrichmentToPlan } from "./aiEnrichClientPlan";
+import { saveClient } from "../store";
 
 const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
 const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
@@ -157,6 +158,20 @@ export async function publishConsultationToClientApp(client, consultation, enric
     }
   } catch {
     /* silent : pas grave si quota plein */
+  }
+
+  // V94.66 : persiste l'id staging (= clients.id cote app cliente) sur le
+  // client SaaS local. Permet ensuite a fetchClientsStatus de matcher la
+  // cliente directement par client_id, sans dependre de l'email — crucial
+  // pour les comptes App Store / Play Store ou Apple/Google peuvent
+  // remplacer l'email par hide-my-email.
+  try {
+    const stagingId = body?.client_id ? String(body.client_id) : null;
+    if (stagingId && client?.id && client.stagingClientId !== stagingId) {
+      saveClient({ id: client.id, stagingClientId: stagingId });
+    }
+  } catch {
+    /* silent : la publication a reussi, le mapping local est best-effort */
   }
 
   return body;

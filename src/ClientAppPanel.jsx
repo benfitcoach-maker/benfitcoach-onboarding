@@ -229,15 +229,20 @@ function OverviewTab({
 
   useEffect(() => {
     let cancelled = false;
-    if (!client?.email) {
+    const email = client?.email || null;
+    const stagingClientId = client?.stagingClientId || null;
+    if (!email && !stagingClientId) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    fetchClientsStatus([client.email])
+    fetchClientsStatus([{ email, stagingClientId }])
       .then((map) => {
         if (cancelled) return;
-        const entry = map[client.email.toLowerCase()] || null;
+        const key = stagingClientId
+          ? `id:${stagingClientId}`
+          : email?.toLowerCase();
+        const entry = (key && map[key]) || null;
         setStatus(entry);
         // V94.53 : backfill auto. Si l'API confirme l'existence (found=true),
         // on hydrate le localStorage. Resultat : toutes les clientes existantes
@@ -253,7 +258,7 @@ function OverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [client?.email, client?.id]);
+  }, [client?.email, client?.id, client?.stagingClientId]);
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);

@@ -155,6 +155,9 @@ async function cloudSyncClient(client) {
     pack_started_at: rest.packStartedAt || null,
     pack_schedule: rest.packSchedule || null,
     pack_started_at_confirmed: rest.packStartedAtConfirmed ?? false,
+    // V94.66 : ref vers clients.id cote app cliente, pour matching robuste
+    // App Store / Play Store (cf. fetchClientsStatus + publishToClientApp).
+    staging_client_id: rest.stagingClientId || null,
   };
   supabase.from('clients').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
@@ -298,6 +301,7 @@ async function cloudSyncNutritionConsultation(consultation) {
             pack_started_at: rest.packStartedAt || null,
             pack_schedule: rest.packSchedule || null,
             pack_started_at_confirmed: rest.packStartedAtConfirmed ?? false,
+            staging_client_id: rest.stagingClientId || null,
           };
           const { error: clientErr } = await supabase
             .from('clients')
@@ -549,6 +553,7 @@ export async function pullFromCloud() {
         packStartedAt: c.pack_started_at || null,
         packSchedule: c.pack_schedule || null,
         packStartedAtConfirmed: c.pack_started_at_confirmed ?? false,
+        stagingClientId: c.staging_client_id || null,
         history,
         progression,
         massageSessions,

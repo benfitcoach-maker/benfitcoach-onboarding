@@ -27,18 +27,21 @@ function colorFor(count) {
   return            { bg: "rgba(255,255,255,.04)",      border: "rgba(255,255,255,.10)", color: "#8a8a7a", tip: "Aucun ressenti envoyé sur 7j" };
 }
 
-export default function ClientEngagementBadge({ email }) {
+export default function ClientEngagementBadge({ email, stagingClientId = null }) {
   const [entry, setEntry] = useState(null); // { status, feedbacks_7d_count, ... } | null
 
   useEffect(() => {
     let cancelled = false;
-    if (!email) return;
-    fetchClientsStatus([email]).then((map) => {
+    if (!email && !stagingClientId) return;
+    fetchClientsStatus([{ email, stagingClientId }]).then((map) => {
       if (cancelled) return;
-      setEntry(map[email.toLowerCase()] || null);
+      const key = stagingClientId
+        ? `id:${stagingClientId}`
+        : email?.toLowerCase();
+      setEntry((key && map[key]) || null);
     });
     return () => { cancelled = true; };
-  }, [email]);
+  }, [email, stagingClientId]);
 
   if (!entry) return null;
   // Pas pertinent pour les clientes pas encore actives

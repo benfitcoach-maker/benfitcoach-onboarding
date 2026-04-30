@@ -16,18 +16,21 @@
 import { useEffect, useState } from "react";
 import { fetchClientsStatus } from "./services/fetchClientsStatus";
 
-export default function ClientNewFeedbacksBadge({ email }) {
+export default function ClientNewFeedbacksBadge({ email, stagingClientId = null }) {
   const [entry, setEntry] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (!email) return;
-    fetchClientsStatus([email]).then((map) => {
+    if (!email && !stagingClientId) return;
+    fetchClientsStatus([{ email, stagingClientId }]).then((map) => {
       if (cancelled) return;
-      setEntry(map[email.toLowerCase()] || null);
+      const key = stagingClientId
+        ? `id:${stagingClientId}`
+        : email?.toLowerCase();
+      setEntry((key && map[key]) || null);
     });
     return () => { cancelled = true; };
-  }, [email]);
+  }, [email, stagingClientId]);
 
   if (!entry) return null;
   if (entry.status === "absent") return null;

@@ -315,21 +315,29 @@ function App() {
   // (pas stockees DB) car auto-derives du dernier last_reviewed_at.
   const buildFeedbackNotifs = async (anissaClients) => {
     if (!Array.isArray(anissaClients) || anissaClients.length === 0) return [];
-    const emails = anissaClients
-      .map((c) => (c.email || '').trim().toLowerCase())
-      .filter(Boolean);
-    if (emails.length === 0) return [];
+    // V94.66 : envoie {email, stagingClientId} pour matching robuste
+    // (cf. fetchClientsStatus). Permet de retrouver la cliente meme quand
+    // l'email Apple/Google sur le compte App Store differe de l'email SaaS.
+    const items = anissaClients
+      .map((c) => ({
+        email: (c.email || '').trim().toLowerCase() || null,
+        stagingClientId: c.stagingClientId || null,
+      }))
+      .filter((x) => x.email || x.stagingClientId);
+    if (items.length === 0) return [];
     let statuses = {};
     try {
-      statuses = await fetchClientsStatus(emails);
+      statuses = await fetchClientsStatus(items);
     } catch {
       return []; // best-effort, pas bloquant
     }
     const out = [];
     for (const c of anissaClients) {
       const email = (c.email || '').trim().toLowerCase();
-      if (!email) continue;
-      const s = statuses[email];
+      const stagingId = c.stagingClientId || null;
+      if (!email && !stagingId) continue;
+      const key = stagingId ? `id:${stagingId}` : email;
+      const s = statuses[key];
       const n = s?.new_feedbacks_count || 0;
       if (n <= 0) continue;
       const plural = n > 1;

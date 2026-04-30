@@ -267,9 +267,9 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
           }}>
             {client.prenom || 'Sans nom'}
           </span>
-          <ClientStatusBadge email={client.form?.email} />
-          <ClientEngagementBadge email={client.form?.email} />
-          <ClientNewFeedbacksBadge email={client.form?.email} />
+          <ClientStatusBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
+          <ClientEngagementBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
+          <ClientNewFeedbacksBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
         </div>
         <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
           {consultations.length > 0

@@ -42,22 +42,25 @@ const META = {
   },
 };
 
-export default function ClientStatusBadge({ email }) {
+export default function ClientStatusBadge({ email, stagingClientId = null }) {
   const [status, setStatus] = useState(null); // null = loading
 
   useEffect(() => {
     let cancelled = false;
-    if (!email) {
+    if (!email && !stagingClientId) {
       setStatus("absent");
       return;
     }
-    fetchClientsStatus([email]).then((map) => {
+    fetchClientsStatus([{ email, stagingClientId }]).then((map) => {
       if (cancelled) return;
-      const entry = map[email.toLowerCase()];
+      const key = stagingClientId
+        ? `id:${stagingClientId}`
+        : email?.toLowerCase();
+      const entry = key ? map[key] : null;
       setStatus(entry?.status || "absent");
     });
     return () => { cancelled = true; };
-  }, [email]);
+  }, [email, stagingClientId]);
 
   if (status === null) return null; // pas de placeholder visuel pour éviter le flash
 
