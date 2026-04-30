@@ -300,15 +300,16 @@ function OverviewTab({
         </button>
       )}
 
-      {/* V94.51 : Workflow checklist — guide etape-par-etape pour Anissa.
-          Aide a ne rien oublier (lettre, recettes, publication) avant
-          d'envoyer le plan. Chaque etape est cliquable → jump au sous-onglet. */}
+      {/* V94.51 → V94.56 : Workflow checklist — guide etape-par-etape.
+          clientPublished aligne sur hasAppAccess (4 sources de verite,
+          coherent avec le reste du panel). Sinon dependence sur l'API
+          stale fait afficher 2/3 alors que le plan est bien publie. */}
       <WorkflowChecklist
         hasPlan={hasPlan}
         letterFilled={letterFilled}
         recipesFilledCount={recipesFilledCount}
         totalMeals={totalMeals}
-        clientPublished={!!status?.found || !!(client?.app_enabled ?? client?.appEnabled)}
+        clientPublished={hasAppAccess}
         onJumpTo={onJumpTo}
       />
 
