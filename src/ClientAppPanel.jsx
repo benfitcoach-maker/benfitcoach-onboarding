@@ -40,7 +40,14 @@ const SUB_TABS = [
   { id: "signals", label: "Signaux" },
 ];
 
-export default function ClientAppPanel({ client, consultation, form, onUpdateConsultation }) {
+export default function ClientAppPanel({
+  client,
+  consultation,
+  form,
+  hasPlan,
+  onUpdateConsultation,
+  onOpenPreview,
+}) {
   const [activeTab, setActiveTab] = useState("overview");
 
   if (!client) {
@@ -73,7 +80,12 @@ export default function ClientAppPanel({ client, consultation, form, onUpdateCon
       {/* Content */}
       <div style={contentStyle}>
         {activeTab === "overview" && (
-          <OverviewTab client={client} consultation={consultation} />
+          <OverviewTab
+            client={client}
+            consultation={consultation}
+            hasPlan={hasPlan}
+            onOpenPreview={onOpenPreview}
+          />
         )}
         {/* V94.48 : Lettre + Recettes regroupees ici (composantes app cliente) */}
         {activeTab === "letter" && (
@@ -100,7 +112,7 @@ export default function ClientAppPanel({ client, consultation, form, onUpdateCon
 
 // ─── Vue d'ensemble ─────────────────────────────────────────────────────
 
-function OverviewTab({ client, consultation }) {
+function OverviewTab({ client, consultation, hasPlan, onOpenPreview }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -143,14 +155,42 @@ function OverviewTab({ client, consultation }) {
   }
 
   // Cas reel "pas d'app" : ni l'API ni le flag SaaS ne signalent un acces.
+  // V94.50 : on affiche aussi le bouton 'Apercu & Publier' meme dans cet etat
+  // pour qu'Anissa puisse activer le compte cliente directement depuis ici.
   if (!hasAppAccess) {
     return (
-      <div style={emptyStateStyle}>
-        <div style={{ fontSize: "1rem", marginBottom: 6, color: "#cfcfc4" }}>
-          Cette cliente n&apos;a pas encore d&apos;acces a l&apos;app.
-        </div>
-        <div style={{ fontSize: ".8rem", color: "#8a8a7a" }}>
-          Publiez son plan dans l&apos;app cliente pour activer son compte.
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {onOpenPreview && (
+          <button
+            type="button"
+            onClick={onOpenPreview}
+            disabled={!hasPlan}
+            style={publishButtonStyle(hasPlan)}
+            title={hasPlan ? "Voir le rendu cliente et publier" : "Aucun plan a publier"}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: "1.2rem" }}>👁️</span>
+              <div>
+                <div style={{ fontSize: ".85rem", fontWeight: 600, color: hasPlan ? "#cfcfc4" : "#8a8a7a" }}>
+                  Apercu & Publier dans l&apos;app
+                </div>
+                <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 2 }}>
+                  {hasPlan
+                    ? "Activer le compte cliente en publiant son plan"
+                    : "Redigez un plan d'abord pour pouvoir publier"}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: "1rem", color: "#82c39e" }}>→</span>
+          </button>
+        )}
+        <div style={emptyStateStyle}>
+          <div style={{ fontSize: "1rem", marginBottom: 6, color: "#cfcfc4" }}>
+            Cette cliente n&apos;a pas encore d&apos;acces a l&apos;app.
+          </div>
+          <div style={{ fontSize: ".8rem", color: "#8a8a7a" }}>
+            Publiez son plan ci-dessus pour activer son compte.
+          </div>
         </div>
       </div>
     );
@@ -166,6 +206,35 @@ function OverviewTab({ client, consultation }) {
         <div style={{ fontSize: ".7rem", color: "#e8a040", padding: "6px 10px", background: "rgba(232,160,64,.06)", border: "1px solid rgba(232,160,64,.2)", borderRadius: 6 }}>
           ⚠ Donnees API en cours de synchronisation. Le statut connexion peut etre incomplet.
         </div>
+      )}
+
+      {/* V94.50 : CTA principale "Apercu & Publier" — anciennement bouton
+          "Aperçu JSON" du header editeur (mauvais nom, mauvaise place).
+          Action critique du workflow Anissa : ouvre la modale qui montre
+          le rendu visuel des sections + bouton Publier dans l'app. */}
+      {onOpenPreview && (
+        <button
+          type="button"
+          onClick={onOpenPreview}
+          disabled={!hasPlan}
+          style={publishButtonStyle(hasPlan)}
+          title={hasPlan ? "Voir le rendu cliente et publier" : "Aucun plan a publier"}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: "1.2rem" }}>👁️</span>
+            <div>
+              <div style={{ fontSize: ".85rem", fontWeight: 600, color: hasPlan ? "#cfcfc4" : "#8a8a7a" }}>
+                Apercu & Publier dans l&apos;app
+              </div>
+              <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 2 }}>
+                {hasPlan
+                  ? "Voir le rendu cliente puis publier la nouvelle version"
+                  : "Redigez un plan d'abord pour pouvoir publier"}
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "1rem", color: "#82c39e" }}>→</span>
+        </button>
       )}
 
       {/* Statut connexion */}
@@ -1360,6 +1429,30 @@ const archiveBtnStyle = {
   cursor: "pointer",
   flexShrink: 0,
 };
+
+// V94.50 : style du bouton 'Apercu & Publier' (CTA principale du hub)
+function publishButtonStyle(enabled) {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "12px 16px",
+    background: enabled
+      ? "linear-gradient(135deg, rgba(130,195,158,0.18), rgba(130,195,158,0.08))"
+      : "rgba(255,255,255,.025)",
+    border: `1px solid ${enabled ? "rgba(130,195,158,0.3)" : "rgba(255,255,255,.06)"}`,
+    borderRadius: 10,
+    color: enabled ? "#cfcfc4" : "#8a8a7a",
+    fontSize: ".85rem",
+    fontWeight: 500,
+    cursor: enabled ? "pointer" : "not-allowed",
+    opacity: enabled ? 1 : 0.55,
+    transition: "all 120ms ease",
+    textAlign: "left",
+    width: "100%",
+  };
+}
 
 // V94.45 : item de signal (interet upsell ou ouverture attachment)
 const signalItemStyle = {
