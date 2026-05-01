@@ -457,6 +457,17 @@ function classifyMealLabel(label, locale) {
       };
     }
   }
+  // V95.1 : "Collation" sans qualificatif (matin/apres-midi/soir) tombait
+  // auparavant sur le fallback 'lunch' → 2 meals du jour avaient slot='lunch'
+  // et le mapping alternatives (qui utilise normalizeSlotLabelToSlot →
+  // afternoon_snack par defaut) ne retrouvait jamais son meal cible.
+  // Aligne avec normalizeSlotLabelToSlot pour coherence entre semaine et alts.
+  if (/collation|snack|go[uû]ter/i.test(label)) {
+    return {
+      slot: "afternoon_snack",
+      slot_label: locale === "fr" ? "Collation" : "Snack",
+    };
+  }
   return { slot: "lunch", slot_label: label };
 }
 
@@ -471,6 +482,14 @@ function classifyMealLabelStrict(label, locale) {
         slot_label: locale === "fr" ? p.label_fr : p.label_en,
       };
     }
+  }
+  // V95.1 : "Collation" simple aussi accepte en mode strict pour rester
+  // coherent avec classifyMealLabel (cf. ci-dessus).
+  if (/^collation$|^snack$|^go[uû]ter$/i.test(label.trim())) {
+    return {
+      slot: "afternoon_snack",
+      slot_label: locale === "fr" ? "Collation" : "Snack",
+    };
   }
   return null;
 }
