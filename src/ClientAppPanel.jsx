@@ -31,7 +31,7 @@ import RecipesTab from "./RecipesTab";
 // regroupes ici pour eliminer le doublon avec l'onglet 'App cliente'.
 import ClientAppSettingsCard from "./ClientAppSettingsCard";
 // V94.51 : helper pour compter les meals uniques du plan (pour badge Recettes)
-import { extractUniqueMealsFromPlan } from "./services/extractMealsFromPlan";
+import { extractMealsAndAlternativesFromPlan } from "./services/extractMealsFromPlan";
 // V94.52 / V94.53 : signal SaaS-side de publication (fallback si l'API
 // clients-status est en cache stale ou trouve pas l'email apres update DB
 // cote staging) + backfill auto quand l'API confirme.
@@ -76,7 +76,10 @@ export default function ClientAppPanel({
   // d'API call (les counters fetched sont alimentes par les sub-tabs
   // eux-memes lorsqu'ils sont actives).
   const planText = consultation?.nutrition_plan || consultation?.nutritionPlan || "";
-  const totalMeals = useMemo(() => extractUniqueMealsFromPlan(planText).length, [planText]);
+  // V95.5 : aligne avec RecipesTab qui genere aussi les recettes des
+  // alternatives. Sans ca, le badge affichait par exemple "18/3" (18 recettes
+  // filled vs 3 meals principaux) — incoherent et confondant.
+  const totalMeals = useMemo(() => extractMealsAndAlternativesFromPlan(planText, "fr").length, [planText]);
   const recipesFilledCount = useMemo(() => {
     const r = consultation?.meal_recipes || {};
     return Object.values(r).filter((rec) => rec?.ingredients?.length || rec?.preparation?.length).length;
