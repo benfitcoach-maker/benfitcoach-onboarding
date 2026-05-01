@@ -598,11 +598,15 @@ function buildMealsFromBody(body, locale) {
 // section "## 4. ALTERNATIVES PAR REPAS" du plan. Utilisé par buildWeekMeals
 // pour décorer chaque meal.alternatives. Map vide si la section est absente
 // (plans pré-V95) → backward compat naturelle.
-function buildAlternativesIndex(sections, locale) {
+//
+// V95.4 : ajoute recipe aux alts si une recette a ete generee cote SaaS
+// (mealRecipes[mealKey(slot, alt.title)]). Permet a l'app cliente de
+// montrer la recette directement quand la cliente swap.
+function buildAlternativesIndex(sections, locale, mealRecipes = {}) {
   const altSection = findSection(sections, "alternatives");
   if (!altSection?.body) return new Map();
 
-  const groups = parseSlotAlternatives(altSection.body);
+  const groups = parseSlotAlternatives(altSection.body, locale);
   const index = new Map();
 
   for (const group of groups) {
@@ -613,10 +617,13 @@ function buildAlternativesIndex(sections, locale) {
     const items = group.items
       .map((it) => {
         if (!it.title || it.title.length < 3) return null;
+        const recipe = mealRecipes[mealKey(slot, it.title)];
+        const hasRecipe = recipe && (recipe.ingredients?.length || recipe.preparation?.length);
         return {
           id: uniqueId(slugify(it.title), usedAltIds),
           title: it.title,
           ...(it.hint ? { hint: it.hint } : {}),
+          ...(hasRecipe ? { recipe } : {}),
         };
       })
       .filter(Boolean);
@@ -648,7 +655,9 @@ function buildWeekMeals(client, consultation, sections) {
   // V95 : injection des alternatives par slot. Map vide si la section
   // "ALTERNATIVES PAR REPAS" n'a pas été produite par le prompt (plans pré-V95)
   // → meal.alternatives reste undefined, l'app cliente cache le bouton.
-  const altsBySlot = buildAlternativesIndex(sections, locale);
+  // V95.4 : passe mealRecipes pour que les alts heritent de leur recette
+  // si Anissa l'a generee cote SaaS.
+  const altsBySlot = buildAlternativesIndex(sections, locale, mealRecipes);
   const attachAlternatives = (m) => {
     const alts = altsBySlot.get(m.slot);
     if (alts && alts.length > 0) return { ...m, alternatives: alts };

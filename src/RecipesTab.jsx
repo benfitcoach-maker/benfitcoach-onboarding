@@ -12,14 +12,21 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from "react";
-import { extractUniqueMealsFromPlan } from "./services/extractMealsFromPlan";
+import { extractMealsAndAlternativesFromPlan } from "./services/extractMealsFromPlan";
 import { generateRecipesForMeals } from "./services/aiRecipeGenerator";
 
 export default function RecipesTab({ consultation, form, onSave, onPersistGlobally }) {
   const planText = consultation?.nutrition_plan || consultation?.nutritionPlan || "";
 
-  // Extraction des repas uniques depuis le plan
-  const meals = useMemo(() => extractUniqueMealsFromPlan(planText), [planText]);
+  // V95.4 : extraction des repas principaux ET des alternatives. Anissa
+  // genere une seule fois → toutes les recettes (16-20 typiquement) sont
+  // enrichies d'un coup. Le client app les lit via meal_recipes lookup
+  // (mealKey commun main/alt) → tap sur une alt cote cliente ouvre direct
+  // la recette sans attente.
+  const meals = useMemo(
+    () => extractMealsAndAlternativesFromPlan(planText, "fr"),
+    [planText],
+  );
 
   // Etat local des recettes (key → Recipe)
   const [recipes, setRecipes] = useState(() => consultation?.meal_recipes || {});
@@ -164,7 +171,7 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
         </div>
       )}
 
-      {/* Cards de recettes */}
+      {/* Cards de recettes — V95.4 : groupees par slot, badge 'alternative' */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
         {meals.map((m) => (
           <RecipeCard
@@ -205,12 +212,34 @@ function RecipeCard({ meal, recipe = {}, onChange }) {
         style={cardHeaderStyle}
       >
         <div style={{ flex: 1, textAlign: "left" }}>
-          <div style={{ fontSize: ".7rem", color: "#8a8a7a", textTransform: "uppercase", letterSpacing: ".05em" }}>
+          <div style={{ fontSize: ".7rem", color: "#8a8a7a", textTransform: "uppercase", letterSpacing: ".05em", display: "flex", alignItems: "center", gap: 6 }}>
             {meal.slot_label}
+            {/* V95.4 : badge discret pour les alternatives */}
+            {meal.kind === "alt" && (
+              <span
+                style={{
+                  fontSize: ".6rem",
+                  fontWeight: 600,
+                  color: "#c4a050",
+                  letterSpacing: ".06em",
+                  background: "rgba(196,160,80,.1)",
+                  border: "1px solid rgba(196,160,80,.2)",
+                  padding: "1px 6px",
+                  borderRadius: 999,
+                }}
+              >
+                ALTERNATIVE
+              </span>
+            )}
           </div>
           <div style={{ fontSize: ".95rem", color: "#cfcfc4", fontWeight: 500, marginTop: 2 }}>
             {meal.title}
           </div>
+          {meal.kind === "alt" && meal.hint && (
+            <div style={{ fontSize: ".75rem", color: "#8a8a7a", marginTop: 2, fontStyle: "italic" }}>
+              {meal.hint}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span
