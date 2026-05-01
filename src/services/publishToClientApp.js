@@ -78,9 +78,13 @@ export function checkClientReadyForPublish(client, consultation) {
  * @param {object} consultation - ligne `nutrition_consultations` (état courant)
  * @param {object|null} [enrichment] - enrichissement IA accepté par Anissa (optionnel).
  *                                     Si fourni, mergé sur le plan avant publication.
- * @returns {Promise<object>}   - { ok, plan_id, status, published_version, login_url, ... }
+ * @param {object} [options] - V96.0 options gating temporel :
+ *   - effectiveAtOverride: ISO string pour forcer une date d'effet (override
+ *     "Publier maintenant" sur un suivi). Si absent, l'API calcule depuis
+ *     consultation.followupWeek.
+ * @returns {Promise<object>}   - { ok, plan_id, status, published_version, effective_at, login_url, ... }
  */
-export async function publishConsultationToClientApp(client, consultation, enrichment = null) {
+export async function publishConsultationToClientApp(client, consultation, enrichment = null, options = {}) {
   // 1. Vérif config
   const cfg = checkPublishConfig();
   if (!cfg.ok) {
@@ -102,6 +106,12 @@ export async function publishConsultationToClientApp(client, consultation, enric
   const apiUrl = getEnv(ENV_API_URL).replace(/\/+$/, "");
   const secret = getEnv(ENV_SECRET);
 
+  // V96.0 : gating temporel.
+  // - followup_week derive de consultation.followupWeek (0=initial, 1-4=suivis)
+  //   → l'API calcule effective_at = first_plan.published_at + week × 28j.
+  // - effectiveAtOverride en cas d'override explicite ("Publier maintenant").
+  const followupWeek = Number(consultation?.followupWeek) || 0;
+
   const payload = {
     email: ready.email,
     first_name: client.prenom?.trim() || "Cliente",
@@ -112,6 +122,11 @@ export async function publishConsultationToClientApp(client, consultation, enric
     source_consultation_id: consultation.id,
     nutrition_plan: consultation.nutrition_plan,
     sections: plan.sections,
+    // V96.0
+    followup_week: followupWeek,
+    ...(options?.effectiveAtOverride
+      ? { effective_at_override: options.effectiveAtOverride }
+      : {}),
   };
 
   let res;

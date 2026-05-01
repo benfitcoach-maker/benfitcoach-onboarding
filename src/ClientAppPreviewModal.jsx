@@ -94,14 +94,19 @@ export default function ClientAppPreviewModal({ client, consultation, onClose })
     }
   };
 
-  const handlePublish = async () => {
+  const handlePublish = async (options = {}) => {
     setPublishError(null);
     setPublishResult(null);
     setPublishing(true);
     try {
-      // Si un enrichissement a été appliqué, on l'inclut dans le payload
-      // de publication via le 3e arg.
-      const res = await publishConsultationToClientApp(client, consultation, enrichmentApplied);
+      // V96.0 : options.effectiveAtOverride pour le bouton "Publier maintenant"
+      // (force visible immédiate sur un plan de suivi).
+      const res = await publishConsultationToClientApp(
+        client,
+        consultation,
+        enrichmentApplied,
+        options,
+      );
       setPublishResult(res);
     } catch (err) {
       if (err instanceof PublishConfigError) {
@@ -354,6 +359,7 @@ export default function ClientAppPreviewModal({ client, consultation, onClose })
           publishResult={publishResult}
           publishError={publishError}
           confirming={confirmingPublish}
+          followupWeek={Number(consultation?.followupWeek) || 0}
           onAskConfirm={() => { setConfirmingPublish(true); setPublishError(null); }}
           onCancel={() => setConfirmingPublish(false)}
           onConfirm={handlePublish}
@@ -371,12 +377,20 @@ export default function ClientAppPreviewModal({ client, consultation, onClose })
 function PublishFooter({
   cfgCheck, clientEmail, plan,
   publishing, publishResult, publishError, confirming,
+  followupWeek = 0,
   onAskConfirm, onCancel, onConfirm,
 }) {
   const blockedReasons = [];
   if (!plan) blockedReasons.push('Mapping en erreur');
   if (!cfgCheck.ok) blockedReasons.push('Config publication manquante');
   if (!clientEmail) blockedReasons.push('Cliente sans email');
+
+  // V96.0 — message de gating temporel selon followupWeek
+  // 0 = plan initial → visible tout de suite
+  // 1 = S4, 2 = S8, 3 = S12, 4 = S16 → visible N×4 semaines après le plan initial
+  const isFollowup = followupWeek > 0;
+  const followupLabel = isFollowup ? `S${followupWeek * 4}` : null;
+  const weeksAfterInitial = followupWeek * 4;
 
   const canPublish = blockedReasons.length === 0 && !publishing;
 
@@ -407,6 +421,23 @@ function PublishFooter({
           <div>
             ✓ Plan publié — version {publishResult.published_version}
           </div>
+          {/* V96.0 : si effective_at futur, indiquer la date à laquelle la
+              cliente verra ce plan. Sinon "visible immédiatement". */}
+          {publishResult.effective_at && (
+            (() => {
+              const eff = new Date(publishResult.effective_at);
+              const now = new Date();
+              const diffDays = Math.round((eff.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays > 0) {
+                return (
+                  <div style={{ fontSize: '.78rem', color: '#e5c878' }}>
+                    Visible par la cliente le {eff.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} (dans {diffDays} jours).
+                  </div>
+                );
+              }
+              return null;
+            })()
+          )}
           <div style={{ fontSize: '.75rem', color: '#8eb892' }}>
             La cliente peut se connecter avec <strong>{clientEmail}</strong>.
           </div>
@@ -469,12 +500,20 @@ function PublishFooter({
       )}
 
       {/* Bouton confirm OU bouton publier */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         {confirming ? (
           <>
-            <span style={{ fontSize: '.78rem', color: '#cfcfc4', marginRight: 'auto' }}>
-              Publier vers <strong>{clientEmail}</strong> ?
-              {publishResult?.ok && ' (Ré-publication — nouvelle version, ancienne archivée.)'}
+            <span style={{ fontSize: '.78rem', color: '#cfcfc4', marginRight: 'auto', flex: '1 1 auto', minWidth: 200 }}>
+              {isFollowup ? (
+                <>
+                  Plan <strong>{followupLabel}</strong> de <strong>{clientEmail}</strong> — visible {weeksAfterInitial} semaines après le plan initial.
+                </>
+              ) : (
+                <>
+                  Publier vers <strong>{clientEmail}</strong> ? Visible immédiatement.
+                  {publishResult?.ok && ' (Ré-publication — nouvelle version, ancienne archivée.)'}
+                </>
+              )}
             </span>
             <button
               type="button"
@@ -492,9 +531,32 @@ function PublishFooter({
             >
               Annuler
             </button>
+            {/* V96.0 : bouton override "Publier maintenant" sur les suivis,
+                au cas où Anissa veut bypass le gating (ex: la cliente est en
+                avance et veut son S4 tout de suite). */}
+            {isFollowup && (
+              <button
+                type="button"
+                onClick={() => onConfirm({ effectiveAtOverride: new Date().toISOString() })}
+                disabled={publishing}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(229,200,120,.4)',
+                  color: '#e5c878',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  fontSize: '.78rem',
+                  cursor: publishing ? 'wait' : 'pointer',
+                  opacity: publishing ? 0.6 : 1,
+                }}
+                title="Override : visible par la cliente immédiatement, sans attendre les 4 semaines"
+              >
+                Publier maintenant
+              </button>
+            )}
             <button
               type="button"
-              onClick={onConfirm}
+              onClick={() => onConfirm()}
               disabled={publishing}
               style={{
                 background: '#2E4E38',
@@ -508,7 +570,7 @@ function PublishFooter({
                 opacity: publishing ? 0.6 : 1,
               }}
             >
-              {publishing ? 'Publication…' : 'Confirmer'}
+              {publishing ? 'Publication…' : isFollowup ? 'Programmer la publication' : 'Confirmer'}
             </button>
           </>
         ) : (
