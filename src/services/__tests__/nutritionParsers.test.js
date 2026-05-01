@@ -253,6 +253,63 @@ describe('parseSlotAlternatives', () => {
     expect(groups[0].items[0].title).toBe('Bowl saumon-avocat');
     expect(groups[0].items[0].hint).toBe('riz basmati, sesame');
   });
+
+  it('V95.3 : sous-header sans ### (texte nu) → detecte si slot connu', () => {
+    // Cas reel observe sur le plan Melissa : l'IA omet parfois les ###
+    const text = `Petit-déjeuner
+- Porridge sarrasin & cannelle — 40g flocons, lait amande
+- Smoothie épinards & avocat — 200ml lait vegetal
+
+Déjeuner
+- Saumon vapeur & legumineuses — 100g saumon, lentilles vertes
+
+Collation
+- Compote & oleagineux — 25g noix
+
+Dîner
+- Cabillaud & legumes vapeur — julienne legumes`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toHaveLength(4);
+    expect(groups[0].slotLabel).toBe('Petit-déjeuner');
+    expect(groups[0].items).toHaveLength(2);
+    expect(groups[1].slotLabel).toBe('Déjeuner');
+    expect(groups[2].slotLabel).toBe('Collation');
+    expect(groups[3].slotLabel).toBe('Dîner');
+  });
+
+  it('V95.3 : sous-header en bold **Petit-dejeuner** → detecte', () => {
+    const text = `**Petit-dejeuner**
+- Porridge — 40g flocons
+- Smoothie — banane
+
+**Dejeuner**
+- Saumon — 120g`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].slotLabel).toBe('Petit-dejeuner');
+    expect(groups[1].slotLabel).toBe('Dejeuner');
+  });
+
+  it('V95.3 : ligne courte mais slot inconnu → ignoree (pas de header)', () => {
+    const text = `Aperitif
+- Olives — 30g`;
+
+    // "Aperitif" n'est pas un slot connu → pas de groupe ouvert
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toEqual([]);
+  });
+
+  it('V95.3 : "Petit-dejeuner : ..." (avec :) PAS interprete comme header', () => {
+    // Cas SEMAINE 1 : "Petit-déjeuner : 1 oeuf..." ne doit pas etre
+    // confondu avec un header alternatives (presence du ":" l'exclut)
+    const text = `Petit-dejeuner : 1 oeuf + pain
+Dejeuner : 100g cabillaud`;
+
+    const groups = parseSlotAlternatives(text);
+    expect(groups).toEqual([]);
+  });
 });
 
 describe('normalizeSlotLabelToSlot', () => {

@@ -107,7 +107,7 @@ export function parseBulletLines(text) {
 //
 // State machine simple. Style fail-soft cohérent avec parseRotationGroups :
 // si une section est mal formattée, on drop silencieusement (pas d'exception).
-export function parseSlotAlternatives(text) {
+export function parseSlotAlternatives(text, locale = 'fr') {
   if (!text) return [];
   const lines = text.split('\n');
   const groups = [];
@@ -117,11 +117,13 @@ export function parseSlotAlternatives(text) {
     const line = rawLine.trim();
     if (!line) continue;
 
-    // ### Header → ouvre un nouveau groupe
-    const headerMatch = line.match(/^#{2,4}\s+(.+)$/);
-    if (headerMatch) {
-      const slotLabel = headerMatch[1].trim();
-      current = { slotLabel, items: [] };
+    // V95.3 : detection de sous-header tolerante. L'IA produit le format
+    // attendu (### Petit-dejeuner) la plupart du temps, mais derive parfois
+    // vers du bold (**Petit-dejeuner**) ou du texte nu. On accepte les 3
+    // formats — le critere final est "ce libelle est-il un slot connu ?".
+    const detectedHeader = detectSlotHeader(line, locale);
+    if (detectedHeader) {
+      current = { slotLabel: detectedHeader, items: [] };
       groups.push(current);
       continue;
     }
@@ -146,6 +148,39 @@ export function parseSlotAlternatives(text) {
   }
 
   return groups.filter((g) => g.items.length > 0);
+}
+
+/** V95.3 : helper pour parseSlotAlternatives. Retourne le label si la ligne
+ *  est un sous-header de slot (3 formats acceptes), null sinon. */
+function detectSlotHeader(line, locale) {
+  // Format 1 : ### Petit-dejeuner (markdown standard)
+  const mdMatch = line.match(/^#{2,4}\s+(.+)$/);
+  if (mdMatch) return mdMatch[1].trim();
+
+  // Format 2 : **Petit-dejeuner** (bold markdown). On ne l'accepte que si
+  // c'est bien un slot connu, pour eviter de transformer un bullet bold
+  // accidentel en header.
+  const boldMatch = line.match(/^\*\*([^*]+)\*\*\s*:?$/);
+  if (boldMatch) {
+    const inner = boldMatch[1].trim();
+    if (normalizeSlotLabelToSlot(inner, locale)) return inner;
+  }
+
+  // Format 3 : Petit-dejeuner (texte nu sur ligne courte). Critere strict :
+  // - <= 30 chars
+  // - pas de ":" (pour ne pas avaler "Petit-dejeuner : 1 oeuf...")
+  // - pas un bullet
+  // - matche un slot connu
+  if (
+    line.length <= 30
+    && !line.includes(':')
+    && !/^[—\-•*·]\s/.test(line)
+    && normalizeSlotLabelToSlot(line, locale)
+  ) {
+    return line;
+  }
+
+  return null;
 }
 
 // V95 : Normalise un libellé de slot (FR ou EN, accents, casse variable) en
