@@ -144,29 +144,16 @@ function buildUserMessage({ meals, form, locale = "fr" }) {
   return lines.join("\n");
 }
 
-/**
- * Genere des recettes detaillees pour une liste de repas.
- *
- * @param {Array<{ key, slot, slot_label, title, hint? }>} meals
- * @param {object} ctx - { form, locale }
- * @returns {Promise<Object<string, Recipe>>} - map mealKey → recipe
- */
-export async function generateRecipesForMeals(meals, { form = {}, locale = "fr" } = {}) {
-  if (!Array.isArray(meals) || meals.length === 0) {
-    throw new Error("Aucun repas a enrichir.");
-  }
+// V95.4 : taille max d'un batch d'appel IA. Une recette detaillee ≈ 350-500
+// tokens output. Avec max_tokens=4000, on tient ~7-8 recettes max sans risquer
+// la troncature JSON. Marge de securite : 5 par lot.
+const BATCH_SIZE = 5;
 
-  const apiKey = localStorage.getItem("bfc_api_key") || "";
+async function callIaForBatch(meals, { form, locale, apiKey }) {
   const headers = { "Content-Type": "application/json" };
   if (apiKey) headers["x-fallback-key"] = apiKey;
 
   const userMessage = buildUserMessage({ meals, form, locale });
-
-  // V94.42 : on chunke si beaucoup de meals (>15) pour rester sous le token budget.
-  // Pour la V1, on accepte jusqu'a 25 meals en 1 appel (Haiku gere 200K context).
-  if (meals.length > 25) {
-    throw new Error("Trop de repas pour un seul appel (max 25). Decoupez en lots.");
-  }
 
   const response = await fetch("/api/claude", {
     method: "POST",
@@ -193,10 +180,51 @@ export async function generateRecipesForMeals(meals, { form = {}, locale = "fr" 
     throw new Error("Reponse IA invalide : 'recipes' manquant ou non-objet.");
   }
 
+  return recipes;
+}
+
+/**
+ * Genere des recettes detaillees pour une liste de repas.
+ *
+ * V95.4 : decoupe automatique en batches de 5 meals envoyes en parallele.
+ * 18 meals → 4 appels Promise.all → latence ~= 1 appel solo, mais pas de
+ * troncature JSON (chaque batch produit ~2500 tokens, large marge sous 4000).
+ *
+ * @param {Array<{ key, slot, slot_label, title, hint? }>} meals
+ * @param {object} ctx - { form, locale }
+ * @returns {Promise<Object<string, Recipe>>} - map mealKey → recipe
+ */
+export async function generateRecipesForMeals(meals, { form = {}, locale = "fr" } = {}) {
+  if (!Array.isArray(meals) || meals.length === 0) {
+    throw new Error("Aucun repas a enrichir.");
+  }
+
+  const apiKey = localStorage.getItem("bfc_api_key") || "";
+
+  // Decoupe en batches
+  const batches = [];
+  for (let i = 0; i < meals.length; i += BATCH_SIZE) {
+    batches.push(meals.slice(i, i + BATCH_SIZE));
+  }
+
+  // Promise.all : tous les batches partent en parallele. Si un batch foire,
+  // on remonte l'erreur mais on perd les autres — acceptable pour MVP, le
+  // user peut re-cliquer pour retry. Alternative future : Promise.allSettled
+  // pour merger les batches reussis et signaler les echecs.
+  const batchResults = await Promise.all(
+    batches.map((batch) => callIaForBatch(batch, { form, locale, apiKey })),
+  );
+
+  // Merge tous les batches dans un seul objet
+  const allRecipes = {};
+  for (const batchRecipes of batchResults) {
+    Object.assign(allRecipes, batchRecipes);
+  }
+
   // Normaliser et filtrer les recettes valides
   const out = {};
   for (const meal of meals) {
-    const r = recipes[meal.key];
+    const r = allRecipes[meal.key];
     if (!r || typeof r !== "object") continue;
     out[meal.key] = {
       ingredients: Array.isArray(r.ingredients) ? r.ingredients.filter(Boolean).slice(0, 15) : [],
