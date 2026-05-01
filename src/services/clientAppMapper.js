@@ -147,7 +147,13 @@ function splitPlanSections(planText) {
   };
 
   for (const line of lines) {
-    const md = line.match(/^#{1,3}\s+(.+)$/);
+    // V95.1 : ne capture QUE les titres niveau 1-2 (# ou ##). Les ### sont
+    // utilises par la section "## 4. ALTERNATIVES PAR REPAS" pour delimiter
+    // les sous-slots (### Petit-dejeuner). Avant V95.1, ### etait traite
+    // comme un titre principal et coupait la section en 5 morceaux vides
+    // → le mapper trouvait "alternatives" avec body="" et parseSlotAlternatives
+    // renvoyait []. Resultat : meal.alternatives jamais peuple cote app cliente.
+    const md = line.match(/^#{1,2}\s+(.+)$/);
     if (md) {
       flush();
       currentTitle = md[1].trim();
