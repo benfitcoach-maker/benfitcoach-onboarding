@@ -6,7 +6,6 @@ import CycleReviewPanel from './CycleReviewPanel';
 import ClientStatusBadge from './ClientStatusBadge';
 import ClientEngagementBadge from './ClientEngagementBadge';
 import ClientNewFeedbacksBadge from './ClientNewFeedbacksBadge';
-import RecentPhotosWidget from './RecentPhotosWidget';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
 import { getClientNutritionLocale } from './services/nutritionLocale';
@@ -974,9 +973,6 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
         onClickClient={onOpenClient}
         refreshTick={ownClients.length + sharedClients.length}
       />
-
-      {/* V96.3 : Photos recentes des clientes (carrousel + reactions emoji) */}
-      <RecentPhotosWidget />
 
       <div className="dashboard-header">
         <h2>Mes clients</h2>
