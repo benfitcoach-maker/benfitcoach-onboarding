@@ -4046,6 +4046,267 @@ html{overflow-x:hidden}
   color:#4A4A42;
   border-top:1px solid rgba(74,74,66,.1);
 }
+.dec-footer a{
+  color:#4A4A42;
+  text-decoration:none;
+  transition:color .15s;
+}
+.dec-footer a:hover{color:#1A2E1F}
+
+/* ═══ DECOUVERTE V2 — Insta funnel additions (2026-05) ═══ */
+
+/* CTA primaire géant (hero + final) */
+.dec-cta-primary{
+  display:inline-block;
+  width:100%;
+  max-width:420px;
+  background:#1A2E1F;
+  color:#fff;
+  padding:18px 28px;
+  border-radius:100px;
+  font-size:.95rem;
+  font-weight:700;
+  letter-spacing:.4px;
+  text-decoration:none;
+  text-align:center;
+  border:none;
+  cursor:pointer;
+  transition:transform .15s, box-shadow .15s, background .15s;
+  box-shadow:0 8px 22px rgba(26,46,31,.18);
+}
+.dec-cta-primary:hover{
+  background:#1A3A2A;
+  transform:translateY(-1px);
+  box-shadow:0 10px 26px rgba(26,46,31,.26);
+}
+.dec-cta-primary-large{
+  font-size:1rem;
+  padding:20px 32px;
+}
+
+/* CTAs secondaires hero (appeler / whatsapp) */
+.dec-cta-row-secondary{
+  margin-top:12px;
+}
+.dec-cta-ghost{
+  background:transparent;
+  color:#1A2E1F;
+  border:1.5px solid #1A2E1F;
+  padding:12px 28px;
+  font-weight:600;
+}
+.dec-cta-ghost:hover{
+  background:#1A2E1F;
+  color:#fff;
+  opacity:1;
+}
+
+/* Bandeau confiance */
+.dec-trust{
+  background:#fff;
+  border:1px solid rgba(74,74,66,.1);
+  border-radius:12px;
+  padding:18px 22px;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  gap:14px 24px;
+}
+.dec-trust-item{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  flex:1 1 30%;
+  min-width:140px;
+}
+.dec-trust-label{
+  font-size:.68rem;
+  font-weight:700;
+  letter-spacing:1.2px;
+  text-transform:uppercase;
+  color:#4A4A42;
+}
+.dec-trust-value{
+  font-size:.92rem;
+  font-weight:600;
+  color:#1A2E1F;
+  line-height:1.3;
+}
+@media(max-width:520px){
+  .dec-trust{flex-direction:column;align-items:stretch}
+  .dec-trust-item{min-width:0}
+}
+
+/* Piliers (3 colonnes) */
+.dec-pillars{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:14px;
+}
+@media(max-width:680px){
+  .dec-pillars{grid-template-columns:1fr}
+}
+.dec-pillar{
+  background:#fff;
+  border:1px solid rgba(74,74,66,.1);
+  border-radius:12px;
+  padding:22px 20px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.dec-pillar-icon{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#1A2E1F;
+  margin-bottom:4px;
+  font-size:0;
+}
+.dec-pillar-title{
+  font-size:1rem;
+  font-weight:700;
+  color:#1A2E1F;
+  line-height:1.3;
+}
+.dec-pillar-text{
+  font-size:.86rem;
+  color:#4A4A42;
+  line-height:1.55;
+}
+
+/* Témoignages */
+.dec-testimonials{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.dec-testimonial{
+  background:#fff;
+  border:1px solid rgba(74,74,66,.1);
+  border-left:3px solid #1A2E1F;
+  border-radius:0 12px 12px 0;
+  padding:20px 24px;
+  margin:0;
+}
+.dec-testimonial-text{
+  font-family:'Georgia', 'Playfair Display', serif;
+  font-style:italic;
+  font-size:1rem;
+  color:#1A2E1F;
+  line-height:1.55;
+  margin-bottom:10px;
+}
+.dec-testimonial-author{
+  font-size:.8rem;
+  font-weight:600;
+  color:#4A4A42;
+  letter-spacing:.3px;
+}
+
+/* App section */
+.dec-app-promise{
+  font-size:.92rem;
+  color:#4A4A42;
+  line-height:1.55;
+  text-align:center;
+  margin-bottom:20px;
+}
+.dec-app-screens{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:12px;
+  margin-bottom:24px;
+}
+@media(max-width:520px){
+  .dec-app-screens{grid-template-columns:1fr 1fr}
+  .dec-app-screens .dec-app-screen:nth-child(3){grid-column:1 / -1;max-width:60%;margin:0 auto}
+}
+.dec-app-screen{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin:0;
+  text-align:center;
+}
+.dec-app-screen img{
+  width:100%;
+  height:auto;
+  border-radius:14px;
+  background:#fff;
+  border:1px solid rgba(74,74,66,.08);
+  box-shadow:0 6px 18px rgba(26,46,31,.10);
+}
+.dec-app-screen figcaption{
+  font-size:.78rem;
+  font-weight:600;
+  color:#4A4A42;
+  letter-spacing:.3px;
+}
+.dec-app-benefits{
+  list-style:none;
+  padding:0;
+  margin:0 0 14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.dec-app-benefits li{
+  font-size:.88rem;
+  color:#1A2E1F;
+  line-height:1.5;
+  padding-left:20px;
+  position:relative;
+}
+.dec-app-benefits li::before{
+  content:'';
+  position:absolute;
+  left:0;
+  top:.6em;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#1A2E1F;
+}
+.dec-app-included{
+  font-size:.78rem;
+  font-style:italic;
+  color:#4A4A42;
+  text-align:center;
+  margin-top:6px;
+}
+
+/* Duo lien */
+.dec-duo-link{
+  display:inline-block;
+  margin-top:10px;
+  color:#1A2E1F;
+  font-weight:600;
+  font-size:.85rem;
+  text-decoration:none;
+  border-bottom:1.5px solid #1A2E1F;
+  padding-bottom:1px;
+}
+.dec-duo-link:hover{opacity:.7}
+
+/* Section finale */
+.dec-section-final{
+  text-align:center;
+  padding-top:24px;
+  padding-bottom:48px;
+}
+.dec-final-title{
+  font-size:1.35rem;
+  font-weight:700;
+  color:#1A2E1F;
+  line-height:1.3;
+  margin-bottom:8px;
+}
+.dec-final-sub{
+  font-size:.92rem;
+  color:#4A4A42;
+  margin-bottom:22px;
+}
 
 /* ═══ Anissa Client Card — Responsive (V41) ═══ */
 .anissa-client-card-mobile{
