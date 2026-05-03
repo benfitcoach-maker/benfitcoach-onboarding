@@ -119,7 +119,7 @@ export default function Decouverte() {
           <div className="dec-pillar">
             <div className="dec-pillar-icon" aria-hidden>{'\u25CF'}</div>
             <h3 className="dec-pillar-title">Bilan sanguin comment{'\u00e9'}</h3>
-            <p className="dec-pillar-text">On lit vos analyses avant de parler d{'\u2019'}alimentation. Ferritine, vitamine D, TSH, glyc{'\u00e9'}mie : ce que votre sang dit r{'\u00e9'}ellement.</p>
+            <p className="dec-pillar-text">On regarde vos analyses avant de parler d{'\u2019'}alimentation. Ferritine, vitamine D, TSH, glyc{'\u00e9'}mie : les marqueurs qui orientent vraiment votre corps.</p>
           </div>
           <div className="dec-pillar">
             <div className="dec-pillar-icon" aria-hidden>{'\u25CF'}</div>
