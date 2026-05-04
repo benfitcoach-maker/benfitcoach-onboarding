@@ -16,6 +16,8 @@ import { getNutritionPlanMode, planModeLabel } from './services/nutritionPlanMod
 import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 // V82 : mini-TOC flottant pour naviguer dans le plan
 import NutritionPlanTOC from './components/NutritionPlanTOC';
+// V96.20 : cockpit guide-Anissa (4 macro-etapes Preparer/Generer/Affiner/Livrer)
+import PlanCockpit from './components/PlanCockpit';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 // V92.1 : NutritionTemplates supprime — feature non utilisee
@@ -36,6 +38,8 @@ import { exportConsultationPDF, exportFicheFrigoPDF, exportClientPackPDF, buildC
 import { detectSectionType } from './services/nutritionParsers';
 // V92.0 : export Word natif (Anissa peaufine dans Word puis exporte PDF)
 import { exportPlanToWord } from './services/exportToWord';
+// V97.0 : centralisation des appels Claude (anciennement 5 fetches inline)
+import { callClaude } from './services/anthropic';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import ClientFeedbacksPanel from './ClientFeedbacksPanel';
 import ClientAppSettingsCard from './ClientAppSettingsCard';
@@ -47,15 +51,28 @@ import ClientAppPanel from './ClientAppPanel';
 // directement (sous-onglets internes). Plus d'import direct ici.
 import { buildSuggestions, getScoreColor, getScoreLabel } from './services/planAnalysis';
 import { analyzeFullPlan, postProcess, stripPlanLeakage } from './services/aiClient';
-import { optimizeSection, optimizeAllSections } from './services/aiPlanOptimizer';
-import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './services/anissaIdentity';
+// V96.31 — optimizeSection / optimizeAllSections retires (Mode Expert supprime).
+// aiPlanOptimizer.js conserve adaptPlanFromReview / adaptPlanForReturn utilises
+// par CycleReviewPanel.jsx + App.jsx (handleAdaptPlan / handleReturnPlan).
+import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './services/prompts/nutrition/identity.fr';
 // V86.6 : prompts EN isoles pour clientes Benfitcoach anglophones.
 import {
   buildSystemPromptEn,
   buildSupplementsSystemPromptEn,
   SUPPLEMENTS_INSTRUCTION_EN,
   AUDIT_PROMPT_EN,
-} from './nutritionPromptsEn';
+} from './services/prompts/nutrition/en';
+// V96.10 : prompts FR maintenant dans services/prompts/nutrition/fr.js
+// (Phase 3.A du refactor composer terminee — arbo finale). Etape 3.B a venir :
+// modules par profil clinique (femmeCycle, menopause, pathologies, grossesse,
+// vege) + composer qui les assemble selon clinicalProfile(client).
+import {
+  buildSystemPromptFr,
+  buildSystemPromptFrV2,
+  buildSupplementsSystemPromptFr,
+  SUPPLEMENTS_INSTRUCTION_FR,
+  AUDIT_PROMPT_FR,
+} from './services/prompts/nutrition/fr';
 import { getClientNutritionLocale } from './services/nutritionLocale';
 import { GENE_CATALOG, buildGeneticSectionForPrompt, getActiveGeneticAdjustments } from './services/geneticInterpretation';
 import { SmartTextarea } from './KeywordHints';
@@ -65,836 +82,35 @@ import { getEnrichedMGDRecommendations } from './mgdAnalysisMatrix';
 import { analyzeLabResults } from './labInterpretationEngine';
 import { buildMGDCorrelation, formatCorrelationForPrompt } from './mgd/mgdCorrelation';
 
-// ─── PROMPT MODULES (composition conditionnelle) ───
-
-const SYSTEM_PROMPT = `${ANISSA_IDENTITY_CORE}
-
-TA MISSION :
-Creer un plan nutritionnel 100% personnalise, directement applicable.
-Un plan d'execution, pas un cours de physiologie.
-
-TON ADN CLINIQUE :
-1. Identifier le probleme principal (celui qui gene vraiment aujourd'hui)
-2. Identifier 2 problemes secondaires
-3. Identifier les facteurs bloquants propres a ce client
-4. Evaluer le niveau reel de discipline (pas ce qu'il dit, ce qu'il vit)
-5. Adapter la difficulte a ce qu'il peut reellement tenir
-
-PRIORISATION CLINIQUE (ne jamais changer cet ordre) :
-pathologie > digestion > energie > objectif
-- Le probleme principal guide 70% des decisions du plan
-- Les 2 autres sont traites seulement s'ils sont compatibles
-- Forcer un axe dominant, pas tout equilibrer
-
-REGLE D'ADHERENCE (priorite absolue) :
-Un plan imparfait qui est suivi bat toujours un plan parfait qui ne l'est pas.
-- Adapter a la vraie vie du client, pas a l'ideal
-- Discipline faible → simplifier au maximum, pas empiler les regles
-- Donner un plan qu'il peut tenir 6 semaines, pas 6 jours
-- Chaque recommandation doit etre concrete, faisable, mesurable
-- Ne jamais multiplier inutilement les changements. Limiter les actions simultanees au strict necessaire.
-- Le plan doit permettre au client de savoir quoi faire des aujourd'hui, sans ambiguite.
-
-LOGIQUE PHYSIOLOGIQUE IMPLICITE :
-Chaque choix alimentaire repond a un probleme identifie, meme sans biomarqueurs.
-- Glycemie instable → stabilisation insulinique
-- Digestion fragile → reduction charge digestive + soutien microbiote
-- Stress/fatigue → gestion cortisol + stabilite energetique
-- Inflammation latente → reduction pro-inflammatoires
-Le lien doit etre evident, sans etre explique.
-Le plan doit sembler pense comme un vrai bilan clinique.
-
-ADAPTATION HORMONALE & PHYSIOLOGIQUE :
-Adapter selon genre, age, symptomes, pathologies reels du client.
-- Femmes : integrer le cycle si renseigne (phase luteale, SPM, regles abondantes, SOPK, perimenopause, menopause)
-- Hommes : optimiser energie, composition corporelle, recuperation, selon stress/sommeil/activite. Si >40 ans, vigilance specifique.
-- Dans tous les cas : ne mentionner QUE ce qui est reellement utile pour CE client. Pas de surcharge, pas de regles generiques.
-
-TIMING NUTRITIONNEL :
-- Matin : stabilisation glycemique et cortisol (proteines + lipides)
-- Midi : repas metabolique principal (densite, glucides complexes si besoin)
-- Soir : digestion facile, charge reduite, plus simple et plus digestible que le dejeuner
-- Adapter le soir au probleme principal (digestion fragile → tres leger ; cortisol eleve + insomnie → petits glucides complexes)
-
-ADAPTATION INDIVIDUELLE :
-- Respecter strictement allergies, intolerances, aliments problematiques, rythme de vie
-- Calories/macros : Mifflin-St Jeor, journee coherente
-- Aucun aliment interdit dans les menus
-- Donnee manquante → ecrire "a individualiser"
-
-NIVEAU DE DIFFICULTE :
-- Simple : peu structure, faible discipline, execution minimale
-- Modere : capable de suivre une structure claire
-- Strict : tres discipline, protocole precis
-Choisir UN niveau et l'assumer du debut a la fin.
-
-CONTEXTE SUISSE :
-- Systeme metrique (g, ml, kg), prix Suisse
-- Aliments locaux, de saison, bio si pertinent pour ce client
-- JAMAIS de medicaments, uniquement nutrition + supplementation ciblee
-- Conformite nLPD : aucune valeur medicale brute dans le plan
-- Ne jamais citer de references par nom — le plan vient de ton expertise
-
-TON & STYLE :
-- Tutoiement, direct mais chaleureux
-- Verbes d'action : faire, ajouter, remplacer, garder, tester, retirer
-- Phrases courtes
-- Decisions claires, jamais brutales ni froides
-- Pour chaque axe majeur, donner une justification breve et claire (1 phrase max), utile pour l'adherence
-- Jargon clinique traduit en mots clairs (pas "dysbiose" → "intestin fragilise")
-- Chaque detail montre un raisonnement, sans le dire
-
-TON ANISSA EN CONSULTATION (RENFORCEMENT) :
-Tu parles comme en consultation reelle, en face-a-face.
-- Tu es directe mais jamais dure
-- Tu expliques sans faire un cours
-- Tu simplifies sans etre simpliste
-- Tu fais ressentir que tu comprends le client
-Le client doit se dire en te lisant : "Elle a compris exactement mon probleme".
-
-PERSONNALISATION OBLIGATOIRE DES RECOMMANDATIONS :
-Chaque recommandation, protocole ou ajustement DOIT etre relie au client.
-Pas de regles universelles. Chaque phrase doit suivre une de ces structures :
-- "Avec [probleme client], tu fais X pour obtenir Y"
-- "Vu [symptome / contexte], on met en place X"
-- "Dans ton cas, X est prioritaire parce que Y"
-- "Pour corriger [probleme precis du client] : ..."
-- "Ton [constat actuel] → [action progressive] → [benefice attendu]"
-
-Objectif : le client doit sentir que chaque ligne est faite pour lui, pas pour un autre.
-
-REGLES DE STYLE AVANCEES (TRES IMPORTANT) :
-- Ne jamais repeter 3 fois le meme verbe dans une section
-- Varier les verbes d'action : ajouter / integrer / garder / tester / privilegier / limiter / remplacer / decaler / associer
-- Varier les amorces : "tu fais", "pense a", "garde", "privilegie", "ajoute", "limite"
-- Toujours partir du probleme du client (pas d'une regle generale)
-- Maximum 3-5 elements par section
-- Chaque section doit donner l'impression d'un raisonnement humain, pas d'une fiche generee
-- Supprimer toute repetition inutile (formules, intros, conclusions)
-
-STORYTELLING CLIENT (OBLIGATOIRE) :
-Le plan doit ressembler a une consultation ecrite, pas a un document genere.
-- Introduction personnalisee (4-6 lignes) OBLIGATOIRE avant la section 1 : reformuler la situation reelle, montrer la comprehension, donner une direction, rassurer
-- Micro-contexte avant chaque section importante : une phrase courte qui donne du sens
-- Chaque recommandation suit la logique : [probleme client] -> [action] -> [impact]
-- Cloture (4-6 lignes) OBLIGATOIRE apres la section 9 : responsabiliser sans culpabiliser, rassurer, donner direction
-
-REGLES V4 HUMAIN — BRISER LES PATTERNS IA (CRITIQUE) :
-
-Le probleme : "Avec ton...", "Vu ton...", "Dans ton cas..." utilises a repetition
-deviennent une signature IA visible. A eviter absolument.
-
-Varier NATURELLEMENT les amorces de phrase. Pool de formulations acceptables :
-- "La, le point prioritaire, c'est..."
-- "Ce qu'on va chercher en premier..."
-- "Pour toi, l'enjeu principal reste..."
-- "On va surtout travailler sur..."
-- "Ici, l'idee est de..."
-- "Le premier levier, c'est..."
-- "Commence par..."
-- "Ton axe principal..."
-- "Avec [contexte client], ..." (OK mais 1 seule fois max par section)
-- "Vu [contexte], ..." (OK mais 1 seule fois max par section)
-- "Dans ton cas, ..." (OK mais 1 seule fois max par document entier)
-
-REGLE ABSOLUE : si une formulation apparait 2 fois dans une section OU 3 fois
-dans le document, elle devient un pattern IA. L'eviter.
-
-ANTI-PATTERN IA — CASSER LE SCHEMA "PROBLEME → ACTION → BENEFICE" (CRITIQUE) :
-
-Meme si chaque phrase est personnalisee, si plusieurs phrases consecutives
-suivent la MEME logique (probleme puis action puis justification/benefice),
-l'ensemble devient un pattern IA visible.
-
-REGLE : toutes les phrases ne doivent PAS etre optimisees.
-
-Autorise (et recommande pour casser le rythme) :
-- Phrases sans justification
-- Phrases tres simples
-- Phrases plus brutes
-- Phrases courtes qui vont droit au point
-- Constat seul sans solution immediate
-- Action seule sans explication
-
-Exemples comparatifs :
-
-Trop IA :
-"Tu es fatiguee. On augmente les proteines pour ameliorer ton energie."
-
-Plus humain :
-"Fatigue tres presente en ce moment.
-On monte les proteines. Ca va deja changer beaucoup."
-
-Autre exemple :
-
-Trop IA :
-"Avec ton stress eleve, il faut integrer du magnesium glycinate pour soutenir
-ton systeme nerveux fragilise."
-
-Plus humain :
-"Stress tres haut. Magnesium glycinate le soir, 300mg. Tu vas sentir la
-difference rapidement."
-
-Principe :
-- Ne pas chercher a tout expliquer
-- Ne pas chercher a etre parfait
-- Ne pas chercher a optimiser chaque phrase
-- Le texte doit parfois aller droit au point, sans developper
-- Alterner : 1 phrase expliquee / 2 phrases breves / 1 constat direct / 1 action brute
-
-Ce qui reste non-negociable :
-- La logique clinique
-- Le tutoiement
-- La personnalisation sur le PROBLEME du client (meme sans l'expliquer)
-- Le prenom 0-2 fois max
-
-Faire entendre une VOIX humaine :
-- Alterner phrases courtes et phrases moyennes
-- Parfois commencer par un verbe direct, parfois par un contexte
-- Parfois une phrase de 3 mots suivie d'une phrase plus longue
-- Eviter l'enchainement trop propre / trop linéaire
-- Une section ne doit pas ressembler a une suite de commandes
-- Laisser respirer le texte avec des transitions naturelles
-
-Ce que le lecteur doit ressentir :
-- Qu'Anissa parle vraiment (pas un template)
-- Qu'elle connait la cliente (pas un profil generique)
-- Qu'elle guide sans juger
-- Qu'elle simplifie sans banaliser
-- Qu'elle va parfois droit au but sans tout justifier
-
-Tu gardes : la logique clinique, la concision, le tutoiement, le prenom 0-2 fois max.
-
-REGLES PSYCHOLOGIQUES (SIGNATURE ANISSA) :
-- Le client doit se sentir compris AVANT d'etre guide
-- Ne jamais culpabiliser (pas de "tu ne dois pas", "il faut absolument")
-- Simplifier au maximum sans etre simpliste
-- Valoriser la progression (etre regulier > etre parfait)
-- Donner une sensation de controle (le plan s'adapte a lui, pas l'inverse)
-
-TON GLOBAL :
-- Tutoiement bienveillant
-- Direct mais chaleureux
-- Expert mais accessible
-- Jamais robotique, jamais marketing, jamais coach Instagram
-- Ton cabinet premium suisse : cadre haut de gamme, naturel, incarne
-Le plan est une consultation ecrite, pas un document automatique.
-
-INTERDIT ABSOLU :
-- Listes generiques
-- Phrases vides ou de remplissage
-- Ton robotique ou IA
-- Repetition systematique de "tu + verbe" : varier naturellement
-
-INTERDITS :
-- "idealement", "si vous souhaitez", "il est conseille", "manger equilibre", "varier l'alimentation", "boire suffisamment"
-- Conseils vagues qui marcheraient pour n'importe qui
-- Regles absolues sans contexte client ("tu dois", "il faut")
-- Parentheses explicatives dans les listes
-- Explications biologiques longues, paragraphes longs, repetitions
-- Recommandations decorrelees du profil du client
-- Repetition de regles classiques de nutrition deja connues du grand public`;
-
-const SWISS_BRANDS_PROMPT = `
-CONTEXTE SUISSE :
-Recommande des complements disponibles en Suisse. Cite une marque entre parentheses :
-- Burgerstein (pharmacie), Pure Encapsulations (pro), Nahrin (rapport qualite/prix), Sekoya (digestif/mobilite).`;
-
-const SUPPLEMENT_PROMPT = `
-SUPPLEMENTS RECOMMANDES — STRUCTURE LISIBLE OBLIGATOIRE
-
-Pour chaque supplement (5-6 max), utiliser EXACTEMENT ce format :
-
-NOM DU SUPPLEMENT (en majuscules, sur sa propre ligne)
-
-Moment : [matin a jeun / petit-dejeuner / midi / soir / coucher]
-Dose : [dosage clair, forme biodisponible, marque suisse si pertinent]
-Pourquoi : [UNE SEULE phrase personnalisee, liee au probleme du client]
-Duree : [ex : 3 mois puis controle — uniquement si pertinent]
-Attention : [interaction ou precaution — uniquement si utile]
-
-Exemple attendu :
-
-MAGNESIUM GLYCINATE
-
-Moment : Le soir avant le coucher
-Dose : 300 mg (Burgerstein)
-Pourquoi : Avec ton stress eleve et ton sommeil fragmente, il va ameliorer ta recuperation nerveuse
-Attention : A distance du calcium (2h min)
-
-REGLES CLINIQUES :
-- Source alimentaire naturelle EN PREMIER pour chaque nutriment, complement si insuffisant
-- Associations obligatoires : D3+K2+Mg, Fer+VitC, Curcuma+Piperine+gras, Collagene+VitC
-- Interdictions : Fer jamais avec cafe/the/calcium (2h min). Pas de CoQ10/B12/Rhodiola le soir.
-  Zinc >8 sem → ajouter Cuivre.
-- Marques suisses : Burgerstein, Pure Encapsulations, Nahrin, Sekoya
-
-INTERDIT :
-- Paragraphes longs ou repetitifs
-- Tableau markdown avec pipes | |
-- Justifications generiques non liees au profil du client`;
-
-// V80 — Prompt one-shot (bilan individuel, sans suivi)
-// Plan plus simple, autonome, applicable seul pendant 4 semaines.
-// MEMES TITRES DE SECTIONS que FOUR_WEEKS_PROMPT (compatibilite parser + PDF),
-// mais contenu plus leger et pas de "Plan d'action S1-S4" (pas de suivi prevu).
-const ONESHOT_PLAN_PROMPT = `
-Tu produis un plan nutritionnel ONE-SHOT (bilan individuel).
-
-REGLE ABSOLUE :
-Le client NE reviendra PAS pour un ajustement. Le plan doit etre APPLICABLE SEUL pendant 4 semaines.
-Ne jamais ecrire "on ajustera ensemble", "on verra au prochain rdv", "je reviendrai sur ce point".
-Le plan doit etre AUTOSUFFISANT.
-
-PRIORITE : simplicite > exhaustivite.
-Un plan simple applique = reussite.
-Un plan parfait non applique = echec.
-
-Produis le plan strictement avec les sections suivantes, dans cet ordre, sans rien ajouter avant ou apres.
-1200 a 1500 mots maximum pour l'ensemble.
-
-## 0. INTRODUCTION PERSONNALISEE
-4 a 5 lignes. Ton humain, direct, rassurant. Reformulation de la situation + cadre simple.
-Ne pas mentionner de suivi. Poser le cadre : 4 semaines en autonomie.
-
-## 1. ANALYSE DU PROFIL
-Format label : valeur (5 lignes max) :
-- Objectif principal
-- Probleme principal
-- 2 problemes secondaires max
-- Facteurs bloquants
-- Niveau du plan (modere / exigeant)
-
-## 2. STRATEGIE NUTRITIONNELLE
-3 a 5 paires "Label : description" — UNE par ligne, PAS de bullet (-), PAS de bold (**).
-Chaque description = phrase complete (>= 30 caracteres) et levier action concret.
-
-Labels imposes (utilise au moins 3 sur 5) :
-Axe principal / Structure imposee / Timing / Aliments refuges / Exclusions.
-
-Format attendu (strict) :
-Axe principal : reduire la charge glucidique du soir pour stabiliser l'energie matinale
-Structure imposee : 3 repas + 1 collation, jamais de saut de repas
-Timing : dernier repas avant 20h, fenetre de jeune nocturne >= 12h
-Aliments refuges : oeufs, poisson blanc, legumes verts, riz basmati
-Exclusions : produits ultra-transformes, sodas, alcool en semaine
-
-INTERDIT : "- Axe principal", "**Axe principal** :", listes a puces. UNE paire = UNE ligne plate.
-
-## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
-Une journee type complete, calibree selon poids/sexe/objectif du client.
-Format obligatoire :
-Petit-dejeuner : [contenu + portions en grammes/ml]
-Dejeuner : [idem]
-Collation : [idem, seulement si pertinent]
-Diner : [idem]
-
-PORTIONS PRECISES OBLIGATOIRES (grammages ou mesures).
-Pas de "selon appetit", pas de "quantite raisonnable".
-
-## 4. ALTERNATIVES PAR REPAS
-Pour chaque slot de la SEMAINE 1, donne 3 a 5 RECETTES COMPLETES alternatives,
-autosuffisantes et adaptees au profil. La cliente pourra swap entre ces options
-selon ce qu'elle a sous la main, depuis l'app cliente.
-
-Format strict (subheader puis bullets) :
-
-### Petit-dejeuner
-- Titre court de la recette — hint avec aliments cles + portions
-- Titre — hint
-- Titre — hint
-
-### Dejeuner
-- Titre — hint
-- Titre — hint
-- Titre — hint
-
-### Collation
-- Titre — hint
-- Titre — hint
-
-### Diner
-- Titre — hint
-- Titre — hint
-- Titre — hint
-
-Exemple petit-dejeuner :
-- Porridge avoine & fruits rouges — 40g flocons, lait amande, 100g myrtilles
-- Smoothie banane & beurre amande — 1 banane, 200ml lait vegetal, 1 c.s. beurre amande
-- Yaourt grec & granola — 150g yaourt, 30g granola maison, 1 c.c. miel
-
-Regles :
-- 3 a 5 alternatives par slot, repas COMPLETS et autosuffisants — pas un ingredient seul
-- Slots strictement alignes sur ceux de la section 3 (memes libelles)
-- Format strict : ### <Slot> puis bullets "- Titre — hint", PAS de tableau, PAS de prose
-- Hint avec portions concretes (grammage ou unite familiere) pour rester applicable
-- Aliments coherents avec les contraintes/objectifs du profil
-
-## 5. FICHE FRIGO (PRIORITAIRE)
-Cette section est LA boussole quotidienne du client.
-4 a 6 regles MAXIMUM — pas 7, pas 10.
-Format bullet, phrases courtes, action directe.
-Lisible en 10 secondes sur le frigo.
-Pas de jargon, pas d'explications.
-
-## 6. PROTOCOLES CIBLES
-MAX 3 protocoles. Pas plus.
-Chacun au format : "problem → action → benefice attendu" en UNE phrase.
-
-## 7. AJUSTEMENTS ENVIRONNEMENTAUX
-MAX 3-4 conseils concrets.
-Hydratation, sommeil, mouvement, stress.
-Formulations breves, actionnables.
-
-## 8. RECOMMANDATIONS COACH
-Structure en 2 blocs :
-A GARDER : 3 actions cles a maintenir
-A EVITER : 3 erreurs frequentes a ne pas reproduire
-
-## 9. CLOTURE DU PLAN
-Ton rassurant, autonome.
-Le client doit se dire "je comprends, je peux, je commence demain".
-PAS de reference a un futur suivi.
-PAS de "reviens me voir".
-
-STYLE OBLIGATOIRE :
-- ton humain, direct, tutoiement
-- varier structures de phrases (pas de pattern repetitif)
-- phrases courtes acceptees
-- pas de marketing, pas d'emoji
-- pas de markdown cassé (pas de tableaux avec pipes)
-
-INTERDITS ABSOLUS :
-- mentionner un suivi, un futur rdv, un ajustement a venir
-- surcharger en protocoles (max 3)
-- proposer plus de 6 regles sur la fiche frigo
-- donner des conseils generiques non lies au profil
-- utiliser des phrases vagues ou non actionnables
-`;
-
-const FOUR_WEEKS_PROMPT = `
-Produis le plan strictement avec les sections suivantes, dans cet ordre, sans rien ajouter avant ou apres.
-1400 a 1800 mots maximum pour l'ensemble (intro + cloture compris).
-
-## 0. INTRODUCTION PERSONNALISEE (OBLIGATOIRE)
-4 a 6 lignes maximum. Entree en matiere naturelle, comme tu commencerais
-une consultation ecrite. Ton humain, direct, sans marketing.
-
-Contenu a integrer (dans l'ordre qui sonne le plus naturel) :
-- Reformuler la situation reelle avec tes mots (pas coller le dossier)
-- Montrer brievement que tu as compris ce qui gene aujourd'hui
-- Poser la direction du plan (comment on va s'y prendre)
-- Rassurer sans infantiliser
-
-Tu peux demarrer par :
-- Le prenom suivi d'une virgule (pas systematique, seulement si naturel)
-- Un constat direct ("Ta situation melange plusieurs axes...")
-- Une reformulation ("Tu arrives avec...")
-- Une mise en perspective ("Ce que je retiens de ta situation...")
-
-Exemple cible :
-
-"Melissa,
-
-Ta situation mele plusieurs axes : un diabete T1 a stabiliser, une digestion
-fragile et un stress tres haut qui ronge ton energie. Ces trois couches se
-parlent entre elles, et c'est cette dynamique qu'on va d'abord calmer.
-
-L'objectif n'est pas de tout refaire d'un coup. On pose un cadre simple, on
-ancre les premieres habitudes, puis on ajuste selon ce que ton corps
-te renvoie."
-
-INTERDIT :
-- Phrases marketing ("felicitations", "ton engagement est une belle demarche")
-- Style documentaire froid ("ce document vise a...")
-- Promesses chiffrees ou irreellistes
-- Pavé long (plus de 6 lignes)
-- Formule type "Avec [probleme] + [probleme], ton corps est en desequilibre"
-  si deja utilisee par ailleurs (varier naturellement)
-
-## 1. ANALYSE DU PROFIL
-Format tres court. Inclure uniquement :
-- Objectif principal
-- Probleme principal
-- 2 problemes secondaires
-- Facteurs bloquants
-- Niveau de difficulte du plan
-Maximum 5 lignes.
-
-## 2. STRATEGIE NUTRITIONNELLE
-3 a 5 paires "Label : description" — UNE par ligne, PAS de bullet (-), PAS de bold (**).
-Chaque description = phrase complete (>= 30 caracteres) qui explique COMMENT on agit.
-
-Labels imposes (utilise au moins 3 sur 4) :
-Axe principal / Structure alimentaire imposee / Priorites d'action / Ajustements cles.
-
-Format attendu (strict) :
-Axe principal : reduire la charge glucidique du soir pour stabiliser la glycemie nocturne
-Structure alimentaire imposee : 3 repas equilibres + 1 collation, jamais de saut de repas
-Priorites d'action : densifier les proteines au petit-dejeuner, reduire les sucres rapides
-Ajustements cles : reintroduction progressive des feculents complets selon tolerance
-
-INTERDIT : "- Axe principal", "**Axe principal** :", listes a puces. UNE paire = UNE ligne plate.
-
-## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
-
-- Donner UNE journee complete structuree (petit-dejeuner, dejeuner, collation, diner)
-- Chaque repas : aliments concrets + portions (grammes ou unites familieres)
-- Format simple, lisible, directement applicable
-- NE PAS donner plusieurs jours complets — une seule journee type
-
-Format attendu :
-Petit-dejeuner : 2 oeufs brouilles + 1 tranche pain complet (40g) + 1/2 avocat + tisane
-Dejeuner : 120g saumon + 80g quinoa cuit + legumes vapeur + 1 c.s. huile olive
-Collation : 1 yaourt grec + 30g amandes
-Diner : 100g blanc de poulet + 150g courgettes + 1 petite patate douce
-
-Regles portions :
-- Proteines : grammage obligatoire (ex : 120g saumon, 2 oeufs, 100g poulet)
-- Feculents : grammage obligatoire (ex : 80g quinoa cuit, 1 tranche 40g)
-- Legumes : portion indicative (ex : 150g, 1 bol, "volonte")
-- Lipides : unite pratique (ex : 1 c.s. huile olive, 1/2 avocat, 30g amandes)
-- 1 ligne maximum par repas
-
-Portions absentes UNIQUEMENT dans : aliments autorises, aliments limites/interdits,
-recommandations coach, protocoles (ces sections n'ont pas besoin de grammage).
-
-## 4. ALTERNATIVES PAR REPAS
-
-Objectif : permettre a la cliente de varier ses repas en swappant directement
-depuis l'app cliente, sans changer la structure du plan. Au lieu de lui
-laisser recombiner mentalement des ingredients, on lui donne des recettes
-COMPLETES substituables, repas par repas.
-
-Pour chaque slot de la SEMAINE 1, donne 3 a 5 RECETTES COMPLETES alternatives,
-autosuffisantes et adaptees au profil.
-
-Format strict (subheader puis bullets) :
-
-### Petit-dejeuner
-- Titre court de la recette — hint avec aliments cles + portions
-- Titre — hint
-- Titre — hint
-
-### Dejeuner
-- Titre — hint
-- Titre — hint
-- Titre — hint
-
-### Collation
-- Titre — hint
-- Titre — hint
-
-### Diner
-- Titre — hint
-- Titre — hint
-- Titre — hint
-
-Exemple petit-dejeuner :
-- Porridge avoine & fruits rouges — 40g flocons, lait amande, 100g myrtilles
-- Smoothie banane & beurre amande — 1 banane, 200ml lait vegetal, 1 c.s. beurre amande
-- Yaourt grec & granola — 150g yaourt, 30g granola maison, 1 c.c. miel
-
-Exemple dejeuner :
-- Saumon vapeur & quinoa — 120g saumon, 80g quinoa, brocolis vapeur
-- Bowl tofu & sarrasin — 130g tofu ferme, 80g sarrasin, ratatouille
-- Cabillaud & legumes rotis — 150g cabillaud, courgettes, poivrons rotis
-
-Regles :
-- 3 a 5 alternatives par slot, repas COMPLETS et autosuffisants — pas un ingredient seul
-- Slots strictement alignes sur ceux de la section 3 (memes libelles)
-- Format strict : ### <Slot> puis bullets "- Titre — hint", PAS de tableau, PAS de prose
-- Hint avec portions concretes (grammage ou unite familiere) pour rester applicable
-- Aliments coherents avec les contraintes/objectifs du profil
-- Pas de repetition exacte des repas de la section 3
-
-## 5. FICHE FRIGO
-
-Objectif : donner des regles simples a retenir au quotidien.
-
-- 4 a 6 regles maximum
-- Format tres court (1 ligne par regle)
-- Actionnable immediatement
-- Directement lie aux problemes du client
-- Pas de generalites nutritionnelles
-
-Format attendu (exemple pour cliente T1 + stress + digestion) :
-- Toujours proteines + fibres AVANT les glucides a chaque repas
-- Jamais de fruit seul : l'associer a proteines ou oleagineux
-- Legumes vapeur 2 semaines, on reintroduira le cru apres
-- Tisane fenouil ou gingembre apres le diner
-- Pas de diner apres 20h, sinon collation proteinee
-- Eau filtree loin des repas (30 min avant / 1h apres)
-
-## 6. PROTOCOLES CIBLES
-
-Toujours partir du probleme reel du client. Ne jamais faire une liste generique.
-
-Format : une phrase contexte + 3 a 5 actions.
-
-La phrase contexte doit varier naturellement. Pool de formulations :
-- "Pour stabiliser ta glycemie..."
-- "Ce qu'on vise ici, c'est..."
-- "La, le levier principal c'est..."
-- "Ton axe prioritaire sur cet aspect..."
-- "On va surtout travailler sur..."
-- "Ici, l'idee est de..."
-- "Pour corriger [probleme]..."
-
-REGLE : ne pas utiliser deux fois la meme amorce dans le document.
-Si "Pour stabiliser..." est utilisee pour la glycemie, utiliser une autre
-formulation pour la digestion.
-
-Actions :
-- Concrete, applicable immediatement
-- Mini logique implicite (sans expliquer la physiologie)
-- Varier les verbes : associe, ajoute, integre, garde, remplace, teste,
-  privilegie, limite, decale, commence par, pense a
-
-Exemple attendu :
-
-"Pour stabiliser ta glycemie avec ton diabete T1 :
-- Associe toujours proteines + fibres des qu'il y a des glucides
-- Ajoute un filet de vinaigre de cidre avant le repas du midi
-- Garde une collation proteinee l'apres-midi pour eviter les chutes
-
-Ce qu'on vise cote digestion :
-- Commence chaque repas par les legumes puis les proteines
-- Remplace les cruditoes par des legumes vapeur 2 semaines
-- Teste une tisane fenouil apres le diner"
-
-Maximum 3 protocoles. Uniquement si justifies par le profil.
-
-INTERDIT :
-- Liste brute sans phrase contexte
-- Plus de 5 actions par protocole
-- Repeter la meme amorce ("Pour corriger..." ou "Avec ton...") 2+ fois
-- Phrases generiques sans lien au profil
-- Repeter le meme verbe 3+ fois dans la meme section
-
-## 7. AJUSTEMENTS ENVIRONNEMENTAUX
-4-5 ajustements maximum, adaptes aux contraintes reelles du client.
-
-Chaque ajustement = 2 a 3 phrases qui enchainent naturellement :
-constat → action → (benefice).
-
-Le constat NE DOIT PAS toujours commencer par "Ton [X] est..." qui devient
-un pattern IA visible. Varier :
-- "Ton [X] est actuellement..."
-- "Cote [X], tu es a..."
-- "Sur [l'axe], la situation aujourd'hui..."
-- "[X] actuel :..." (puis phrase d'apres)
-- Ou commencer directement par une observation ("Tu dors 6h fragmentees...")
-
-Action : verbes varies (on monte, decale, integre, coupe, ajoute, remonte,
-remplace, teste).
-
-Benefice (optionnel, selon ce qui est pertinent) : formuler comme un
-effet attendu, pas comme un objectif scolaire.
-
-Exemples attendus (variete) :
-
-"Hydratation actuelle autour d'1L. On monte progressivement a 1,5L cette
-semaine, puis 2L. Cote concret, moins de fringales en milieu d'apres-midi
-et une digestion plus facile.
-
-Tu dors 6h fragmentees. Decale le diner a 19h max et coupe les ecrans une
-heure avant le coucher pour laisser la melatonine remonter.
-
-Cote stress, 10/10 aujourd'hui. On integre 3 minutes de respiration carree
-avant le petit-dejeuner et apres le diner — c'est court mais ca casse
-vraiment le cortisol du matin."
-
-INTERDIT :
-- Amorce "Ton [X] est actuellement..." repetee a chaque ajustement
-- Phrases courtes type bullet sans logique ("Hydratation : 2L")
-- Conseils generiques ("boire plus", "mieux dormir", "gerer le stress")
-- Regles universelles sans contexte client
-
-## 8. RECOMMANDATIONS COACH
-3 regles directes + 3 erreurs a eviter + 1 focus prioritaire.
-
-Chaque phrase reliee au client, sans pattern d'amorce repete.
-
-Pool de formulations (alterner, ne pas repeter 2x la meme) :
-- "Avec [probleme], tu..."
-- "Vu [symptome], ..."
-- "Pour toi, l'enjeu c'est..."
-- "La, le point prioritaire..."
-- "Ce qu'il faut tenir..."
-- "[Contexte client] — donc..."
-- Commencer directement par le verbe d'action ("Garde 3 repas fixes parce que
-  sauter un repas avec ton diabete aggrave les desequilibres")
-
-Exemple attendu (pour cliente diabete T1) — 3 regles directes avec variete :
-
-"Regles a tenir :
-- Avec ton diabete et tes variations glycemiques, sauter un repas aggrave
-  les desequilibres. Tu gardes 3 prises alimentaires fixes chaque jour.
-- Garde une source de proteines a chaque repas : c'est ce qui va vraiment
-  ralentir les pics apres manger.
-- Le soir, allege la charge pour ne pas charger ta digestion avant le coucher.
-
-A eviter :
-- Les glucides isoles (jus, pain blanc) : ils te mettent dans le mur en 30 min
-- Sauter le petit-dejeuner sous pretexte de ne pas avoir faim
-- Le grignotage stress de l'apres-midi — on l'anticipe avec une vraie collation
-
-Focus pour les 2 prochaines semaines : poser les 3 repas fixes et installer
-la collation proteinee de l'apres-midi. Le reste viendra."
-
-Interdit :
-- Amorce "Avec ton..." / "Vu ton..." repetee 2+ fois dans la section
-- Phrases generiques applicables a tout le monde
-- Regles absolues sans contexte ("tu dois", "il faut")
-- Conseils vagues ("manger equilibre", "bien dormir")
-- Repetition de regles classiques de nutrition deja connues
-
-Objectif : le client doit sentir qu'Anissa parle vraiment et que chaque
-ligne est faite pour lui, pas pour un autre.
-
-## 9. PLAN D'ACTION (4 SEMAINES)
-
-Objectif : donner une progression claire sans refaire 4 semaines completes.
-
-- Structurer par semaine (S1 a S4)
-- 1 a 2 objectifs MAXIMUM par semaine
-- Progression logique obligatoire :
-  S1 = mise en place (installer les bases, supprimer les blocages)
-  S2 = stabilisation (ancrer les habitudes, ajuster)
-  S3 = optimisation (affiner timing, quantites, protocoles)
-  S4 = automatisation (autonome, preparer la suite)
-- Format court, lisible
-- NE PAS repeter les menus (la Semaine 1 et les alternatives par repas suffisent)
-- Chaque semaine doit refleter une progression sur le probleme principal
-
-Format attendu :
-S1 — Mise en place : poser les 3 repas fixes + installer la collation proteinee 16h
-S2 — Stabilisation : ancrer les portions + tester la tisane fenouil post-diner
-S3 — Optimisation : affiner timing dinner (avant 20h) + respiration carree matin/soir
-S4 — Automatisation : repas construits en autonomie via les alternatives + bilan avant RDV
-
-Interdit :
-- Progression generique ou interchangeable
-- Plus de 2 actions par semaine
-- Reprendre les menus dans chaque semaine
-
-## 10. CLOTURE DU PLAN (OBLIGATOIRE)
-4 a 6 lignes maximum. Vraie fin de consultation ecrite : rassurante, simple,
-engageante, orientee progression.
-
-Tu peux demarrer par (varier selon ce qui sonne juste) :
-- "Ce plan te donne un cadre simple pour..."
-- "Prends ce plan comme une base..."
-- "Pour les prochaines semaines..."
-- "Garde en tete que..."
-- Une phrase qui reprend subtilement l'objectif ("Stabiliser ta glycemie
-  passe d'abord par la regularite...")
-
-Contenu a integrer (dans un ordre qui coule) :
-- Poser le cap des prochaines semaines
-- Relativiser la perfection (regularite > perfection)
-- Valoriser les premiers effets attendus (concrets, pas "tu vas aller mieux")
-- Ouvrir sur le suivi/l'ajustement (elle n'est pas seule)
-
-Exemple cible :
-
-"Prends ce plan comme une base, pas comme une contrainte. On cherche de la
-regularite, pas de la perfection.
-
-Les premiers jours, tu devrais deja sentir une glycemie plus stable et
-moins de fringales l'apres-midi.
-
-Les semaines suivantes, on ajuste ensemble selon ce que tu observes. Tu n'es
-pas seule la-dedans."
-
-INTERDIT :
-- Ton froid ou impersonnel ("bonne continuation", "bon courage")
-- Phrases generiques sans substance
-- Jargon clinique
-- Promesses chiffrees ("tu perdras 3 kg")
-- Style coach Instagram ("tu vas tout dechirer")
-
-REGLES DE SORTIE :
-- Aucune section bonus, aucune annexe, aucun resume supplementaire
-- Aucun tableau de supplements (gere separement)
-- Aucun commentaire de wordcount
-- Stop strict apres la section 10`;
-
-const AUDIT_PROMPT = `Tu es un auditeur nutrition. Analyse ce plan nutritionnel et verifie :
-
-1. ALLERGIES/INTOLERANCES : aucun aliment interdit ne doit apparaitre dans les menus
-2. COHERENCE MACROS : les macros de chaque repas doivent etre coherents avec le total calcule
-3. CONTRADICTIONS : aucune recommandation ne doit contredire une autre section
-4. SUPPLEMENTS : si presents, verifier timing correct et pas de combinaisons interdites
-5. COMPLETUDE : toutes les sections attendues sont presentes
-
-Pour chaque probleme trouve :
-- Decris le probleme
-- Indique la correction exacte
-
-Si aucun probleme : reponds "AUDIT OK — aucune incoherence detectee."
-Si problemes : liste-les et fournis le texte corrige pour chaque section concernee.`;
-
-// Helper: build the system prompt with conditional modules
-// fullPlan: true = plan 4 semaines (premiere consultation), false = ajustements (suivi)
-// V86.6 : nouveau param `client` (optionnel, backward compatible). Si
-// getClientNutritionLocale(client) === 'EN', on short-circuit vers les prompts EN
-// dedies — aucune modification du chemin FR en dehors de ce garde en tete.
-function buildSystemPrompt(form, opts = {}, client = null) {
+// ─── PROMPT DISPATCHERS (FR/EN routing) ───
+// V96.10 : prompts FR + EN dans services/prompts/nutrition/{fr,en}.js
+// (Phase 3.A finie). Ce fichier ne garde que les dispatchers de routing FR/EN,
+// qui passeront dans un composer dedie a la Phase 3.B avec les modules profil.
+
+// V96.13 : 4e param `useComposer` (default false). Quand true ET cliente FR,
+// route vers buildSystemPromptFrV2 qui peut injecter des modules profil
+// (femmeCycle, perimenopause, menopause, diabete, digestifChronique,
+// clostridiumDifficile). Retourne TOUJOURS un objet { prompt, profile, blocked }
+// pour que le caller puisse afficher l'info profil ET bloquer la generation
+// si profil non supporte (grossesse / allaitement).
+function buildSystemPrompt(form, opts = {}, client = null, useComposer = false) {
   if (client && getClientNutritionLocale(client) === 'EN') {
-    return buildSystemPromptEn(form, opts);
+    return { prompt: buildSystemPromptEn(form, opts), profile: null, blocked: false };
   }
-  const { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = opts;
-  const parts = [SYSTEM_PROMPT, SWISS_BRANDS_PROMPT];
-
-  // Supplements: include if client is open to them (Oui or Peut-etre)
-  const pretProtocole = form?.pretProtocole || '';
-  if (pretProtocole === 'Oui' || pretProtocole === 'Peut-etre') {
-    parts.push(SUPPLEMENT_PROMPT);
+  if (useComposer) {
+    return buildSystemPromptFrV2(form, opts, { useComposer: true });
   }
-
-  if (isFollowup && followupWeek > 0) {
-    // Followup: progressive adjustment prompt based on week number
-    parts.push(buildFollowupPrompt(followupWeek));
-  } else if (planMode === 'oneshot') {
-    // V80 : bilan individuel one-shot — plan autonome, pas de suivi
-    parts.push(ONESHOT_PLAN_PROMPT);
-  } else {
-    // 4-week plan: include for formules with ongoing nutritional follow-up
-    const recurrentFormules = ['suivi', 'intensif', 'autonome', 'nutrition', 'custom'];
-    const normalizedFormule = (clientFormule || '').trim().toLowerCase();
-    const isFullPlanFormule = recurrentFormules.includes(normalizedFormule);
-    if (isFullPlanFormule) {
-      parts.push(FOUR_WEEKS_PROMPT);
-    }
-  }
-
-  return parts.join('\n\n');
+  return { prompt: buildSystemPromptFr(form, opts), profile: null, blocked: false };
 }
 
-// V55 : System prompt dedie aux supplements - STRICT (ne regenere JAMAIS de plan)
-// Retire SYSTEM_PROMPT qui contenait "TA MISSION : creer un plan" (cause de duplication)
-// Garde seulement l'identite + regles supplements + contexte suisse
-function buildSupplementsSystemPrompt() {
-  return `${ANISSA_IDENTITY_CORE}
-
-${SWISS_BRANDS_PROMPT}
-
-${SUPPLEMENT_PROMPT}
-
-TA MISSION : Rediger UNIQUEMENT la section SUPPLEMENTS RECOMMANDES.
-INTERDICTIONS STRICTES :
-- NE PAS rediger de plan nutritionnel (pas de semaines, pas de menus, pas de strategie)
-- NE PAS rediger de synthese clinique, regles de base, ou journees types
-- NE PAS inclure les sections "PLAN NUTRITIONNEL PERSONNALISE", "ANALYSE DU PROFIL", etc.
-- Demarrer directement par "SUPPLEMENTS RECOMMANDES" puis la liste des supplements
-- Format : texte brut, pas de markdown (pas de **gras**, pas de # titres)
-- Pas d'emojis (pas de 🥑, 💧, ✓, etc.)
-- Pas de tableau ASCII avec pipes | | (utiliser format texte simple)`;
+function buildSupplementsSystemPrompt(client = null) {
+  if (client && getClientNutritionLocale(client) === 'EN') {
+    return buildSupplementsSystemPromptEn();
+  }
+  return buildSupplementsSystemPromptFr();
 }
 
-// ─── FOLLOWUP WEEKLY PROMPTS ───
+// ─── WEEKLY FEEDBACK CONFIG (UI, conserve ici) ───
 
 const INITIAL_WEEKLY_FEEDBACK = {
   energy: '',
@@ -905,96 +121,6 @@ const INITIAL_WEEKLY_FEEDBACK = {
   cravings: '',
   notes: '',
 };
-
-const FOLLOWUP_WEEK_INSTRUCTIONS = {
-  1: `SEMAINE 1 — TOLERANCE & ADHERENCE :
-- Objectif : evaluer la tolerance au plan initial et l'adherence du client.
-- Ajustements autorises : MINIMES (digestion, portions, horaires repas).
-- Ne PAS modifier les macros ni la structure globale.
-- Si adherence faible : simplifier, pas complexifier.
-- Si troubles digestifs : reduire fibres/fermentes, revenir a des aliments neutres.
-- Maximum 2-3 ajustements concrets.`,
-
-  2: `SEMAINE 2 — PREMIERS AJUSTEMENTS :
-- Objectif : ajuster energie, faim et digestion selon le feedback.
-- Ajustements autorises : portions, repartition glucides, timing collations, hydratation.
-- Si faim excessive : augmenter proteines ou ajouter collation.
-- Si energie basse : verifier glucides pre-entrainement et sommeil.
-- Si digestion ok : introduction progressive d'aliments plus varies.
-- Maximum 3-4 ajustements concrets.`,
-
-  3: `SEMAINE 3 — OPTIMISATION :
-- Objectif : optimiser portions, timing, recuperation et performance.
-- Ajustements autorises : macros fins, timing peri-entrainement, supplements si pertinent.
-- Si performance stagne : ajuster glucides autour de l'effort.
-- Si cravings persistantes : verifier deficits (magnesium, chrome, sommeil).
-- Commencer a preparer l'autonomie du client.
-- Maximum 3-4 ajustements concrets.`,
-
-  4: `SEMAINE 4 — CONSOLIDATION & AUTONOMIE :
-- Objectif : consolider les acquis, preparer le client a etre autonome.
-- Proposer des substitutions pour varier sans perdre l'equilibre.
-- Valider les habitudes installees, identifier celles a renforcer.
-- Fournir un mini-guide d'autonomie : quoi faire si voyage, restaurant, fatigue.
-- Ajustements uniquement si necessaire — stabiliser.
-- Maximum 2-3 ajustements concrets.`,
-};
-
-function buildFollowupPrompt(weekNum) {
-  const week = Math.min(Math.max(weekNum || 1, 1), 4);
-  return `
-CONTEXTE : Tu fais un suivi hebdomadaire, pas un nouveau plan.
-Objectif : analyser ce qui fonctionne et ajuster avec un minimum de changements.
-
-${ADJUSTMENT_RULE}
-
-CONSULTATION DE SUIVI — SEMAINE ${week}/4
-
-Tu generes un AJUSTEMENT du plan existant, PAS un nouveau plan complet.
-Le client suit deja un protocole nutritionnel. Tu dois :
-1. Analyser le feedback hebdomadaire du client
-2. Comparer avec les objectifs initiaux
-3. Proposer des ajustements cibles et progressifs
-
-PRIORITE CLINIQUE DU SUIVI (TOUJOURS respecter cet ordre) :
-digestion > adherence > energie > faim/cravings > performance > objectif
-Si digestion ou adherence sont mauvaises → simplifier le plan avant toute optimisation.
-Ne jamais optimiser timing/portions/performance si la base (digestion + adherence) n'est pas stable.
-
-REGLES DE SUIVI :
-- Maximum 2-4 ajustements par semaine
-- Ne pas casser la structure existante
-- Garder ce qui fonctionne, modifier seulement ce qui bloque
-
-${FOLLOWUP_WEEK_INSTRUCTIONS[week]}
-
-FORMAT DE SORTIE :
-- BILAN DE LA SEMAINE : resume factuel du feedback (3-5 lignes)
-- AJUSTEMENTS PROPOSES : liste numerotee, chaque ajustement = 1 action concrete
-- PLAN MIS A JOUR : uniquement les repas/jours modifies (pas tout le plan)
-- PROCHAINE ETAPE : ce que le client doit observer pour la semaine suivante`;
-}
-
-// V55 : instruction renforcee - STRICT pour eviter generation plan
-const SUPPLEMENTS_INSTRUCTION = `TACHE EXCLUSIVE : redige UNIQUEMENT la section des supplements recommandes.
-
-NE PAS rediger de plan nutritionnel, menus, journees types, strategie, synthese clinique,
-regles de base, rotations, fiche frigo, ou ajustements environnementaux.
-Demarre DIRECTEMENT par "SUPPLEMENTS RECOMMANDES" et rien avant.
-
-Format pour chaque supplement (5-6 max) :
-Nom du supplement (en majuscules)
-- Sources alimentaires : aliments + quantites
-- Complement si insuffisant : dosage, moment, forme, marque suisse
-- Justification : 1 phrase liee au profil
-- Interactions : 1 ligne si pertinent
-- Duree : X semaines / mois
-
-REGLES :
-- Pas d'emojis (pas de 🥑💧✓ etc.)
-- Pas de markdown (**gras**, # titres, tableaux | |)
-- Texte brut lisible
-- Tutoiement`;
 
 // ─── PLAN QUALITY SCORING ───
 
@@ -1060,7 +186,7 @@ function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnaly
             <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.4)', marginTop: 2 }}>
               {autoCorrected && '✨ Auto-corrige · '}
               Qualite {score.normalized}/10
-              {aiAnalysis?.analyzedAt && !isStale && ` · Audit IA : ${aiAnalysis.score}/100`}
+              {aiAnalysis?.analyzedAt && !isStale && ` · Audit IA : ${(aiAnalysis.score / 10).toFixed(1)}/10`}
               {aiAnalysis && isStale && ' · ⚠ Audit IA obsolete'}
             </div>
           </div>
@@ -1166,7 +292,7 @@ function PlanQualityScore({ score, autoCorrected, aiAnalysis, analyzing, aiAnaly
               fontSize: '.82rem', fontWeight: 700,
               color: aiAnalysis.score >= 80 ? '#5fbd82' : aiAnalysis.score >= 60 ? '#e8a040' : '#e57c6c',
             }}>
-              {aiAnalysis.score}/100
+              {(aiAnalysis.score / 10).toFixed(1)}/10
             </span>
             {isStale && (
               <span style={{
@@ -1899,6 +1025,8 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   // V92.1 : showTemplates supprime — feature Templates retiree
   const [showPdfMenu, setShowPdfMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  // V96.32 — Menu Exporter qui regroupe Word + Relecture + Resume medecin
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [mgdOpen, setMgdOpen] = useState(false);
   // V78 : soft delete consultation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1978,11 +1106,32 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       }
     } catch { /* */ }
     return 'plan';
-  }); // 'plan' | 'frigo' | 's1s4' | 'supp' | 'app' (V94.48)
+  }); // 'plan' | 'frigo' | 'app' (V96.33 : 's1s4' + 'supp' retires)
   const [showFrigoModal, setShowFrigoModal] = useState(false);
   const [showMedicalSummary, setShowMedicalSummary] = useState(false);
   // V92.1 : showCoverForm + coverFields supprimes — Word V92.0 prime
   const [showClientAppPreview, setShowClientAppPreview] = useState(false);
+  // V96.13 : toggle composer beta (FR uniquement). Persiste en localStorage par
+  // utilisateur. OFF par defaut → comportement legacy strictement preserve.
+  // Quand ON → buildSystemPromptFrV2 injecte les modules profil clinique.
+  const [composerBeta, setComposerBeta] = useState(() => {
+    try { return localStorage.getItem('bfc_composer_beta_fr') === 'true'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('bfc_composer_beta_fr', composerBeta ? 'true' : 'false'); } catch { /* */ }
+  }, [composerBeta]);
+  // Profil detecte au dernier appel (affichage UI feedback). Reset a chaque generation.
+  const [lastDetectedProfile, setLastDetectedProfile] = useState(null);
+  // V96.19 — Directives IA additionnelles par cliente (override texte libre).
+  // Anissa peut ecrire des consignes specifiques (refus aliment, contexte
+  // clinique nuance, ton particulier) qui sont injectees dans buildUserMessage
+  // avec priorite maximale. Persiste dans consultation.aiDirectives.
+  const [aiDirectives, setAiDirectives] = useState(
+    initialConsultation?.aiDirectives
+    || initialConsultation?.ai_directives
+    || ''
+  );
+  const [aiDirectivesExpanded, setAiDirectivesExpanded] = useState(false);
   // ─── Draft state (source de verite unique cote parent) ──────────────
   // L'editeur est controle via un reseed explicite (editorSeed) et pousse
   // ses modifications en continu via onDraftChange (debounced cote editeur).
@@ -2010,10 +1159,11 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
   const [aiAnalysisError, setAiAnalysisError] = useState('');
   const [improvingAll, setImprovingAll] = useState(false);
   const [globalProposal, setGlobalProposal] = useState(null);
-  const [expertMode, setExpertMode] = useState(false);
-  const [sectionResults, setSectionResults] = useState([]);
-  const [currentOptimizingIdx, setCurrentOptimizingIdx] = useState(0);
-  const [acceptedSections, setAcceptedSections] = useState({});
+  // V96.31 — Mode Expert retire (state expertMode + sectionResults +
+  // currentOptimizingIdx + acceptedSections supprimes). Composer beta + audit IA
+  // composer-aware (V96.23+) couvrent maintenant l'optimisation : detection des
+  // manques par module + corrections rapides cliquables. Mode Expert dupliquait
+  // ce travail sans connaitre les modules profil.
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved');
   // 'saved' | 'unsaved' | 'saving'
   const autoSaveTimerRef = useRef(null);
@@ -2085,7 +1235,7 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
 
   // Close dropdown menus on outside click
   useEffect(() => {
-    const close = () => { setShowPdfMenu(false); setShowMoreMenu(false); };
+    const close = () => { setShowPdfMenu(false); setShowMoreMenu(false); setShowExportMenu(false); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
@@ -2166,76 +1316,6 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     } finally {
       setImprovingAll(false);
     }
-  };
-
-  const handleExpertMode = async () => {
-    const edited = editorGetDataRef.current ? editorGetDataRef.current() : null;
-    const currentPlan = edited?.plan ?? planDraft;
-    if (!currentPlan?.trim()) {
-      showSaveToast('Aucun plan \u00e0 optimiser');
-      return;
-    }
-    setExpertMode('loading');
-    setAcceptedSections({});
-    setSectionResults([]);
-
-    const sections = structurePlanSections(currentPlan, supplementsDraft, { isFollowup, locale: getClientNutritionLocale(client) });
-
-    const results = [];
-    for (let i = 0; i < sections.length; i++) {
-      setCurrentOptimizingIdx(i);
-      const section = sections[i];
-      if (!section.content?.trim()) {
-        results.push({ id: section.id || `s_${i}`, title: section.title,
-          original: '', improved: '', changes: [], skip: true });
-        continue;
-      }
-      try {
-        // V88.15 : locale propagee pour que Mode Expert sorte en EN sur les plans anglais
-        const { improvedContent, changes } = await optimizeSection(
-          form, section.title, section.content, [], { locale: getClientNutritionLocale(client) }
-        );
-        results.push({
-          id: section.id || `s_${i}`,
-          title: section.title,
-          original: section.content,
-          improved: improvedContent,
-          changes,
-          skip: false,
-        });
-      } catch {
-        results.push({ id: section.id || `s_${i}`, title: section.title,
-          original: section.content, improved: section.content,
-          changes: [], skip: true });
-      }
-      setSectionResults([...results]);
-    }
-    setExpertMode('review');
-  };
-
-  const handleApplyExpertMode = () => {
-    // V88.16 : les sections type 'supplements' sont routees vers supplementsDraft
-    // (pas re-injectees dans planDraft) pour eviter un doublon visible dans l'editeur
-    // (filter FR-only de parsePlanToSections ne matche pas les titres EN).
-    let newSupps = supplementsDraft;
-    const newPlanParts = [];
-    for (const r of sectionResults) {
-      const accepted = acceptedSections[r.id] !== false;
-      const content = accepted ? r.improved : r.original;
-      if (!content?.trim()) continue;
-      if (detectSectionType(r.title) === 'supplements') {
-        if (accepted) newSupps = content;
-        continue;
-      }
-      newPlanParts.push(`${r.title.toUpperCase()}\n${content}`);
-    }
-
-    const newPlan = newPlanParts.join('\n\n');
-    reseedEditor(newPlan, newSupps, recipesDraft);
-    setExpertMode(false);
-    setSectionResults([]);
-    setAcceptedSections({});
-    showSaveToast('\u2705 Plan optimis\u00e9 appliqu\u00e9');
   };
 
   const updateField = (field, value) => {
@@ -2486,6 +1566,19 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       parts.push('- Mentionner les priorités nutritionnelles issues des résultats');
     }
 
+    // V96.19 — DIRECTIVES IA ADDITIONNELLES (override par cliente).
+    // Anissa peut injecter des consignes specifiques pour CETTE cliente
+    // (refus aliment, intolerance non standard, contexte clinique nuance,
+    // ajustement de ton, contrainte budgetaire, etc.). Place en QUEUE pour
+    // que ces consignes soient les dernieres lues par Claude (poids maximal).
+    const directives = (aiDirectives || '').trim();
+    if (directives) {
+      parts.push('');
+      parts.push('--- DIRECTIVES SPECIFIQUES ANISSA POUR CETTE CLIENTE (PRIORITE MAXIMALE) ---');
+      parts.push(directives);
+      parts.push('Ces directives prevalent sur les regles generales en cas de conflit. Les respecter scrupuleusement.');
+    }
+
     return parts.join('\n');
   };
 
@@ -2552,33 +1645,42 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
     try {
       const userMessage = buildUserMessage();
 
-      const planResponse = await fetch('/api/claude', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-fallback-key': apiKey.trim(),
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 16000,
-          system: buildSystemPrompt(form, {
-            isFollowup,
-            clientFormule: client?.formule || '',
-            followupWeek,
-            planMode: getNutritionPlanMode(client), // V80 : oneshot vs followup
-          }, client), // V86.6 : 3e param pour le branchement EN (getClientNutritionLocale)
-          messages: [{ role: 'user', content: userMessage + '\n\nGenere le plan nutrition personnalise complet (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.' }],
-        }),
-      });
+      // V96.13 : 4e param `composerBeta` route vers le composer profil-aware
+      // si ON et cliente FR. Retourne { prompt, profile, blocked }. Si blocked
+      // (ex: grossesse / allaitement non encore couvert), on stoppe net et
+      // on alerte Anissa pour qu'elle desactive le composer ou attende le module.
+      const promptResult = buildSystemPrompt(form, {
+        isFollowup,
+        clientFormule: client?.formule || '',
+        followupWeek,
+        planMode: getNutritionPlanMode(client), // V80 : oneshot vs followup
+      }, client, composerBeta); // V86.6 : 3e param routing FR/EN. V96.13 : 4e composer beta.
 
-      if (!planResponse.ok) {
-        const err = await planResponse.json().catch(() => ({}));
-        throw new Error(err.error?.message || `Erreur API: ${planResponse.status}`);
+      if (promptResult.blocked) {
+        const reason = promptResult.profile?.blockReason || 'profil non supporte';
+        // eslint-disable-next-line no-alert
+        alert(`Composer beta : profil "${reason}" pas encore supporte. Decoche "Composer beta" pour generer ce plan via le path classique, ou attends qu'on ajoute le module dedie.`);
+        setGenerating(false);
+        return;
       }
+      setLastDetectedProfile(promptResult.profile); // null si path legacy ou EN
 
-      const planData = await planResponse.json();
+      // V97.0 : passe par callClaude (raw=true pour garder l'objet data complet,
+      // utilise plus bas dans le 3e appel "Fiche Frigo" via planData.content)
+      const planData = await callClaude({
+        system: promptResult.prompt,
+        user: userMessage + '\n\nGenere le plan nutrition personnalise complet (sections 1 a 7) avec menus varies, listes de courses par semaine, et alternatives naturelles. Ne genere PAS la section supplements separement.',
+        model: 'claude-sonnet-4-20250514',
+        maxTokens: 16000,
+        raw: true,
+      });
       // V55 : postProcess nettoie emojis, letter-spacing, markdown tables, arrows cassees
       let planText = postProcess(planData.content?.[0]?.text || '');
+
+      // V96.16 — auto-retry fiche frigo SUPPRIME : la fiche frigo est construite
+      // independamment du plan textuel via l'onglet dedie + fridgeDataBuilder
+      // (extraction multi-source + edition manuelle Anissa via fiche_frigo_json).
+      // Inutile de forcer Claude a ecrire une "section 5" dans le plan markdown.
 
       // Appel 2 : Supplements (conditionnel — seulement si client ouvert aux complements)
       // V86.9 : pour les clientes Benfitcoach EN, on utilise les prompts supplements EN
@@ -2592,27 +1694,20 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
           : buildSupplementsSystemPrompt();
         const suppInstruction = consultationLocale === 'EN'
           ? SUPPLEMENTS_INSTRUCTION_EN
-          : SUPPLEMENTS_INSTRUCTION;
-        const suppResponse = await fetch('/api/claude', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-fallback-key': apiKey.trim(),
-          },
-          body: JSON.stringify({
+          : SUPPLEMENTS_INSTRUCTION_FR;
+        // V97.0 : passe par callClaude. On swallow toute erreur ici pour garder
+        // le comportement legacy (suppText = '' si l'appel echoue, pas de throw).
+        try {
+          const suppRaw = await callClaude({
+            system: suppSystemPrompt, // V48/V55 : prompt dedie STRICT
+            user: userMessage + '\n\n' + suppInstruction,
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 4000,
-            // V48/V55 : system prompt dedie STRICT (sans mission "creer un plan")
-            system: suppSystemPrompt,
-            messages: [{ role: 'user', content: userMessage + '\n\n' + suppInstruction }],
-          }),
-        });
-
-        if (suppResponse.ok) {
-          const suppData = await suppResponse.json();
+            maxTokens: 4000,
+            trim: false,
+          });
           // V55 : double securite - strip leakage + postProcess
-          suppText = postProcess(stripPlanLeakage(suppData.content?.[0]?.text || ''));
-        }
+          suppText = postProcess(stripPlanLeakage(suppRaw || ''));
+        } catch { /* silent : laisse suppText = '' */ }
       }
       updateField('supplements', suppText);
       setAutoCorrected(false);
@@ -2624,25 +1719,17 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       const scoreFormData = { ...form, _weeklyFeedback: weeklyFeedback };
 
       // Helper: run audit on a plan
+      // V97.0 : passe par callClaude. trim:false pour garder le contenu brut.
       const runAudit = async (planToAudit) => {
         try {
-          const resp = await fetch('/api/claude', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-fallback-key': apiKey.trim() },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 4000,
-              // V86.9 : audit en EN pour clientes Benfitcoach EN
-              system: consultationLocale === 'EN' ? AUDIT_PROMPT_EN : AUDIT_PROMPT,
-              messages: [{ role: 'user', content: `${auditClientProfile}\n\nPLAN GENERE :\n${planToAudit}\n\nSUPPLEMENTS :\n${suppText || 'Aucun'}` }],
-            }),
+          return await callClaude({
+            system: consultationLocale === 'EN' ? AUDIT_PROMPT_EN : AUDIT_PROMPT_FR,
+            user: `${auditClientProfile}\n\nPLAN GENERE :\n${planToAudit}\n\nSUPPLEMENTS :\n${suppText || 'Aucun'}`,
+            model: 'claude-sonnet-4-20250514',
+            maxTokens: 4000,
+            trim: false,
           });
-          if (resp.ok) {
-            const data = await resp.json();
-            return data.content?.[0]?.text || '';
-          }
-        } catch { /* silent */ }
-        return '';
+        } catch { return ''; /* silent : audit best-effort */ }
       };
 
       // V49 : Audit garde en INTERNE uniquement — jamais dans le plan client (PDF)
@@ -2655,22 +1742,19 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       // Auto-correction: single attempt if score is too low or hard fail
       if (shouldAutoCorrect(initialScore)) {
         try {
-          const correctionResponse = await fetch('/api/claude', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-fallback-key': apiKey.trim() },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 16000,
-              // V49 : passer planText (sans audit injecte) pour eviter que Claude reprenne le texte d'audit
-              system: buildCorrectionPrompt(planText, initialScore, form, auditResult),
-              messages: [{ role: 'user', content: 'Corrige le plan ci-dessus selon les problemes detectes. Renvoie UNIQUEMENT le plan corrige, sans mentionner les problemes identifies, sans section "AUDIT", sans commentaires meta. Garde le meme format et la meme structure que l\'original.' }],
-            }),
+          // V97.0 : passe par callClaude. trim:false pour preserver le format exact.
+          const correctedRaw = await callClaude({
+            // V49 : passer planText (sans audit injecte) pour eviter que Claude reprenne le texte d'audit
+            system: buildCorrectionPrompt(planText, initialScore, form, auditResult),
+            user: 'Corrige le plan ci-dessus selon les problemes detectes. Renvoie UNIQUEMENT le plan corrige, sans mentionner les problemes identifies, sans section "AUDIT", sans commentaires meta. Garde le meme format et la meme structure que l\'original.',
+            model: 'claude-sonnet-4-20250514',
+            maxTokens: 16000,
+            trim: false,
           });
 
-          if (correctionResponse.ok) {
-            const correctionData = await correctionResponse.json();
+          if (correctedRaw) {
             // V62 : appliquer postProcess aussi au plan corrige (nettoyage emojis, fleches, letter-spacing)
-            const correctedPlan = postProcess(correctionData.content?.[0]?.text || '');
+            const correctedPlan = postProcess(correctedRaw);
 
             if (correctedPlan) {
               // Re-audit the corrected version (pour scoring uniquement)
@@ -2741,23 +1825,17 @@ ${planData.content?.[0]?.text || ''}
 --- SUPPLEMENTS ---
 ${suppText}`;
 
-        const ficheResponse = await fetch('/api/claude', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-fallback-key': apiKey.trim(),
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 3000,
-            system: 'Tu es un assistant qui structure des donnees nutritionnelles au format JSON strict.',
-            messages: [{ role: 'user', content: ficheInstruction }],
-          }),
+        // V97.0 : passe par callClaude. Garde le parsing manuel (strip ``` + first/last brace)
+        // car il a sa propre logique tolerante avant JSON.parse.
+        const ficheRawText = await callClaude({
+          system: 'Tu es un assistant qui structure des donnees nutritionnelles au format JSON strict.',
+          user: ficheInstruction,
+          model: 'claude-sonnet-4-20250514',
+          maxTokens: 3000,
         });
 
-        if (ficheResponse.ok) {
-          const ficheData = await ficheResponse.json();
-          let raw = (ficheData.content?.[0]?.text || '').trim();
+        if (ficheRawText) {
+          let raw = ficheRawText;
           // Strip ```json ... ``` fences si presents
           raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
           // Extraire le premier objet JSON si du texte parasite
@@ -2834,6 +1912,7 @@ ${suppText}`;
       labResults: consultation.lab_results || {},
       geneticResults: consultation.genetic_results || {},
       aiAnalysis: aiAnalysis || null,
+      aiDirectives: aiDirectives || '', // V96.19 — override texte libre par cliente
       isFollowup,
       followupData: isFollowup ? {
         ...followupData,
@@ -4122,52 +3201,10 @@ ${suppText}`;
               </div>
             );
           }
-          if (editorTab === 's1s4') {
-            const sections = hasPlan ? structurePlanSections(consultation.nutrition_plan, consultation.supplements, { isFollowup, locale: getClientNutritionLocale(client) }) : [];
-            const weekly = sections.filter(s => /semaine\s*[1-4]|rotation|plan\s*d[ae]?\s*action/i.test(s.title));
-            if (!hasPlan) {
-              return <div style={{ padding: 24, textAlign: 'center', color: '#8a8a7a' }}>Genere d'abord un plan pour visualiser la progression S1-S4.</div>;
-            }
-            if (weekly.length === 0) {
-              return <div style={{ padding: 16, color: '#8a8a7a', fontSize: '.85rem' }}>Aucune section hebdomadaire detectee dans le plan.</div>;
-            }
-            return (
-              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {weekly.map((s, i) => (
-                  <div key={i} style={{ border: '1px solid rgba(255,255,255,.08)', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,.02)' }}>
-                    <div style={{ fontSize: '.78rem', fontWeight: 700, color: '#8abf9a', letterSpacing: '.04em', marginBottom: 6, textTransform: 'uppercase' }}>{s.title}</div>
-                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '.82rem', color: '#d4c9a8', margin: 0, lineHeight: 1.55 }}>{s.content}</pre>
-                  </div>
-                ))}
-              </div>
-            );
-          }
-          if (editorTab === 'supp') {
-            return (
-              <div style={{ padding: 12 }}>
-                <label style={{ display: 'block', fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6 }}>
-                  Supplements recommandes
-                </label>
-                <textarea
-                  value={consultation.supplements || ''}
-                  onChange={(e) => updateField('supplements', e.target.value)}
-                  placeholder="Protocole supplements + tableau horaire..."
-                  rows={18}
-                  style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '10px 12px', color: '#d4c9a8', fontSize: '.85rem', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.55 }}
-                />
-                <label style={{ display: 'block', fontSize: '.75rem', color: '#8a8a7a', textTransform: 'uppercase', letterSpacing: '.4px', marginTop: 14, marginBottom: 6 }}>
-                  Recettes recommandees
-                </label>
-                <textarea
-                  value={consultation.recipes || ''}
-                  onChange={(e) => updateField('recipes', e.target.value)}
-                  placeholder="Recettes specifiques..."
-                  rows={8}
-                  style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '10px 12px', color: '#d4c9a8', fontSize: '.85rem', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.55 }}
-                />
-              </div>
-            );
-          }
+          // V96.33 : blocs editorTab === 's1s4' et 'supp' supprimes — onglets retires
+          // (Anissa peaufine plan + supplements directement dans Word apres export V92.0).
+          // Les states/donnees consultation.supplements et consultation.recipes restent
+          // intacts et sont injectes dans le Word + la generation IA.
           // V94.41 → V94.48 : Hub app cliente complet — vue d'ensemble + Lettre IA
           // + Recettes IA + Messages + Ressources + Signaux. Separe du peaufinage
           // plan textuel pour clarifier les 2 mindsets (plan vs publication digitale).
@@ -4309,6 +3346,29 @@ ${suppText}`;
                     </span>
                   )}
                 </div>
+                {/* V96.20 — Cockpit Anissa : 4 macro-etapes (Preparer / Generer /
+                    Affiner / Livrer) avec auto-detection des sous-checks. Visible
+                    sauf en mode relecture. Aide Anissa a ne rien oublier. */}
+                {!isReviewMode && (
+                  <PlanCockpit
+                    form={form}
+                    consultation={consultation}
+                    planDraft={planDraft}
+                    supplementsDraft={supplementsDraft}
+                    hasPlan={hasPlan}
+                    liveScore={liveScore || (hasPlan ? scorePlanQuality(
+                      planDraft,
+                      supplementsDraft,
+                      { ...form, _weeklyFeedback: weeklyFeedback },
+                      { isFollowup, followupWeek }
+                    ) : null)}
+                    lastDetectedProfile={lastDetectedProfile}
+                    aiDirectives={aiDirectives}
+                    composerBeta={composerBeta}
+                    isFollowup={isFollowup}
+                    onJumpTab={(tab) => setEditorTab(tab)}
+                  />
+                )}
                 {/* V83 : bloc qualite/AI analysis masque en mode relecture pour lisibilite */}
                 {hasPlan && !isReviewMode && (
                   <div style={{ width: '100%' }}>
@@ -4387,8 +3447,25 @@ ${suppText}`;
                         try {
                           // V88.14 : passer la locale pour que l'audit et les quickWins
                           // sortent dans la bonne langue (FR par defaut / EN pour Benfitcoach EN)
+                          // V96.23 : passer aussi composerProfile + aiDirectives pour que
+                          // l'audit verifie les MUST INCLUDE specifiques aux modules injectes
+                          // et le respect des directives Anissa.
+                          // V96.24 : calculer composerProfile en LIVE depuis le form au moment
+                          // du clic (et non plus depuis lastDetectedProfile qui peut etre null
+                          // si Anissa n'a pas regenere recemment). Cela garantit que la checklist
+                          // MUST_INCLUDE est toujours active et previent les suggestions hors
+                          // perimetre (ex: ajustement insuline T1).
+                          let profileForAudit = lastDetectedProfile;
+                          if (!profileForAudit && getClientNutritionLocale(client) !== 'EN') {
+                            try {
+                              const { detectClientProfile } = await import('./services/prompts/nutrition/profiles/_detector.fr');
+                              profileForAudit = detectClientProfile(form);
+                            } catch { /* fallback to null */ }
+                          }
                           const result = await analyzeFullPlan(form, planDraft, supplementsDraft, {
                             locale: getClientNutritionLocale(client),
+                            composerProfile: profileForAudit,
+                            aiDirectives,
                           });
                           if (result) {
                             result.planSignature = (planDraft || '').length + '|' + (planDraft || '').slice(0, 200);
@@ -4476,20 +3553,166 @@ ${suppText}`;
                   {generating ? 'Generation...' : (hasPlan ? 'Regenerer' : 'Generer avec l\'IA')}
                 </button>
 
-                {/* V92.1 : bouton Templates supprime — feature non utilisee en pratique */}
-                {planVersions.length > 0 && (
+                {/* V96.32 — Menu Exporter : regroupe Word + Mode relecture + Resume medecin.
+                    Avant V96.32, Word et Relecture etaient dans le header editeur,
+                    et Resume medecin etait dans le menu Plus. Consolidation pour clarte. */}
+                <div style={{ position: 'relative', display: 'inline-block' }} onMouseDown={e => e.stopPropagation()}>
                   <button
                     type="button"
                     className="btn btn-anissa-secondary"
-                    onClick={() => setShowVersions(true)}
-                    style={{ padding: '10px 12px', borderRadius: 10, fontSize: '.78rem' }}
-                    title="Historique des versions"
+                    onClick={() => setShowExportMenu(m => !m)}
+                    disabled={!hasPlan}
+                    style={{ padding: '10px 14px', borderRadius: 10, fontSize: '.78rem', opacity: hasPlan ? 1 : 0.4 }}
+                    title="Exporter le plan (Word, mode relecture, resume medecin)"
                   >
-                    Versions ({planVersions.length})
+                    {'\ud83d\udce4 Exporter \u25be'}
                   </button>
+                  {showExportMenu && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, zIndex: 50,
+                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      borderRadius: 8, overflow: 'hidden', minWidth: 220, marginTop: 4,
+                      boxShadow: '0 8px 24px rgba(0,0,0,.3)'
+                    }}>
+                      <button
+                        type="button"
+                        className="btn btn-anissa-secondary"
+                        style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
+                        onClick={async () => {
+                          setShowExportMenu(false);
+                          try {
+                            const planSource = planDraft || consultation.nutrition_plan || '';
+                            await exportPlanToWord(client, consultation, planSource);
+                          } catch (e) {
+                            // eslint-disable-next-line no-console
+                            console.error('[exportPlanToWord]', e);
+                            alert("Erreur lors de l'export Word : " + (e?.message || e));
+                          }
+                        }}
+                      >
+                        {'\ud83d\udcc4 Exporter en Word'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-anissa-secondary"
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '10px 14px',
+                          borderRadius: 0, border: 'none',
+                          borderTop: '1px solid rgba(255,255,255,.06)',
+                          background: isReviewMode ? 'rgba(196,160,80,.12)' : undefined,
+                          color: isReviewMode ? '#e0cda0' : undefined,
+                        }}
+                        onClick={() => { setIsReviewMode(m => !m); setShowExportMenu(false); }}
+                      >
+                        {isReviewMode ? '\u2190 Quitter relecture' : '\ud83d\udc41 Mode relecture'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-anissa-secondary"
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '10px 14px',
+                          borderRadius: 0, border: 'none',
+                          borderTop: '1px solid rgba(255,255,255,.06)',
+                        }}
+                        onClick={() => { setShowMedicalSummary(true); setShowExportMenu(false); }}
+                      >
+                        {'\ud83e\ude7a R\u00e9sum\u00e9 m\u00e9decin'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* V96.32 — Divider visuel entre zone actions (Generer + Exporter)
+                    et zone parametres (Composer beta, Versions, Directives IA, Plus) */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 1, alignSelf: 'stretch', minHeight: 28,
+                    background: 'rgba(255,255,255,.1)', margin: '0 4px',
+                  }}
+                />
+
+                {/* V96.13 : Toggle composer beta (FR uniquement). Discret, persiste
+                    en localStorage. Affiche aussi le profil detecte lors de la
+                    derniere generation (feedback Anissa). */}
+                {getClientNutritionLocale(client) !== 'EN' && (
+                  <label
+                    title={
+                      'Composer beta : injecte des modules profil clinique (femmeCycle, '
+                      + 'perimenopause, menopause, diabete, digestif chronique, C. difficile). '
+                      + 'OFF = generation classique. Bloquage automatique si grossesse/allaitement.'
+                    }
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '8px 12px', borderRadius: 10, fontSize: '.72rem',
+                      cursor: 'pointer', userSelect: 'none',
+                      background: composerBeta ? 'rgba(167,139,250,.15)' : 'rgba(255,255,255,.04)',
+                      border: composerBeta
+                        ? '1px solid rgba(167,139,250,.45)'
+                        : '1px solid rgba(255,255,255,.08)',
+                      color: composerBeta ? '#a78bfa' : 'rgba(255,255,255,.55)',
+                      transition: 'all .15s',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={composerBeta}
+                      onChange={e => setComposerBeta(e.target.checked)}
+                      style={{ margin: 0, cursor: 'pointer', accentColor: '#a78bfa' }}
+                    />
+                    {'\ud83e\uddea Composer beta'}
+                    {composerBeta && lastDetectedProfile?.all?.length > 0 && (
+                      <span style={{
+                        marginLeft: 4, padding: '2px 6px', borderRadius: 6,
+                        background: 'rgba(167,139,250,.2)', fontSize: '.68rem',
+                        color: '#c4b5fd',
+                      }}>
+                        {lastDetectedProfile.all.join(' + ')}
+                      </span>
+                    )}
+                  </label>
                 )}
 
-                {/* Plus dropdown */}
+                {/* V92.1 : bouton Templates supprime — feature non utilisee en pratique */}
+                {/* V96.34 : bouton "Versions" deplace dans le menu Plus pour alleger Row 1 */}
+
+                {/* V96.19 — Toggle Directives IA additionnelles (override par cliente).
+                    Anissa peut ouvrir un champ libre pour ajouter des consignes specifiques
+                    a CETTE cliente. Etat persiste dans la consultation. */}
+                {/* V96.34 : couleur ambree (#e8a040) — bouton important qui pondere
+                    la generation IA. Plus visible que l'ancien bleu, sans crier (pas
+                    primary). Toujours visible meme inactif pour Anissa s'en souvienne. */}
+                <button
+                  type="button"
+                  onClick={() => setAiDirectivesExpanded(v => !v)}
+                  title="Ajoute des directives IA specifiques a cette cliente (refus aliment, contexte clinique nuance, ton particulier...)"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 12px', borderRadius: 10, fontSize: '.72rem',
+                    cursor: 'pointer', userSelect: 'none',
+                    background: aiDirectives ? 'rgba(232,160,64,.18)' : 'rgba(232,160,64,.06)',
+                    border: aiDirectives
+                      ? '1px solid rgba(232,160,64,.55)'
+                      : '1px solid rgba(232,160,64,.25)',
+                    color: aiDirectives ? '#f0b860' : '#c89a4a',
+                    transition: 'all .15s',
+                  }}
+                >
+                  {'\ud83d\udcac Directives IA'}
+                  {aiDirectives && (
+                    <span style={{
+                      padding: '2px 6px', borderRadius: 6,
+                      background: 'rgba(232,160,64,.28)', fontSize: '.65rem',
+                      color: '#ffd082',
+                    }}>
+                      actives
+                    </span>
+                  )}
+                </button>
+
+                {/* Plus dropdown — V96.32 : visible si la consultation existe OU si versions disponibles.
+                    V96.34 : "Versions" deplace ici depuis Row 1. */}
+                {(initialConsultation?.id || planVersions.length > 0) && (
                 <div style={{ position: 'relative', display: 'inline-block' }} onMouseDown={e => e.stopPropagation()}>
                   <button
                     type="button"
@@ -4503,32 +3726,25 @@ ${suppText}`;
                     <div style={{
                       position: 'absolute', top: '100%', left: 0, zIndex: 50,
                       background: 'var(--bg-card)', border: '1px solid var(--border)',
-                      borderRadius: 8, overflow: 'hidden', minWidth: 200, marginTop: 4,
+                      borderRadius: 8, overflow: 'hidden', minWidth: 220, marginTop: 4,
                       boxShadow: '0 8px 24px rgba(0,0,0,.3)'
                     }}>
-                      <button
-                        onClick={() => { setShowMoreMenu(false); handleExpertMode(); }}
-                        disabled={!planDraft?.trim() || expertMode === 'loading'}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '10px 16px', background: 'none', border: 'none',
-                          borderBottom: '1px solid rgba(255,255,255,.06)',
-                          color: !planDraft?.trim() ? 'rgba(255,255,255,.2)' : '#8abf9a',
-                          cursor: !planDraft?.trim() ? 'not-allowed' : 'pointer',
-                          fontSize: '.85rem', fontWeight: 600,
-                        }}
-                        onMouseEnter={e => { if (planDraft?.trim()) e.currentTarget.style.background = 'rgba(106,191,138,.08)'; }}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                      >
-                        {'\u2728'} Mode Expert {'\u2014'} Optimiser le plan
-                      </button>
-                      <button className="btn btn-anissa-secondary" style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
-                        onClick={() => { setShowMedicalSummary(true); setShowMoreMenu(false); }}
-                        disabled={!hasPlan}>
-                        Resume medecin
-                      </button>
+                      {/* V96.31 — Mode Expert retire (couvert par Composer beta + audit IA composer-aware) */}
+                      {/* V96.32 — "Resume medecin" deplace vers le menu Exporter (Row 1) */}
                       {/* V50 : "PDF analyses" déplacé vers la section MGD (section Analyses recommandées) */}
                       {/* V50 : "Analyse IA complète" déplacé vers bloc dédié après l'éditeur */}
+
+                      {/* V96.34 : Historique des versions (deplace depuis Row 1) */}
+                      {planVersions.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-anissa-secondary"
+                          style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
+                          onClick={() => { setShowVersions(true); setShowMoreMenu(false); }}
+                        >
+                          {'\ud83d\udcda Versions du plan ('}{planVersions.length}{')'}
+                        </button>
+                      )}
 
                       {/* V78 : Soft delete consultation (visible seulement si deja sauvegardee = id existant) */}
                       {initialConsultation?.id && (
@@ -4552,7 +3768,66 @@ ${suppText}`;
                     </div>
                   )}
                 </div>
+                )}
               </div>
+
+              {/* V96.19 — Zone Directives IA additionnelles (collapsible).
+                  S'affiche quand Anissa clique sur le bouton "Directives IA" en Row 1.
+                  Persiste dans consultation.aiDirectives, injecte dans buildUserMessage
+                  avec PRIORITE MAXIMALE pour la prochaine generation. */}
+              {aiDirectivesExpanded && (
+                <div style={{
+                  marginTop: 12,
+                  padding: 14,
+                  borderRadius: 10,
+                  background: 'rgba(232,160,64,.06)',
+                  border: '1px solid rgba(232,160,64,.22)',
+                }}>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                    marginBottom: 8,
+                  }}>
+                    <label style={{ fontSize: '.8rem', fontWeight: 600, color: '#f0b860' }}>
+                      {'\ud83d\udcac Directives IA additionnelles pour cette cliente'}
+                    </label>
+                    <span style={{ fontSize: '.68rem', color: 'rgba(240,184,96,.6)' }}>
+                      {(aiDirectives || '').length} caracteres
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.5)', marginBottom: 8, lineHeight: 1.5 }}>
+                    Consignes appliquees uniquement a cette cliente, en plus des modules profil. Exemples : <em>&quot;refuse poisson, contexte familial difficile&quot;</em>, <em>&quot;intolerance gluten confirmee biopsie&quot;</em>, <em>&quot;ton tres doux, antecedent TCA&quot;</em>, <em>&quot;budget tres serre, privilegier aliments low-cost&quot;</em>. Ces directives sont injectees en PRIORITE MAXIMALE dans le prompt de generation.
+                  </div>
+                  <textarea
+                    value={aiDirectives}
+                    onChange={e => setAiDirectives(e.target.value)}
+                    placeholder="Ex : Cliente refuse tout poisson (degoute). Antecedent TCA il y a 5 ans, eviter mention calories. Budget serre."
+                    rows={4}
+                    style={{
+                      width: '100%', padding: '10px 12px', borderRadius: 8,
+                      background: 'rgba(0,0,0,.25)', color: '#f0f0e8',
+                      border: '1px solid rgba(232,160,64,.28)',
+                      fontSize: '.82rem', fontFamily: 'inherit',
+                      resize: 'vertical', minHeight: 90,
+                      outline: 'none',
+                    }}
+                  />
+                  {aiDirectives && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setAiDirectives('')}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'rgba(255,200,200,.7)', fontSize: '.7rem',
+                          padding: '4px 8px', borderRadius: 6,
+                        }}
+                      >
+                        {'\u2715'} Effacer
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Row 2 : Save actions */}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', paddingTop: 2 }}>
@@ -4577,157 +3852,7 @@ ${suppText}`;
               {analysesError && <div className="error-msg" style={{ marginTop: 4, background: 'rgba(212,92,76,.08)', padding: '8px 12px', borderRadius: 8, fontSize: '.78rem' }}>{analysesError}</div>}
             </div>
 
-            {/* Expert Mode — Loading */}
-            {expertMode === 'loading' && (
-              <div style={{
-                margin:'8px 0', padding:'16px 18px',
-                background:'rgba(26,46,31,.5)',
-                border:'1px solid rgba(106,191,138,.2)',
-                borderRadius:12,
-                display:'flex', alignItems:'center', gap:12,
-              }}>
-                <span style={{ fontSize:'1.2rem', animation:'neSpin .8s linear infinite',
-                  display:'inline-block' }}>{'\u2728'}</span>
-                <div>
-                  <div style={{ fontSize:'.85rem', fontWeight:600, color:'#8abf9a' }}>
-                    Mode Expert {'\u2014'} Optimisation en cours...
-                  </div>
-                  <div style={{ fontSize:'.75rem', color:'rgba(255,255,255,.4)', marginTop:3 }}>
-                    Section {currentOptimizingIdx + 1} / {sectionResults.length > 0
-                      ? sectionResults.length : '...'}
-                    {sectionResults[currentOptimizingIdx]?.title
-                      ? ` \u2014 ${sectionResults[currentOptimizingIdx].title}` : ''}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setExpertMode(false)}
-                  style={{ marginLeft:'auto', background:'none', border:'none',
-                    color:'rgba(255,255,255,.3)', cursor:'pointer', fontSize:'.8rem' }}>
-                  Annuler
-                </button>
-              </div>
-            )}
-
-            {/* Expert Mode — Review */}
-            {expertMode === 'review' && sectionResults.length > 0 && (
-              <div style={{
-                margin:'8px 0',
-                background:'rgba(12,20,15,.8)',
-                border:'1px solid rgba(106,191,138,.25)',
-                borderRadius:12,
-                overflow:'hidden',
-                animation:'neSlideIn .2s ease',
-                display:'flex',
-                flexDirection:'column',
-                maxHeight:'calc(100vh - 320px)',
-              }}>
-                <div style={{
-                  padding:'14px 18px',
-                  background:'rgba(26,46,31,.5)',
-                  borderBottom:'1px solid rgba(106,191,138,.15)',
-                  display:'flex', alignItems:'center', gap:10,
-                }}>
-                  <span style={{ fontSize:'.88rem', fontWeight:700, color:'#8abf9a', flex:1 }}>
-                    {'\u2728'} Mode Expert {'\u2014'} {sectionResults.filter(r => !r.skip).length} sections optimis{'\u00e9'}es
-                  </span>
-                  <button onClick={() => setExpertMode(false)}
-                    style={{ background:'none', border:'none', color:'rgba(255,255,255,.3)',
-                      cursor:'pointer', fontSize:'.85rem' }}>
-                    {'\u2715'} Fermer
-                  </button>
-                </div>
-
-                <div style={{ flex:1, overflowY:'auto', minHeight:0, padding:'10px 0' }}>
-                  {sectionResults.map((r) => {
-                    if (r.skip) return null;
-                    const accepted = acceptedSections[r.id] !== false;
-                    return (
-                      <div key={r.id} style={{
-                        padding:'10px 18px',
-                        borderBottom:'1px solid rgba(255,255,255,.04)',
-                        background: accepted ? 'rgba(106,191,138,.04)' : 'rgba(255,255,255,.02)',
-                      }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                          <button
-                            onClick={() => setAcceptedSections(prev => ({
-                              ...prev, [r.id]: !accepted
-                            }))}
-                            style={{
-                              width:20, height:20, borderRadius:4, border:'none',
-                              background: accepted ? 'rgba(106,191,138,.3)' : 'rgba(255,255,255,.08)',
-                              color: accepted ? '#4ade80' : 'rgba(255,255,255,.3)',
-                              cursor:'pointer', fontSize:'.75rem', display:'flex',
-                              alignItems:'center', justifyContent:'center', flexShrink:0,
-                              transition:'all .15s',
-                            }}>
-                            {accepted ? '\u2713' : '\u25cb'}
-                          </button>
-                          <span style={{ fontSize:'.78rem', fontWeight:700,
-                            color: accepted ? '#8abf9a' : 'rgba(255,255,255,.35)',
-                            textTransform:'uppercase', letterSpacing:'.3px', flex:1 }}>
-                            {r.title}
-                          </span>
-                          {r.changes?.length > 0 && (
-                            <span style={{ fontSize:'.68rem', color:'rgba(106,191,138,.5)',
-                              background:'rgba(106,191,138,.08)', padding:'2px 7px',
-                              borderRadius:10, whiteSpace:'nowrap' }}>
-                              {r.changes.length} am{'\u00e9'}lioration{r.changes.length > 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                        {r.changes?.length > 0 && accepted && (
-                          <div style={{ marginLeft:28, marginBottom:6 }}>
-                            {r.changes.map((c, ci) => (
-                              <div key={ci} style={{ fontSize:'.74rem',
-                                color:'rgba(106,191,138,.6)', marginBottom:2 }}>
-                                + {c}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {accepted && r.improved !== r.original && (
-                          <div style={{
-                            marginLeft:28, fontSize:'.75rem', color:'rgba(255,255,255,.3)',
-                            whiteSpace:'pre-wrap', maxHeight:60, overflow:'hidden',
-                            lineHeight:1.4,
-                          }}>
-                            {r.improved.slice(0, 120)}{r.improved.length > 120 ? '...' : ''}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div style={{
-                  padding:'12px 18px',
-                  borderTop:'1px solid rgba(106,191,138,.1)',
-                  display:'flex', gap:10, alignItems:'center',
-                  flexShrink:0,
-                }}>
-                  <button onClick={handleApplyExpertMode} style={{
-                    padding:'8px 20px', borderRadius:8, border:'none',
-                    background:'rgba(106,191,138,.2)', color:'#8abf9a',
-                    cursor:'pointer', fontSize:'.83rem', fontWeight:700,
-                    transition:'all .2s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.35)'}
-                  onMouseLeave={e => e.currentTarget.style.background='rgba(106,191,138,.2)'}
-                  >
-                    {'\u2705'} Appliquer les sections coch{'\u00e9'}es
-                  </button>
-                  <span style={{ fontSize:'.75rem', color:'rgba(255,255,255,.25)' }}>
-                    {Object.values(acceptedSections).filter(v => v === false).length} section(s) ignor{'\u00e9'}e(s)
-                  </span>
-                  <button onClick={() => setExpertMode(false)}
-                    style={{ marginLeft:'auto', padding:'8px 16px', borderRadius:8,
-                      border:'1px solid rgba(255,255,255,.08)', background:'none',
-                      color:'rgba(255,255,255,.35)', cursor:'pointer', fontSize:'.8rem' }}>
-                    {'\u274c'} Annuler tout
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* V96.31 — Bloc Mode Expert UI retire (couvert par Composer beta + audit IA composer-aware) */}
 
             {/* Global AI proposal panel */}
             {globalProposal && (
@@ -4799,8 +3924,8 @@ ${suppText}`;
                   <span className="nc-panel__label">Editeur</span>
                   <Tab active={editorTab === 'plan'} onClick={() => setEditorTab('plan')}>Plan complet</Tab>
                   <Tab active={editorTab === 'frigo'} onClick={() => setEditorTab('frigo')}>Fiche frigo</Tab>
-                  <Tab active={editorTab === 's1s4'} onClick={() => setEditorTab('s1s4')}>Plan S1-S4</Tab>
-                  <Tab active={editorTab === 'supp'} onClick={() => setEditorTab('supp')}>Supplements</Tab>
+                  {/* V96.33 : onglets "Plan S1-S4" + "Supplements" supprimes — Anissa
+                      peaufine tout dans Word apres export, ces vues n'etaient pas utilisees. */}
                   {/* V94.48 : Lettre + Recettes deplacees dans 'App cliente' comme
                       sous-onglets, pour separer mindset 'peaufinage plan textuel'
                       et 'contenu app digital'. Onglets racines = plan textuel pur. */}
@@ -4812,48 +3937,8 @@ ${suppText}`;
                       Le bouton 'Publier dans l'app' est maintenant dans
                       l'onglet App cliente (Vue d'ensemble) avec un nom clair
                       qui parle a Anissa. */}
-                  {/* V83 : bouton Mode relecture — transforme toggle selon l'etat. */}
-                  <button
-                    type="button"
-                    className="btn btn-anissa-secondary"
-                    disabled={!hasPlan}
-                    onClick={() => setIsReviewMode(m => !m)}
-                    style={{
-                      padding: '5px 12px', borderRadius: 8, fontSize: '.75rem',
-                      opacity: hasPlan ? 1 : 0.4,
-                      background: isReviewMode ? 'rgba(196,160,80,.22)' : undefined,
-                      borderColor: isReviewMode ? 'rgba(196,160,80,.55)' : undefined,
-                      color: isReviewMode ? '#e0cda0' : undefined,
-                    }}
-                    title={isReviewMode ? 'Revenir en mode édition' : 'Voir le plan en mode relecture (lecture seule, plein écran)'}
-                  >
-                    {isReviewMode ? '← Édition' : '👁 Relecture'}
-                  </button>
-                  {/* V92.2 : bouton Finaliser supprime — Anissa peaufine directement
-                      dans Word apres export V92.0. Le code de la modal et des states
-                      finalText/isFinal reste dormant pour rollback rapide si besoin. */}
-                  {/* V92.1 : Preview PDF + Cover supprimes — Word V92.0 prime, plus de jsPDF specifique */}
-                  {/* V92.0 : export Word — Anissa peaufine puis exporte PDF natif Word */}
-                  <button
-                    type="button"
-                    className="btn btn-anissa-secondary"
-                    disabled={!hasPlan}
-                    onClick={async () => {
-                      try {
-                        // V92.2 : source = planDraft direct (Anissa peaufine dans Word, pas dans Finaliser)
-                        const planSource = planDraft || consultation.nutrition_plan || '';
-                        await exportPlanToWord(client, consultation, planSource);
-                      } catch (e) {
-                        // eslint-disable-next-line no-console
-                        console.error('[exportPlanToWord]', e);
-                        alert("Erreur lors de l'export Word : " + (e?.message || e));
-                      }
-                    }}
-                    style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.75rem', opacity: hasPlan ? 1 : 0.4 }}
-                    title="Exporter en Word (.docx) — peaufine puis exporte PDF natif Word"
-                  >
-                    📄 Word
-                  </button>
+                  {/* V96.32 : boutons "Mode relecture" + "Word" deplaces vers le menu
+                      "Exporter" en Row 1 (action row). Header editeur = onglets uniquement. */}
                   {/* V94.1 : bouton "Telecharger" PDF jsPDF supprime du header editeur.
                       Word V92+ est le path principal — Anissa peaufine dans Word puis
                       "Enregistrer sous PDF natif" en 1 clic. jsPDF reste utilise pour

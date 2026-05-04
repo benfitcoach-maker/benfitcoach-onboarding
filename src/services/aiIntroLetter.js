@@ -5,8 +5,9 @@
 // Output : JSON strict { letter: { body[], pull_quote?, tailored_points? } }
 // Mapping : ces champs alimentent intro_data dans clientAppMapper.
 
-import { ANISSA_IDENTITY_CORE } from "./anissaIdentity";
-import { safeParseJson } from "./aiMedicalSummary";
+import { ANISSA_IDENTITY_CORE } from "./prompts/nutrition/identity.fr";
+// V97.0 : safeParseJson + callClaude depuis services/anthropic.js
+import { callClaude, safeParseJson } from "./anthropic";
 
 const SYSTEM_PROMPT = `${ANISSA_IDENTITY_CORE}
 
@@ -238,30 +239,13 @@ function buildUserMessage({ form = {}, consultation = {} }) {
  * @returns {Promise<{ body: string[], pull_quote?: string, tailored_points?: { title, detail }[] }>}
  */
 export async function generateIntroLetter({ form = {}, consultation = {} } = {}) {
-  const apiKey = localStorage.getItem("bfc_api_key") || "";
-  const headers = { "Content-Type": "application/json" };
-  if (apiKey) headers["x-fallback-key"] = apiKey;
-
   const userMessage = buildUserMessage({ form, consultation });
-
-  const response = await fetch("/api/claude", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1500,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
-    }),
+  // V97.0 : passe par services/anthropic.js
+  const rawText = await callClaude({
+    system: SYSTEM_PROMPT,
+    user: userMessage,
+    maxTokens: 1500,
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur API : ${response.status}`);
-  }
-
-  const data = await response.json();
-  const rawText = data.content?.[0]?.text?.trim() || "";
   const parsed = safeParseJson(rawText);
 
   // Normalisation

@@ -1,29 +1,9 @@
-import { ANISSA_IDENTITY_CORE } from './anissaIdentity';
+import { ANISSA_IDENTITY_CORE } from './prompts/nutrition/identity.fr';
+// V97.0 : centralisation des appels Claude via services/anthropic.js
+import { callClaude } from './anthropic';
 
-async function aiRequest(systemPrompt, userMessage, maxTokens = 1500) {
-  const apiKey = localStorage.getItem('bfc_api_key') || '';
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['x-fallback-key'] = apiKey;
-
-  const response = await fetch('/api/claude', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur API: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.content?.[0]?.text?.trim() || '';
-}
+const aiRequest = (systemPrompt, userMessage, maxTokens = 1500) =>
+  callClaude({ system: systemPrompt, user: userMessage, maxTokens });
 
 // V55 : strip le contenu de plan redondant qui se glisse parfois avant la section Suppléments
 // (ex : "PLAN NUTRITIONNEL PERSONNALISÉ", "SYNTHÈSE CLINIQUE", "JOURNÉES TYPES"...)
@@ -278,7 +258,137 @@ JAMAIS de formulations molles ou de markdown.`;
   }
 }
 
-export async function analyzeFullPlan(form, planText, supplementsText, { locale = 'FR' } = {}) {
+// V96.23 — checklist des MUST INCLUDE par module profil. L'audit IA verifie
+// que ces elements specifiques sont presents dans le plan quand un module a
+// ete injecte par le composer. Plus precis qu'un audit generique.
+const MUST_INCLUDE_BY_PROFILE = {
+  complicationsDiabete: [
+    'mention LITTERALE de "lutiine" (ou "lutéine") associee a la retinopathie',
+    'mention LITTERALE de "vitamine K2" (ou "vit K2") pour les calcifications arterielles',
+    'mention de "alpha-lipoique" ET "magnesium" SI neuropathie/mal perforant declare',
+    'phrase qui RELIE explicitement la stabilite glycemique a la protection des complications',
+  ],
+  saos: [
+    'horaire diner avant "19h" ou "19h30" + mention "leger" / "allege"',
+    'mention LITTERALE de "lumiere naturelle" + "matin" ou "reveil"',
+    'mention LITTERALE de "cafeine" (stop apres 14h) ET "alcool" en lien avec apnees',
+  ],
+  diabete: [
+    'sequence repas explicite : fibres → proteines → glucides',
+    'pas de mention de dose insuline (perimetre medecin, INTERDIT)',
+  ],
+  digestifChronique: [
+    'mention de la mastication (20-30 fois/bouchee)',
+    'reduction temporaire des cruditees (legumes cuits 2 a 3 semaines)',
+    'eau hors repas (30 min avant / 1h apres)',
+  ],
+  nephropathie: [
+    'plafond proteique chiffre LITTERAL : "0,8 g/kg/jour" + calcul en grammes pour le poids du client',
+    'limitation sodium chiffree LITTERALE : "< 5 g de sel par jour" (ou 4 g si HTA)',
+    'mention "faiblement mineralisee" pour l\'eau de boisson',
+  ],
+  clostridiumDifficile: [
+    'cadrage : nutrition en SUPPORT du traitement medical (vancomycine/fidaxomicine)',
+    'phase aigue : hydratation prioritaire, aliments tres digestes',
+    'phase reconstruction : reintroduction progressive prebiotiques + fermentes',
+    'garde-fou : pas de probiotique sans avis du gastroenterologue',
+  ],
+  grossesse: [
+    'liste claire d\'aliments INTERDITS (listeria, toxoplasmose, mercure, foie animal)',
+    'mention folates (B9), iode, omega-3 DHA, calcium/D, fer',
+    'INTERDIT : alcool zero, jamais de regime hypocalorique, jamais jeune intermittent',
+  ],
+  allaitement: [
+    'apport calorique +500 kcal/jour explicite',
+    'hydratation 2,5 a 3 L/jour',
+    'omega-3 DHA, iode, calcium/D mentionnes',
+    'interdit : pas de regime restrictif, pas d\'eviction preventive sans symptomes bebe',
+  ],
+  postPartum: [
+    'pas de regime restrictif les 6 premiers mois',
+    'restauration fer + B12 + B9 + D explicite',
+    'omega-3 DHA pour prevention baby blues',
+  ],
+  perimenopause: [
+    'stabilite glycemique (sequence repas, IG bas)',
+    'soutien masse maigre : proteines elevees (~1.2 g/kg)',
+    'densite osseuse : Ca + vit D + K2',
+  ],
+  menopause: [
+    'proteines hautes anti-sarcopenie (1.2-1.5 g/kg)',
+    'densite osseuse : calcium + D + K2',
+    'mention sport resistance / renforcement musculaire',
+  ],
+  femmeCycle: [
+    'adaptation phase luteale (J15-J28) si cycle renseigne',
+    'sources de fer + vit C parallele si regles abondantes',
+  ],
+  // V96.26 — 8 nouveaux modules
+  performanceSportif: [
+    'apport proteique chiffre selon type sport (1.6-2.2 g/kg force ou 1.4-1.7 g/kg endurance)',
+    'timing peri-effort chiffre : 30-60 min avant + 30 min apres avec ratios proteines/glucides',
+    'hydratation effort + electrolytes mentionnes (500-800 ml/h)',
+  ],
+  thyroide: [
+    'mention selenium ET zinc (cofacteurs T4 → T3)',
+    'iode prudent (pas de supplement haute dose si Hashimoto)',
+    'timing Levothyrox a jeun + 30-60 min avant repas si traitement',
+    'eviction temporaire gluten 8 semaines si Hashimoto',
+  ],
+  burnoutCortisol: [
+    'stabilite glycemique stricte (sequence repas, pas de saut)',
+    'magnesium par alimentation cite (oleagineux, cacao cru, legumes verts)',
+    'omega-3 EPA/DHA cite',
+    'cafeine stop apres 12h-13h ET alcool zero soir explicites',
+  ],
+  preConceptionFertilite: [
+    'folates B9 (legumes verts, supplement medical)',
+    'iode 150-200 mcg/jour cite',
+    'ferritine cible 50-80 ng/mL',
+    'omega-3 DHA pour qualite cellulaire',
+    'mention perturbateurs endocriniens a limiter',
+  ],
+  spm: [
+    'magnesium ET vitamine B6 cites (couple anti-SPM)',
+    'omega-3 EPA pour douleurs (anti-prostaglandines)',
+    'phase luteale (J15-J28) adaptee : proteines + feculents complets diner',
+    'fer + vit C si regles abondantes',
+  ],
+  endometriose: [
+    'omega-3 EPA en grande quantite (3-4x/semaine poisson gras)',
+    'brassicacees cuites quotidiennes (detox oestrogenes)',
+    'mention perturbateurs endocriniens a limiter',
+    'test eviction gluten + lait 8 semaines',
+  ],
+  tdah: [
+    'stabilite glycemique stricte (pas de sucres rapides isoles a jeun)',
+    'omega-3 EPA + DHA quotidiens',
+    'proteines au petit-dejeuner cite (precurseur dopamine, tyrosine)',
+    'eviter additifs : E102, E110, E122, E124, E129, benzoate de sodium',
+  ],
+  sopk: [
+    'IG bas systematique (sequence repas fibres → proteines → glucides)',
+    'inositol mentionne (myo + d-chiro)',
+    'cannelle quotidienne (sensibilisateur insulinique)',
+    'omega-3 EPA + the vert (anti-androgene)',
+    'test eviction lait industriel 8 semaines',
+  ],
+};
+
+function buildMustIncludeChecklist(composerProfile) {
+  if (!composerProfile?.all || composerProfile.all.length === 0) return '';
+  const lines = [];
+  for (const tag of composerProfile.all) {
+    const items = MUST_INCLUDE_BY_PROFILE[tag];
+    if (!items) continue;
+    lines.push(`\n[${tag}]`);
+    for (const item of items) lines.push(`  - ${item}`);
+  }
+  if (lines.length === 0) return '';
+  return `\n\nMUST INCLUDE — elements OBLIGATOIRES dans le plan vu les modules profil injectes par le composer (verifie chacun dans le plan, signale les manques en issues) :${lines.join('\n')}`;
+}
+
+export async function analyzeFullPlan(form, planText, supplementsText, { locale = 'FR', composerProfile = null, aiDirectives = '' } = {}) {
   const context = buildClientContext(form);
   const wordCount = (planText || '').split(/\s+/).filter(Boolean).length;
   const prenom = form?.prenom || (locale === 'EN' ? 'the client' : 'le client');
@@ -413,9 +523,17 @@ CRITERES D'AUDIT (score 0-100, ponderation indicative) :
    Cofacteurs biologiques integres si labs renseignes ?
 
 7. STRUCTURE & COMPLETUDE (10 pts)
-   Les 9 sections sont-elles presentes et concises ?
-   (Analyse profil, Strategie, Semaine 1, Rotations, Fiche frigo, Protocoles ciblés,
-   Ajustements environnementaux, Recommandations coach, Plan d'action S1-S4)
+   Sections cibles (0 a 10) : 0.Introduction, 1.Analyse profil, 2.Strategie,
+   3.Semaine 1, 4.Alternatives par repas, 5.Fiche frigo, 6.Protocoles cibles,
+   7.Ajustements environnementaux, 8.Recommandations coach, 9.Plan d'action S1-S4,
+   10.Cloture du plan.
+   - Sections 0 + 10 = bonus si presentes, sinon non bloquant.
+   - Sections 1, 2, 3, 6, 7, 8 = critiques.
+   - Sections 4, 5, 9 = importantes mais Claude saute parfois la 5 (Fiche frigo)
+     qui est reconstruite en aval depuis "Alternatives par repas" + "A privilegier"
+     + "A limiter" via extractFridgeDataFromSections. Donc ne PAS critiquer comme
+     "manquante" si les autres sections nourrissent la fiche frigo (mots-cles
+     "A privilegier", "A limiter" presents OU section 4 bien remplie).
    Longueur cible 1200-1600 mots respectee ?
 
 FORMAT DE SORTIE :
@@ -433,7 +551,18 @@ CONTRAINTES :
 - Les issues DOIVENT referer a un critere : "ton", "adherence", "priorite", "interdits", etc.
 - Les quickWins DOIVENT etre des actions precises executables en 2 minutes d'edit
 - Score reflete la realite : 90+ = premium, 75-89 = bon, 60-74 = a retravailler, <60 = probleme
-- Ne surnote jamais. Sois stricte. Un plan generique doit avoir un score faible meme s'il semble correct.`;
+- Ne surnote jamais. Sois stricte. Un plan generique doit avoir un score faible meme s'il semble correct.
+
+GARDE-FOUS ABSOLUS — NE JAMAIS SUGGERER ces actions dans les quickWins ou issues :
+- Aucune suggestion d'ajustement de dose insuline (T1) — perimetre endocrinologue uniquement.
+- Aucune suggestion de regime restrictif sur grossesse ou allaitement — perimetre gyneco/sage-femme.
+- Aucune suggestion de phytoestrogenes en supplement ou de THM — perimetre medical.
+- Aucune suggestion de probiotique haute dose chez immunodeprime / patient C. difficile actif
+  — perimetre gastroenterologue.
+- Aucune suggestion de medicament, posologie, ou modification d'un traitement en cours.
+- Si DIRECTIVES SPECIFIQUES ANISSA fournies ci-dessous : les RESPECTER scrupuleusement et
+  NE JAMAIS suggerer du contenu qui les contredit (ex: si directive "refuse poisson",
+  ne pas suggerer d'ajouter du saumon).${buildMustIncludeChecklist(composerProfile)}${(aiDirectives || '').trim() ? `\n\nDIRECTIVES SPECIFIQUES ANISSA POUR CETTE CLIENTE (verifier qu'elles sont respectees dans le plan, JAMAIS les contredire dans tes quickWins) :\n${aiDirectives.trim()}` : ''}`;
 
   const text = await aiRequest(
     system,

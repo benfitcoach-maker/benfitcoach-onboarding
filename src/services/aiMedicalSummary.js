@@ -7,7 +7,9 @@
 // supplément à la pathologie/situation du patient (au lieu des champs vides
 // actuels causés par l'extraction regex bugguée).
 
-import { ANISSA_IDENTITY_CORE } from './anissaIdentity';
+import { ANISSA_IDENTITY_CORE } from './prompts/nutrition/identity.fr';
+// V97.0 : centralisation des appels Claude
+import { callClaude } from './anthropic';
 import { analyzeAnamnese, formatAnamneseForPrompt } from './anamneseAnalyzer';
 
 const SYSTEM_PROMPT = `${ANISSA_IDENTITY_CORE}
@@ -443,30 +445,13 @@ export function safeParseJson(text) {
  * @returns {Promise<object>} - { antecedents, bilans, approche, alimentsCles, alimentsEviter, supplements[], coordination }
  */
 export async function generateMedicalSummary(form, consultation, destinataire = null) {
-  const apiKey = localStorage.getItem('bfc_api_key') || '';
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['x-fallback-key'] = apiKey;
-
   const userMessage = buildUserMessage(form || {}, consultation || {}, destinataire);
-
-  const response = await fetch('/api/claude', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    }),
+  // V97.0 : passe par services/anthropic.js (proxy + lecture localStorage centralisee)
+  const rawText = await callClaude({
+    system: SYSTEM_PROMPT,
+    user: userMessage,
+    maxTokens: 2000,
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur API : ${response.status}`);
-  }
-
-  const data = await response.json();
-  const rawText = data.content?.[0]?.text?.trim() || '';
   const parsed = safeParseJson(rawText);
 
   // Normaliser : transformer arrays alimentsCles/Eviter en string si l'IA renvoie un array

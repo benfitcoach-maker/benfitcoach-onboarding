@@ -1,5 +1,7 @@
 import { FORMULES } from './formSteps';
 import { computeMetrics, round1, round0 } from './bodyMetrics';
+// V97.0 : centralisation des appels Claude (model sonnet ici, override default)
+import { callClaude } from './services/anthropic';
 
 function fmtOrNR(v, suffix = '') {
   return v != null ? `${v}${suffix}` : 'Non renseigne';
@@ -232,42 +234,22 @@ export function parseSections(text) {
   return sections;
 }
 
-async function anthropicRequest(apiKey, systemPrompt, userMessage, maxTokens = 8000) {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  // Fallback : si l'utilisateur a saisi une clé côté UI, on la transmet au
-  // proxy Vercel via x-fallback-key. En prod, ANTHROPIC_API_KEY côté serveur
-  // prend le relais et ce header est ignoré.
-  if (apiKey) headers['x-fallback-key'] = apiKey;
+// V97.0 : anthropicRequest local supprime, on passe par callClaude. Note :
+// le model par defaut de callClaude est haiku-4-5 — ici on garde sonnet
+// (modele plus puissant pour la generation initiale du dossier complet).
+// Le parametre apiKey de callAnthropic est conserve mais ignore : callClaude
+// lit lui-meme localStorage('bfc_api_key'). Ne pas casser les call sites
+// existants qui passent encore apiKey.
 
-  const response = await fetch('/api/claude', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur API: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.content?.[0]?.text || '';
-}
-
-export async function callAnthropic(apiKey, form) {
+export async function callAnthropic(_apiKey, form) {
   const systemPrompt = buildSystemPrompt(form) + '\n\n---\n\n' + buildSectionInstructions(form);
-  const text = await anthropicRequest(
-    apiKey,
-    systemPrompt,
-    `Genere le dossier d'onboarding complet pour ${form.prenom || 'ce client'}. Suis exactement le format avec les 8 sections ===SECTION===.`
-  );
+  const text = await callClaude({
+    system: systemPrompt,
+    user: `Genere le dossier d'onboarding complet pour ${form.prenom || 'ce client'}. Suis exactement le format avec les 8 sections ===SECTION===.`,
+    model: 'claude-sonnet-4-20250514',
+    maxTokens: 8000,
+    trim: false,
+  });
   return parseSections(text);
 }
 
@@ -303,12 +285,13 @@ export async function regenerateSection(apiKey, form, sectionTitle) {
       break;
   }
 
-  const text = await anthropicRequest(
-    apiKey,
-    buildSystemPrompt(form),
-    `Regenere UNIQUEMENT la section "${sectionTitle}" pour ${form.prenom || 'ce client'}. ${sectionInstruction} Redige en ${lang}. Ecris directement le contenu sans prefixe ni marqueur.`,
-    3000
-  );
+  // V97.0 : passe par services/anthropic.js (model sonnet conserve)
+  const text = await callClaude({
+    system: buildSystemPrompt(form),
+    user: `Regenere UNIQUEMENT la section "${sectionTitle}" pour ${form.prenom || 'ce client'}. ${sectionInstruction} Redige en ${lang}. Ecris directement le contenu sans prefixe ni marqueur.`,
+    model: 'claude-sonnet-4-20250514',
+    maxTokens: 3000,
+  });
 
   return text.trim();
 }

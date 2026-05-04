@@ -10,8 +10,9 @@
 // d'inventions). Si la cliente a des allergies/regimes, on les transmet et l'IA
 // les respecte (pas de gluten, vegetarien, etc.).
 
-import { ANISSA_IDENTITY_CORE } from "./anissaIdentity";
-import { safeParseJson } from "./aiMedicalSummary";
+import { ANISSA_IDENTITY_CORE } from "./prompts/nutrition/identity.fr";
+// V97.0 : safeParseJson centralise dans anthropic.js, callClaude unifie
+import { callClaude, safeParseJson } from "./anthropic";
 
 const SYSTEM_PROMPT = `${ANISSA_IDENTITY_CORE}
 
@@ -149,30 +150,14 @@ function buildUserMessage({ meals, form, locale = "fr" }) {
 // la troncature JSON. Marge de securite : 5 par lot.
 const BATCH_SIZE = 5;
 
-async function callIaForBatch(meals, { form, locale, apiKey }) {
-  const headers = { "Content-Type": "application/json" };
-  if (apiKey) headers["x-fallback-key"] = apiKey;
-
+async function callIaForBatch(meals, { form, locale }) {
   const userMessage = buildUserMessage({ meals, form, locale });
-
-  const response = await fetch("/api/claude", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
-    }),
+  // V97.0 : passe par services/anthropic.js
+  const rawText = await callClaude({
+    system: SYSTEM_PROMPT,
+    user: userMessage,
+    maxTokens: 4000,
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur API : ${response.status}`);
-  }
-
-  const data = await response.json();
-  const rawText = data.content?.[0]?.text?.trim() || "";
   const parsed = safeParseJson(rawText);
 
   const recipes = parsed.recipes || {};
@@ -199,7 +184,7 @@ export async function generateRecipesForMeals(meals, { form = {}, locale = "fr" 
     throw new Error("Aucun repas a enrichir.");
   }
 
-  const apiKey = localStorage.getItem("bfc_api_key") || "";
+  // V97.0 : apiKey n'est plus necessaire ici, callClaude la lit lui-meme
 
   // Decoupe en batches
   const batches = [];
@@ -212,7 +197,7 @@ export async function generateRecipesForMeals(meals, { form = {}, locale = "fr" 
   // user peut re-cliquer pour retry. Alternative future : Promise.allSettled
   // pour merger les batches reussis et signaler les echecs.
   const batchResults = await Promise.all(
-    batches.map((batch) => callIaForBatch(batch, { form, locale, apiKey })),
+    batches.map((batch) => callIaForBatch(batch, { form, locale })),
   );
 
   // Merge tous les batches dans un seul objet

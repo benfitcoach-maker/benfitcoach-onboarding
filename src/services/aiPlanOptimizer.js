@@ -1,30 +1,10 @@
-import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './anissaIdentity';
-import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './anissaIdentityEn';
+import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './prompts/nutrition/identity.fr';
+import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './prompts/nutrition/identity.en';
+// V97.0 : centralisation des appels Claude via services/anthropic.js
+import { callClaude } from './anthropic';
 
-async function aiRequest(systemPrompt, userMessage, maxTokens = 2000) {
-  const apiKey = localStorage.getItem('bfc_api_key') || '';
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['x-fallback-key'] = apiKey;
-
-  const response = await fetch('/api/claude', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erreur API: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.content?.[0]?.text?.trim() || '';
-}
+const aiRequest = (systemPrompt, userMessage, maxTokens = 2000) =>
+  callClaude({ system: systemPrompt, user: userMessage, maxTokens });
 
 function postProcess(text) {
   if (!text) return text;
@@ -84,156 +64,9 @@ function buildClientContext(form, locale = 'FR') {
 
 // Optimise UNE section \u2014 retourne { improvedContent, changes[] }
 // V88.15 : param { locale } pour sortir l'optimisation en EN sur plans anglophones.
-export async function optimizeSection(form, sectionTitle, currentContent, analysisIssues = [], { locale = 'FR' } = {}) {
-  const context = buildClientContext(form, locale);
-
-  if (locale === 'EN') {
-    const issuesHintEn = analysisIssues.length > 0
-      ? `\n\nIdentified issues to fix:\n${analysisIssues.map(i => `- ${i}`).join('\n')}`
-      : '';
-    const systemEn = `${ANISSA_IDENTITY_CORE_EN}
-
-CONTEXT: You are optimizing a single part of the plan.
-Goal: improve without impacting the rest of the plan.
-
-${ADJUSTMENT_RULE_EN}
-
-OPTIMIZATION RULES:
-- Do not impact the rest of the plan
-- Improve without complexifying
-- Stay concise \u2014 improve without extending by more than 30%
-
-CLIENT PROFILE:
-${context}
-
-OUTPUT RULES:
-- Return ONLY valid JSON, no markdown fences
-- Format: { "content": "...", "changes": ["change 1", "change 2"] }
-- "content": the improved section content (in English)
-- "changes": list of 1 to 4 precise improvements made (in English)
-- Same format as the original (keep lists as lists)
-- Add calories/macros if missing
-- Fix inconsistencies with the client profile
-
-WRITING RULES:
-- NEVER soft formulations: "ideally", "feel free to", "it is advisable", "you could", "it is important to", "indeed"
-- NEVER markdown inside the content: no **bold**, no # headers
-- NEVER meta-commentary: "this approach", "this protocol", "in conclusion", "to summarize"
-- Direct, short, actionable sentences
-- Second person "you", warm but expert
-
-STYLE EXAMPLES:
-\u274c "Ideally, it is advisable to consume green vegetables"
-\u2705 "200g of green vegetables at every meal"
-\u274c "Feel free to integrate protein sources"
-\u2705 "Add 25g of protein per meal: chicken, fish, eggs or legumes"${issuesHintEn}`;
-
-    const textEn = await aiRequest(
-      systemEn,
-      `Section "${sectionTitle}" to optimize:\n\n${currentContent}`,
-      1000
-    );
-    try {
-      const clean = textEn.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      return {
-        improvedContent: postProcess(parsed.content || currentContent),
-        changes: parsed.changes || [],
-      };
-    } catch {
-      return { improvedContent: postProcess(textEn || currentContent), changes: ['Section optimized'] };
-    }
-  }
-
-  const issuesHint = analysisIssues.length > 0
-    ? `\n\nProbl\u00e8mes identifi\u00e9s \u00e0 corriger :\n${analysisIssues.map(i => `- ${i}`).join('\n')}`
-    : '';
-
-  const system = `${ANISSA_IDENTITY_CORE}
-
-CONTEXTE : Tu optimises une seule partie du plan.
-Objectif : ameliorer sans impacter le reste du plan.
-
-${ADJUSTMENT_RULE}
-
-REGLES D'OPTIMISATION :
-- Ne pas impacter le reste du plan
-- Ameliorer sans complexifier
-- Reste concis \u2014 am\u00e9liore sans rallonger de plus de 30%
-
-PROFIL CLIENT :
-${context}
-
-R\u00c8GLES DE SORTIE :
-- Retourne UNIQUEMENT un JSON valide, sans markdown
-- Format : { "content": "...", "changes": ["changement 1", "changement 2"] }
-- "content" : le contenu am\u00e9lior\u00e9 de la section
-- "changes" : liste de 1 \u00e0 4 am\u00e9liorations pr\u00e9cises apport\u00e9es
-- M\u00eame format que l'original (listes si listes)
-- Ajoute calories/macros si manquants
-- Corrige les incoh\u00e9rences avec le profil client
-
-R\u00c8GLES D'\u00c9CRITURE :
-- JAMAIS de formulations molles : 'id\u00e9alement', 'n'h\u00e9sitez pas', 'il est conseill\u00e9', 'vous pourriez', 'il est important de', 'en effet', 'force est de constater'
-- JAMAIS de markdown dans le contenu : pas de **gras**, pas de # titres
-- JAMAIS de m\u00e9ta-commentaires : pas de 'cette approche', 'ce protocole', 'en conclusion', 'pour r\u00e9sumer'
-- Phrases directes, courtes, actionnables
-- Tutoiement, chaleureux mais expert
-
-EXEMPLES DE STYLE :
-\u274c "Id\u00e9alement, il est conseill\u00e9 de consommer des l\u00e9gumes verts"
-\u2705 "200g de l\u00e9gumes verts \u00e0 chaque repas"
-\u274c "N'h\u00e9sitez pas \u00e0 int\u00e9grer des sources de prot\u00e9ines"
-\u2705 "Ajoute 25g de prot\u00e9ines \u00e0 chaque repas : poulet, poisson, \u0153ufs ou l\u00e9gumineuses"${issuesHint}`;
-
-  const text = await aiRequest(
-    system,
-    `Section "${sectionTitle}" \u00e0 optimiser :\n\n${currentContent}`,
-    1000
-  );
-
-  try {
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-    return {
-      improvedContent: postProcess(parsed.content || currentContent),
-      changes: parsed.changes || [],
-    };
-  } catch {
-    return { improvedContent: postProcess(text || currentContent), changes: ['Section optimis\u00e9e'] };
-  }
-}
-
-// Optimise TOUTES les sections \u2014 retourne section par section
-// V88.15 : param { locale } propage a optimizeSection pour les plans EN.
-export async function optimizeAllSections(form, sections, analysisIssues = [], { locale = 'FR' } = {}) {
-  const results = [];
-  for (const section of sections) {
-    if (!section.content?.trim()) {
-      results.push({ id: section.id, title: section.title,
-        original: '', improved: '', changes: [], skip: true });
-      continue;
-    }
-    try {
-      const { improvedContent, changes } = await optimizeSection(
-        form, section.title, section.content, analysisIssues, { locale }
-      );
-      results.push({
-        id: section.id,
-        title: section.title,
-        original: section.content,
-        improved: improvedContent,
-        changes,
-        skip: false,
-      });
-    } catch (err) {
-      results.push({ id: section.id, title: section.title,
-        original: section.content, improved: section.content,
-        changes: [], skip: true, error: err.message });
-    }
-  }
-  return results;
-}
+// V96.31 — optimizeSection / optimizeAllSections supprimees (utilisaient le
+// Mode Expert retire). adaptPlanFromReview / adaptPlanForReturn ci-dessous
+// restent utilises par CycleReviewPanel.jsx et App.jsx (handleAdaptPlan / handleReturnPlan).
 
 export async function adaptPlanFromReview(form, currentPlan, review, analysis) {
   const context = [
