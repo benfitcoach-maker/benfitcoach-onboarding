@@ -1185,6 +1185,11 @@ function App() {
               // API down, etc.), on log mais on continue le flow normal.
               if (activateApp) {
                 const appMode = (packType || '').startsWith('suivi_') ? 'followup' : 'oneshot';
+                // V97.6 — passe l'URL du questionnaire web au moment de
+                // l'invitation pour que la timeline app puisse afficher un
+                // CTA "Remplir le questionnaire" qui ouvre directement le
+                // bon formulaire externe.
+                const saasOrigin = window.location.origin;
                 try {
                   const inviteRes = await clientAppFetch('/api/admin/invite-client', {
                     method: 'POST',
@@ -1192,6 +1197,7 @@ function App() {
                       email: formData.email,
                       first_name: formData.prenom || 'Cliente',
                       mode: appMode,
+                      questionnaire_url: `${saasOrigin}/questionnaire/${client.id}`,
                     },
                   });
                   if (inviteRes?.ok && inviteRes?.client_id) {
@@ -1210,27 +1216,61 @@ function App() {
                 }
               }
 
-              // Open Gmail with questionnaire link (inchange — l'email
-              // questionnaire web est toujours envoye, en attendant V97.6
-              // ou le questionnaire sera in-app)
-              const url = `${window.location.origin}/questionnaire/${client.id}`;
+              // V97.5.2 — Email d'accueil unifie : si activateApp, l'app
+              // devient le point d'entree unique (la cliente y trouve son
+              // pre-questionnaire via le CTA de la timeline V97.6). Sinon
+              // on garde l'ancien mail questionnaire-only.
+              //
+              // Important : pas de magic link auto (Gmail pre-fetch
+              // consommerait le token avant clic cliente). On donne juste
+              // l'URL /login, la cliente entre son email et recoit un OTP
+              // code Supabase 8 chiffres.
+              const questionnaireUrl = `${window.location.origin}/questionnaire/${client.id}`;
               const prenom = formData.prenom || '';
-              const subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
-              const appNote = activateApp
-                ? `Vous recevrez egalement un email separe avec le lien d'acces a votre espace personnel.\n\n`
-                : '';
-              const body =
-                `Bonjour ${prenom},\n\n` +
-                `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
-                `➜ ${url}\n\n` +
-                appNote +
-                `Ce questionnaire est strictement confidentiel.`;
+
+              // App cliente URL — vit dans une env var pour pouvoir basculer
+              // entre staging/prod sans recompiler
+              const APP_URL = import.meta?.env?.VITE_CLIENT_APP_URL
+                || 'https://anissa-client-app.vercel.app';
+
+              let subject;
+              let body;
+              if (activateApp) {
+                // Mail "Bienvenue sur l'app" — point d'entree unique.
+                // Le questionnaire sera accessible depuis la timeline app
+                // (V97.6 CTA "Remplir le questionnaire").
+                subject = 'Votre espace Anissa Nutrition est pret';
+                body =
+                  `Bonjour ${prenom},\n\n` +
+                  `Bienvenue chez Anissa Nutrition. Votre espace personnel est pret :\n\n` +
+                  `➜ ${APP_URL}/login\n\n` +
+                  `Comment vous connecter :\n` +
+                  `1. Ouvrez le lien ci-dessus\n` +
+                  `2. Entrez votre email (${formData.email || 'celui-ci'})\n` +
+                  `3. Vous recevrez un code a 8 chiffres par email\n` +
+                  `4. Une fois connectee, vous verrez votre parcours en 7 etapes,\n` +
+                  `   en commencant par le pre-questionnaire a remplir avant notre RDV.\n\n` +
+                  `Astuce : installez l'app sur votre ecran d'accueil pour un acces rapide :\n` +
+                  `• iPhone (Safari) : Partager → "Sur l'ecran d'accueil"\n` +
+                  `• Android (Chrome) : un bouton "Installer" apparaitra\n\n` +
+                  `A tres bientot,\nAnissa`;
+              } else {
+                // Mail questionnaire classique — comportement avant V97.5.
+                subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
+                body =
+                  `Bonjour ${prenom},\n\n` +
+                  `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
+                  `➜ ${questionnaireUrl}\n\n` +
+                  `Ce questionnaire est strictement confidentiel.\n\n` +
+                  `A tres bientot,\nAnissa`;
+              }
+
               const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(formData.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               window.open(gmailUrl, '_blank');
               showToast(
                 activateApp
-                  ? 'Cliente creee — espace app active + questionnaire pret a envoyer'
-                  : 'Cliente creee — questionnaire pret a envoyer (app non activee)'
+                  ? 'Cliente creee — espace app active + email Bienvenue pret'
+                  : 'Cliente creee — questionnaire pret a envoyer'
               );
               setTimeout(() => goToDashboard(), 1800);
             }}
