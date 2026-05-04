@@ -1,13 +1,8 @@
 // ─── sendCoachMessage.js ─────────────────────────────────────────────
 // Envoie un message d'Anissa vers la cliente dans son app (in-app).
-// Réutilise les mêmes env vars que publish/enrich (ADMIN_INVITE_SECRET).
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy`.
 
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  return import.meta.env?.[key];
-}
+import { clientAppFetch, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
 
 export class CoachMessageError extends Error {
   constructor(message, status) {
@@ -15,6 +10,12 @@ export class CoachMessageError extends Error {
     this.name = "CoachMessageError";
     this.status = status;
   }
+}
+
+function wrapErr(err) {
+  if (err instanceof ClientAppConfigError) return new CoachMessageError(err.message, 0);
+  if (err instanceof ClientAppHttpError) return new CoachMessageError(err.message, err.status);
+  return err;
 }
 
 /**
@@ -35,11 +36,6 @@ export async function sendCoachMessage({
   attachment_label = null,
   attachment_type = null,
 }) {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  if (!apiUrl || !secret) {
-    throw new CoachMessageError("Config app cliente manquante (.env.local)", 0);
-  }
   if (!email) throw new CoachMessageError("Cliente sans email", 0);
   const trimmed = String(body || "").trim();
   if (!trimmed) throw new CoachMessageError("Message vide", 0);
@@ -73,28 +69,52 @@ export async function sendCoachMessage({
     payload.attachment_type = aType;
   }
 
-  let res;
+  let resp;
   try {
-    res = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/admin/coach-message`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) {
-    throw new CoachMessageError(`Erreur réseau : ${e?.message || e}`, 0);
-  }
-
-  let resp = null;
-  try { resp = await res.json(); } catch { /* */ }
-
-  if (!res.ok || !resp?.ok) {
-    const msg = resp?.error || resp?.message || `HTTP ${res.status}`;
-    throw new CoachMessageError(msg, res.status);
-  }
+    resp = await clientAppFetch("/api/admin/coach-message", { method: "POST", payload });
+  } catch (e) { throw wrapErr(e); }
+  if (!resp?.ok) throw new CoachMessageError(resp?.error || resp?.message || "Reponse invalide", 0);
   return resp.message;
+}
+
+/**
+ * V96.6 : edite le body d'un message déjà envoyé.
+ *
+ * @param {object} params
+ * @param {string} params.id    - id UUID du message
+ * @param {string} params.body  - nouveau contenu (1-2000 chars)
+ * @returns {Promise<object>} le message mis à jour
+ */
+export async function editCoachMessage({ id, body }) {
+  if (!id) throw new CoachMessageError("Id message manquant", 0);
+  const trimmed = String(body || "").trim();
+  if (!trimmed) throw new CoachMessageError("Message vide", 0);
+  if (trimmed.length > 2000) throw new CoachMessageError("Message trop long (max 2000)", 0);
+
+  let resp;
+  try {
+    resp = await clientAppFetch("/api/admin/coach-message", { method: "PATCH", payload: { id, body: trimmed } });
+  } catch (e) { throw wrapErr(e); }
+  if (!resp?.ok) throw new CoachMessageError(resp?.error || resp?.message || "Reponse invalide", 0);
+  return resp.message;
+}
+
+/**
+ * V96.6 : supprime un message envoyé. Hard delete.
+ *
+ * @param {object} params
+ * @param {string} params.id - id UUID du message
+ * @returns {Promise<{deleted_id: string}>}
+ */
+export async function deleteCoachMessage({ id }) {
+  if (!id) throw new CoachMessageError("Id message manquant", 0);
+
+  let resp;
+  try {
+    resp = await clientAppFetch("/api/admin/coach-message", { method: "DELETE", query: { id } });
+  } catch (e) { throw wrapErr(e); }
+  if (!resp?.ok) throw new CoachMessageError(resp?.error || resp?.message || "Reponse invalide", 0);
+  return { deleted_id: resp.deleted_id };
 }
 
 /**
@@ -106,34 +126,13 @@ export async function sendCoachMessage({
  * @returns {Promise<{messages: object[], total: number}>}
  */
 export async function fetchCoachMessages({ email, limit = 20 }) {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  if (!apiUrl || !secret) {
-    throw new CoachMessageError("Config app cliente manquante (.env.local)", 0);
-  }
   if (!email) throw new CoachMessageError("Cliente sans email", 0);
 
-  let res;
+  let payload;
   try {
-    res = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/admin/coach-messages-history`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify({ email, limit }),
-    });
-  } catch (e) {
-    throw new CoachMessageError(`Erreur réseau : ${e?.message || e}`, 0);
-  }
-
-  let payload = null;
-  try { payload = await res.json(); } catch { /* */ }
-
-  if (!res.ok || !payload?.ok) {
-    const msg = payload?.error || payload?.message || `HTTP ${res.status}`;
-    throw new CoachMessageError(msg, res.status);
-  }
+    payload = await clientAppFetch("/api/admin/coach-messages-history", { method: "POST", payload: { email, limit } });
+  } catch (e) { throw wrapErr(e); }
+  if (!payload?.ok) throw new CoachMessageError(payload?.error || payload?.message || "Reponse invalide", 0);
   return {
     messages: Array.isArray(payload.messages) ? payload.messages : [],
     total: typeof payload.total === "number" ? payload.total : 0,

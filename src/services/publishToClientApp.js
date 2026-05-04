@@ -4,25 +4,15 @@
 // Construit le ClientPlan via le mapper local (déjà validé sur vraie data),
 // puis POST l'endpoint admin /api/admin/publish-plan de l'app cliente.
 //
-// Variables d'env (côté SaaS, prefix VITE_) :
-//   VITE_CLIENT_APP_API_URL       — ex. https://anissa-client-app.vercel.app
-//   VITE_CLIENT_APP_ADMIN_SECRET  — Bearer token (= ADMIN_INVITE_SECRET de l'app cliente)
-//
-// Le secret est exposé dans le bundle Vite (VITE_*), ce qui est acceptable ici
-// car le SaaS lui-même est protégé par auth (LoginScreen) et n'est pas
-// déployé en accès public.
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy` au lieu
+// d'appeler directement l'app cliente avec un Bearer token. Le secret
+// VITE_CLIENT_APP_ADMIN_SECRET (qui était inliné dans le bundle JS public)
+// vit maintenant côté serveur uniquement (process.env.CLIENT_APP_ADMIN_SECRET).
 
 import { buildClientAppPlanFromConsultation } from "./clientAppMapper";
 import { applyEnrichmentToPlan } from "./aiEnrichClientPlan";
 import { saveClient } from "../store";
-
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  // Vite expose les variables via import.meta.env
-  return import.meta.env?.[key];
-}
+import { clientAppFetch, checkClientAppConfig, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
 
 /** Récupère l'email de la cliente depuis ses données SaaS. */
 function resolveClientEmail(client) {
@@ -51,12 +41,7 @@ export class PublishHttpError extends Error {
 
 /** Vérifie que la config minimale est présente sans rien envoyer. */
 export function checkPublishConfig() {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  const issues = [];
-  if (!apiUrl) issues.push(`Variable d'env manquante : ${ENV_API_URL}`);
-  if (!secret) issues.push(`Variable d'env manquante : ${ENV_SECRET}`);
-  return { ok: issues.length === 0, issues };
+  return checkClientAppConfig();
 }
 
 /** Vérifie qu'on a tout ce qu'il faut sur la cliente avant publication. */
@@ -102,10 +87,7 @@ export async function publishConsultationToClientApp(client, consultation, enric
   const basePlan = buildClientAppPlanFromConsultation(client, consultation);
   const plan = enrichment ? applyEnrichmentToPlan(basePlan, enrichment) : basePlan;
 
-  // 4. POST l'endpoint admin
-  const apiUrl = getEnv(ENV_API_URL).replace(/\/+$/, "");
-  const secret = getEnv(ENV_SECRET);
-
+  // 4. POST l'endpoint admin via proxy V96.35
   // V96.0 : gating temporel.
   // - followup_week derive de consultation.followupWeek (0=initial, 1-4=suivis)
   //   → l'API calcule effective_at = first_plan.published_at + week × 28j.
@@ -129,34 +111,16 @@ export async function publishConsultationToClientApp(client, consultation, enric
       : {}),
   };
 
-  let res;
+  let body;
   try {
-    res = await fetch(`${apiUrl}/api/admin/publish-plan`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    body = await clientAppFetch("/api/admin/publish-plan", { method: "POST", payload });
   } catch (err) {
-    throw new PublishHttpError(
-      `Erreur réseau : ${err?.message || err}`,
-      0,
-      null,
-    );
+    if (err instanceof ClientAppConfigError) throw new PublishConfigError(err.message);
+    if (err instanceof ClientAppHttpError) throw new PublishHttpError(err.message, err.status, err.payload);
+    throw err;
   }
-
-  let body = null;
-  try {
-    body = await res.json();
-  } catch {
-    // body non-JSON — on garde body=null
-  }
-
-  if (!res.ok || !body?.ok) {
-    const msg = body?.error || body?.message || `HTTP ${res.status}`;
-    throw new PublishHttpError(msg, res.status, body);
+  if (!body?.ok) {
+    throw new PublishHttpError(body?.error || body?.message || "Reponse invalide", 0, body);
   }
 
   // V94.52 : trace SaaS-side de la publication. Permet a ClientAppPanel

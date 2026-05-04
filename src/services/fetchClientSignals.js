@@ -5,12 +5,8 @@
 //
 // Combine cote SaaS pour afficher dans l'onglet 'App cliente' > Signaux.
 
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  return import.meta.env?.[key];
-}
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy`
+import { clientAppFetch, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
 
 export class ClientSignalsError extends Error {
   constructor(message, status) {
@@ -20,6 +16,12 @@ export class ClientSignalsError extends Error {
   }
 }
 
+function wrapErr(err) {
+  if (err instanceof ClientAppConfigError) return new ClientSignalsError(err.message, 0);
+  if (err instanceof ClientAppHttpError) return new ClientSignalsError(err.message, err.status);
+  return err;
+}
+
 /**
  * @param {object} params
  * @param {string} params.email
@@ -27,34 +29,13 @@ export class ClientSignalsError extends Error {
  * @returns {Promise<{ upgrade_interests: object[], attachment_opens: object[] }>}
  */
 export async function fetchClientSignals({ email, limit = 50 }) {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  if (!apiUrl || !secret) {
-    throw new ClientSignalsError("Config app cliente manquante (.env.local)", 0);
-  }
   if (!email) throw new ClientSignalsError("Cliente sans email", 0);
 
-  let res;
+  let payload;
   try {
-    res = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/admin/client-signals`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify({ email, limit }),
-    });
-  } catch (e) {
-    throw new ClientSignalsError(`Erreur réseau : ${e?.message || e}`, 0);
-  }
-
-  let payload = null;
-  try { payload = await res.json(); } catch { /* */ }
-
-  if (!res.ok || !payload?.ok) {
-    const msg = payload?.error || payload?.message || `HTTP ${res.status}`;
-    throw new ClientSignalsError(msg, res.status);
-  }
+    payload = await clientAppFetch("/api/admin/client-signals", { method: "POST", payload: { email, limit } });
+  } catch (e) { throw wrapErr(e); }
+  if (!payload?.ok) throw new ClientSignalsError(payload?.error || payload?.message || "Reponse invalide", 0);
 
   return {
     upgrade_interests: Array.isArray(payload.upgrade_interests) ? payload.upgrade_interests : [],

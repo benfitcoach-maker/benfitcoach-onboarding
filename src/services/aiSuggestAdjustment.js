@@ -9,13 +9,8 @@
 // Anissa garde le dernier mot. L'IA ne peut JAMAIS modifier le plan.
 
 import { buildClientAppPlanFromConsultation } from "./clientAppMapper";
-
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  return import.meta.env?.[key];
-}
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy`
+import { clientAppFetch, checkClientAppConfig, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
 
 export class SuggestConfigError extends Error {
   constructor(message) {
@@ -34,12 +29,7 @@ export class SuggestHttpError extends Error {
 }
 
 export function checkSuggestConfig() {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  const issues = [];
-  if (!apiUrl) issues.push(`Variable d'env manquante : ${ENV_API_URL}`);
-  if (!secret) issues.push(`Variable d'env manquante : ${ENV_SECRET}`);
-  return { ok: issues.length === 0, issues };
+  return checkClientAppConfig();
 }
 
 /** Extrait les inputs SAFE pour l'IA. */
@@ -95,29 +85,16 @@ export async function aiSuggestAdjustment(client, consultation, summary, ruleSig
     throw new SuggestConfigError("Pas de piliers détectés dans la stratégie — l'IA n'a pas assez de matière.");
   }
 
-  const apiUrl = getEnv(ENV_API_URL).replace(/\/+$/, "");
-  const secret = getEnv(ENV_SECRET);
-
-  let res;
+  let body;
   try {
-    res = await fetch(`${apiUrl}/api/admin/suggest-adjustment`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify(inputs),
-    });
+    body = await clientAppFetch("/api/admin/suggest-adjustment", { method: "POST", payload: inputs });
   } catch (err) {
-    throw new SuggestHttpError(`Erreur réseau : ${err?.message || err}`, 0, null);
+    if (err instanceof ClientAppConfigError) throw new SuggestConfigError(err.message);
+    if (err instanceof ClientAppHttpError) throw new SuggestHttpError(err.message, err.status, err.payload);
+    throw err;
   }
-
-  let body = null;
-  try { body = await res.json(); } catch { /* */ }
-
-  if (!res.ok || !body?.ok) {
-    const msg = body?.error || body?.message || `HTTP ${res.status}`;
-    throw new SuggestHttpError(msg, res.status, body);
+  if (!body?.ok) {
+    throw new SuggestHttpError(body?.error || body?.message || "Reponse invalide", 0, body);
   }
   return body.suggestion;
 }

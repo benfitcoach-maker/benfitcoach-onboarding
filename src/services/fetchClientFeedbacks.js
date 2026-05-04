@@ -6,12 +6,8 @@
 // Exporte aussi `summarizeFeedbacks()` : agrège la majorité par axe sur
 // les N derniers jours pour affichage compact dans la fiche cliente.
 
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  return import.meta.env?.[key];
-}
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy`
+import { clientAppFetch } from "./clientAppFetch";
 
 function resolveClientEmail(client) {
   return client?.form?.email || client?.email || null;
@@ -23,32 +19,19 @@ function resolveClientEmail(client) {
  * @returns {Promise<{ ok: boolean, feedbacks: array, found?: boolean, error?: string }>}
  */
 export async function fetchClientFeedbacks(client, days = 7) {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  if (!apiUrl || !secret) {
-    return { ok: false, feedbacks: [], error: "Config app cliente manquante (.env.local)" };
-  }
   const email = resolveClientEmail(client);
   if (!email) {
     return { ok: false, feedbacks: [], error: "Cliente sans email" };
   }
 
-  const url = `${apiUrl.replace(/\/+$/, "")}/api/admin/client-feedbacks?email=${encodeURIComponent(email)}&days=${days}`;
-
-  let res;
+  let body;
   try {
-    res = await fetch(url, {
-      headers: { authorization: `Bearer ${secret}` },
-    });
+    body = await clientAppFetch("/api/admin/client-feedbacks", { method: "GET", query: { email, days } });
   } catch (e) {
-    return { ok: false, feedbacks: [], error: `Erreur réseau : ${e?.message || e}` };
+    return { ok: false, feedbacks: [], error: e?.message || "Erreur reseau" };
   }
-
-  let body = null;
-  try { body = await res.json(); } catch { /* */ }
-
-  if (!res.ok || !body?.ok) {
-    return { ok: false, feedbacks: [], error: body?.error || `HTTP ${res.status}` };
+  if (!body?.ok) {
+    return { ok: false, feedbacks: [], error: body?.error || "Reponse invalide" };
   }
   return {
     ok: true,

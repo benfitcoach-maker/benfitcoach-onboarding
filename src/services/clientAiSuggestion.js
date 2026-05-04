@@ -14,12 +14,8 @@
 //   - suggestion > 7 jours
 //   - OU au moins 1 nouveau feedback depuis (signal qui a changé)
 
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  return import.meta.env?.[key];
-}
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy`
+import { clientAppFetch, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
 
 function resolveClientEmail(client) {
   return client?.form?.email || client?.email || null;
@@ -33,42 +29,28 @@ export class AiSuggestionError extends Error {
   }
 }
 
-function getEnvOrThrow() {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  if (!apiUrl || !secret) {
-    throw new AiSuggestionError("Config app cliente manquante (.env.local)", 0);
-  }
-  return { apiUrl, secret };
+function wrapErr(err) {
+  if (err instanceof ClientAppConfigError) return new AiSuggestionError(err.message, 0);
+  if (err instanceof ClientAppHttpError) return new AiSuggestionError(err.message, err.status);
+  return err;
 }
 
 /**
  * GET la dernière suggestion enregistrée pour cette cliente.
- * @param {object} client
- * @returns {Promise<{ ok: boolean, suggestion?: object | null, is_stale?: boolean, error?: string }>}
  */
 export async function fetchLatestAiSuggestion(client) {
-  let env;
-  try { env = getEnvOrThrow(); } catch (e) { return { ok: false, error: e.message }; }
-
   const email = resolveClientEmail(client);
   if (!email) return { ok: false, error: "Cliente sans email" };
 
-  const url = `${env.apiUrl.replace(/\/+$/, "")}/api/admin/client-ai-suggestion?email=${encodeURIComponent(email)}`;
-  let res;
+  let body;
   try {
-    res = await fetch(url, { headers: { authorization: `Bearer ${env.secret}` } });
+    body = await clientAppFetch("/api/admin/client-ai-suggestion", { method: "GET", query: { email } });
   } catch (e) {
-    return { ok: false, error: `Erreur réseau : ${e?.message || e}` };
+    return { ok: false, error: e?.message || "Erreur reseau" };
   }
-
-  let body = null;
-  try { body = await res.json(); } catch { /* */ }
-
-  if (!res.ok || !body?.ok) {
-    return { ok: false, error: body?.error || `HTTP ${res.status}` };
+  if (!body?.ok) {
+    return { ok: false, error: body?.error || "Reponse invalide" };
   }
-
   return {
     ok: true,
     suggestion: body.suggestion ?? null,
@@ -78,21 +60,13 @@ export async function fetchLatestAiSuggestion(client) {
 
 /**
  * POST une nouvelle suggestion (sauvegarde post-call Claude).
- * @param {object} client
- * @param {object} consultation - pour récupérer le plan_id si dispo
- * @param {object} suggestion - { summary, suggestions, coach_note }
  */
 export async function saveAiSuggestion(client, consultation, suggestion) {
-  let env;
-  try { env = getEnvOrThrow(); } catch (e) { throw e; }
-
   const email = resolveClientEmail(client);
   if (!email) throw new AiSuggestionError("Cliente sans email", 0);
 
   // plan_id côté SaaS Anissa = consultation.id ? Non — c'est le plan_id
   // côté staging app cliente, qu'on ne connaît pas directement.
-  // On laisse plan_id null pour l'instant. La mise en cohérence cross-DB
-  // viendrait dans une V90.x dédiée.
 
   const payload = {
     email,
@@ -102,24 +76,10 @@ export async function saveAiSuggestion(client, consultation, suggestion) {
     coach_note: suggestion?.coach_note ?? null,
   };
 
-  let res;
+  let body;
   try {
-    res = await fetch(`${env.apiUrl.replace(/\/+$/, "")}/api/admin/client-ai-suggestion`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.secret}`,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) {
-    throw new AiSuggestionError(`Erreur réseau : ${e?.message || e}`, 0);
-  }
-
-  let body = null;
-  try { body = await res.json(); } catch { /* */ }
-  if (!res.ok || !body?.ok) {
-    throw new AiSuggestionError(body?.error || `HTTP ${res.status}`, res.status);
-  }
+    body = await clientAppFetch("/api/admin/client-ai-suggestion", { method: "POST", payload });
+  } catch (e) { throw wrapErr(e); }
+  if (!body?.ok) throw new AiSuggestionError(body?.error || "Reponse invalide", 0);
   return body.suggestion;
 }

@@ -1,10 +1,33 @@
 // Vercel serverless function (Node.js runtime) proxying Anthropic Messages API.
-// Keeps the real API key server-side. Supports a client-side fallback key via
-// the `x-fallback-key` header when ANTHROPIC_API_KEY is not configured on Vercel.
+// Keeps the real API key server-side.
+//
+// V96.35 hardening (audit V96.34) :
+// - CORS restreint à app.anissanutrition.ch + previews Vercel + localhost dev
+//   (avant : wildcard `*` qui permettait à n'importe quel site d'utiliser le proxy)
+// - Header `x-fallback-key` interdit en production (avant : permettait à n'importe
+//   qui d'utiliser le proxy comme relay Anthropic gratuit avec sa propre clé).
+//   Reste accepté en dev/preview pour qu'Anissa puisse tester localement.
+
+const ALLOWED_ORIGINS = [
+  'https://app.anissanutrition.ch',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:4173', // vite preview
+];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (/^https:\/\/benfitcoach-onboarding[a-z0-9-]*\.vercel\.app$/.test(origin)) return true;
+  return false;
+}
 
 export default async function handler(req, res) {
-  // Basic CORS (same-origin in prod, but helps local dev too)
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (isAllowedOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-fallback-key');
 
@@ -18,22 +41,25 @@ export default async function handler(req, res) {
     return;
   }
 
+  const isProd = process.env.VERCEL_ENV === 'production';
   const serverKey = process.env.ANTHROPIC_API_KEY;
   const fallbackKey = req.headers['x-fallback-key'];
-  const apiKey = serverKey || (typeof fallbackKey === 'string' ? fallbackKey : '');
+  // V96.35 : on n'accepte plus la fallback key en prod — sécu (anti-relay).
+  const allowFallback = !isProd;
+  const apiKey = serverKey || (allowFallback && typeof fallbackKey === 'string' ? fallbackKey : '');
 
   if (!apiKey) {
     res.status(500).json({
       error: {
-        message:
-          "Clé API Anthropic manquante. Configure ANTHROPIC_API_KEY sur Vercel ou fournis x-fallback-key.",
+        message: isProd
+          ? "Clé API Anthropic manquante. Configure ANTHROPIC_API_KEY sur Vercel."
+          : "Clé API Anthropic manquante. Configure ANTHROPIC_API_KEY sur Vercel ou fournis x-fallback-key (dev/preview only).",
       },
     });
     return;
   }
 
   try {
-    // Vercel already parses JSON bodies for Node functions, but be defensive.
     let body = req.body;
     if (typeof body === 'string') {
       try {

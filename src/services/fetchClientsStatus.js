@@ -14,12 +14,8 @@
 // fallback sur le lookup historique par email.
 // L'ancien input string[] reste accepté (rétrocompat).
 
-const ENV_API_URL = "VITE_CLIENT_APP_API_URL";
-const ENV_SECRET = "VITE_CLIENT_APP_ADMIN_SECRET";
-
-function getEnv(key) {
-  return import.meta.env?.[key];
-}
+// V96.35 : passe par le proxy server-side `/api/client-app-proxy`
+import { clientAppFetch, checkClientAppConfig } from "./clientAppFetch";
 
 const CACHE_TTL_MS = 60 * 1000;
 // Cache key composite : "id:<stagingClientId>" prioritaire, sinon
@@ -71,9 +67,8 @@ function cacheKeyFor(item) {
  *   via la clé `id:<stagingClientId>`.
  */
 export async function fetchClientsStatus(items) {
-  const apiUrl = getEnv(ENV_API_URL);
-  const secret = getEnv(ENV_SECRET);
-  if (!apiUrl || !secret) return {};
+  // V96.35 : check basique via helper (URL only). Le secret est server-side.
+  if (!checkClientAppConfig().ok) return {};
 
   const normalized = normalizeInput(items);
   if (normalized.length === 0) return {};
@@ -108,24 +103,14 @@ export async function fetchClientsStatus(items) {
   if (emailsToFetch.length > 0) payload.emails = emailsToFetch;
   if (clientIdsToFetch.length > 0) payload.client_ids = clientIdsToFetch;
 
-  let res;
+  let body = null;
   try {
-    res = await fetch(`${apiUrl.replace(/\/+$/, "")}/api/admin/clients-status`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    body = await clientAppFetch("/api/admin/clients-status", { method: "POST", payload });
   } catch {
-    // network error → on renvoie ce qu'on a (en cache + vide pour le reste)
+    // network ou config error → on renvoie ce qu'on a (en cache + vide pour le reste)
     return result;
   }
-
-  let body = null;
-  try { body = await res.json(); } catch { /* */ }
-  if (!res.ok || !body?.ok) return result;
+  if (!body?.ok) return result;
 
   const statuses = (body.statuses && typeof body.statuses === "object") ? body.statuses : {};
   const statusesById = (body.statuses_by_id && typeof body.statuses_by_id === "object")
