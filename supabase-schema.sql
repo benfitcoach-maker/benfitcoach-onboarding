@@ -136,24 +136,28 @@ CREATE INDEX idx_massage_sessions_client ON massage_sessions(client_id);
 CREATE INDEX idx_progression_client ON progression(client_id);
 CREATE INDEX idx_nutrition_consultations_client ON nutrition_consultations(client_id);
 
--- RLS : politiques permissives (acces via anon key)
+-- RLS V96.36 — TO authenticated (mono-tenant Anissa+Benoit).
+-- Migration appliquée dans : migrations/V96.36_rls_authenticated.sql
+-- Audit V96.34 a révélé que les policies legacy `allow_all_*` bypassaient
+-- les owner-checks via le OR de PostgreSQL. Approche table rase : 1 seule
+-- policy clean par table, restreinte aux users auth via Supabase signIn.
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_clients" ON clients FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_clients" ON clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE generations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_generations" ON generations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_generations" ON generations FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE massage_sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_massage" ON massage_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_massage" ON massage_sessions FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE progression ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_progression" ON progression FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_progression" ON progression FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_config" ON app_config FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_config" ON app_config FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE nutrition_consultations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_nutrition" ON nutrition_consultations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_nutrition" ON nutrition_consultations FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE manual_revenues ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_manual_revenues" ON manual_revenues FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "auth_only_manual_revenues" ON manual_revenues FOR ALL TO authenticated USING (true) WITH CHECK (true);
