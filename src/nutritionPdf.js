@@ -1583,7 +1583,7 @@ export async function exportConsultationPDF(consultation, client, { output = 'sa
   }
 
   // ─── PLAN SECTIONS ───
-  console.log('[PDF RENDER] unifiedSections:', unifiedSections?.length, unifiedSections?.map(s => ({ t: s.title, type: s.type, len: s.content?.length })));
+  if (import.meta.env.DEV) console.log('[PDF RENDER] unifiedSections:', unifiedSections?.length, unifiedSections?.map(s => ({ t: s.title, type: s.type, len: s.content?.length })));
   if (unifiedSections) {
     // Helper: find section by type
     const findSec = (type) => unifiedSections.find(s => s.type === type);
@@ -3130,7 +3130,7 @@ export async function exportCoverPDF(consultation, client) {
   else if (blood)   typeBilan = 'Bilan Nutritionnel & Sanguin';
   else if (dna)     typeBilan = 'Bilan Nutritionnel & ADN';
 
-  console.log('[Cover] generating for', { prenom, objectifLen: rawObjectif.length, typeBilan, dateStr });
+  if (import.meta.env.DEV) console.log('[Cover] generating for', { prenom, objectifLen: rawObjectif.length, typeBilan, dateStr });
 
   // ─── Chargement du logo Anissa (skip silencieux si indisponible) ───
   // On utilise le chemin canvas (<img> + canvas.toDataURL('image/png'))
@@ -3166,7 +3166,7 @@ export async function exportCoverPDF(consultation, client) {
   let logoData = null;
   try {
     logoData = await loadCoverLogo('/logo-anissa.png');
-    console.log('[Cover] logo:', logoData ? 'OK' : 'FAILED');
+    if (import.meta.env.DEV) console.log('[Cover] logo:', logoData ? 'OK' : 'FAILED');
   } catch (err) {
     console.warn('[Cover] logo load error (skipped):', err);
     logoData = null;
@@ -3192,7 +3192,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFontSize(12);
   doc.setTextColor(...DARK_GREEN);
   doc.text('ANISSA DEROUBAIX', margin, headerY);
-  console.log('[Cover] header line 1 drawn at', { x: margin, y: headerY });
+  if (import.meta.env.DEV) console.log('[Cover] header line 1 drawn at', { x: margin, y: headerY });
 
   // Ligne 2 : sous-titre principal
   doc.setCharSpace(0);
@@ -3410,7 +3410,7 @@ export async function exportCoverPDF(consultation, client) {
     { align: 'center' }
   );
 
-  console.log('[Cover] layout', { yAfterCard, quoteBlockY, footerTextY, objLineCount });
+  if (import.meta.env.DEV) console.log('[Cover] layout', { yAfterCard, quoteBlockY, footerTextY, objLineCount });
 
   doc.save(`cover-${prenom.toLowerCase()}-${dateStr.replace(/\./g, '-')}.pdf`);
 }

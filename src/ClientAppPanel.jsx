@@ -43,6 +43,7 @@ import { extractMealsAndAlternativesFromPlan } from "./services/extractMealsFrom
 // cote staging) + backfill auto quand l'API confirme.
 import { hasBeenPublishedLocally, markPublishedLocally } from "./services/publishToClientApp";
 import JourneyCockpit from "./components/JourneyCockpit";
+import { useConfirmDialog, ConfirmDialog } from "./components/ConfirmDialog";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -1034,6 +1035,7 @@ function formatMessageDate(iso) {
 // historiques qui referencent l'URL.
 
 function ResourcesTab() {
+  const confirmDialog = useConfirmDialog();
   const [resources, setResources] = useState(null);
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -1093,7 +1095,13 @@ function ResourcesTab() {
 
   async function handleArchive(id, label) {
     if (archivingId) return;
-    if (!confirm(`Archiver "${label}" ?\n\nCette ressource ne sera plus selectionnable dans les nouveaux messages, mais reste accessible aux clientes qui l'ont deja recue.`)) return;
+    const ok = await confirmDialog.ask({
+      title: `Archiver "${label}" ?`,
+      message: "Cette ressource ne sera plus sélectionnable dans les nouveaux messages, mais reste accessible aux clientes qui l'ont déjà reçue.",
+      confirmLabel: 'Archiver',
+      danger: true,
+    });
+    if (!ok) return;
     setArchivingId(id);
     try {
       await archiveCoachResource(id);
@@ -1239,6 +1247,7 @@ function ResourcesTab() {
           ))}
         </ul>
       )}
+      <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
     </div>
   );
 }

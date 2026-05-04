@@ -107,7 +107,7 @@ export default function MassageSessionPanel({ clientId, onRefresh }) {
 
       {sessions.length === 0 ? (
         <div className="massage-sessions-empty">
-          Aucune seance enregistree. Cliquez sur "+ Nouvelle seance" pour commencer.
+          Aucune séance enregistrée. Clique sur "+ Nouvelle séance" pour commencer.
         </div>
       ) : (
         <div className="massage-sessions-list">

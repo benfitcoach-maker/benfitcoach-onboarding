@@ -2,19 +2,20 @@ import { useState } from 'react';
 
 const ANISSA_LOGO = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
+// TODO V97.10 : custom domain app.anissanutrition.ch quand configuré dans Vercel
 const APP_SCREENS = [
   {
-    src: 'https://anissa-client-app.vercel.app/marketing/home.png',
+    src: 'https://app.anissanutrition.ch/marketing/home.png',
     alt: 'Écran d\u2019accueil de l\u2019app — bonjour Chloé, votre prochain repas',
     caption: 'Votre journée',
   },
   {
-    src: 'https://anissa-client-app.vercel.app/marketing/semaine.png',
+    src: 'https://app.anissanutrition.ch/marketing/semaine.png',
     alt: 'Écran Votre semaine — sélecteur de jour, repas avec alternatives',
     caption: 'Votre semaine',
   },
   {
-    src: 'https://anissa-client-app.vercel.app/marketing/lettre.png',
+    src: 'https://app.anissanutrition.ch/marketing/lettre.png',
     alt: 'Écran Votre lettre — mot personnalisé d\u2019Anissa',
     caption: 'Votre lettre',
   },

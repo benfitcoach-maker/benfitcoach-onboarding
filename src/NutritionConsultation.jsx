@@ -1871,7 +1871,7 @@ ${suppText}`;
 
   const handleSave = () => {
     if (!consultation.mgd_recommendation) {
-      showSaveToast('Sélectionnez une recommandation biologique avant de sauvegarder');
+      showSaveToast('Sélectionne une recommandation biologique avant de sauvegarder');
       return;
     }
 
@@ -2498,7 +2498,7 @@ ${suppText}`;
                 🔬 Résultats biologiques
               </div>
               <p style={{ fontSize: '.75rem', color: '#6b5f48', marginBottom: 10 }}>
-                Saisissez les valeurs disponibles. Les champs vides sont ignorés.
+                Saisis les valeurs disponibles. Les champs vides sont ignorés.
               </p>
 
               {/* V45 : Quick Fills — bilans pre-configures */}
@@ -2843,7 +2843,7 @@ ${suppText}`;
                     ...prev,
                     mgd_recommended_tests_text: e.target.value,
                   }))}
-                  placeholder="Cliquez sur Générer pour obtenir les analyses recommandées, ou saisissez manuellement..."
+                  placeholder="Clique sur Générer pour obtenir les analyses recommandées, ou saisis manuellement..."
                   style={{
                     width: '100%', minHeight: 100,
                     background: 'rgba(0,0,0,.2)',
@@ -3027,7 +3027,7 @@ ${suppText}`;
         };
 
         const doExportPdf = async () => {
-          console.log('[PDF] doExportPdf CALLED');
+          if (import.meta.env.DEV) console.log('[PDF] doExportPdf CALLED');
           setPdfError('');
           const edited = readEdited();
           // V88 : prime finalText si present (couche humaine au-dessus du plan IA).
@@ -3036,20 +3036,20 @@ ${suppText}`;
           const supplements = edited.supplements;
           const recipes = edited.recipes;
           if (isFinal && finalText) {
-            console.log('[PDF] using FINAL version (length:', finalText.length, ')');
+            if (import.meta.env.DEV) console.log('[PDF] using FINAL version (length:', finalText.length, ')');
           }
-          console.log('[PDF] plan length:', plan?.length, 'supplements length:', supplements?.length);
+          if (import.meta.env.DEV) console.log('[PDF] plan length:', plan?.length, 'supplements length:', supplements?.length);
           const currentScore = scorePlanQuality(plan, supplements, { ...form, _weeklyFeedback: weeklyFeedback }, { isFollowup, followupWeek });
           const fullText = (plan || '') + '\n' + (supplements || '');
           const validation = validatePlanForPDF(fullText, currentScore, { isFollowup });
-          console.log('[PDF] validation:', validation);
+          if (import.meta.env.DEV) console.log('[PDF] validation:', validation);
           if (!validation.valid) {
-            console.log('[PDF] BLOCKED by validation:', validation.errors);
+            if (import.meta.env.DEV) console.log('[PDF] BLOCKED by validation:', validation.errors);
             setPdfError('Export bloque : ' + validation.errors.join(' | '));
             return;
           }
           const sections = structurePlanSections(plan, supplements, { isFollowup, locale: getClientNutritionLocale(client) });
-          console.log('[PDF DEBUG] sections:', sections.length, sections.map(s => ({ title: s.title, type: s.type, contentLen: s.content?.length })));
+          if (import.meta.env.DEV) console.log('[PDF DEBUG] sections:', sections.length, sections.map(s => ({ title: s.title, type: s.type, contentLen: s.content?.length })));
           try {
             await exportConsultationPDF({
               observations: consultation.observations,

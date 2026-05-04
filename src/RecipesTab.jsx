@@ -1,10 +1,10 @@
 // ─── RecipesTab ─────────────────────────────────────────────────────────
-// V94.42 — Authoring de recettes detaillees pour le plan nutrition.
+// V94.42 — Authoring de recettes détaillées pour le plan nutrition.
 //
 // Workflow Anissa :
-//   1. Le plan est redige (nutrition_plan textuel)
-//   2. Bouton "Generer toutes les recettes" → 1 appel IA Haiku 4.5
-//   3. Table editable par repas (ingredients, preparation, temps, conseil)
+//   1. Le plan est rédigé (nutrition_plan textuel)
+//   2. Bouton "Générer toutes les recettes" → 1 appel IA Haiku 4.5
+//   3. Table éditable par repas (ingrédients, préparation, temps, conseil)
 //   4. Sauvegarde dans consultation.meal_recipes (JSON map mealKey → recipe)
 //   5. Republication push les recipes au client app via clientAppMapper
 //
@@ -19,16 +19,16 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
   const planText = consultation?.nutrition_plan || consultation?.nutritionPlan || "";
 
   // V95.4 : extraction des repas principaux ET des alternatives. Anissa
-  // genere une seule fois → toutes les recettes (16-20 typiquement) sont
+  // génère une seule fois → toutes les recettes (16-20 typiquement) sont
   // enrichies d'un coup. Le client app les lit via meal_recipes lookup
-  // (mealKey commun main/alt) → tap sur une alt cote cliente ouvre direct
+  // (mealKey commun main/alt) → tap sur une alt côté cliente ouvre direct
   // la recette sans attente.
   const meals = useMemo(
     () => extractMealsAndAlternativesFromPlan(planText, "fr"),
     [planText],
   );
 
-  // Etat local des recettes (key → Recipe)
+  // État local des recettes (key → Recipe)
   const [recipes, setRecipes] = useState(() => consultation?.meal_recipes || {});
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
@@ -44,8 +44,8 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
   if (!planText.trim()) {
     return (
       <div style={emptyStyle}>
-        Aucun plan nutrition redige. Allez sur l&apos;onglet &quot;Plan complet&quot; pour
-        ecrire le plan, puis revenez ici pour generer les recettes.
+        Aucun plan nutrition rédigé. Va sur l&apos;onglet &quot;Plan complet&quot; pour
+        écrire le plan, puis reviens ici pour générer les recettes.
       </div>
     );
   }
@@ -53,8 +53,8 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
   if (meals.length === 0) {
     return (
       <div style={emptyStyle}>
-        Aucun repas detecte dans le plan. Verifiez que les sections de repas
-        suivent le format standard (Petit-dejeuner, Dejeuner, Diner...).
+        Aucun repas détecté dans le plan. Vérifie que les sections de repas
+        suivent le format standard (Petit-déjeuner, Déjeuner, Dîner...).
       </div>
     );
   }
@@ -109,7 +109,7 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
       {/* Header / actions */}
       <div style={headerStyle}>
         <div>
-          <div style={titleStyle}>🍳 Recettes detaillees</div>
+          <div style={titleStyle}>🍳 Recettes détaillées</div>
           <div style={subtitleStyle}>
             {filledCount}/{meals.length} repas enrichis
           </div>
@@ -122,7 +122,7 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
             disabled={generating}
             style={primaryBtnStyle}
           >
-            {generating ? "Generation…" : "🪄 Generer toutes les recettes"}
+            {generating ? "Génération…" : "🪄 Générer toutes les recettes"}
           </button>
           <button
             type="button"
@@ -161,7 +161,7 @@ export default function RecipesTab({ consultation, form, onSave, onPersistGlobal
             borderRadius: 8,
           }}
         >
-          ✓ Recettes sauvegardees.
+          ✓ Recettes sauvegardées.
         </div>
       )}
 
@@ -266,17 +266,17 @@ function RecipeCard({ meal, recipe = {}, onChange }) {
       {/* Body editable */}
       {expanded && (
         <div style={cardBodyStyle}>
-          <Field label="Ingredients (1 par ligne)">
+          <Field label="Ingrédients (1 par ligne)">
             <textarea
               value={ingredientsText}
               onChange={(e) => updateIngredients(e.target.value)}
-              placeholder="120 g de saumon&#10;1/2 avocat mur&#10;..."
+              placeholder="120 g de saumon&#10;1/2 avocat mûr&#10;..."
               rows={6}
               style={textareaStyle}
             />
           </Field>
 
-          <Field label="Preparation (1 etape par ligne)">
+          <Field label="Préparation (1 étape par ligne)">
             <textarea
               value={preparationText}
               onChange={(e) => updatePreparation(e.target.value)}
@@ -320,7 +320,7 @@ function RecipeCard({ meal, recipe = {}, onChange }) {
             <textarea
               value={recipe.tip || ""}
               onChange={(e) => onChange({ tip: e.target.value.slice(0, 250) })}
-              placeholder="1 phrase signature : pourquoi ce repas est benefique."
+              placeholder="1 phrase signature : pourquoi ce repas est bénéfique."
               rows={2}
               style={textareaStyle}
             />

@@ -1,14 +1,14 @@
 // ─── IntroLetterTab ────────────────────────────────────────────────────
-// V94.47 — Authoring de la lettre d'intro personnalisee.
+// V94.47 — Authoring de la lettre d'intro personnalisée.
 //
 // Workflow :
-//   1. Bouton "🪄 Generer la lettre" → appel Claude Haiku 4.5
-//   2. La lettre apparait dans des champs editables (paragraphes + pull_quote
+//   1. Bouton "🪄 Générer la lettre" → appel Claude Haiku 4.5
+//   2. La lettre apparaît dans des champs éditables (paragraphes + pull_quote
 //      + tailored_points)
-//   3. Anissa relit, edite si besoin
+//   3. Anissa relit, édite si besoin
 //   4. Bouton "💾 Sauvegarder" → consultation.intro_letter
-//   5. A la republication, clientAppMapper utilise intro_letter en priorite
-//      pour construire intro_data.body (cote app cliente)
+//   5. À la republication, clientAppMapper utilise intro_letter en priorité
+//      pour construire intro_data.body (côté app cliente)
 // ────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
@@ -23,7 +23,7 @@ export default function IntroLetterTab({ consultation, form, onSave, onPersistGl
   );
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
-  // V94.55 : feedback visuel apres clic Sauvegarder
+  // V94.55 : feedback visuel après clic Sauvegarder
   const [savedFlash, setSavedFlash] = useState(false);
 
   const filled = body.length > 0;
@@ -83,8 +83,8 @@ export default function IntroLetterTab({ consultation, form, onSave, onPersistGl
     // V94.55 : flash visuel pour confirmer l'action
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 2500);
-    // V94.57 : declenche la persistance globale automatiquement (fusion
-    // des 2 saves pour eviter qu'Anissa oublie le clic Sauvegarder en haut).
+    // V94.57 : déclenche la persistance globale automatiquement (fusion
+    // des 2 saves pour éviter qu'Anissa oublie le clic Sauvegarder en haut).
     if (typeof onPersistGlobally === "function") {
       onPersistGlobally();
     }
@@ -99,7 +99,7 @@ export default function IntroLetterTab({ consultation, form, onSave, onPersistGl
           <div style={subtitleStyle}>
             {filled
               ? `${body.length} paragraphe${body.length > 1 ? "s" : ""}`
-              : "Pas encore generee"}
+              : "Pas encore générée"}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -111,10 +111,10 @@ export default function IntroLetterTab({ consultation, form, onSave, onPersistGl
             style={primaryBtnStyle}
           >
             {generating
-              ? "Generation…"
+              ? "Génération…"
               : filled
-                ? "🪄 Regenerer"
-                : "🪄 Generer la lettre"}
+                ? "🪄 Régénérer"
+                : "🪄 Générer la lettre"}
           </button>
           <button
             type="button"
@@ -141,7 +141,7 @@ export default function IntroLetterTab({ consultation, form, onSave, onPersistGl
 
       {error && <div style={errorStyle}>⚠ {error}</div>}
 
-      {/* V94.55 → V94.57 : flash de confirmation apres save. Avec la
+      {/* V94.55 → V94.57 : flash de confirmation après save. Avec la
           fusion V94.57, le clic local sauvegarde aussi globalement. */}
       {savedFlash && (
         <div
@@ -155,15 +155,15 @@ export default function IntroLetterTab({ consultation, form, onSave, onPersistGl
             borderRadius: 8,
           }}
         >
-          ✓ Lettre sauvegardee.
+          ✓ Lettre sauvegardée.
         </div>
       )}
 
       {!filled && !generating && !error && (
         <div style={emptyStyle}>
-          Cliquez &quot;Generer la lettre&quot; pour creer une lettre d&apos;intro
-          personnalisee. L&apos;IA s&apos;appuie sur le profil de la cliente
-          (objectif, antecedents, observations) et le ton signature
+          Clique sur &quot;Générer la lettre&quot; pour créer une lettre d&apos;intro
+          personnalisée. L&apos;IA s&apos;appuie sur le profil de la cliente
+          (objectif, antécédents, observations) et le ton signature
           d&apos;Anissa.
         </div>
       )}

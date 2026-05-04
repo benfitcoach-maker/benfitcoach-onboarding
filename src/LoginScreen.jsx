@@ -46,7 +46,7 @@ export default function LoginScreen({ onLogin }) {
       <div className="login-card">
         {step === 'select' ? (
           <>
-            <p className="login-subtitle">Choisissez votre profil pour acceder au dashboard.</p>
+            <p className="login-subtitle">Choisis ton profil pour accéder au dashboard.</p>
             <div className="login-users">
               {USERS.map(user => (
                 <button
@@ -77,7 +77,7 @@ export default function LoginScreen({ onLogin }) {
               <span>{username}</span>
             </div>
             <h2>Mot de passe</h2>
-            <p className="login-subtitle">Entrez votre mot de passe.</p>
+            <p className="login-subtitle">Entre ton mot de passe.</p>
 
             <form onSubmit={handleLogin} className="login-form">
               <div className="field">

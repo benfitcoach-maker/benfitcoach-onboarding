@@ -244,7 +244,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
       {step === 1 && (
         <div className="nutrition-form-section">
           <h3>Validation des donnees client & Mesures</h3>
-          <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 20 }}>Ces donnees proviennent du questionnaire client — verifiez et corrigez si necessaire.</p>
+          <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 20 }}>Ces données proviennent du questionnaire client — vérifie et corrige si nécessaire.</p>
           <div className="form-grid">
             <div className="field"><label>Prenom *</label><input type="text" value={form.prenom} onChange={e => updateField('prenom', e.target.value)} /></div>
             <div className="field"><label>Nom</label><input type="text" value={form.nom} onChange={e => updateField('nom', e.target.value)} /></div>

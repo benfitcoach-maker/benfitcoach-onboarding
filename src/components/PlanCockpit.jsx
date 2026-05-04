@@ -1,16 +1,16 @@
-// V96.20 — PlanCockpit : bandeau guide-Anissa pour la generation et la
-// livraison d'un plan nutrition. 4 macro-etapes (Preparer / Generer /
-// Affiner / Livrer) avec auto-detection des sous-checks. Compact par defaut,
-// expandable au click pour voir le detail de chaque etape.
+// V96.20 — PlanCockpit : bandeau guide-Anissa pour la génération et la
+// livraison d'un plan nutrition. 4 macro-étapes (Préparer / Générer /
+// Affiner / Livrer) avec auto-détection des sous-checks. Compact par défaut,
+// expandable au clic pour voir le détail de chaque étape.
 //
-// Philosophie : reduire la charge mentale d'Anissa, garantir qu'aucune etape
-// critique ne soit oubliee (lettre intro, fiche frigo, recettes, export Word).
+// Philosophie : réduire la charge mentale d'Anissa, garantir qu'aucune étape
+// critique ne soit oubliée (lettre intro, fiche frigo, recettes, export Word).
 //
-// Branche dans NutritionConsultation.jsx au-dessus de PlanQualityScore.
+// Branché dans NutritionConsultation.jsx au-dessus de PlanQualityScore.
 
 import { useState, useMemo } from 'react';
 // V96.21 — calcul live du profil composer (sinon on attend qu'Anissa
-// regenere pour voir les profils detectes dans le cockpit).
+// régénère pour voir les profils détectés dans le cockpit).
 import { detectClientProfile } from '../services/prompts/nutrition/profiles/_detector.fr';
 
 const COL_GREEN = '#6abf8a';
@@ -67,9 +67,9 @@ function CheckLine({ ok, label, hint, optional = false }) {
  * @param {object} props.consultation      Consultation actuelle (avec recipes, intro_letter, etc.)
  * @param {string} props.planDraft         Plan markdown courant
  * @param {string} props.supplementsDraft  Texte supplements
- * @param {boolean} props.hasPlan          true si plan deja genere
+ * @param {boolean} props.hasPlan          true si plan déjà généré
  * @param {object|null} props.liveScore    Score plan ({ normalized, hasHardFail })
- * @param {object|null} props.lastDetectedProfile  Profile composer detecte (badge)
+ * @param {object|null} props.lastDetectedProfile  Profil composer détecté (badge)
  * @param {string} props.aiDirectives      Directives texte libre par cliente
  * @param {boolean} props.composerBeta     Toggle composer actif
  * @param {boolean} props.isFollowup       Mode followup (sinon plan complet)
@@ -84,16 +84,16 @@ export default function PlanCockpit({
   const f = form || {};
   const c = consultation || {};
 
-  // V96.21 — Profil composer calcule en live depuis le form. V96.22 : on
-  // calcule meme si composer beta est OFF, pour qu'Anissa voie les profils
-  // potentiels et puisse decider d'activer le composer en connaissance de cause.
+  // V96.21 — Profil composer calculé en live depuis le form. V96.22 : on
+  // calcule même si composer bêta est OFF, pour qu'Anissa voie les profils
+  // potentiels et puisse décider d'activer le composer en connaissance de cause.
   const liveProfile = useMemo(() => {
     try { return detectClientProfile(f); }
     catch { return null; }
   }, [f]);
   const profileToDisplay = liveProfile || lastDetectedProfile;
 
-  // ─── Auto-detection des sous-checks par etape ───
+  // ─── Auto-détection des sous-checks par étape ───
   const checks = useMemo(() => {
     const hasDateNaissanceOrAge = Boolean(f.dateNaissance || f.age);
     const hasGenre = Boolean(f.genre);
@@ -121,25 +121,25 @@ export default function PlanCockpit({
     const wordExported = Boolean(c.word_exported_at || c.wordExportedAt);
 
     return {
-      // Etape 1 — PREPARER
+      // Étape 1 — PRÉPARER
       anamneseOk, hasLab, hasGenetic, profilesDetected, hasDirectives,
-      // Etape 2 — GENERER
+      // Étape 2 — GÉNÉRER
       planPresent, scoreOk, scoreModerate,
-      // Etape 3 — AFFINER
+      // Étape 3 — AFFINER
       fridgePresent, supplementsPresent, planReviewed,
-      // Etape 4 — LIVRER
+      // Étape 4 — LIVRER
       introLetter, recipesEnriched, wordExported,
     };
   }, [f, c, planDraft, supplementsDraft, hasPlan, liveScore, profileToDisplay, aiDirectives, composerBeta]);
 
-  // ─── Etat de chaque macro-etape (done / current / pending) ───
+  // ─── État de chaque macro-étape (done / current / pending) ───
   const stepsState = useMemo(() => {
     const step1Done = checks.anamneseOk;
     const step2Done = checks.planPresent;
     const step3Done = checks.fridgePresent && (isFollowup || checks.supplementsPresent);
     const step4Done = checks.introLetter && checks.recipesEnriched && checks.wordExported;
 
-    // current = premiere etape non-done
+    // current = première étape non-done
     let current = 1;
     if (step1Done) current = 2;
     if (step1Done && step2Done) current = 3;
@@ -147,8 +147,8 @@ export default function PlanCockpit({
     if (step1Done && step2Done && step3Done && step4Done) current = 0; // tout done
 
     return [
-      { id: 1, label: 'Preparer', done: step1Done, current: current === 1 },
-      { id: 2, label: 'Generer', done: step2Done, current: current === 2 },
+      { id: 1, label: 'Préparer', done: step1Done, current: current === 1 },
+      { id: 2, label: 'Générer', done: step2Done, current: current === 2 },
       { id: 3, label: 'Affiner', done: step3Done, current: current === 3 },
       { id: 4, label: 'Livrer', done: step4Done, current: current === 4 },
     ];
@@ -180,7 +180,7 @@ export default function PlanCockpit({
           color: totalDone === 4 ? COL_GREEN : 'rgba(255,255,255,.55)',
           fontWeight: 600,
         }}>
-          {totalDone}/4 etapes
+          {totalDone}/4 étapes
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
@@ -215,7 +215,7 @@ export default function PlanCockpit({
         </div>
       </div>
 
-      {/* Detail expandable de l'etape selectionnee */}
+      {/* Détail expandable de l'étape sélectionnée */}
       {expandedStep && (
         <div style={{
           marginTop: 10, paddingTop: 10,
@@ -223,58 +223,58 @@ export default function PlanCockpit({
         }}>
           {expandedStep === 1 && (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              <CheckLine ok={checks.anamneseOk} label="Anamnese complete (date naissance, genre, pathologies, allergies)" />
+              <CheckLine ok={checks.anamneseOk} label="Anamnèse complète (date naissance, genre, pathologies, allergies)" />
               <CheckLine ok={checks.profilesDetected} optional
-                label="Composer beta + profils cliniques detectes"
+                label="Composer bêta + profils cliniques détectés"
                 hint={(() => {
                   const profilsList = profileToDisplay?.all?.length > 0
                     ? profileToDisplay.all.join(' + ')
                     : null;
                   if (composerBeta && profilsList) return `Profils actifs dans le prompt : ${profilsList}`;
-                  if (composerBeta && !profilsList) return 'Composer beta active mais anamnese trop generique pour declencher un profil specifique';
-                  if (!composerBeta && profilsList) return `Profils potentiels (composer OFF, non injectes) : ${profilsList} \u2014 active le toggle pour les utiliser`;
-                  return 'Coche le toggle Composer beta a cote du bouton Generer pour activer la generation profil-aware';
+                  if (composerBeta && !profilsList) return 'Composer bêta actif mais anamnèse trop générique pour déclencher un profil spécifique';
+                  if (!composerBeta && profilsList) return `Profils potentiels (composer OFF, non injectés) : ${profilsList} \u2014 active le toggle pour les utiliser`;
+                  return 'Coche le toggle Composer bêta à côté du bouton Générer pour activer la génération profil-aware';
                 })()} />
-              <CheckLine ok={checks.hasLab} label="Bilan sanguin renseigne" optional />
-              <CheckLine ok={checks.hasGenetic} label="Analyse ADN renseignee" optional />
+              <CheckLine ok={checks.hasLab} label="Bilan sanguin renseigné" optional />
+              <CheckLine ok={checks.hasGenetic} label="Analyse ADN renseignée" optional />
               <CheckLine ok={checks.hasDirectives} label="Directives IA additionnelles" optional
-                hint={checks.hasDirectives ? `${aiDirectives.length} caracteres saisis` : 'Cas complexe : ajoute des consignes specifiques (refus aliment, contexte clinique...)'} />
+                hint={checks.hasDirectives ? `${aiDirectives.length} caractères saisis` : 'Cas complexe : ajoute des consignes spécifiques (refus aliment, contexte clinique...)'} />
             </ul>
           )}
           {expandedStep === 2 && (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              <CheckLine ok={checks.planPresent} label="Plan genere"
-                hint={checks.planPresent ? `${(planDraft || '').length} caracteres` : "Click 'Generer avec l'IA'"} />
+              <CheckLine ok={checks.planPresent} label="Plan généré"
+                hint={checks.planPresent ? `${(planDraft || '').length} caractères` : "Clique sur 'Générer avec l'IA'"} />
               <CheckLine ok={checks.scoreOk}
                 label={checks.scoreOk
-                  ? `Score qualite ${liveScore?.normalized?.toFixed(1)}/10 (excellent)`
+                  ? `Score qualité ${liveScore?.normalized?.toFixed(1)}/10 (excellent)`
                   : checks.scoreModerate
-                  ? `Score qualite ${liveScore?.normalized?.toFixed(1)}/10 (a ameliorer)`
-                  : 'Score qualite 8/10 minimum'}
-                hint={liveScore?.hasHardFail ? 'Echec critique detecte — voir details du score' : null}
+                  ? `Score qualité ${liveScore?.normalized?.toFixed(1)}/10 (à améliorer)`
+                  : 'Score qualité 8/10 minimum'}
+                hint={liveScore?.hasHardFail ? 'Échec critique détecté — voir détails du score' : null}
               />
             </ul>
           )}
           {expandedStep === 3 && (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              <CheckLine ok={checks.fridgePresent} label="Fiche frigo presente"
-                hint={onJumpTab ? "Onglet 'Fiche frigo' pour verifier/editer" : null} />
+              <CheckLine ok={checks.fridgePresent} label="Fiche frigo présente"
+                hint={onJumpTab ? "Onglet 'Fiche frigo' pour vérifier/éditer" : null} />
               {!isFollowup && (
-                <CheckLine ok={checks.supplementsPresent} label="Supplements rediges"
-                  hint={onJumpTab ? "Onglet 'Supplements' pour verifier" : null} />
+                <CheckLine ok={checks.supplementsPresent} label="Suppléments rédigés"
+                  hint={onJumpTab ? "Onglet 'Suppléments' pour vérifier" : null} />
               )}
-              <CheckLine ok={checks.planReviewed} label="Plan complet relu et ajuste" optional
+              <CheckLine ok={checks.planReviewed} label="Plan complet relu et ajusté" optional
                 hint="Click sur les sections du plan pour ajuster manuellement" />
             </ul>
           )}
           {expandedStep === 4 && (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              <CheckLine ok={checks.introLetter} label="Lettre d'introduction generee"
-                hint={onJumpTab ? "Onglet 'App cliente' > Lettre" : 'A generer dans l\u2019onglet App cliente'} />
+              <CheckLine ok={checks.introLetter} label="Lettre d'introduction générée"
+                hint={onJumpTab ? "Onglet 'App cliente' > Lettre" : 'À générer dans l\u2019onglet App cliente'} />
               <CheckLine ok={checks.recipesEnriched} label="Recettes app enrichies"
-                hint={onJumpTab ? "Onglet 'App cliente' > Recettes" : 'Necessaire avant publication app cliente'} optional />
-              <CheckLine ok={checks.wordExported} label="Export Word effectue"
-                hint="Bouton 'Word' en haut a droite de l'editeur" />
+                hint={onJumpTab ? "Onglet 'App cliente' > Recettes" : 'Nécessaire avant publication app cliente'} optional />
+              <CheckLine ok={checks.wordExported} label="Export Word effectué"
+                hint="Bouton 'Word' en haut à droite de l'éditeur" />
             </ul>
           )}
 
@@ -282,17 +282,17 @@ export default function PlanCockpit({
           {onJumpTab && expandedStep === 3 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
               <button type="button" onClick={() => onJumpTab('frigo')}
-                style={btnLink}>Aller a Fiche frigo {'\u2192'}</button>
+                style={btnLink}>Aller à Fiche frigo {'\u2192'}</button>
               {!isFollowup && (
                 <button type="button" onClick={() => onJumpTab('supp')}
-                  style={btnLink}>Aller a Supplements {'\u2192'}</button>
+                  style={btnLink}>Aller à Suppléments {'\u2192'}</button>
               )}
             </div>
           )}
           {onJumpTab && expandedStep === 4 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
               <button type="button" onClick={() => onJumpTab('app')}
-                style={btnLink}>Aller a App cliente {'\u2192'}</button>
+                style={btnLink}>Aller à App cliente {'\u2192'}</button>
             </div>
           )}
         </div>

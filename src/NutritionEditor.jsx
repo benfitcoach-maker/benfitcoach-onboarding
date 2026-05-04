@@ -1211,7 +1211,7 @@ export default function NutritionEditor({ planText, supplementsText, recipesText
                 value={newSectionTitle}
                 onChange={e => setNewSectionTitle(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleAddSection(); if (e.key === 'Escape') { setShowAddSection(false); setNewSectionTitle(''); } }}
-                placeholder="Ou saisissez un titre personnalisé..."
+                placeholder="Ou saisis un titre personnalisé..."
                 className="ne-add-section-input"
                 autoFocus
                 style={{ flex: 1 }}

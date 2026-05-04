@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations, saveClient } from './store';
 import { getCurrentUser } from './supabaseClient';
@@ -162,6 +163,7 @@ function getFollowUpStatus(clientId) {
 }
 
 function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview, onReturnPlan, onSendPackReview, onMarkProgramDelivered, onUnmarkProgramDelivered }) {
+  const confirmDialog = useConfirmDialog();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('loading');
   const [latestReview, setLatestReview] = useState(null);
@@ -208,13 +210,18 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
     || client.form?.objectifPrincipal
     || null;
 
-  const handleDelete = (e) => {
+  const handleDelete = async (e) => {
     e.stopPropagation();
     setMenuOpen(false);
-    if (confirm('Supprimer ce client ?')) {
-      deleteClient(client.id);
-      onRefresh();
-    }
+    const ok = await confirmDialog.ask({
+      title: 'Supprimer ce client',
+      message: 'Cette action est irréversible. Toutes les données associées seront perdues.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
+    deleteClient(client.id);
+    onRefresh();
   };
 
   const handleSendReview = async (e) => {
@@ -937,13 +944,17 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                     {'\ud83d\udcc5'} Modifier la date de remise
                   </button>
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      // eslint-disable-next-line no-alert
-                      if (window.confirm('Annuler le marquage de remise ? La timeline du suivi sera mise en pause jusqu\'a un nouveau marquage.')) {
-                        setMenuOpen(false);
-                        onUnmarkProgramDelivered?.(client.id);
-                      }
+                      const ok = await confirmDialog.ask({
+                        title: 'Annuler la remise ?',
+                        message: 'La timeline du suivi sera mise en pause jusqu\'à un nouveau marquage.',
+                        confirmLabel: 'Annuler la remise',
+                        danger: true,
+                      });
+                      if (!ok) return;
+                      setMenuOpen(false);
+                      onUnmarkProgramDelivered?.(client.id);
                     }}
                     style={{
                       display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
@@ -1063,6 +1074,7 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
           )}
         </div>
       </div>
+      <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
     </div>
   );
 }

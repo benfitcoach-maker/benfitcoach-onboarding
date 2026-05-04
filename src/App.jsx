@@ -607,7 +607,7 @@ function App() {
 
   const handleGenerate = async () => {
     if (!apiKey.trim()) {
-      setError('Entrez votre cle API Anthropic.');
+      setError('Entre ta clé API Anthropic.');
       return;
     }
     const client = handleSaveNoRedirect();
@@ -1229,9 +1229,9 @@ function App() {
               const prenom = formData.prenom || '';
 
               // App cliente URL — vit dans une env var pour pouvoir basculer
-              // entre staging/prod sans recompiler
+              // entre staging/prod sans recompiler.
               const APP_URL = import.meta?.env?.VITE_CLIENT_APP_URL
-                || 'https://anissa-client-app.vercel.app';
+                || 'https://app.anissanutrition.ch';
 
               let subject;
               let body;
@@ -1438,7 +1438,7 @@ function App() {
       {page === 'newCategory' && (
         <div className="category-selector">
           <h2>Nouveau client</h2>
-          <p className="category-subtitle">Choisissez le type de service</p>
+          <p className="category-subtitle">Choisis le type de service</p>
           <div className="category-cards">
             {Object.entries(CATEGORIES)
               .filter(([key]) => key !== 'online')

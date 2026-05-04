@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import { FORMULES, CATEGORIES, PRESENTIEL_PACKS } from './formSteps';
 import { deleteClient, updateClientStatus, getNutritionConsultations, syncBenoitNotifications, getNotifications, saveClient } from './store';
 import {
@@ -550,6 +551,7 @@ function getFormulaDisplay(client) {
 }
 
 export default function Dashboard({ clients, onOpen, onNew, onHistory, onRefresh, onNutrition, onOpenCalendar }) {
+  const confirmDialog = useConfirmDialog();
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterFormule, setFilterFormule] = useState('all');
@@ -777,12 +779,17 @@ export default function Dashboard({ clients, onOpen, onNew, onHistory, onRefresh
   };
   const totalBenoitCount = benoitNotifs.length;
 
-  const handleDelete = (e, id) => {
+  const handleDelete = async (e, id) => {
     e.stopPropagation();
-    if (confirm('Supprimer ce client ?')) {
-      deleteClient(id);
-      onRefresh();
-    }
+    const ok = await confirmDialog.ask({
+      title: 'Supprimer ce client',
+      message: 'Cette action est irréversible. Toutes les données associées seront perdues.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
+    deleteClient(id);
+    onRefresh();
   };
 
   const cycleStatus = (e, client) => {
@@ -832,16 +839,19 @@ export default function Dashboard({ clients, onOpen, onNew, onHistory, onRefresh
   };
 
   // V13 : marquer le questionnaire rempli en direct avec Benoit
-  const handleMarkQuestionnaireFilled = (e, client) => {
+  const handleMarkQuestionnaireFilled = async (e, client) => {
     e.stopPropagation();
     const prenom = client.prenom || client.form?.prenom || 'client';
-    if (typeof window !== 'undefined' && window.confirm) {
-      const already = client.form?.benoitQuestionnaireFilledAt;
-      const msg = already
-        ? `Ce client a déjà un questionnaire marqué comme fait (${already.slice(0,10)}). Écraser avec la date du jour (rempli avec Benoit) ?`
-        : `Marquer le questionnaire de ${prenom} comme rempli en direct avec Benoit ?`;
-      if (!window.confirm(msg)) return;
-    }
+    const already = client.form?.benoitQuestionnaireFilledAt;
+    const ok = await confirmDialog.ask({
+      title: already ? 'Écraser le questionnaire ?' : 'Marquer comme rempli ?',
+      message: already
+        ? `Ce client a déjà un questionnaire marqué comme fait (${already.slice(0, 10)}). Écraser avec la date du jour (rempli avec Benoit) ?`
+        : `Marquer le questionnaire de ${prenom} comme rempli en direct avec Benoit ?`,
+      confirmLabel: already ? 'Écraser' : 'Confirmer',
+      danger: Boolean(already),
+    });
+    if (!ok) return;
     const mergedForm = {
       ...(client.form || {}),
       benoitQuestionnaireFilledAt: new Date().toISOString(),
@@ -2032,6 +2042,7 @@ export default function Dashboard({ clients, onOpen, onNew, onHistory, onRefresh
           })}
         </div>
       )}
+      <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
     </div>
   );
 }

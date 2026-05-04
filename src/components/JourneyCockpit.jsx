@@ -133,7 +133,7 @@ export default function JourneyCockpit({ email, clientId, journey, onUpdated, cl
     if (currentStatus === "program_in_progress") {
       return (
         <div style={infoHintStyle}>
-          Cliquez sur &quot;Publier le programme&quot; en haut de l&apos;onglet pour passer à l&apos;étape suivante.
+          Clique sur &quot;Publier le programme&quot; en haut de l&apos;onglet pour passer à l&apos;étape suivante.
         </div>
       );
     }

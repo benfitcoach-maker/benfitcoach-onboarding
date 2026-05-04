@@ -55,7 +55,7 @@ export default function BenoitPaymentsPanel({ clientId, onRefresh }) {
   if (!client) {
     return (
       <div className="benoit-payments-panel" style={{ padding: 20, color: 'var(--text-muted)' }}>
-        Sélectionnez un client pour voir ses paiements.
+        Sélectionne un client pour voir ses paiements.
       </div>
     );
   }
