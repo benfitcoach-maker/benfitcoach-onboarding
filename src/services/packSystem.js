@@ -106,24 +106,27 @@ export const REVIEW_TEMPLATES = {
 /**
  * Calcule les étapes de suivi pour un client selon son pack.
  * Retourne un tableau d'étapes avec dates calculées et statuts.
+ *
+ * V96.27 — Le schedule ne demarre QUE si Anissa a marque le programme comme
+ * remis (packStartedAtConfirmed === true). Sinon retourne [] et l'UI affiche
+ * un etat "En attente remise programme" + bouton de marquage manuel.
+ * Compat retro : les clientes deja confirmees auto avant V96.27 conservent
+ * leur date d'origine.
  */
 export function buildPackFollowupSchedule(client) {
   const packType = client.packType || 'oneshot_180';
   const pack = PACK_DEFINITIONS[packType];
   if (!pack || pack.steps.length === 0) return [];
 
-  // Règle : pack_started_at = première consultation réelle
-  // Fallback : pack_started_at stocké → sinon createdAt
-  const resolveStartDate = (c) => {
-    if (c.packStartedAt) {
-      const stored = new Date(c.packStartedAt);
-      const created = new Date(c.createdAt || Date.now());
-      // packStartedAt valide = même jour ou postérieur à createdAt
-      if (stored >= created) return stored;
-    }
-    return new Date(c.createdAt || Date.now());
-  };
-  const startedAt = resolveStartDate(client);
+  // V96.27 : pas de schedule tant que la remise n'est pas confirmee manuellement
+  if (!client.packStartedAtConfirmed || !client.packStartedAt) {
+    return [];
+  }
+
+  const stored = new Date(client.packStartedAt);
+  const created = new Date(client.createdAt || Date.now());
+  // packStartedAt valide = même jour ou postérieur à createdAt
+  const startedAt = stored >= created ? stored : created;
 
   const packSchedule = client.packSchedule || [];
 

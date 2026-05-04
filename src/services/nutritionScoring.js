@@ -188,6 +188,10 @@ export function scorePlanQuality(planText, supplementsText, form, { isFollowup =
     notes.push('Aucune marque suisse mentionnee');
   }
 
+  // V96.16 — hardFail "Fiche frigo manquante" SUPPRIME : la fiche frigo est gere
+  // dans l'onglet dedie (fiche_frigo_json + fridgeDataBuilder), pas dans la
+  // section 5 du plan textuel. Faux positif a ne plus declencher.
+
   // --- TOTALS ---
   const total = coherence + simplicity + applicability + constraints;
   const normalized = Math.round((total / 40) * 100) / 10;
@@ -315,6 +319,27 @@ export function validatePlanForPDF(planText, planScore, { isFollowup = false } =
     const suppSection = text.slice(text.indexOf('supplement'), text.indexOf('tableau horaire') > 0 ? text.indexOf('tableau horaire') : undefined);
     if (tableauSection.includes('magnesium') && !suppSection.includes('magnesium')) {
       errors.push('Incoherence : magnesium dans le tableau mais absent des recommandations');
+    }
+  }
+
+  // V96.16 — check "section 5 FICHE FRIGO" SUPPRIME (la fiche frigo est gere
+  // dans l'onglet dedie via fridgeDataBuilder, faux positif). Les autres
+  // sections (1-4, 6-8) restent verifiees pour detecter de vrais saut de
+  // contenu structurel — Anissa peut juger en regardant le plan texte.
+  if (!isFollowup) {
+    const REQUIRED_SECTIONS = [
+      { regex: /(^|\n)\s*##?\s*1\.|analyse\s*du\s*profil/i, label: 'Analyse du profil (section 1)' },
+      { regex: /(^|\n)\s*##?\s*2\.|strategie\s*nutritionnelle/i, label: 'Strategie nutritionnelle (section 2)' },
+      { regex: /(^|\n)\s*##?\s*3\.|semaine\s*1/i, label: 'Semaine 1 (section 3)' },
+      { regex: /(^|\n)\s*##?\s*4\.|alternatives\s*par\s*repas/i, label: 'Alternatives par repas (section 4)' },
+      { regex: /(^|\n)\s*##?\s*6\.|protocoles\s*cibles/i, label: 'Protocoles cibles (section 6)' },
+      { regex: /(^|\n)\s*##?\s*7\.|ajustements\s*environnementaux/i, label: 'Ajustements environnementaux (section 7)' },
+      { regex: /(^|\n)\s*##?\s*8\.|recommandations\s*coach/i, label: 'Recommandations coach (section 8)' },
+    ];
+    for (const { regex, label } of REQUIRED_SECTIONS) {
+      if (!regex.test(planText || '')) {
+        errors.push(`Section obligatoire manquante : ${label}`);
+      }
     }
   }
 

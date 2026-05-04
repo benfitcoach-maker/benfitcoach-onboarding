@@ -259,9 +259,14 @@ export const FORMULES = {
   autonome: { nom: 'Autonome', prix: '150 CHF/mois', montant: 150 },
   suivi: { nom: 'Suivi Complet', prix: '350 CHF/mois', montant: 350 },
   intensif: { nom: 'Intensif', prix: '600 CHF/mois', montant: 600 },
-  pack10: { nom: 'Pack 10 Seances', prix: "1'200 CHF", montant: 1200 },
-  pack20: { nom: 'Pack 20 Seances', prix: "2'200 CHF", montant: 2200 },
-  pack30: { nom: 'Pack 30 Seances', prix: "3'000 CHF", montant: 3000 },
+  pack10: { nom: 'Pack 10', prix: "1'200 CHF", montant: 1200 },
+  // V96.30 — label neutre (anciennement "Pack 20 Seances" / "Pack 30 Seances").
+  // Le mot "Seances" sonnait Presentiel et apparaissait sur les cards des
+  // clientes Coaching Online (Ana, Rebecca) ce qui creait une confusion. Le
+  // contexte (badge categorie de la card) clarifie deja s'il s'agit de
+  // seances IRL ou suivi distance.
+  pack20: { nom: 'Pack 20', prix: "2'200 CHF", montant: 2200 },
+  pack30: { nom: 'Pack 30', prix: "3'000 CHF", montant: 3000 },
   massage: { nom: 'Massotherapie', prix: '120 CHF/h', montant: 120 },
   custom: { nom: 'Tarif personnalise', prix: 'Personnalise', montant: 0 },
 };
@@ -271,8 +276,8 @@ export const FORMULE_OPTIONS_FR = [
   { value: 'suivi', label: 'Suivi Complet - 350 CHF/mois' },
   { value: 'intensif', label: 'Intensif - 600 CHF/mois (3 mois)' },
   { value: 'pack10', label: "Pack 10 Seances - 1'200 CHF" },
-  { value: 'pack20', label: "Pack 20 Seances - 2'200 CHF" },
-  { value: 'pack30', label: "Pack 30 Seances - 3'000 CHF" },
+  { value: 'pack20', label: "Pack 20 - 2'200 CHF" },
+  { value: 'pack30', label: "Pack 30 - 3'000 CHF" },
   { value: 'massage', label: 'Massotherapie - 120 CHF/h' },
   { value: 'custom', label: 'Tarif personnalise' },
 ];
@@ -282,8 +287,8 @@ export const FORMULE_OPTIONS_EN = [
   { value: 'suivi', label: 'Full Support - 350 CHF/month' },
   { value: 'intensif', label: 'Intensive - 600 CHF/month (3 months)' },
   { value: 'pack10', label: "Pack 10 Sessions - 1'200 CHF" },
-  { value: 'pack20', label: "Pack 20 Sessions - 2'200 CHF" },
-  { value: 'pack30', label: "Pack 30 Sessions - 3'000 CHF" },
+  { value: 'pack20', label: "Pack 20 - 2'200 CHF" },
+  { value: 'pack30', label: "Pack 30 - 3'000 CHF" },
   { value: 'massage', label: 'Massage Therapy - 120 CHF/h' },
   { value: 'custom', label: 'Custom Rate' },
 ];

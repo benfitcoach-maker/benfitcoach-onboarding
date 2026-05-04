@@ -34,6 +34,7 @@ function QuestionnaireClient({ clientId }) {
     prenom: '',
     nom: '',
     age: '',
+    dateNaissance: '',     // V96.18 — privilegie sur age (calcul auto)
     genre: '',
     poids: '',
     taille: '',
@@ -56,6 +57,13 @@ function QuestionnaireClient({ clientId }) {
     emotional_shock: '',
     emotional_shock_details: '',
     pretProtocole: '',
+    // V96.18 — femme : etat reproductif/maternel actuel (Oui/Non + details)
+    grossesseActuelle: '',     // Oui | Non
+    grossesseTrimestre: '',    // T1 | T2 | T3
+    allaitement: '',           // Oui | Non
+    allaitementMois: '',       // duree en mois
+    postPartum: '',            // Oui | Non (hors allaitement)
+    postPartumMois: '',        // mois depuis accouchement
   });
 
   // Load existing client data
@@ -83,7 +91,15 @@ function QuestionnaireClient({ clientId }) {
           prenom: f.prenom || data.prenom || '',
           nom: f.nom || '',
           age: f.age || '',
+          dateNaissance: f.dateNaissance || '',
           genre: f.genre || '',
+          // V96.18 hydrate champs maternels existants
+          grossesseActuelle: f.grossesseActuelle || '',
+          grossesseTrimestre: f.grossesseTrimestre || '',
+          allaitement: f.allaitement || '',
+          allaitementMois: f.allaitementMois || '',
+          postPartum: f.postPartum || '',
+          postPartumMois: f.postPartumMois || '',
           poids: f.poids || '',
           taille: f.taille || '',
           email: f.email || '',
@@ -360,8 +376,14 @@ function QuestionnaireClient({ clientId }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
               <div>
-                <label className="q-label">Age</label>
-                <input className="q-input" type="number" value={form.age} onChange={e => update('age', e.target.value)} />
+                <label className="q-label">Date de naissance</label>
+                <input
+                  className="q-input"
+                  type="date"
+                  value={form.dateNaissance}
+                  onChange={e => update('dateNaissance', e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                />
               </div>
               <div>
                 <label className="q-label">Poids (kg)</label>
@@ -413,6 +435,62 @@ function QuestionnaireClient({ clientId }) {
               <label className="q-label">Allergies alimentaires</label>
               <textarea className="q-textarea" rows={3} value={form.allergies} onChange={e => update('allergies', e.target.value)} placeholder="Gluten, lactose, fruits a coque..." />
             </div>
+
+            {/* V96.18 — Etat reproductif/maternel actuel (femmes) */}
+            {form.genre === 'F' && (
+              <div className="q-field" style={{ marginTop: 8, padding: 14, borderRadius: 10, background: 'rgba(106,191,138,.05)', border: '1px solid rgba(106,191,138,.15)' }}>
+                <label className="q-label" style={{ marginBottom: 10, fontWeight: 600 }}>Etat actuel</label>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label className="q-label" style={{ fontSize: '.85rem' }}>Etes-vous enceinte actuellement ?</label>
+                  <BtnGroup field="grossesseActuelle" options={[
+                    { value: 'Oui', label: 'Oui' },
+                    { value: 'Non', label: 'Non' },
+                  ]} columns={2} />
+                </div>
+
+                {form.grossesseActuelle === 'Oui' && (
+                  <div style={{ marginBottom: 12 }}>
+                    <label className="q-label" style={{ fontSize: '.85rem' }}>Trimestre</label>
+                    <BtnGroup field="grossesseTrimestre" options={[
+                      { value: 'T1', label: 'T1 (1-3 mois)' },
+                      { value: 'T2', label: 'T2 (4-6 mois)' },
+                      { value: 'T3', label: 'T3 (7-9 mois)' },
+                    ]} columns={3} />
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 12 }}>
+                  <label className="q-label" style={{ fontSize: '.85rem' }}>Allaitez-vous actuellement ?</label>
+                  <BtnGroup field="allaitement" options={[
+                    { value: 'Oui', label: 'Oui' },
+                    { value: 'Non', label: 'Non' },
+                  ]} columns={2} />
+                </div>
+
+                {form.allaitement === 'Oui' && (
+                  <div style={{ marginBottom: 12 }}>
+                    <label className="q-label" style={{ fontSize: '.85rem' }}>Depuis combien de mois ?</label>
+                    <input className="q-input" type="number" min="0" max="36" value={form.allaitementMois} onChange={e => update('allaitementMois', e.target.value)} placeholder="Ex: 6" />
+                  </div>
+                )}
+
+                <div style={{ marginBottom: form.postPartum === 'Oui' ? 12 : 0 }}>
+                  <label className="q-label" style={{ fontSize: '.85rem' }}>Etes-vous en post-partum (sans allaitement) ?</label>
+                  <BtnGroup field="postPartum" options={[
+                    { value: 'Oui', label: 'Oui' },
+                    { value: 'Non', label: 'Non' },
+                  ]} columns={2} />
+                </div>
+
+                {form.postPartum === 'Oui' && (
+                  <div>
+                    <label className="q-label" style={{ fontSize: '.85rem' }}>Mois depuis l&apos;accouchement</label>
+                    <input className="q-input" type="number" min="0" max="24" value={form.postPartumMois} onChange={e => update('postPartumMois', e.target.value)} placeholder="Ex: 4" />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

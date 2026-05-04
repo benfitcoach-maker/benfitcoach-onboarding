@@ -889,6 +889,7 @@ export function saveNutritionConsultation(consultation) {
     labResults: consultation.labResults || {},
     geneticResults: consultation.geneticResults || {},
     aiAnalysis: consultation.aiAnalysis || null,
+    aiDirectives: consultation.aiDirectives || '', // V96.19 — override texte libre par cliente
     isFollowup: consultation.isFollowup || false,
     followupData: consultation.followupData || null,
     previousConsultationId: consultation.previousConsultationId || null,

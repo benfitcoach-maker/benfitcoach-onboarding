@@ -161,7 +161,7 @@ function getFollowUpStatus(clientId) {
   return null;
 }
 
-function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview, onReturnPlan, onSendPackReview }) {
+function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHistory, onOpen, isOwn, onRefresh, onViewReview, onReturnPlan, onSendPackReview, onMarkProgramDelivered, onUnmarkProgramDelivered }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('loading');
   const [latestReview, setLatestReview] = useState(null);
@@ -179,6 +179,21 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   const completion = isFollowupPack ? getPackCompletion(client) : null;
   const showSendBtn = canSendPackReview(nextStep);
   const packSteps = isFollowupPack ? buildPackFollowupSchedule(client) : [];
+
+  // V96.27 — Etat remise programme (= packStartedAtConfirmed) + mini-modal date
+  const isDelivered = isFollowupPack && client.packStartedAtConfirmed === true && Boolean(client.packStartedAt);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliveryDateInput, setDeliveryDateInput] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const totalPackDays = packDef?.durationWeeks ? packDef.durationWeeks * 7 : null;
+  const daysSinceDelivery = isDelivered
+    ? Math.max(0, Math.floor((Date.now() - new Date(client.packStartedAt).getTime()) / 86400000))
+    : null;
+  // Position en % de la bulle "today" sur la timeline (0-100)
+  const todayProgressPct = isDelivered && totalPackDays
+    ? Math.min(100, Math.max(0, (daysSinceDelivery / totalPackDays) * 100))
+    : 0;
 
   useEffect(() => {
     getCycleReviews(client.id).then(reviews => {
@@ -421,148 +436,285 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               </div>
             )}
 
-            {/* Timeline horizontale */}
-            {packSteps.length > 0 && (
-              <div style={{ marginBottom: 8 }}>
-                {/* Ligne avec points */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0,
-                  marginBottom: 5,
-                }}>
-                  {packSteps.map((step, idx) => {
-                    const isActive = nextStep?.stepNumber === step.stepNumber;
-                    const isDone = step.status === 'done';
-                    const isLate = step.isLate;
-                    const dotColor = isDone ? '#22c55e'
-                      : isLate ? '#f87171'
-                      : isActive ? '#c5b07a'
-                      : 'rgba(255,255,255,.15)';
-                    const dotSize = isActive ? 12 : 8;
-                    return (
-                      <div
-                        key={step.stepNumber}
-                        style={{
-                          display: 'flex', alignItems: 'center',
-                          flex: idx < packSteps.length - 1 ? 1 : 'none',
-                          position: 'relative',
-                        }}
-                        onMouseEnter={() => setHoveredStep(step.stepNumber)}
-                        onMouseLeave={() => setHoveredStep(null)}
-                      >
-                        {hoveredStep === step.stepNumber && (
-                          <div
-                            className="pack-step-tooltip"
-                            style={{
-                              position: 'absolute',
-                              bottom: '100%',
-                              left: idx === packSteps.length - 1 ? 'auto' : '50%',
-                              right: idx === packSteps.length - 1 ? 0 : 'auto',
-                              transform: idx === 0 ? 'translateX(0)'
-                                : idx === packSteps.length - 1 ? 'translateX(0)'
-                                : 'translateX(-50%)',
-                              marginBottom: 8,
-                              background: 'rgba(20,32,22,.97)',
-                              border: '1px solid rgba(197,176,122,.2)',
-                              borderRadius: 8,
-                              padding: '7px 10px',
-                              whiteSpace: 'nowrap',
-                              zIndex: 10,
-                              pointerEvents: 'none',
-                              minWidth: 160,
-                            }}
-                          >
-                            <div style={{
-                              fontSize: '.72rem', fontWeight: 600,
-                              color: '#c5b07a', marginBottom: 3,
-                            }}>
-                              {step.label}
-                            </div>
-                            <div style={{
-                              fontSize: '.68rem',
-                              color: step.status === 'done' ? '#22c55e'
-                                : step.isLate ? '#f87171'
-                                : step.status === 'sent' ? '#fbbf24'
-                                : 'rgba(255,255,255,.4)',
-                            }}>
-                              {step.status === 'done' ? '✓ Complété'
-                                : step.status === 'sent' ? '⏳ Envoyé'
-                                : step.isLate ? '⚠️ En retard'
-                                : step.isDueSoon ? '→ À envoyer cette semaine'
-                                : '○ À venir'}
-                            </div>
-                            {step.dueDate && step.status !== 'done' && (
-                              <div style={{
-                                fontSize: '.65rem',
-                                color: 'rgba(255,255,255,.25)',
-                                marginTop: 3,
-                              }}>
-                                {new Date(step.dueDate).toLocaleDateString('fr-CH', {
-                                  day: 'numeric', month: 'short'
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div
-                          className={isActive ? 'pack-dot-active' : undefined}
-                          style={{
-                          width: dotSize, height: dotSize,
-                          borderRadius: '50%', background: dotColor,
-                          border: isActive
-                            ? '2px solid rgba(197,176,122,.4)'
-                            : isDone
-                            ? '2px solid rgba(34,197,94,.3)'
-                            : '2px solid rgba(255,255,255,.1)',
-                          flexShrink: 0, transition: 'all .2s',
-                          boxShadow: isActive ? '0 0 6px rgba(197,176,122,.6)' : 'none',
-                          boxSizing: 'border-box',
-                        }} />
-                        {idx < packSteps.length - 1 && (
-                          <div style={{
-                            flex: 1, height: 1.5,
-                            background: isDone
-                              ? 'rgba(34,197,94,.4)'
-                              : 'rgba(255,255,255,.08)',
-                            margin: '0 2px',
-                          }} />
-                        )}
-                      </div>
-                    );
-                  })}
+            {/* V96.28 — Etat "Programme à remettre" — clinique pro */}
+            {isFollowupPack && !isDelivered && !showDeliveryModal && (
+              <div style={{
+                marginBottom: 12,
+                padding: '14px 16px',
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(197,176,122,.06) 0%, rgba(197,176,122,.02) 100%)',
+                border: '1px solid rgba(197,176,122,.18)',
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+              }}>
+                <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: 'rgba(197,176,122,.12)',
+                    border: '1px solid rgba(197,176,122,.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.1rem', flexShrink: 0,
+                  }}>
+                    {'\ud83d\udce6'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '.82rem', fontWeight: 600, color: '#d8c89a', marginBottom: 2, letterSpacing: '.01em' }}>
+                      Programme à remettre
+                    </div>
+                    <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.45)', lineHeight: 1.45 }}>
+                      Le suivi clinique démarre dès la remise. Marquer la date pour activer la timeline.
+                    </div>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeliveryDateInput(new Date().toISOString().slice(0, 10));
+                    setShowDeliveryModal(true);
+                  }}
+                  style={{
+                    padding: '9px 16px', borderRadius: 9, border: '1px solid rgba(197,176,122,.4)',
+                    background: 'rgba(197,176,122,.15)', color: '#e0cd96',
+                    fontSize: '.76rem', fontWeight: 600, cursor: 'pointer',
+                    whiteSpace: 'nowrap', letterSpacing: '.02em',
+                    transition: 'all .15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(197,176,122,.22)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(197,176,122,.15)'; }}
+                >
+                  Marquer comme remis
+                </button>
+              </div>
+            )}
 
-                {/* Labels S4, S8... */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}>
-                  {packSteps.map((step, idx) => {
-                    const isActive = nextStep?.stepNumber === step.stepNumber;
-                    const isDone = step.status === 'done';
-                    const isLate = step.isLate;
-                    const labelColor = isDone ? 'rgba(34,197,94,.7)'
-                      : isLate ? '#f87171'
-                      : isActive ? '#c5b07a'
-                      : 'rgba(255,255,255,.2)';
-                    return (
-                      <div key={step.stepNumber} style={{
-                        fontSize: '.62rem', color: labelColor,
-                        fontWeight: isActive ? 700 : 400,
-                        textAlign: idx === 0 ? 'left'
-                          : idx === packSteps.length - 1 ? 'right'
-                          : 'center',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        S{step.weekOffset}
-                      </div>
-                    );
-                  })}
+            {/* V96.28 — Mini-modal date remise — design clinique */}
+            {showDeliveryModal && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  marginBottom: 12, padding: 16, borderRadius: 12,
+                  background: 'rgba(20, 32, 22, .85)',
+                  border: '1px solid rgba(197,176,122,.35)',
+                  boxShadow: '0 4px 16px rgba(0,0,0,.35)',
+                }}
+              >
+                <div style={{ fontSize: '.78rem', fontWeight: 600, color: '#e0cd96', marginBottom: 4, letterSpacing: '.01em' }}>
+                  Date de remise du programme
+                </div>
+                <div style={{ fontSize: '.68rem', color: 'rgba(255,255,255,.45)', marginBottom: 12 }}>
+                  La cliente a reçu son dossier en mains à cette date. La timeline démarre ce jour-là (J0).
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    type="date"
+                    value={deliveryDateInput}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setDeliveryDateInput(e.target.value)}
+                    style={{
+                      padding: '8px 12px', borderRadius: 7, fontSize: '.85rem',
+                      background: 'rgba(0,0,0,.4)', color: '#f0f0e8',
+                      border: '1px solid rgba(255,255,255,.18)',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const iso = new Date(deliveryDateInput + 'T00:00:00').toISOString();
+                      onMarkProgramDelivered?.(client.id, iso);
+                      setShowDeliveryModal(false);
+                    }}
+                    style={{
+                      padding: '8px 14px', borderRadius: 7, border: 'none',
+                      background: '#5fbd82', color: '#0e150f',
+                      fontSize: '.76rem', fontWeight: 700, cursor: 'pointer',
+                      letterSpacing: '.02em',
+                    }}
+                  >
+                    Confirmer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeliveryModal(false)}
+                    style={{
+                      padding: '8px 14px', borderRadius: 7,
+                      background: 'transparent', color: 'rgba(255,255,255,.55)',
+                      border: '1px solid rgba(255,255,255,.12)',
+                      fontSize: '.76rem', cursor: 'pointer',
+                    }}
+                  >
+                    Annuler
+                  </button>
                 </div>
               </div>
             )}
+
+            {/* V96.28 — Timeline temporelle (jalons positionnes au % temps reel) */}
+            {isDelivered && packSteps.length > 0 && totalPackDays && (() => {
+              const trackHeight = 6;
+              const labelLineH = 18;
+              const dotSize = 11;
+              const todaySize = 16;
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  {/* En-tete : chip remis + jour J */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    marginBottom: 12, gap: 12, flexWrap: 'wrap',
+                  }}>
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '5px 11px', borderRadius: 999,
+                      background: 'rgba(95,189,130,.12)',
+                      border: '1px solid rgba(95,189,130,.28)',
+                      fontSize: '.7rem', fontWeight: 600, color: '#7fcd9b',
+                    }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: '#5fbd82', boxShadow: '0 0 5px #5fbd82',
+                      }} />
+                      Programme remis le {new Date(client.packStartedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </div>
+                    <div style={{
+                      fontSize: '.7rem', color: 'rgba(255,255,255,.45)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      Jour <span style={{ color: '#e0cd96', fontWeight: 700 }}>{daysSinceDelivery}</span>
+                      <span style={{ color: 'rgba(255,255,255,.25)' }}> / {totalPackDays}</span>
+                      <span style={{ color: 'rgba(255,255,255,.3)', marginLeft: 6 }}>
+                        ({Math.round(todayProgressPct)}%)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Track + jalons + bulle today, positionnement absolu au % temporel reel */}
+                  <div style={{
+                    position: 'relative',
+                    height: trackHeight + dotSize + labelLineH + 8,
+                    margin: '0 8px',  // marge pour eviter clipping bulle aux extremites
+                  }}>
+                    {/* Track de fond */}
+                    <div style={{
+                      position: 'absolute', top: dotSize / 2 + (todaySize - dotSize) / 2, left: 0, right: 0,
+                      height: trackHeight, borderRadius: trackHeight / 2,
+                      background: 'rgba(255,255,255,.05)',
+                      border: '1px solid rgba(255,255,255,.04)',
+                    }} />
+                    {/* Track rempli (progression doree jusqu'a today) */}
+                    <div style={{
+                      position: 'absolute', top: dotSize / 2 + (todaySize - dotSize) / 2, left: 0,
+                      width: `${todayProgressPct}%`,
+                      height: trackHeight, borderRadius: trackHeight / 2,
+                      background: 'linear-gradient(90deg, rgba(197,176,122,.45) 0%, rgba(224,205,150,.7) 100%)',
+                      boxShadow: '0 0 8px rgba(197,176,122,.25)',
+                      transition: 'width .4s ease',
+                    }} />
+
+                    {/* Jalons positionnes au % temporel reel */}
+                    {packSteps.map((step) => {
+                      const pct = Math.min(100, Math.max(0, (step.weekOffset / packDef.durationWeeks) * 100));
+                      const isActive = nextStep?.stepNumber === step.stepNumber;
+                      const isDone = step.status === 'done';
+                      const isLate = step.isLate;
+                      const isPast = (step.weekOffset * 7) <= daysSinceDelivery;
+                      const dotColor = isDone ? '#5fbd82'
+                        : isLate ? '#e57c6c'
+                        : isPast ? '#e0cd96'
+                        : 'rgba(255,255,255,.18)';
+                      const ringColor = isActive ? 'rgba(224,205,150,.45)'
+                        : isDone ? 'rgba(95,189,130,.3)'
+                        : isLate ? 'rgba(229,124,108,.3)'
+                        : 'rgba(255,255,255,.08)';
+                      return (
+                        <div
+                          key={step.stepNumber}
+                          onMouseEnter={() => setHoveredStep(step.stepNumber)}
+                          onMouseLeave={() => setHoveredStep(null)}
+                          style={{
+                            position: 'absolute',
+                            left: `calc(${pct}% - ${dotSize / 2}px)`,
+                            top: (todaySize - dotSize) / 2,
+                            width: dotSize, height: dotSize, borderRadius: '50%',
+                            background: dotColor, border: `2px solid ${ringColor}`,
+                            boxSizing: 'border-box',
+                            cursor: 'help',
+                            transition: 'all .2s',
+                            zIndex: 2,
+                          }}
+                        >
+                          {/* Label sous le jalon (S4, S8...) */}
+                          <div style={{
+                            position: 'absolute',
+                            top: dotSize + 8, left: '50%', transform: 'translateX(-50%)',
+                            fontSize: '.62rem', fontWeight: isActive ? 700 : 500,
+                            color: isDone ? 'rgba(95,189,130,.85)'
+                              : isLate ? '#e57c6c'
+                              : isActive ? '#e0cd96'
+                              : 'rgba(255,255,255,.35)',
+                            letterSpacing: '.02em',
+                            whiteSpace: 'nowrap',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}>
+                            S{step.weekOffset}
+                          </div>
+                          {/* Tooltip sur hover */}
+                          {hoveredStep === step.stepNumber && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: dotSize + 10, left: '50%', transform: 'translateX(-50%)',
+                              minWidth: 170, padding: '8px 11px', borderRadius: 8,
+                              background: 'rgba(14,21,15,.97)',
+                              border: '1px solid rgba(197,176,122,.25)',
+                              boxShadow: '0 4px 12px rgba(0,0,0,.4)',
+                              zIndex: 30, pointerEvents: 'none',
+                            }}>
+                              <div style={{ fontSize: '.72rem', fontWeight: 600, color: '#e0cd96', marginBottom: 4 }}>
+                                {step.label}
+                              </div>
+                              <div style={{
+                                fontSize: '.66rem',
+                                color: isDone ? '#5fbd82'
+                                  : isLate ? '#e57c6c'
+                                  : step.status === 'sent' ? '#e0cd96'
+                                  : 'rgba(255,255,255,.5)',
+                              }}>
+                                {isDone ? '\u2713 Complete'
+                                  : step.status === 'sent' ? '\u23f3 Envoye'
+                                  : isLate ? '\u26a0 En retard'
+                                  : step.isDueSoon ? '\u2192 A envoyer cette semaine'
+                                  : '\u25cb A venir'}
+                              </div>
+                              {step.dueDate && (
+                                <div style={{ fontSize: '.62rem', color: 'rgba(255,255,255,.35)', marginTop: 3 }}>
+                                  {new Date(step.dueDate).toLocaleDateString('fr-CH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Bulle "aujourd'hui" — design clinique soigne */}
+                    <div
+                      title={`Aujourd'hui — Jour ${daysSinceDelivery} sur ${totalPackDays}`}
+                      style={{
+                        position: 'absolute',
+                        left: `calc(${todayProgressPct}% - ${todaySize / 2}px)`,
+                        top: 0,
+                        width: todaySize, height: todaySize, borderRadius: '50%',
+                        background: '#e0cd96',
+                        border: '3px solid rgba(14,21,15,1)',
+                        boxShadow: '0 0 0 2px rgba(197,176,122,.35), 0 0 12px rgba(197,176,122,.5)',
+                        zIndex: 4,
+                        transition: 'left .4s ease',
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Prochaine étape texte */}
             {nextStep && (
@@ -729,27 +881,81 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
               <SendQuestionnaireButton client={client} />
               {/* V94.60 : raccourci direct vers l'onglet 'App cliente' de la
                   consultation. Set un flag localStorage que NutritionConsultation
-                  lit au mount pour ouvrir direct sur le hub App cliente. */}
-              {consultations.length > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(false);
-                    try { localStorage.setItem('bfc_open_consultation_tab', 'app'); } catch { /* */ }
-                    onConsultation(client.id);
-                  }}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left',
-                    padding: '10px 16px', background: 'none', border: 'none',
-                    color: '#82c39e', cursor: 'pointer', fontSize: '.85rem',
-                    transition: 'background .15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(130,195,158,.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                >
-                  📱 Espace app cliente
-                </button>
+                  lit au mount pour ouvrir direct sur le hub App cliente.
+                  V96.8 (fix) : ouvre la derniere consultation existante via
+                  onEditConsultation (au lieu de demarrer une nouvelle conso vide
+                  via onConsultation). Bouton desactive si pas de consultation. */}
+              {(() => {
+                const lastConsultation = consultations[0] || null;
+                const disabled = !lastConsultation || !onEditConsultation;
+                return (
+                  <button
+                    disabled={disabled}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (disabled) return;
+                      setMenuOpen(false);
+                      try { localStorage.setItem('bfc_open_consultation_tab', 'app'); } catch { /* */ }
+                      onEditConsultation(lastConsultation);
+                    }}
+                    title={disabled ? 'Aucune consultation existante — cree une consultation d\'abord' : ''}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '10px 16px', background: 'none', border: 'none',
+                      color: disabled ? 'rgba(130,195,158,.35)' : '#82c39e',
+                      cursor: disabled ? 'not-allowed' : 'pointer',
+                      fontSize: '.85rem',
+                      opacity: disabled ? 0.5 : 1,
+                      transition: 'background .15s',
+                    }}
+                    onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = 'rgba(130,195,158,.08)'; }}
+                    onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = 'none'; }}
+                  >
+                    📱 Espace app cliente
+                  </button>
+                );
+              })()}
+
+              {/* V96.27 — Actions sur le marquage de remise programme (pack suivi uniquement) */}
+              {isFollowupPack && isDelivered && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      setDeliveryDateInput(client.packStartedAt
+                        ? new Date(client.packStartedAt).toISOString().slice(0, 10)
+                        : new Date().toISOString().slice(0, 10));
+                      setShowDeliveryModal(true);
+                    }}
+                    style={{
+                      display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
+                      background:'none', border:'none', color:'#e8a040', cursor:'pointer',
+                      fontSize:'.85rem',
+                    }}
+                  >
+                    {'\ud83d\udcc5'} Modifier la date de remise
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // eslint-disable-next-line no-alert
+                      if (window.confirm('Annuler le marquage de remise ? La timeline du suivi sera mise en pause jusqu\'a un nouveau marquage.')) {
+                        setMenuOpen(false);
+                        onUnmarkProgramDelivered?.(client.id);
+                      }
+                    }}
+                    style={{
+                      display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
+                      background:'none', border:'none', color:'rgba(255,255,255,.55)', cursor:'pointer',
+                      fontSize:'.85rem',
+                    }}
+                  >
+                    {'\u21ba'} Annuler la remise
+                  </button>
+                </>
               )}
+
               {/* Séparateur */}
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
 
@@ -861,7 +1067,7 @@ function ClientCard({ client, i, onConsultation, onViewHistory, onOpen, isOwn, o
   );
 }
 
-export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan, onReturnPlan, onSendPackReview }) {
+export default function AnissaDashboard({ sharedClients, ownClients, onConsultation, onEditConsultation, onViewHistory, onNewClient, onOpenClient, onRefresh, onAdaptPlan, onReturnPlan, onSendPackReview, onMarkProgramDelivered, onUnmarkProgramDelivered }) {
   const [search, setSearch] = useState('');
   // V94.16 : filtre rapide par statut client (all / active / hors_app / recontact)
   const [statusFilter, setStatusFilter] = useState('all');
@@ -1100,7 +1306,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               </h3>
               <div className="anissa-client-list">
                 {filteredOwn.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onEditConsultation={onEditConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={true} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} onMarkProgramDelivered={onMarkProgramDelivered} onUnmarkProgramDelivered={onUnmarkProgramDelivered} />
                 ))}
               </div>
             </div>
@@ -1115,7 +1321,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               </h3>
               <div className="anissa-client-list">
                 {filteredShared.map((client, i) => (
-                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} />
+                  <ClientCard key={client.id} client={client} i={i} onConsultation={onConsultation} onViewHistory={onViewHistory} onOpen={onOpenClient} isOwn={false} onRefresh={onRefresh} onViewReview={(review, c) => { setSelectedReview(review); setSelectedReviewClient(c); }} onReturnPlan={(c) => { if (onReturnPlan) onReturnPlan(c); }} onSendPackReview={onSendPackReview} onMarkProgramDelivered={onMarkProgramDelivered} onUnmarkProgramDelivered={onUnmarkProgramDelivered} />
                 ))}
               </div>
             </div>

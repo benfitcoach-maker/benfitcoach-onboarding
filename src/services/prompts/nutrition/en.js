@@ -11,7 +11,7 @@
 //  - FR prompts are never imported here — zero risk of bleed.
 //  - Called only when getClientNutritionLocale(client) === 'EN'.
 
-import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './services/anissaIdentityEn';
+import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './identity.en';
 
 // ─── SYSTEM PROMPT (identity + clinical rules + style) ───
 

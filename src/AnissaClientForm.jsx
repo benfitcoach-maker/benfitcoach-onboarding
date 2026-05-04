@@ -199,7 +199,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
           <div className="form-grid">
             <div className="field"><label>Prenom *</label><input type="text" value={form.prenom} onChange={e => updateField('prenom', e.target.value)} /></div>
             <div className="field"><label>Nom</label><input type="text" value={form.nom} onChange={e => updateField('nom', e.target.value)} /></div>
-            <div className="field"><label>Age</label><input type="number" value={form.age} onChange={e => updateField('age', e.target.value)} /></div>
+            <div className="field"><label>Date de naissance</label><input type="date" max={new Date().toISOString().slice(0, 10)} value={form.dateNaissance || ''} onChange={e => updateField('dateNaissance', e.target.value)} /></div>
             <div className="field"><label>Genre</label><select value={form.genre} onChange={e => updateField('genre', e.target.value)}><option value="">-</option><option value="Homme">Homme</option><option value="Femme">Femme</option></select></div>
             <div className="field"><label>Poids (kg)</label><input type="number" value={form.poids} onChange={e => updateField('poids', e.target.value)} /></div>
             <div className="field"><label>Taille (cm)</label><input type="number" value={form.taille} onChange={e => updateField('taille', e.target.value)} /></div>
@@ -241,6 +241,19 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
           <h3>Sante femme</h3>
           {isFemme ? (
             <div className="form-grid">
+              {/* V96.18 — Etat reproductif/maternel actuel (cle pour modules grossesse/allaitement/postPartum du composer beta) */}
+              <div className="field"><label>Grossesse en cours ?</label><select value={form.grossesseActuelle || ''} onChange={e => updateField('grossesseActuelle', e.target.value)}><option value="">-</option><option value="Oui">Oui</option><option value="Non">Non</option></select></div>
+              {form.grossesseActuelle === 'Oui' && (
+                <div className="field"><label>Trimestre</label><select value={form.grossesseTrimestre || ''} onChange={e => updateField('grossesseTrimestre', e.target.value)}><option value="">-</option><option value="T1">T1 (1-3 mois)</option><option value="T2">T2 (4-6 mois)</option><option value="T3">T3 (7-9 mois)</option></select></div>
+              )}
+              <div className="field"><label>Allaitement ?</label><select value={form.allaitement || ''} onChange={e => updateField('allaitement', e.target.value)}><option value="">-</option><option value="Oui">Oui</option><option value="Non">Non</option></select></div>
+              {form.allaitement === 'Oui' && (
+                <div className="field"><label>Allaitement depuis (mois)</label><input type="number" min="0" max="36" value={form.allaitementMois || ''} onChange={e => updateField('allaitementMois', e.target.value)} placeholder="6" /></div>
+              )}
+              <div className="field"><label>Post-partum (sans allaitement) ?</label><select value={form.postPartum || ''} onChange={e => updateField('postPartum', e.target.value)}><option value="">-</option><option value="Oui">Oui</option><option value="Non">Non</option></select></div>
+              {form.postPartum === 'Oui' && (
+                <div className="field"><label>Mois depuis l&apos;accouchement</label><input type="number" min="0" max="24" value={form.postPartumMois || ''} onChange={e => updateField('postPartumMois', e.target.value)} placeholder="4" /></div>
+              )}
               <div className="field"><label>Contraception</label><input type="text" value={form.contraception} onChange={e => updateField('contraception', e.target.value)} placeholder="Pilule, sterilet..." /></div>
               <div className="field"><label>Duree / regularite du cycle</label><input type="text" value={form.cycleDuree} onChange={e => updateField('cycleDuree', e.target.value)} placeholder="28j, regulier..." /></div>
               <div className="field full-width"><label>SPM</label><SmartTextarea value={form.spm} onChange={e => updateField('spm', e.target.value)} placeholder="Irritabilite, ballonnements, fatigue..." rows={2} /></div>

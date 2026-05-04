@@ -723,25 +723,45 @@ function App() {
 
   const handleSaveConsultation = (consultation) => {
     saveNutritionConsultation(consultation);
-    // Règle : confirmer packStartedAt à la première consultation sauvegardée
-    // d'un pack suivi (flag packStartedAtConfirmed garantit idempotence)
-    const savedClientId = consultation.clientId;
-    if (savedClientId) {
-      const freshClient = getClient(savedClientId);
-      if (
-        freshClient?.packType?.startsWith('suivi') &&
-        freshClient.packStartedAtConfirmed !== true
-      ) {
-        saveClient({
-          ...freshClient,
-          packStartedAt: new Date().toISOString(),
-          packStartedAtConfirmed: true,
-        });
-      }
-    }
+    // V96.27 — RETIRE l'auto-confirmation packStartedAt a la 1ere consultation.
+    // Anissa marque maintenant manuellement la remise du programme via le bouton
+    // "📦 Programme remis" sur la card client (correspond au moment ou la cliente
+    // recoit physiquement son dossier postal, point de depart reel du suivi).
+    // Les clientes existantes avec packStartedAtConfirmed deja true conservent
+    // leur date — pas de migration retroactive.
     showToast('Consultation sauvegardee avec succes');
     // V85.3 : plus de redirection auto vers dashboard — l'utilisateur reste sur la page
     // pour continuer ses modifications. Il ferme manuellement via le bouton Fermer.
+  };
+
+  // V96.27 — Marquer le programme comme remis (= envoi postal recu par la cliente).
+  // Anissa clique le bouton "📦 Programme remis" sur la card client. Date par
+  // defaut = today, modifiable. Demarre la timeline pack (jour J=0 ce jour).
+  // Reversible via menu Plus de la card.
+  const handleMarkProgramDelivered = (clientId, deliveredDateIso) => {
+    const fresh = getClient(clientId);
+    if (!fresh) return;
+    saveClient({
+      ...fresh,
+      packStartedAt: deliveredDateIso || new Date().toISOString(),
+      packStartedAtConfirmed: true,
+    });
+    refreshClients();
+    showToast('Programme marque comme remis — la timeline demarre');
+  };
+
+  const handleUnmarkProgramDelivered = (clientId) => {
+    const fresh = getClient(clientId);
+    if (!fresh) return;
+    saveClient({
+      ...fresh,
+      packStartedAtConfirmed: false,
+      // Garde packStartedAt en historique au cas ou Anissa veut juste corriger
+      // la date sans repartir a zero — elle peut re-cliquer "Marquer remis"
+      // avec une nouvelle date.
+    });
+    refreshClients();
+    showToast('Marquage remise annule');
   };
 
   const handleViewNutritionHistory = (id) => {
@@ -1116,6 +1136,7 @@ function App() {
             sharedClients={sharedClients}
             ownClients={anissaOwnClients}
             onConsultation={handleStartConsultation}
+            onEditConsultation={handleEditConsultation}
             onViewHistory={handleViewNutritionHistory}
             onNewClient={handleAnissaNewClient}
             onOpenClient={handleAnissaOpenClient}
@@ -1123,6 +1144,8 @@ function App() {
             onAdaptPlan={handleAdaptPlan}
             onReturnPlan={handleReturnPlan}
             onSendPackReview={handleSendPackReview}
+            onMarkProgramDelivered={handleMarkProgramDelivered}
+            onUnmarkProgramDelivered={handleUnmarkProgramDelivered}
           />
         )}
 
@@ -1314,12 +1337,20 @@ function App() {
       )}
 
       {/* Category Selection for new client */}
+      {/* V96.29 — Categorie 'online' retiree de la creation : Benoit a modifie son
+         offre, plus de nouveau client Coaching Online. Les clientes existantes en
+         categorie 'online' (ex: Ana, Rebecca en formule 'suivi') restent
+         intactes — visibles, editables, partagees avec Anissa via la liste
+         FORMULES_WITH_ANISSA_ACCESS dans store.js. CATEGORIES.online conservee
+         pour le rendu de leur card (icone, couleur, nom). */}
       {page === 'newCategory' && (
         <div className="category-selector">
           <h2>Nouveau client</h2>
           <p className="category-subtitle">Choisissez le type de service</p>
           <div className="category-cards">
-            {Object.entries(CATEGORIES).map(([key, cat]) => (
+            {Object.entries(CATEGORIES)
+              .filter(([key]) => key !== 'online')
+              .map(([key, cat]) => (
               <button
                 key={key}
                 className="category-card"
@@ -1329,9 +1360,9 @@ function App() {
                 <span className="category-card-icon">{cat.icon}</span>
                 <span className="category-card-name" style={{ color: cat.color }}>{cat.nom}</span>
                 <span className="category-card-desc">
-                  {key === 'online' && 'Coaching a distance avec programme et suivi via app'}
-                  {key === 'presentiel' && 'Seances en personne avec pack (10/20/30)'}
+                  {key === 'presentiel' && 'Seances en personne — packs 10 / 20 / 30 (les packs 20 & 30 incluent un suivi nutrition Anissa)'}
                   {key === 'massage' && 'Anamnese et suivi massotherapie'}
+                  {key === 'nutrition' && 'Suivi nutrition (cree directement cote Anissa en general)'}
                 </span>
               </button>
             ))}

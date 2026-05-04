@@ -1,0 +1,95 @@
+// V96.11 — French composer (Phase 3.B). Assembles a system prompt by
+// composing :
+//   1. The base SYSTEM_PROMPT_FR (identity + clinical rules + style)
+//   2. The Swiss brands context
+//   3. Optional supplements rules (if the client is open to them)
+//   4. Profile-specific modules detected from the form (femmeCycle,
+//      perimenopause, menopause, diabete, digestifChronique)
+//   5. The plan-mode prompt (oneshot, fourWeeks, or followup)
+//
+// Compared to buildSystemPromptFr in ./fr.js, the composer adds STEP 4
+// (profile injection) and is otherwise behavior-equivalent.
+//
+// IMPORTANT — opt-in path :
+//   This composer is NOT wired into NutritionConsultation.jsx by default.
+//   It must be called explicitly via buildSystemPromptFrV2 (also exported
+//   from ./fr.js) with the option { useComposer: true }. Until Anissa has
+//   reviewed the profile modules, the legacy path remains active.
+
+import {
+  SYSTEM_PROMPT_FR,
+  SWISS_BRANDS_PROMPT_FR,
+  SUPPLEMENT_PROMPT_FR,
+  ONESHOT_PLAN_PROMPT_FR,
+  FOUR_WEEKS_PROMPT_FR,
+  buildFollowupPromptFr,
+} from './fr';
+import { detectClientProfile } from './profiles/_detector.fr';
+import { getProfileModuleFr } from './profiles/index.fr';
+
+/**
+ * Build the FR system prompt with profile-aware composition.
+ *
+ * @param {object} form - The client anamnese (clients.form in storage)
+ * @param {object} opts - Plan options
+ * @param {boolean} [opts.isFollowup]   - true for weekly follow-up
+ * @param {string}  [opts.clientFormule] - 'suivi' | 'intensif' | 'autonome' | 'nutrition' | 'custom'
+ * @param {number}  [opts.followupWeek] - 1..4 when isFollowup
+ * @param {string}  [opts.planMode]     - 'oneshot' | 'followup'
+ * @returns {{ prompt: string, profile: object, blocked: boolean }}
+ *   - prompt   : the assembled system prompt (or empty string if blocked)
+ *   - profile  : the detected client profile (for logging / UI feedback)
+ *   - blocked  : true if a primary profile blocks generation (eg pregnancy
+ *                without a dedicated module). Caller must surface this to
+ *                the user and skip the AI call.
+ */
+export function composeSystemPromptFr(form, opts = {}) {
+  const profile = detectClientProfile(form);
+
+  // Safety gate — block generation when we lack a safe module.
+  if (profile.blocked) {
+    return { prompt: '', profile, blocked: true };
+  }
+
+  const { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = opts;
+  const parts = [SYSTEM_PROMPT_FR, SWISS_BRANDS_PROMPT_FR];
+
+  // Supplements gate (unchanged from legacy path).
+  const pretProtocole = form?.pretProtocole || '';
+  if (pretProtocole === 'Oui' || pretProtocole === 'Peut-etre') {
+    parts.push(SUPPLEMENT_PROMPT_FR);
+  }
+
+  // Inject profile modules (primary first, then pathologies). V96.17 : cap
+  // monte de 5 a 6, V96.26 : cap monte de 6 a 8 pour absorber les profils
+  // ultra-comorbides apres ajout des 8 nouveaux modules (performanceSportif,
+  // thyroide, burnoutCortisol, preConceptionFertilite, spm, endometriose, tdah,
+  // sopk). Coût token marginal au regard du benefice clinique.
+  const profileModules = profile.all
+    .slice(0, 8)
+    .map(getProfileModuleFr)
+    .filter(Boolean);
+  if (profileModules.length > 0) {
+    parts.push('// ═══ MODULES PROFIL CLIENT ═══');
+    parts.push(...profileModules);
+  }
+
+  // Plan mode (unchanged from legacy path).
+  if (isFollowup && followupWeek > 0) {
+    parts.push(buildFollowupPromptFr(followupWeek));
+  } else if (planMode === 'oneshot') {
+    parts.push(ONESHOT_PLAN_PROMPT_FR);
+  } else {
+    const recurrentFormules = ['suivi', 'intensif', 'autonome', 'nutrition', 'custom'];
+    const normalizedFormule = (clientFormule || '').trim().toLowerCase();
+    if (recurrentFormules.includes(normalizedFormule)) {
+      parts.push(FOUR_WEEKS_PROMPT_FR);
+    }
+  }
+
+  return {
+    prompt: parts.join('\n\n'),
+    profile,
+    blocked: false,
+  };
+}

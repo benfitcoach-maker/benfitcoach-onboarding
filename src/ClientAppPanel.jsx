@@ -15,7 +15,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchClientsStatus } from "./services/fetchClientsStatus";
 import { getNutritionPlanMode, planModeLabel } from "./services/nutritionPlanMode";
-import { fetchCoachMessages, sendCoachMessage, CoachMessageError } from "./services/sendCoachMessage";
+import {
+  fetchCoachMessages,
+  sendCoachMessage,
+  editCoachMessage,
+  deleteCoachMessage,
+  CoachMessageError,
+} from "./services/sendCoachMessage";
 import {
   fetchCoachResources,
   createCoachResource,
@@ -47,6 +53,15 @@ const SUB_TABS = [
 ];
 
 const ONBOARDING_KEY = "bfc_app_panel_onboarded";
+
+// V96.5 fix : l'email de la cliente est saisi dans le questionnaire (form.email)
+// et n'a JAMAIS ete copie a la racine `client.email` (la table `clients` n'a
+// meme pas de colonne email). Tous les composants qui utilisaient `getClientEmail(client)`
+// sans fallback retournaient null → empty state "pas d'email enregistré"
+// alors que l'email etait bien la dans le form. Ce helper unifie l'acces.
+function getClientEmail(client) {
+  return client?.form?.email || getClientEmail(client) || null;
+}
 
 export default function ClientAppPanel({
   client,
@@ -232,7 +247,7 @@ function OverviewTab({
 
   useEffect(() => {
     let cancelled = false;
-    const email = client?.email || null;
+    const email = getClientEmail(client) || null;
     const stagingClientId = client?.stagingClientId || null;
     if (!email && !stagingClientId) {
       setLoading(false);
@@ -261,7 +276,7 @@ function OverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [client?.email, client?.id, client?.stagingClientId]);
+  }, [getClientEmail(client), client?.id, client?.stagingClientId]);
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);
@@ -473,7 +488,7 @@ function MessagesTab({ client }) {
 
   useEffect(() => {
     let cancelled = false;
-    if (!client?.email) {
+    if (!getClientEmail(client)) {
       setMessages([]);
       return;
     }
@@ -481,7 +496,7 @@ function MessagesTab({ client }) {
     setError(null);
     // V94.44 : on charge en parallele les messages + la bibliotheque
     Promise.all([
-      fetchCoachMessages({ email: client.email, limit: 20 }),
+      fetchCoachMessages({ email: getClientEmail(client), limit: 20 }),
       fetchCoachResources().catch(() => []), // bibliotheque optionnelle, pas bloquant
     ])
       .then(([msgRes, lib]) => {
@@ -496,7 +511,7 @@ function MessagesTab({ client }) {
         setMessages([]);
       });
     return () => { cancelled = true; };
-  }, [client?.email, reloadKey]);
+  }, [getClientEmail(client), reloadKey]);
 
   function reload() {
     setReloadKey((k) => k + 1);
@@ -515,7 +530,7 @@ function MessagesTab({ client }) {
       const finalType = showAttach ? attachType : null;
 
       await sendCoachMessage({
-        email: client?.email,
+        email: getClientEmail(client),
         body: draftBody,
         attachment_url: finalUrl,
         attachment_label: finalLabel,
@@ -552,7 +567,7 @@ function MessagesTab({ client }) {
     setAttachType(r.type || "pdf");
   }
 
-  if (!client?.email) {
+  if (!getClientEmail(client)) {
     return (
       <EmptyState
         icon="✉️"
@@ -754,7 +769,7 @@ function MessagesTab({ client }) {
         {messages && messages.length > 0 && (
           <ul style={messageListStyle}>
             {messages.map((m) => (
-              <MessageItem key={m.id} message={m} />
+              <MessageItem key={m.id} message={m} onChanged={reload} />
             ))}
           </ul>
         )}
@@ -763,38 +778,190 @@ function MessagesTab({ client }) {
   );
 }
 
-function MessageItem({ message }) {
+function MessageItem({ message, onChanged }) {
   const sentAt = formatMessageDate(message.sent_at);
   const readAt = message.read_at ? formatMessageDate(message.read_at) : null;
   const hasAttachment = !!(message.attachment_url && message.attachment_label);
 
+  // V96.6 : edition/suppression in-place
+  const [mode, setMode] = useState("read"); // 'read' | 'edit' | 'confirmDelete'
+  const [draft, setDraft] = useState(message.body);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleSave() {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === message.body) {
+      setMode("read");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await editCoachMessage({ id: message.id, body: trimmed });
+      setMode("read");
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof CoachMessageError ? e.message : String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteCoachMessage({ id: message.id });
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof CoachMessageError ? e.message : String(e?.message || e));
+      setBusy(false);
+    }
+  }
+
   return (
     <li style={messageItemStyle}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
         <span style={{ fontSize: ".7rem", color: "#8a8a7a", textTransform: "uppercase", letterSpacing: ".05em" }}>
           Envoye {sentAt}
           {message.source === "ai_assisted" && " · IA"}
         </span>
-        <span
-          style={{
-            fontSize: ".68rem",
-            fontWeight: 600,
-            padding: "2px 8px",
-            borderRadius: 999,
-            color: readAt ? "#82c39e" : "#8a8a7a",
-            background: readAt ? "rgba(130,195,158,.12)" : "rgba(255,255,255,.03)",
-            border: `1px solid ${readAt ? "rgba(130,195,158,.25)" : "rgba(255,255,255,.06)"}`,
-            textTransform: "uppercase",
-            letterSpacing: ".05em",
-          }}
-        >
-          {readAt ? `Lu ${readAt}` : "Non lu"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              fontSize: ".68rem",
+              fontWeight: 600,
+              padding: "2px 8px",
+              borderRadius: 999,
+              color: readAt ? "#82c39e" : "#8a8a7a",
+              background: readAt ? "rgba(130,195,158,.12)" : "rgba(255,255,255,.03)",
+              border: `1px solid ${readAt ? "rgba(130,195,158,.25)" : "rgba(255,255,255,.06)"}`,
+              textTransform: "uppercase",
+              letterSpacing: ".05em",
+            }}
+          >
+            {readAt ? `Lu ${readAt}` : "Non lu"}
+          </span>
+          {mode === "read" && !busy && (
+            <>
+              <button
+                type="button"
+                onClick={() => { setDraft(message.body); setMode("edit"); }}
+                title="Editer"
+                style={messageActionBtnStyle}
+              >
+                ✏️
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("confirmDelete")}
+                title="Supprimer"
+                style={messageActionBtnStyle}
+              >
+                🗑
+              </button>
+            </>
+          )}
+        </div>
       </div>
-      <div style={{ fontSize: ".88rem", color: "#cfcfc4", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-        {message.body}
-      </div>
-      {hasAttachment && (
+
+      {mode === "read" && (
+        <div style={{ fontSize: ".88rem", color: "#cfcfc4", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+          {message.body}
+        </div>
+      )}
+
+      {mode === "edit" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
+            rows={Math.min(10, Math.max(3, draft.split("\n").length + 1))}
+            disabled={busy}
+            style={textareaStyle}
+            autoFocus
+          />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => { setMode("read"); setDraft(message.body); setError(null); }}
+              disabled={busy}
+              style={{ ...messageActionBtnStyle, padding: "6px 12px" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={busy || !draft.trim() || draft.trim() === message.body}
+              style={{
+                ...messageActionBtnStyle,
+                padding: "6px 14px",
+                background: "#315B43",
+                color: "#FAF9F6",
+                borderColor: "#315B43",
+                opacity: busy || !draft.trim() || draft.trim() === message.body ? 0.5 : 1,
+              }}
+            >
+              {busy ? "Sauvegarde…" : "Sauvegarder"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "confirmDelete" && (
+        <div style={{
+          padding: 10,
+          background: "rgba(220, 70, 70, .08)",
+          border: "1px solid rgba(220, 70, 70, .25)",
+          borderRadius: 8,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}>
+          <div style={{ fontSize: ".85rem", color: "#e8c5c0" }}>
+            Supprimer ce message ? La cliente ne le verra plus dans son app.
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => { setMode("read"); setError(null); }}
+              disabled={busy}
+              style={{ ...messageActionBtnStyle, padding: "6px 12px" }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busy}
+              style={{
+                ...messageActionBtnStyle,
+                padding: "6px 14px",
+                background: "#a24e3d",
+                color: "#FAF9F6",
+                borderColor: "#a24e3d",
+                opacity: busy ? 0.5 : 1,
+              }}
+            >
+              {busy ? "Suppression…" : "Supprimer"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          marginTop: 6,
+          fontSize: ".75rem",
+          color: "#e8a59c",
+        }}>
+          {error}
+        </div>
+      )}
+
+      {hasAttachment && mode === "read" && (
         <a
           href={message.attachment_url}
           target="_blank"
@@ -809,6 +976,19 @@ function MessageItem({ message }) {
     </li>
   );
 }
+
+const messageActionBtnStyle = {
+  appearance: "none",
+  border: "1px solid rgba(255,255,255,.1)",
+  background: "rgba(255,255,255,.04)",
+  color: "#cfcfc4",
+  fontSize: ".78rem",
+  cursor: "pointer",
+  padding: "4px 8px",
+  borderRadius: 6,
+  lineHeight: 1,
+  transition: "background 120ms ease",
+};
 
 function formatMessageDate(iso) {
   if (!iso) return "—";
@@ -1055,13 +1235,13 @@ function SignalsTab({ client }) {
 
   useEffect(() => {
     let cancelled = false;
-    if (!client?.email) {
+    if (!getClientEmail(client)) {
       setSignals({ upgrade_interests: [], attachment_opens: [] });
       return;
     }
     setSignals(null);
     setError(null);
-    fetchClientSignals({ email: client.email, limit: 50 })
+    fetchClientSignals({ email: getClientEmail(client), limit: 50 })
       .then((res) => {
         if (cancelled) return;
         setSignals(res);
@@ -1073,9 +1253,9 @@ function SignalsTab({ client }) {
         setSignals({ upgrade_interests: [], attachment_opens: [] });
       });
     return () => { cancelled = true; };
-  }, [client?.email, reloadKey]);
+  }, [getClientEmail(client), reloadKey]);
 
-  if (!client?.email) {
+  if (!getClientEmail(client)) {
     return (
       <EmptyState
         icon="🔍"
