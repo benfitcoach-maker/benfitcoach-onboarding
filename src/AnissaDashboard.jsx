@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import { FORMULES, CATEGORIES } from './formSteps';
 import { getNutritionConsultations, deleteClient, createCycleReview, getCycleReviews, forceSyncAllConsultations, saveClient } from './store';
@@ -12,6 +12,8 @@ import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_
 import { getClientNutritionLocale } from './services/nutritionLocale';
 import { getAllClientAlerts } from './services/clientAlerts';
 import { COLORS, badgeStyle } from './services/uxColors';
+import { markClientReviewed } from './services/markClientReviewed';
+import { clearStatusCache } from './services/fetchClientsStatus';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -1083,16 +1085,34 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   const [search, setSearch] = useState('');
   // V94.16 : filtre rapide par statut client (all / active / hors_app / recontact)
   const [statusFilter, setStatusFilter] = useState('all');
+  // V97.11 : tri ('alert' = priorite urgence, 'recent' = derniere conso, 'name' = alphabetique)
+  const [sortBy, setSortBy] = useState('alert');
   const [selectedReview, setSelectedReview] = useState(null);
   const [selectedReviewClient, setSelectedReviewClient] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  // V97.11 — bouton "Tout marquer lu" (batch)
+  const [markingAll, setMarkingAll] = useState(false);
+  const [markAllResult, setMarkAllResult] = useState(null);
 
+  // V97.11 — Ctrl+K (ou Cmd+K macOS) → focus la barre de recherche
+  const searchInputRef = useRef(null);
   useEffect(() => {
-    const close = () => {};
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const handleKeydown = (e) => {
+      // Ctrl+K (Win/Linux) ou Cmd+K (macOS)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+    return () => document.removeEventListener('keydown', handleKeydown);
   }, []);
+
+  // V97.11 — detection plateforme pour afficher le bon raccourci visuel
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  const shortcutLabel = isMac ? '⌘K' : 'Ctrl+K';
 
   const allClients = [...sharedClients, ...ownClients];
 
@@ -1124,6 +1144,34 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
     filteredShared = filteredShared.filter(passes);
     filteredOwn = filteredOwn.filter(passes);
   }
+
+  // V97.11 — Tri des clientes selon sortBy
+  // - 'alert'  : urgent (>6 mois) > recommended (>3 mois) > sans conso > normal,
+  //              tie-break par derniere conso desc
+  // - 'recent' : derniere conso desc (plus recent en haut)
+  // - 'name'   : alphabetique prenom asc
+  const sortClients = (clients) => {
+    const enriched = clients.map((c) => {
+      const consultations = getNutritionConsultations(c.id);
+      const lastDate = consultations[0] ? new Date(consultations[0].date).getTime() : 0;
+      const followUp = getFollowUpStatus(c.id); // 'urgent' | 'recommended' | null
+      let alertScore = 0;
+      if (followUp === 'urgent') alertScore = 100;
+      else if (followUp === 'recommended') alertScore = 50;
+      else if (consultations.length === 0) alertScore = 25; // hors_app
+      return { client: c, lastDate, alertScore };
+    });
+    if (sortBy === 'alert') {
+      enriched.sort((a, b) => b.alertScore - a.alertScore || b.lastDate - a.lastDate);
+    } else if (sortBy === 'recent') {
+      enriched.sort((a, b) => b.lastDate - a.lastDate);
+    } else if (sortBy === 'name') {
+      enriched.sort((a, b) => (a.client.prenom || '').localeCompare(b.client.prenom || '', 'fr'));
+    }
+    return enriched.map((e) => e.client);
+  };
+  filteredShared = sortClients(filteredShared);
+  filteredOwn = sortClients(filteredOwn);
 
   // V94.16 : compteurs pour les pills
   const allClientsCount = ownClients.length + sharedClients.length;
@@ -1194,6 +1242,43 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
 
       <div className="dashboard-header">
         <h2>Mes clients</h2>
+        {/* V97.11 — batch "Tout marquer lu" : evite a Anissa de cliquer sur
+            chaque cliente pour reset le badge "X nouveaux feedbacks". Le
+            helper markClientReviewed a son cache 5 min donc safe d'appeler
+            sur toutes les clientes (no-op si deja marque recemment). */}
+        <button
+          onClick={async () => {
+            setMarkingAll(true);
+            setMarkAllResult(null);
+            const allTargets = [...ownClients, ...sharedClients];
+            const results = await Promise.allSettled(
+              allTargets.map((c) => markClientReviewed(c))
+            );
+            const marked = results.filter(
+              (r) => r.status === 'fulfilled' && r.value?.ok && r.value?.marked
+            ).length;
+            clearStatusCache();
+            setMarkingAll(false);
+            setMarkAllResult(marked);
+            setTimeout(() => setMarkAllResult(null), 3000);
+            if (typeof onRefresh === 'function') onRefresh();
+          }}
+          disabled={markingAll || (ownClients.length + sharedClients.length) === 0}
+          title="Marque toutes les clientes comme vues (réinitialise les badges 'nouveaux feedbacks')"
+          style={{
+            marginLeft: 'auto', padding: '8px 12px', borderRadius: 8,
+            border: '1px solid rgba(255,255,255,.1)', background: 'none',
+            color: markingAll ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.5)',
+            cursor: markingAll ? 'not-allowed' : 'pointer',
+            fontSize: '.75rem', marginRight: 8, minHeight: 36,
+          }}
+        >
+          {markingAll
+            ? 'Marquage...'
+            : markAllResult !== null
+              ? `${markAllResult} marquée${markAllResult > 1 ? 's' : ''}`
+              : 'Tout marquer lu'}
+        </button>
         <button
           onClick={async () => {
             setSyncing(true);
@@ -1205,7 +1290,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           }}
           disabled={syncing}
           style={{
-            marginLeft:'auto', padding:'8px 12px', borderRadius:8,
+            padding:'8px 12px', borderRadius:8,
             border:'1px solid rgba(255,255,255,.1)', background:'none',
             color: syncing ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.5)',
             cursor: syncing ? 'not-allowed' : 'pointer',
@@ -1219,18 +1304,42 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
         </button>
       </div>
 
-      <div className="search-bar">
+      <div className="search-bar" style={{ position: 'relative' }}>
         <input
+          ref={searchInputRef}
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Rechercher par prenom..."
+          placeholder="Rechercher par prénom..."
           className="search-input"
+          style={{ paddingRight: 56 }}
         />
+        {/* V97.11 — indicateur raccourci clavier (decouvrabilite) */}
+        <kbd
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            right: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontSize: '.7rem',
+            fontFamily: 'inherit',
+            fontWeight: 600,
+            padding: '2px 7px',
+            borderRadius: 5,
+            border: '1px solid rgba(255,255,255,.12)',
+            background: 'rgba(255,255,255,.04)',
+            color: 'rgba(255,255,255,.45)',
+            pointerEvents: 'none',
+            letterSpacing: '.02em',
+          }}
+        >
+          {shortcutLabel}
+        </kbd>
       </div>
 
-      {/* V94.16 : pills de filtre rapide par statut */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, marginTop: -4 }}>
+      {/* V94.16 : pills de filtre rapide par statut + V97.11 : tri */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, marginTop: -4 }}>
         {[
           { id: 'all', label: 'Tous', count: allClientsCount, color: 'rgba(255,255,255,.18)' },
           { id: 'active', label: 'Active', count: activeCount, color: 'rgba(106,191,138,.4)' },
@@ -1265,6 +1374,29 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             </button>
           );
         })}
+
+        {/* V97.11 — Dropdown tri (push a droite) */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)' }}>Tri</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,.1)',
+              background: 'rgba(255,255,255,.03)',
+              color: 'rgba(255,255,255,.7)',
+              fontSize: '.78rem',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="alert">Alertes en premier</option>
+            <option value="recent">Consultation récente</option>
+            <option value="name">Alphabétique</option>
+          </select>
+        </div>
       </div>
 
       {/* Clients to re-contact alert */}
