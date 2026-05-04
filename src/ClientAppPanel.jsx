@@ -62,7 +62,11 @@ const ONBOARDING_KEY = "bfc_app_panel_onboarded";
 // sans fallback retournaient null → empty state "pas d'email enregistré"
 // alors que l'email etait bien la dans le form. Ce helper unifie l'acces.
 function getClientEmail(client) {
-  return client?.form?.email || getClientEmail(client) || null;
+  // V97.12 — fix bug recursif : retournait getClientEmail(client) au lieu
+  // de client?.email, ce qui creait une boucle infinie si form.email
+  // etait falsy (jamais hit en pratique car les nouvelles clientes ont
+  // toujours email, mais theoriquement possible pour clientes legacy).
+  return client?.form?.email || client?.email || null;
 }
 
 export default function ClientAppPanel({
