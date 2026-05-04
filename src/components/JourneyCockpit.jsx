@@ -4,9 +4,53 @@
 //
 // B1 : timeline + avancement manuel
 // B2 : encart "Activer l'app cliente" si la cliente n'existe pas encore
+// V97.10 : error handling — distingue ClientAppConfigError (proxy down)
+// vs ClientAppHttpError (erreur fonctionnelle), affiche message produit
+// adapté avec bouton Réessayer.
 
 import { useState } from "react";
-import { clientAppFetch } from "../services/clientAppFetch";
+import { clientAppFetch, ClientAppConfigError, ClientAppHttpError } from "../services/clientAppFetch";
+
+/**
+ * Convertit une erreur clientAppFetch en message produit lisible pour Anissa.
+ * Distingue 3 cas : config proxy down, erreur réseau, erreur fonctionnelle.
+ */
+function humanizeClientAppError(e) {
+  if (e instanceof ClientAppConfigError) {
+    return {
+      message: "L'app cliente n'est pas joignable pour le moment. Demande à Benoit de vérifier la configuration Vercel.",
+      retryable: true,
+    };
+  }
+  if (e instanceof ClientAppHttpError) {
+    if (e.status === 0) {
+      return {
+        message: "Erreur réseau. Vérifie ta connexion internet et réessaie.",
+        retryable: true,
+      };
+    }
+    if (e.status === 401 || e.status === 403) {
+      return {
+        message: "Accès refusé par l'app cliente. Contacte Benoit (problème de secret admin).",
+        retryable: false,
+      };
+    }
+    if (e.status === 404) {
+      return {
+        message: "Cliente introuvable côté app. Tu peux l'activer via le bouton ci-dessous.",
+        retryable: false,
+      };
+    }
+    if (e.status >= 500) {
+      return {
+        message: "Erreur serveur côté app cliente. Réessaie dans un instant.",
+        retryable: true,
+      };
+    }
+    return { message: e.message || "Erreur inattendue.", retryable: true };
+  }
+  return { message: e?.message || "Erreur inattendue.", retryable: true };
+}
 
 // ─── Données des 7 étapes ────────────────────────────────────────────────
 
@@ -29,11 +73,12 @@ function getStepIndex(status) {
 
 export default function JourneyCockpit({ email, clientId, journey, onUpdated, clientPrenom, clientFormule }) {
   const [acting, setActing]       = useState(false);
-  const [actionError, setActionError] = useState(null);
+  const [actionError, setActionError] = useState(null); // { message, retryable } | null
   const [actionSuccess, setActionSuccess] = useState(null);
   const [activating, setActivating] = useState(false);
   const [showRdvPicker, setShowRdvPicker] = useState(false);
   const [rdvDate, setRdvDate]     = useState("");
+  const [lastFailedAction, setLastFailedAction] = useState(null); // closure pour Réessayer
 
   // Pas d'email = impossible d'agir
   if (!email) {
@@ -62,9 +107,11 @@ export default function JourneyCockpit({ email, clientId, journey, onUpdated, cl
           },
         });
         setActionSuccess("App activée — compte créé et lien de connexion envoyé.");
+        setLastFailedAction(null);
         onUpdated?.();
       } catch (e) {
-        setActionError(e?.message || "Erreur lors de l'activation.");
+        setActionError(humanizeClientAppError(e));
+        setLastFailedAction(() => handleActivate);
       } finally {
         setActivating(false);
       }
@@ -81,7 +128,21 @@ export default function JourneyCockpit({ email, clientId, journey, onUpdated, cl
           <div style={{ fontSize: ".75rem", color: "#8a8a7a", marginBottom: 14 }}>
             Crée le compte sur l&apos;app et envoie le lien de connexion
           </div>
-          {actionError && <div style={errorBannerStyle}>{actionError}</div>}
+          {actionError && (
+            <div style={errorBannerStyle}>
+              <div>{actionError.message}</div>
+              {actionError.retryable && lastFailedAction && (
+                <button
+                  type="button"
+                  onClick={() => lastFailedAction()}
+                  disabled={acting || activating}
+                  style={retryBtnStyle}
+                >
+                  Réessayer
+                </button>
+              )}
+            </div>
+          )}
           {actionSuccess && <div style={successBannerStyle}>{actionSuccess}</div>}
           {!actionSuccess && (
             <button
@@ -113,9 +174,11 @@ export default function JourneyCockpit({ email, clientId, journey, onUpdated, cl
         payload: { email, status: newStatus, ...extraPayload },
       });
       setActionSuccess(null);
+      setLastFailedAction(null);
       onUpdated?.();
     } catch (e) {
-      setActionError(e?.message || "Erreur lors de la mise à jour.");
+      setActionError(humanizeClientAppError(e));
+      setLastFailedAction(() => () => applyTransition(newStatus, extraPayload));
     } finally {
       setActing(false);
       setShowRdvPicker(false);
@@ -297,7 +360,21 @@ export default function JourneyCockpit({ email, clientId, journey, onUpdated, cl
 
       {/* Zone d'action */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {actionError && <div style={errorBannerStyle}>{actionError}</div>}
+        {actionError && (
+          <div style={errorBannerStyle}>
+            <div>{actionError.message}</div>
+            {actionError.retryable && lastFailedAction && (
+              <button
+                type="button"
+                onClick={() => lastFailedAction()}
+                disabled={acting || activating}
+                style={retryBtnStyle}
+              >
+                Réessayer
+              </button>
+            )}
+          </div>
+        )}
         {renderAction()}
 
         {/* Bouton retour arrière — si pas au début et pas program_active */}
@@ -476,6 +553,22 @@ const errorBannerStyle = {
   borderRadius: 6,
   fontSize: ".78rem",
   color: "#e87070",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const retryBtnStyle = {
+  alignSelf: "flex-start",
+  padding: "5px 12px",
+  background: "rgba(220,80,80,0.18)",
+  border: "1px solid rgba(220,80,80,0.35)",
+  borderRadius: 6,
+  fontSize: ".75rem",
+  fontWeight: 600,
+  color: "#e87070",
+  cursor: "pointer",
+  transition: "all .15s",
 };
 
 const successBannerStyle = {
