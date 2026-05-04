@@ -28,6 +28,7 @@ function ensureCustomRate(form, categorie) {
 // 'reviewed' au clic sur une notif ressenti.
 import { fetchClientsStatus, clearStatusCache } from './services/fetchClientsStatus';
 import { markClientReviewed } from './services/markClientReviewed';
+import { clientAppFetch } from './services/clientAppFetch';
 import StepForm from './StepForm';
 import BenoitPaymentsPanel from './BenoitPaymentsPanel';
 import MassageForm from './MassageForm';
@@ -1153,7 +1154,7 @@ function App() {
         {page === 'anissaNewClient' && (
           <AnissaClientForm
             onSave={handleAnissaSaveClient}
-            onSaveQuick={(formData, packType) => {
+            onSaveQuick={async (formData, packType) => {
               const client = saveClient({
                 categorie: 'nutrition',
                 form: formData,
@@ -1168,7 +1169,44 @@ function App() {
                 packSchedule: [],
               });
               refreshClients();
-              // Open Gmail with questionnaire link
+
+              // V97.5 — Activation app cliente : cree la cliente sur l'app
+              // staging + envoie le magic link. Permet a la cliente de voir
+              // sa "ligne du temps" (timeline 7 etapes) des le J0, sans
+              // attendre que le programme soit pret.
+              //
+              // Best-effort : si l'invitation echoue (cliente deja existante,
+              // API down, etc.), on log mais on continue le flow normal —
+              // Anissa pourra re-tenter via le bouton "Activer l'app" du
+              // cockpit dans la fiche cliente.
+              const appMode = (packType || '').startsWith('suivi_') ? 'followup' : 'oneshot';
+              try {
+                const inviteRes = await clientAppFetch('/api/admin/invite-client', {
+                  method: 'POST',
+                  payload: {
+                    email: formData.email,
+                    first_name: formData.prenom || 'Cliente',
+                    mode: appMode,
+                  },
+                });
+                if (inviteRes?.ok && inviteRes?.client_id) {
+                  // V94.66 : stocke le mapping pour les futures lookups
+                  saveClient({
+                    ...client,
+                    id: client.id,
+                    stagingClientId: inviteRes.client_id,
+                    app_enabled: true,
+                  });
+                  refreshClients();
+                }
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn('[invite-client] failed (non-blocking):', err?.message || err);
+              }
+
+              // Open Gmail with questionnaire link (inchange — l'email
+              // questionnaire web est toujours envoye, en attendant V97.6
+              // ou le questionnaire sera in-app)
               const url = `${window.location.origin}/questionnaire/${client.id}`;
               const prenom = formData.prenom || '';
               const subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
@@ -1176,11 +1214,12 @@ function App() {
                 `Bonjour ${prenom},\n\n` +
                 `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
                 `➜ ${url}\n\n` +
+                `Vous recevrez egalement un email separe avec le lien d'acces a votre espace personnel.\n\n` +
                 `Ce questionnaire est strictement confidentiel.`;
               const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(formData.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               window.open(gmailUrl, '_blank');
-              showToast('Client cree — questionnaire pret a envoyer');
-              setTimeout(() => goToDashboard(), 1500);
+              showToast('Cliente creee — espace app active + questionnaire pret a envoyer');
+              setTimeout(() => goToDashboard(), 1800);
             }}
             onCancel={goToDashboard}
           />

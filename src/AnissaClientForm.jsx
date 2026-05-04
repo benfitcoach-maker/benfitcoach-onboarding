@@ -98,7 +98,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
           {/* Quick create card */}
           <div style={{ background: 'rgba(26,46,31,.12)', border: '1px solid rgba(74,222,128,.25)', borderRadius: 12, padding: '24px 28px', marginBottom: 20 }}>
             <h3 style={{ fontSize: '.95rem', fontWeight: 700, color: '#4ade80', marginBottom: 4 }}>Creation rapide</h3>
-            <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 16 }}>Creez le client et envoyez-lui le questionnaire par email. Il remplira sa fiche avant le RDV.</p>
+            <p style={{ fontSize: '.78rem', color: '#8a8a7a', marginBottom: 16 }}>Creez la cliente, activez son espace dans l&apos;app, et envoyez-lui le questionnaire par email.</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="field">
@@ -146,7 +146,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
                 disabled={!canCreate}
                 style={{ flex: 1, padding: '12px 20px', fontSize: '.85rem', fontWeight: 600 }}
               >
-                Creer et envoyer le questionnaire
+                Creer la cliente et activer l&apos;app
               </button>
             </div>
           </div>
