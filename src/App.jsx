@@ -1154,7 +1154,8 @@ function App() {
         {page === 'anissaNewClient' && (
           <AnissaClientForm
             onSave={handleAnissaSaveClient}
-            onSaveQuick={async (formData, packType) => {
+            onSaveQuick={async (formData, packType, options = {}) => {
+              const { activateApp = true } = options;
               const client = saveClient({
                 categorie: 'nutrition',
                 form: formData,
@@ -1175,33 +1176,38 @@ function App() {
               // sa "ligne du temps" (timeline 7 etapes) des le J0, sans
               // attendre que le programme soit pret.
               //
+              // V97.5.1 — Optionnel : Anissa peut decocher l'activation app
+              // dans le formulaire si la cliente ne veut pas de l'app
+              // (generations agees, refus tech, etc.). L'app pourra etre
+              // activee plus tard via le bouton "Activer l'app" du cockpit.
+              //
               // Best-effort : si l'invitation echoue (cliente deja existante,
-              // API down, etc.), on log mais on continue le flow normal —
-              // Anissa pourra re-tenter via le bouton "Activer l'app" du
-              // cockpit dans la fiche cliente.
-              const appMode = (packType || '').startsWith('suivi_') ? 'followup' : 'oneshot';
-              try {
-                const inviteRes = await clientAppFetch('/api/admin/invite-client', {
-                  method: 'POST',
-                  payload: {
-                    email: formData.email,
-                    first_name: formData.prenom || 'Cliente',
-                    mode: appMode,
-                  },
-                });
-                if (inviteRes?.ok && inviteRes?.client_id) {
-                  // V94.66 : stocke le mapping pour les futures lookups
-                  saveClient({
-                    ...client,
-                    id: client.id,
-                    stagingClientId: inviteRes.client_id,
-                    app_enabled: true,
+              // API down, etc.), on log mais on continue le flow normal.
+              if (activateApp) {
+                const appMode = (packType || '').startsWith('suivi_') ? 'followup' : 'oneshot';
+                try {
+                  const inviteRes = await clientAppFetch('/api/admin/invite-client', {
+                    method: 'POST',
+                    payload: {
+                      email: formData.email,
+                      first_name: formData.prenom || 'Cliente',
+                      mode: appMode,
+                    },
                   });
-                  refreshClients();
+                  if (inviteRes?.ok && inviteRes?.client_id) {
+                    // V94.66 : stocke le mapping pour les futures lookups
+                    saveClient({
+                      ...client,
+                      id: client.id,
+                      stagingClientId: inviteRes.client_id,
+                      app_enabled: true,
+                    });
+                    refreshClients();
+                  }
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn('[invite-client] failed (non-blocking):', err?.message || err);
                 }
-              } catch (err) {
-                // eslint-disable-next-line no-console
-                console.warn('[invite-client] failed (non-blocking):', err?.message || err);
               }
 
               // Open Gmail with questionnaire link (inchange — l'email
@@ -1210,15 +1216,22 @@ function App() {
               const url = `${window.location.origin}/questionnaire/${client.id}`;
               const prenom = formData.prenom || '';
               const subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
+              const appNote = activateApp
+                ? `Vous recevrez egalement un email separe avec le lien d'acces a votre espace personnel.\n\n`
+                : '';
               const body =
                 `Bonjour ${prenom},\n\n` +
                 `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
                 `➜ ${url}\n\n` +
-                `Vous recevrez egalement un email separe avec le lien d'acces a votre espace personnel.\n\n` +
+                appNote +
                 `Ce questionnaire est strictement confidentiel.`;
               const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(formData.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               window.open(gmailUrl, '_blank');
-              showToast('Cliente creee — espace app active + questionnaire pret a envoyer');
+              showToast(
+                activateApp
+                  ? 'Cliente creee — espace app active + questionnaire pret a envoyer'
+                  : 'Cliente creee — questionnaire pret a envoyer (app non activee)'
+              );
               setTimeout(() => goToDashboard(), 1800);
             }}
             onCancel={goToDashboard}

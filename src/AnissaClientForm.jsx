@@ -24,6 +24,10 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
   const [packType, setPackType] = useState('oneshot_180');
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState(clientId ? 'full' : 'quick'); // quick = creation rapide, full = anamnese complete
+  // V97.5.1 : Anissa decide si on active l'espace app cliente. Coche par
+  // defaut (vision "ligne conductrice"), mais decochable pour les clientes
+  // qui ne veulent pas de l'app (generations agees, refus tech, etc.).
+  const [activateApp, setActivateApp] = useState(true);
   const totalSteps = 8;
 
   const updateField = (field, value) => {
@@ -55,7 +59,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
       return;
     }
     if (onSaveQuick) {
-      onSaveQuick(form, packType);
+      onSaveQuick(form, packType, { activateApp });
     } else {
       onSave(form);
     }
@@ -139,6 +143,49 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
               </select>
             </div>
 
+            {/* V97.5.1 — Toggle activation app cliente. Coche par defaut.
+                Anissa peut decocher pour les clientes qui ne veulent pas de
+                l'app (generations agees, refus tech, etc.). L'app pourra
+                toujours etre activee plus tard via le cockpit du parcours. */}
+            <div
+              style={{
+                marginTop: 16,
+                padding: '12px 14px',
+                background: activateApp ? 'rgba(74,222,128,.06)' : 'rgba(255,255,255,.02)',
+                border: `1px solid ${activateApp ? 'rgba(74,222,128,.2)' : 'rgba(255,255,255,.08)'}`,
+                borderRadius: 10,
+                transition: 'all .15s',
+              }}
+            >
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  cursor: 'pointer',
+                  fontSize: '.82rem',
+                  color: activateApp ? '#c8d8c8' : '#8a8a7a',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={activateApp}
+                  onChange={e => setActivateApp(e.target.checked)}
+                  style={{ marginTop: 3, width: 16, height: 16, cursor: 'pointer', accentColor: '#4ade80' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                    Activer l&apos;espace app cliente
+                  </div>
+                  <div style={{ fontSize: '.74rem', color: '#7a7a6a', lineHeight: 1.45 }}>
+                    {activateApp
+                      ? 'La cliente recevra un magic link pour acceder a sa timeline (parcours en 7 etapes).'
+                      : 'Aucun acces app envoye. Tu pourras l\'activer plus tard depuis l\'onglet App cliente.'}
+                  </div>
+                </div>
+              </label>
+            </div>
+
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button
                 className="btn btn-anissa-primary"
@@ -146,7 +193,9 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
                 disabled={!canCreate}
                 style={{ flex: 1, padding: '12px 20px', fontSize: '.85rem', fontWeight: 600 }}
               >
-                Creer la cliente et activer l&apos;app
+                {activateApp
+                  ? 'Creer la cliente et activer l\u2019app'
+                  : 'Creer la cliente et envoyer le questionnaire'}
               </button>
             </div>
           </div>
