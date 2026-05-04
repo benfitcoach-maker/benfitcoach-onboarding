@@ -7,6 +7,7 @@ import {
   parseTimelineSteps,
   parseSupplementEntriesStructured,
 } from './services/nutritionParsers';
+import { COACH_IDENTITY, pdfFooterClosingFr, pdfFooterClosingEn } from './services/coachIdentity';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/69c276fd79d460813b99867a/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
@@ -74,11 +75,11 @@ const PDF_LABELS = {
     SUPP_SOURCES: 'Sources',
     CONFIDENTIAL: 'Document confidentiel \u2014 usage personnel uniquement',
     FOOTER_CLOSING_LINE_1: 'Ce plan a ete elabore specifiquement pour vous',
-    FOOTER_CLOSING_LINE_2: 'par Anissa Deroubaix, nutritionniste specialisee',
+    FOOTER_CLOSING_LINE_2: pdfFooterClosingFr(),
     FOOTER_CLOSING_LINE_3: 'en longevite et genetique.',
     FOOTER_RECOMMENDED_LINE_1: 'Il est recommande de suivre ce plan pendant 4 semaines',
     FOOTER_RECOMMENDED_LINE_2: "avant d'envisager des ajustements.",
-    FOOTER_BRAND: 'Anissa Deroubaix Nutrition',
+    FOOTER_BRAND: COACH_IDENTITY.brandFull,
     FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
     DATE_LOCALE: 'fr-CH',
     // V87.7 : labels fiche frigo (exportFicheFrigoPDF + exportClientPackPDF)
@@ -118,11 +119,11 @@ const PDF_LABELS = {
     SUPP_SOURCES: 'Sources',
     CONFIDENTIAL: 'Confidential document \u2014 personal use only',
     FOOTER_CLOSING_LINE_1: 'This plan has been specifically prepared for you',
-    FOOTER_CLOSING_LINE_2: 'by Anissa Deroubaix, nutritionist specialized',
+    FOOTER_CLOSING_LINE_2: pdfFooterClosingEn(),
     FOOTER_CLOSING_LINE_3: 'in longevity and genetics.',
     FOOTER_RECOMMENDED_LINE_1: 'It is recommended to follow this plan for 4 weeks',
     FOOTER_RECOMMENDED_LINE_2: 'before considering adjustments.',
-    FOOTER_BRAND: 'Anissa Deroubaix Nutrition',
+    FOOTER_BRAND: COACH_IDENTITY.brandFull,
     FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
     DATE_LOCALE: 'en-GB',
     // V87.7 : labels fiche frigo EN

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { getClient, getNutritionConsultations, savePlanVersion, getPlanVersions, saveClient, saveDraft, loadDraft, clearDraft, softDeleteConsultation } from './store';
+import { COACH_IDENTITY } from './services/coachIdentity';
 // V94.26 : helpers de scoring extraits depuis ce fichier (refactor Phase 1.A)
 import { scorePlanQuality, shouldAutoCorrect, buildCorrectionPrompt, validatePlanForPDF, cleanPlanForPDF } from './services/nutritionScoring';
 // V94.27 : helpers clinical profile extraits depuis ce fichier (refactor Phase 1.B)
@@ -657,7 +658,7 @@ async function exportAnalysesPDF(recommendations, symptoms, clientName, dateStr)
   doc.setFontSize(7);
   doc.setTextColor(138, 138, 122);
   const totalAnalyses = recommendations.essential.length + recommendations.relevant.length + recommendations.optional.length;
-  doc.text('Anissa Deroubaix Nutrition', margin, ph - 10);
+  doc.text(COACH_IDENTITY.brandFull, margin, ph - 10);
   doc.text(`${totalAnalyses} analyses recommandees`, pw - margin, ph - 10, { align: 'right' });
 
   doc.save(`analyses-${clientName.toLowerCase().replace(/\s+/g, '-')}-${dateStr.replace(/\//g, '-')}.pdf`);

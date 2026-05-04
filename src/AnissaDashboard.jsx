@@ -14,6 +14,7 @@ import { getAllClientAlerts } from './services/clientAlerts';
 import { COLORS, badgeStyle } from './services/uxColors';
 import { markClientReviewed } from './services/markClientReviewed';
 import { clearStatusCache } from './services/fetchClientsStatus';
+import { PARTNER_IDENTITY, emailSubjectQuestionnaire, emailSubjectFollowupReview } from './services/coachIdentity';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -29,7 +30,7 @@ function SendQuestionnaireButton({ client }) {
     let url, subject, body;
     if (locale === 'EN') {
       url = `${window.location.origin}/anamnese/${clientId}`;
-      subject = 'Your pre-consultation health assessment — Anissa Deroubaix';
+      subject = emailSubjectQuestionnaire('en');
       body =
         `Hello ${clientPrenom},\n\n` +
         `Ahead of our consultation, please take 10-15 minutes to complete your personalized health assessment:\n\n` +
@@ -37,7 +38,7 @@ function SendQuestionnaireButton({ client }) {
         `All information is strictly confidential and used only to prepare your nutrition plan.`;
     } else {
       url = `${window.location.origin}/questionnaire/${clientId}`;
-      subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
+      subject = emailSubjectQuestionnaire('fr');
       body =
         `Bonjour ${clientPrenom},\n\n` +
         `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
@@ -233,7 +234,7 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
     if (!token) { alert('Erreur lors de la création du bilan'); return; }
     const url = `${window.location.origin}/review/${token}`;
     const prenom = client.prenom || '';
-    const subject = 'Ton bilan 4 semaines — Anissa Deroubaix';
+    const subject = emailSubjectFollowupReview('fr');
     const body =
       `Bonjour ${prenom},\n\n` +
       `4 semaines se sont écoulées depuis ton plan nutrition.\n` +
@@ -346,8 +347,8 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
             <span
               onClick={e => { e.stopPropagation(); if (client.form?.anissaTransferSummary) setTransferExpanded(v => !v); }}
               title={client.form?.anissaTransferSummary
-                ? `Transmission Benoit disponible — cliquer pour ${transferExpanded ? 'masquer' : 'afficher'} le résumé`
-                : 'Client de Benoit'}
+                ? `Transmission ${PARTNER_IDENTITY.name} disponible — cliquer pour ${transferExpanded ? 'masquer' : 'afficher'} le résumé`
+                : `Client de ${PARTNER_IDENTITY.name}`}
               style={{
                 display:'inline-flex', alignItems:'center', gap:4,
                 fontSize:'.7rem', fontWeight:600, padding:'2px 8px',
@@ -359,7 +360,7 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                 cursor: client.form?.anissaTransferSummary ? 'pointer' : 'default',
               }}
             >
-              🤝 Client de Benoit
+              🤝 Client de {PARTNER_IDENTITY.name}
               {client.form?.anissaTransferStatus && client.form.anissaTransferStatus !== 'sent' ? ` · ${client.form.anissaTransferStatus}` : ''}
               {client.form?.anissaTransferSummary ? (transferExpanded ? ' ▴' : ' ▾') : ''}
             </span>
@@ -1431,7 +1432,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
       {allClients.length === 0 ? (
         <div className="dashboard-empty">
           <div className="empty-title">Aucun client</div>
-          <p>Creez votre premier client ou attendez que Benoit ajoute un client en Suivi Complet / Intensif.</p>
+          <p>Crée ta première cliente ou attends que {PARTNER_IDENTITY.name} ajoute une cliente en Suivi Complet / Intensif.</p>
           <button className="btn btn-anissa-primary" onClick={onNewClient} style={{ marginTop: 16, padding: '12px 28px' }}>
             + Nouveau client
           </button>
@@ -1460,7 +1461,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           {filteredShared.length > 0 && (
             <div className="anissa-section" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,.06)' }}>
               <h3 className="anissa-section-title">
-                Clients partages avec Benoit
+                Clients partagés avec {PARTNER_IDENTITY.name}
                 <span className="anissa-section-count">{filteredShared.length}</span>
               </h3>
               <div className="anissa-client-list">

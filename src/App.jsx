@@ -29,6 +29,7 @@ function ensureCustomRate(form, categorie) {
 import { fetchClientsStatus, clearStatusCache } from './services/fetchClientsStatus';
 import { markClientReviewed } from './services/markClientReviewed';
 import { clientAppFetch } from './services/clientAppFetch';
+import { COACH_IDENTITY, emailSubjectQuestionnaire, emailSubjectWelcomeApp } from './services/coachIdentity';
 import StepForm from './StepForm';
 import BenoitPaymentsPanel from './BenoitPaymentsPanel';
 import MassageForm from './MassageForm';
@@ -1239,10 +1240,10 @@ function App() {
                 // Mail "Bienvenue sur l'app" — point d'entree unique.
                 // Le questionnaire sera accessible depuis la timeline app
                 // (V97.6 CTA "Remplir le questionnaire").
-                subject = 'Votre espace Anissa Nutrition est pret';
+                subject = emailSubjectWelcomeApp('fr');
                 body =
                   `Bonjour ${prenom},\n\n` +
-                  `Bienvenue chez Anissa Nutrition. Votre espace personnel est pret :\n\n` +
+                  `Bienvenue chez ${COACH_IDENTITY.brand}. Votre espace personnel est prêt :\n\n` +
                   `➜ ${APP_URL}/login\n\n` +
                   `Comment vous connecter :\n` +
                   `1. Ouvrez le lien ci-dessus\n` +
@@ -1253,16 +1254,16 @@ function App() {
                   `Astuce : installez l'app sur votre ecran d'accueil pour un acces rapide :\n` +
                   `• iPhone (Safari) : Partager → "Sur l'ecran d'accueil"\n` +
                   `• Android (Chrome) : un bouton "Installer" apparaitra\n\n` +
-                  `A tres bientot,\nAnissa`;
+                  `À très bientôt,\n${COACH_IDENTITY.shortName}`;
               } else {
                 // Mail questionnaire classique — comportement avant V97.5.
-                subject = 'Votre questionnaire pre-consultation — Anissa Deroubaix';
+                subject = emailSubjectQuestionnaire('fr');
                 body =
                   `Bonjour ${prenom},\n\n` +
                   `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
                   `➜ ${questionnaireUrl}\n\n` +
                   `Ce questionnaire est strictement confidentiel.\n\n` +
-                  `A tres bientot,\nAnissa`;
+                  `À très bientôt,\n${COACH_IDENTITY.shortName}`;
               }
 
               const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(formData.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

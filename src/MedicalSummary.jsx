@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { jsPDF } from 'jspdf';
 import { generateMedicalSummary } from './services/aiMedicalSummary';
 import { CharCounter } from './App';
+import { COACH_IDENTITY } from './services/coachIdentity';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/699eb56ec2e8b94e41cfa06c/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 const GREEN = [26, 46, 31];
@@ -376,7 +377,7 @@ async function generateMedicalPDF(data) {
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GREY);
-  doc.text('Anissa Deroubaix — Nutritionniste spécialisée en longévité et génétique', pw / 2, fy + 4, { align: 'center' });
+  doc.text(`${COACH_IDENTITY.name} — ${COACH_IDENTITY.subtitle}`, pw / 2, fy + 4, { align: 'center' });
   doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, fy + 8, { align: 'center' });
   doc.text('Document confidentiel — usage médical uniquement', pw / 2, fy + 12, { align: 'center' });
 
