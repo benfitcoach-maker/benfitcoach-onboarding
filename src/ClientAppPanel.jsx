@@ -42,6 +42,7 @@ import { extractMealsAndAlternativesFromPlan } from "./services/extractMealsFrom
 // clients-status est en cache stale ou trouve pas l'email apres update DB
 // cote staging) + backfill auto quand l'API confirme.
 import { hasBeenPublishedLocally, markPublishedLocally } from "./services/publishToClientApp";
+import JourneyCockpit from "./components/JourneyCockpit";
 
 const SUB_TABS = [
   { id: "overview", label: "Vue d'ensemble" },
@@ -244,6 +245,11 @@ function OverviewTab({
 }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [journeyRefreshKey, setJourneyRefreshKey] = useState(0);
+
+  function refreshStatus() {
+    setJourneyRefreshKey((k) => k + 1);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -276,7 +282,7 @@ function OverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [getClientEmail(client), client?.id, client?.stagingClientId]);
+  }, [getClientEmail(client), client?.id, client?.stagingClientId, journeyRefreshKey]);
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);
@@ -308,6 +314,14 @@ function OverviewTab({
   if (!hasAppAccess) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <JourneyCockpit
+          email={getClientEmail(client)}
+          clientId={client?.stagingClientId}
+          journey={status?.journey || null}
+          onUpdated={refreshStatus}
+          clientPrenom={client?.prenom || client?.form?.prenom || ""}
+          clientFormule={client?.formule || client?.packType || ""}
+        />
         {onOpenPreview && (
           <button
             type="button"
@@ -320,7 +334,7 @@ function OverviewTab({
               <span style={{ fontSize: "1.2rem" }}>👁️</span>
               <div>
                 <div style={{ fontSize: ".85rem", fontWeight: 600, color: hasPlan ? "#cfcfc4" : "#8a8a7a" }}>
-                  Apercu & Publier dans l&apos;app
+                  Apercu &amp; Publier le programme
                 </div>
                 <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 2 }}>
                   {hasPlan
@@ -355,6 +369,16 @@ function OverviewTab({
         </div>
       )}
 
+      {/* Cockpit parcours cliente — EN HAUT de la vue d'ensemble */}
+      <JourneyCockpit
+        email={getClientEmail(client)}
+        clientId={client?.stagingClientId}
+        journey={status?.journey || null}
+        onUpdated={refreshStatus}
+        clientPrenom={client?.prenom || client?.form?.prenom || ""}
+        clientFormule={client?.formule || client?.packType || ""}
+      />
+
       {/* V94.50 : CTA principale "Apercu & Publier" — anciennement bouton
           "Aperçu JSON" du header editeur (mauvais nom, mauvaise place).
           Action critique du workflow Anissa : ouvre la modale qui montre
@@ -371,7 +395,7 @@ function OverviewTab({
             <span style={{ fontSize: "1.2rem" }}>👁️</span>
             <div>
               <div style={{ fontSize: ".85rem", fontWeight: 600, color: hasPlan ? "#cfcfc4" : "#8a8a7a" }}>
-                Apercu & Publier dans l&apos;app
+                Apercu &amp; Publier le programme
               </div>
               <div style={{ fontSize: ".7rem", color: "#8a8a7a", marginTop: 2 }}>
                 {hasPlan
@@ -1846,7 +1870,7 @@ function WorkflowChecklist({
     },
     {
       id: "publish",
-      label: clientPublished ? "Republier les modifications" : "Publier dans l'app",
+      label: clientPublished ? "Republier le programme" : "Publier le programme",
       hint: clientPublished
         ? "Les changements ne sont visibles qu'apres une nouvelle publication"
         : "Activer le compte cliente en publiant le plan",

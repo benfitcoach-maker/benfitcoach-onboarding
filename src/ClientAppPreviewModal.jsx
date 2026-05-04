@@ -551,7 +551,7 @@ function PublishFooter({
                 }}
                 title="Override : visible par la cliente immédiatement, sans attendre les 4 semaines"
               >
-                Publier maintenant
+                Publier le programme maintenant
               </button>
             )}
             <button
@@ -588,9 +588,9 @@ function PublishFooter({
               fontWeight: 600,
               cursor: canPublish ? 'pointer' : 'not-allowed',
             }}
-            title={canPublish ? 'Publier vers app cliente' : blockedReasons.join(' • ')}
+            title={canPublish ? 'Publier le programme dans l\'app cliente' : blockedReasons.join(' • ')}
           >
-            {publishResult?.ok ? '↻ Re-publier' : '🚀 Publier dans l\'app'}
+            {publishResult?.ok ? '↻ Re-publier' : '🚀 Publier le programme'}
           </button>
         )}
       </div>
