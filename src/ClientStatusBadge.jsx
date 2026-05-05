@@ -35,9 +35,9 @@ const META = {
   },
   absent: {
     label: "Hors app",
-    bg: "rgba(255,255,255,.04)",
-    border: "rgba(255,255,255,.1)",
-    color: "#8a8a7a",
+    bg: "var(--bg-card)",
+    border: "var(--border)",
+    color: "var(--text-muted)",
     tip: "Plan non encore publié dans l'app cliente",
   },
 };
