@@ -133,3 +133,93 @@
   font-family: var(--font-accent);
   font-style: italic;
 }
+
+/* ═══ V98.0 PHASE B — overrides classes hardcodees Benfitcoach ═══════════
+ * Ces regles ciblent uniquement les classes CSS dans index.css qui
+ * hardcodent encore des couleurs Benfitcoach (rgba(10,9,8,...), etc.)
+ * malgre l'override des variables :root. On les neutralise via selecteur
+ * [data-theme="anissa"] descendant.
+ *
+ * Inline styles JSX (style={{color:'rgba(255,255,255,.5)'}}) NON couverts
+ * ici — necessitent migration en JSX (Phase C-D).
+ */
+
+/* ─── Header (App.jsx — fixed top bar) ──────────────────────────────────── */
+[data-theme="anissa"] .header {
+  background: rgba(245, 240, 232, 0.85); /* ivoire avec alpha au lieu de noir */
+  border-bottom: 1px solid var(--border);
+}
+
+[data-theme="anissa"] .btn-nav:hover {
+  background: rgba(26, 46, 31, 0.06); /* vert tres dilue au lieu de dore dilue */
+  color: var(--text);
+}
+
+[data-theme="anissa"] .reminder-bell:hover {
+  color: var(--gold-dark); /* vert sombre au lieu de blanc */
+}
+
+/* ─── Cards & client list (Dashboard) ───────────────────────────────────── */
+[data-theme="anissa"] .client-card:hover {
+  /* shadow gold → shadow vert */
+  border-color: var(--border-gold);
+  box-shadow: 0 8px 32px rgba(26, 46, 31, 0.06),
+              0 0 0 1px rgba(26, 46, 31, 0.08);
+}
+
+[data-theme="anissa"] .client-avatar {
+  /* Avatar gradient gold → vert profond */
+  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+  color: var(--bg-card);
+  box-shadow: 0 2px 12px rgba(26, 46, 31, 0.18);
+}
+
+/* ─── Pulse animation : utilise rgba dorée hardcodee ───────────────────── */
+[data-theme="anissa"] .reminder-badge,
+[data-theme="anissa"] [class*="pulse"] {
+  /* Override des animations qui utilisent rgba(196,160,80,...) */
+  animation: none; /* fallback : on coupe le pulse en theme Anissa */
+}
+
+/* ─── Cockpit nutrition (header dark hardcode) ──────────────────────────── */
+[data-theme="anissa"] .nc-cockpit-header {
+  background: rgba(245, 240, 232, 0.95); /* ivoire au lieu de rgba(12,18,15,.95) */
+  border-top-color: rgba(26, 46, 31, 0.25);
+  border-bottom-color: rgba(26, 46, 31, 0.10);
+}
+
+/* ─── Texte/boutons grises hardcodes inline (pattern frequent : rgba blancs)
+ * On augmente la specificite via combinaison + on cible les conteneurs
+ * connus du dashboard. Cela ne couvre pas TOUS les inline styles, mais
+ * augmente le contraste sur les zones les plus visibles.
+ */
+[data-theme="anissa"] .dashboard-header button {
+  color: var(--text-muted) !important;
+  border-color: var(--border) !important;
+}
+[data-theme="anissa"] .dashboard-header button:hover {
+  color: var(--text) !important;
+  border-color: var(--border-gold) !important;
+}
+
+/* ─── Stat cards (force fond ivoire + texte vert) ───────────────────────── */
+[data-theme="anissa"] .stat-card,
+[data-theme="anissa"] .anissa-stat {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text);
+}
+[data-theme="anissa"] .anissa-stat .stat-number {
+  color: var(--gold-dark); /* override le #6abf8a ligne 2735 */
+}
+
+/* ─── Section title "Clients Anissa (4)" ────────────────────────────────── */
+[data-theme="anissa"] .anissa-section-title,
+[data-theme="anissa"] .anissa-section-count {
+  color: var(--gold-dark);
+}
+
+/* ─── Footer/version badge ──────────────────────────────────────────────── */
+[data-theme="anissa"] .version-badge {
+  color: var(--text-muted);
+}
