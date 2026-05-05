@@ -414,11 +414,11 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
               alignItems: 'center',
               marginBottom: 10,
             }}>
-              <span style={{ color: '#c5b07a', fontWeight: 600, fontSize: '.75rem' }}>
+              <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: '.75rem' }}>
                 {packDef.label}
               </span>
               {completion && (
-                <span style={{ color: 'rgba(255,255,255,.3)', fontSize: '.68rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '.68rem' }}>
                   {completion.done}/{completion.total} étapes
                 </span>
               )}
@@ -429,7 +429,7 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
               <div style={{
                 width: '100%',
                 height: 2,
-                background: 'rgba(255,255,255,.06)',
+                background: 'var(--border)',
                 borderRadius: 2,
                 marginBottom: 10,
                 overflow: 'hidden',
