@@ -7,7 +7,7 @@ import {
   parseTimelineSteps,
   parseSupplementEntriesStructured,
 } from './services/nutritionParsers';
-import { COACH_IDENTITY, pdfFooterClosingFr, pdfFooterClosingEn } from './services/coachIdentity';
+import { COACH_IDENTITY, COMPANY_IDENTITY, pdfFooterClosingFr, pdfFooterClosingEn } from './services/coachIdentity';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/69c276fd79d460813b99867a/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
@@ -80,7 +80,7 @@ const PDF_LABELS = {
     FOOTER_RECOMMENDED_LINE_1: 'Il est recommande de suivre ce plan pendant 4 semaines',
     FOOTER_RECOMMENDED_LINE_2: "avant d'envisager des ajustements.",
     FOOTER_BRAND: COACH_IDENTITY.brandFull,
-    FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
+    FOOTER_ADDRESS: COMPANY_IDENTITY.addressLine,
     DATE_LOCALE: 'fr-CH',
     // V87.7 : labels fiche frigo (exportFicheFrigoPDF + exportClientPackPDF)
     FRIDGE_HEADER: 'FICHE NUTRITION',
@@ -124,7 +124,7 @@ const PDF_LABELS = {
     FOOTER_RECOMMENDED_LINE_1: 'It is recommended to follow this plan for 4 weeks',
     FOOTER_RECOMMENDED_LINE_2: 'before considering adjustments.',
     FOOTER_BRAND: COACH_IDENTITY.brandFull,
-    FOOTER_ADDRESS: 'AB Coaching Sarl \u00b7 Rue de Rive 28, 1260 Nyon',
+    FOOTER_ADDRESS: COMPANY_IDENTITY.addressLine,
     DATE_LOCALE: 'en-GB',
     // V87.7 : labels fiche frigo EN
     FRIDGE_HEADER: 'NUTRITION SHEET',
@@ -1883,7 +1883,7 @@ export async function exportConsultationPDF(consultation, client, { output = 'sa
 
       doc.setFontSize(7.5);
       doc.setTextColor(...MUTED_TEXT);
-      doc.text('AB Coaching Sarl  ·  Rue de Rive 28  ·  1260 Nyon', pw / 2, sigY + 20, { align: 'center' });
+      doc.text(`${COMPANY_IDENTITY.name}  ·  ${COMPANY_IDENTITY.street}  ·  ${COMPANY_IDENTITY.postalCode} ${COMPANY_IDENTITY.city}`, pw / 2, sigY + 20, { align: 'center' });
 
       // Mention confidentielle en bas de page (discret)
       doc.setFontSize(6.5);
@@ -3405,7 +3405,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFontSize(8);
   doc.setTextColor(...GREY);
   doc.text(
-    '076 621 02 05  ·  Rue de Rive 28, 1260 Nyon  ·  anissa.nutri@gmail.com  ·  www.anissanutrition.ch',
+    `${COACH_IDENTITY.phone}  ·  ${COMPANY_IDENTITY.street}, ${COMPANY_IDENTITY.postalCode} ${COMPANY_IDENTITY.city}  ·  ${COACH_IDENTITY.email}  ·  ${COACH_IDENTITY.website}`,
     pw / 2,
     footerTextY,
     { align: 'center' }
@@ -3484,7 +3484,7 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   doc.setTextColor(...GREY_TEXT);
   doc.text(dateStr, pw / 2, y, { align: 'center' });
   y += 6;
-  doc.text('AB Coaching Sarl · Rue de Rive 28, 1260 Nyon', pw / 2, y, { align: 'center' });
+  doc.text(COMPANY_IDENTITY.addressLine, pw / 2, y, { align: 'center' });
   y += 10;
   doc.setFontSize(7.5);
   doc.text('Document confidentiel — usage personnel uniquement', pw / 2, y, { align: 'center' });

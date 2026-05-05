@@ -26,8 +26,30 @@ export const COACH_IDENTITY = {
   brandFull: 'Anissa Deroubaix Nutrition',
   /** Sous-titre / spécialisation pour signatures */
   subtitle: 'Nutritionniste spécialisée en longévité et génétique',
-  /** Ville (utilisée dans la signature pied de page) */
+  /** Ville du cabinet de consultation (V97.15+ : a confirmer) */
   city: 'Nyon',
+  /** Email de contact officiel pour la cliente */
+  email: 'anissa.nutri@gmail.com',
+  /** Numero de telephone officiel */
+  phone: '076 621 02 05',
+  /** Site web public */
+  website: 'www.anissanutrition.ch',
+};
+
+/** Identité légale de la société (siège social AB Coaching Sàrl). */
+export const COMPANY_IDENTITY = {
+  /** Raison sociale : "AB Coaching Sàrl" */
+  name: 'AB Coaching Sàrl',
+  /** Rue + numero du siege */
+  street: 'Chemin du Vieux-Château 2a',
+  /** Code postal */
+  postalCode: '1264',
+  /** Ville du siege social */
+  city: 'St-Cergue',
+  /** Adresse complete sur une ligne (signatures PDF, footer) */
+  get addressLine() {
+    return `${this.name} · ${this.street}, ${this.postalCode} ${this.city}`;
+  },
 };
 
 /**
