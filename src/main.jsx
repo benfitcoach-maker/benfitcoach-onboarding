@@ -1,21 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import './themes/anissa.css' // V98.0 Phase A — overrides via [data-theme="anissa"]
 import App from './App.jsx'
-
-// V98.0 — Active le thème Anissa si flag localStorage présent.
-// Activation : localStorage.setItem('theme', 'anissa') puis reload.
-// Désactivation : localStorage.removeItem('theme') puis reload.
-// (Auto-detect par utilisateur connecté = Phase ultérieure.)
-try {
-  const theme = localStorage.getItem('theme');
-  if (theme === 'anissa') {
-    document.body.dataset.theme = 'anissa';
-  }
-} catch {
-  // localStorage indispo (privacy mode strict) → on ignore, fallback Benfitcoach
-}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

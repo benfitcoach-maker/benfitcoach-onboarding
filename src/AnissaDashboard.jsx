@@ -104,16 +104,16 @@ function TodaysTasks({ onClickClient, refreshTick }) {
         title={collapsed ? 'Afficher les actions' : 'Masquer'}
       >
         <span style={{ fontSize: '1.1rem' }}>{'\u2728'}</span>
-        <span style={{ fontWeight: 700, fontSize: '.9rem', color: 'var(--warning)' }}>
+        <span style={{ fontWeight: 700, fontSize: '.9rem', color: '#e9b876' }}>
           À faire aujourd&apos;hui
         </span>
-        <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.5)' }}>
           {alerts.length} action{alerts.length > 1 ? 's' : ''}
           {dangerCount > 0 && ` · ${dangerCount} urgente${dangerCount > 1 ? 's' : ''}`}
           {warningCount > 0 && ` · ${warningCount} à surveiller`}
         </span>
         <span style={{
-          marginLeft: 'auto', fontSize: '.7rem', color: 'var(--text-muted)',
+          marginLeft: 'auto', fontSize: '.7rem', color: 'rgba(255,255,255,.4)',
           transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)',
           transition: 'transform .15s',
         }}>{'\u25be'}</span>
@@ -414,11 +414,11 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
               alignItems: 'center',
               marginBottom: 10,
             }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: '.75rem' }}>
+              <span style={{ color: '#c5b07a', fontWeight: 600, fontSize: '.75rem' }}>
                 {packDef.label}
               </span>
               {completion && (
-                <span style={{ color: 'var(--text-muted)', fontSize: '.68rem' }}>
+                <span style={{ color: 'rgba(255,255,255,.3)', fontSize: '.68rem' }}>
                   {completion.done}/{completion.total} étapes
                 </span>
               )}
@@ -429,7 +429,7 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
               <div style={{
                 width: '100%',
                 height: 2,
-                background: 'var(--border)',
+                background: 'rgba(255,255,255,.06)',
                 borderRadius: 2,
                 marginBottom: 10,
                 overflow: 'hidden',
@@ -452,8 +452,8 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                 marginBottom: 12,
                 padding: '14px 16px',
                 borderRadius: 12,
-                background: 'var(--gold-dim)',
-                border: '1px solid var(--border-gold)',
+                background: 'linear-gradient(135deg, rgba(197,176,122,.06) 0%, rgba(197,176,122,.02) 100%)',
+                border: '1px solid rgba(197,176,122,.18)',
                 display: 'flex', alignItems: 'center',
                 justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
               }}>
@@ -468,10 +468,10 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                     {'\ud83d\udce6'}
                   </div>
                   <div>
-                    <div style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text)', marginBottom: 2, letterSpacing: '.01em' }}>
+                    <div style={{ fontSize: '.82rem', fontWeight: 600, color: '#d8c89a', marginBottom: 2, letterSpacing: '.01em' }}>
                       Programme à remettre
                     </div>
-                    <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                    <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.45)', lineHeight: 1.45 }}>
                       Le suivi clinique démarre dès la remise. Marquer la date pour activer la timeline.
                     </div>
                   </div>
@@ -484,14 +484,14 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                     setShowDeliveryModal(true);
                   }}
                   style={{
-                    padding: '9px 16px', borderRadius: 9, border: '1px solid var(--border-gold)',
-                    background: 'var(--gold-dim)', color: 'var(--gold)',
+                    padding: '9px 16px', borderRadius: 9, border: '1px solid rgba(197,176,122,.4)',
+                    background: 'rgba(197,176,122,.15)', color: '#e0cd96',
                     fontSize: '.76rem', fontWeight: 600, cursor: 'pointer',
                     whiteSpace: 'nowrap', letterSpacing: '.02em',
                     transition: 'all .15s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold-glow)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--gold-dim)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(197,176,122,.22)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(197,176,122,.15)'; }}
                 >
                   Marquer comme remis
                 </button>
@@ -835,8 +835,8 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
             title="Plus d'actions (historique, modifier, supprimer...)"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
+              background: 'rgba(255,255,255,.04)',
+              border: '1px solid rgba(255,255,255,.18)',
               borderRadius: 8,
               padding: '7px 12px',
               cursor: 'pointer',
@@ -848,12 +848,12 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
               transition: 'background .15s, border-color .15s',
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'var(--gold-dim)';
-              e.currentTarget.style.borderColor = 'var(--border-gold)';
+              e.currentTarget.style.background = 'rgba(106,191,138,.1)';
+              e.currentTarget.style.borderColor = 'rgba(106,191,138,.4)';
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background = 'var(--bg-card)';
-              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.background = 'rgba(255,255,255,.04)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,.18)';
             }}
           >
             <span style={{ fontSize: '1rem', lineHeight: 1 }}>{'\u22ef'}</span>
@@ -868,7 +868,7 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
           {menuOpen && (
             <div style={{
               position: 'absolute', right: 0, top: '100%', zIndex: 50,
-              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              background: '#1e241f', border: '1px solid rgba(255,255,255,.1)',
               borderRadius: 10, overflow: 'hidden', minWidth: 180,
               boxShadow: '0 8px 24px rgba(0,0,0,.4)', marginTop: 4,
             }}>
@@ -1328,9 +1328,9 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             fontWeight: 600,
             padding: '2px 7px',
             borderRadius: 5,
-            border: '1px solid var(--border)',
-            background: 'var(--bg-card)',
-            color: 'var(--text-muted)',
+            border: '1px solid rgba(255,255,255,.12)',
+            background: 'rgba(255,255,255,.04)',
+            color: 'rgba(255,255,255,.45)',
             pointerEvents: 'none',
             letterSpacing: '.02em',
           }}
@@ -1357,9 +1357,9 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '6px 12px', borderRadius: 999,
-                border: `1px solid ${active ? p.color : 'var(--border)'}`,
+                border: `1px solid ${active ? p.color : 'rgba(255,255,255,.1)'}`,
                 background: active ? `${p.color.replace('.4)', '.1)').replace('.5)', '.12)').replace('.25)', '.06)').replace('.18)', '.05)')}` : 'transparent',
-                color: active ? 'var(--text)' : 'var(--text-muted)',
+                color: active ? 'var(--text)' : 'rgba(255,255,255,.55)',
                 fontSize: '.78rem', fontWeight: active ? 600 : 500,
                 cursor: 'pointer',
                 transition: 'all .15s',
@@ -1368,9 +1368,9 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
               <span>{p.label}</span>
               <span style={{
                 fontSize: '.7rem',
-                background: 'var(--gold-dim)',
+                background: 'rgba(0,0,0,.25)',
                 padding: '1px 8px', borderRadius: 999,
-                color: 'var(--text-muted)',
+                color: 'rgba(255,255,255,.6)',
               }}>{p.count}</span>
             </button>
           );
@@ -1378,16 +1378,16 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
 
         {/* V97.11 — Dropdown tri (push a droite) */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>Tri</span>
+          <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.4)' }}>Tri</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             style={{
               padding: '6px 10px',
               borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-card)',
-              color: 'var(--text)',
+              border: '1px solid rgba(255,255,255,.1)',
+              background: 'rgba(255,255,255,.03)',
+              color: 'rgba(255,255,255,.7)',
               fontSize: '.78rem',
               fontFamily: 'inherit',
               cursor: 'pointer',
