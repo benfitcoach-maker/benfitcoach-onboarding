@@ -43,6 +43,7 @@ import { extractMealsAndAlternativesFromPlan } from "./services/extractMealsFrom
 // cote staging) + backfill auto quand l'API confirme.
 import { hasBeenPublishedLocally, markPublishedLocally } from "./services/publishToClientApp";
 import JourneyCockpit from "./components/JourneyCockpit";
+import PushNotifSender from "./components/PushNotifSender";
 import { useConfirmDialog, ConfirmDialog } from "./components/ConfirmDialog";
 
 const SUB_TABS = [
@@ -382,6 +383,13 @@ function OverviewTab({
         onUpdated={refreshStatus}
         clientPrenom={client?.prenom || client?.form?.prenom || ""}
         clientFormule={client?.formule || client?.packType || ""}
+      />
+
+      {/* V97.11.4 — Envoi notif push custom (carte repliée par défaut) */}
+      <PushNotifSender
+        clientEmail={getClientEmail(client)}
+        clientId={client?.stagingClientId}
+        clientPrenom={client?.prenom || client?.form?.prenom || ""}
       />
 
       {/* V94.50 : CTA principale "Apercu & Publier" — anciennement bouton
