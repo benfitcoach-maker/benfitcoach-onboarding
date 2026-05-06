@@ -23,12 +23,15 @@ export const NUTRITION_INITIAL_FORM = {
   masseMusculaire: '',
   telephone: '',
   email: '',
+  adresse: '',
   // Etape 2 - Antecedents medicaux
   antecedentsFamiliaux: '',
   pathologies: '',
   traitements: '',
   operations: '',
   allergies: '',
+  medecinTraitant: '',
+  dernierDetartrage: '',
   // Etape 3 - Alimentation
   nbRepas: '',
   alimentsEvites: '',
