@@ -169,9 +169,19 @@ async function cloudSyncClient(client) {
 
 function cloudDeleteClient(id) {
   if (!isCloudEnabled) return;
-  supabase.from('clients').delete().eq('id', id).then(({ error }) => {
+  // V97.2 : soft-delete via is_deleted=true au lieu de DELETE row.
+  // Pourquoi : un hard DELETE ne propage pas aux autres devices
+  // qui ont la cliente en localStorage. Au prochain pullFromCloud,
+  // ils detectent "local-only client" et la re-pushent vers Supabase
+  // (cloudSyncClient ligne ~614), ressuscitant la cliente partout.
+  // Le soft-delete via column is_deleted partagee permet a tous les
+  // devices de voir le tombstone et nettoyer leur localStorage.
+  supabase.from('clients').update({
+    is_deleted: true,
+    deleted_at: new Date().toISOString(),
+  }).eq('id', id).then(({ error }) => {
     if (error) {
-      console.warn('Cloud delete client failed:', error.message);
+      console.warn('Cloud soft-delete client failed:', error.message);
       addToSyncQueue({ type: 'delete_client', data: { id } });
     }
   });
@@ -443,7 +453,15 @@ export async function pullFromCloud() {
 
     if (clientsRes.error) throw clientsRes.error;
 
-    const cloudClients = clientsRes.data || [];
+    // V97.2 : split cloud clients en actifs vs tombstones (is_deleted=true).
+    // Les tombstones sont propages aux deletedIds locaux pour que tous les
+    // devices nettoient leur localStorage et arretent de re-pusher.
+    const allCloudClients = clientsRes.data || [];
+    const cloudClients = allCloudClients.filter(c => !c.is_deleted);
+    const cloudTombstones = allCloudClients.filter(c => c.is_deleted);
+    for (const t of cloudTombstones) {
+      addDeletedId(t.id);
+    }
     const cloudGens = gensRes.data || [];
     const cloudSessions = sessionsRes.data || [];
     const cloudProg = progRes.data || [];
