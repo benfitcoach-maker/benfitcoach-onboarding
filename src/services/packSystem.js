@@ -1,6 +1,58 @@
 // ─── PACK DEFINITIONS ───────────────────────────────────────────
+//
+// Phase A migration (2026-05-09) :
+// - 3 nouveaux packs actifs : consultation_initiale_220, suivi_3m_990, suivi_6m_1990
+// - 6 anciens packs marques `archived: true` : conserves pour les clientes en cours,
+//   mais filtres dans le dropdown de creation nouvelle cliente.
+// - Les analyses Ortho/MGD ne sont PAS dans cette structure (Phase B MVP analyses).
 
 export const PACK_DEFINITIONS = {
+
+  // ─── NOUVEAUX PACKS (V2 — Direction E, 2026-05-09) ─────────────
+
+  consultation_initiale_220: {
+    label: 'Consultation Initiale',
+    price: 220,
+    durationWeeks: 0,
+    consultations: 1,
+    steps: [],
+    requiresBloodwork: false,
+    requiresDna: false,
+    archived: false,
+  },
+  suivi_3m_990: {
+    label: 'Suivi 3 mois',
+    price: 990,
+    durationWeeks: 12,
+    consultations: 2,
+    requiresBloodwork: false,
+    requiresDna: false,
+    archived: false,
+    steps: [
+      { weekOffset: 4,  type: 'review',       label: 'Bilan S4 — Adhérence',         template: 'adherence' },
+      { weekOffset: 8,  type: 'consultation',  label: 'Consultation mi-parcours',      template: null },
+      { weekOffset: 12, type: 'review',        label: 'Bilan final',                   template: 'final' },
+    ],
+  },
+  suivi_6m_1990: {
+    label: 'Suivi 6 mois',
+    price: 1990,
+    durationWeeks: 24,
+    consultations: 4,
+    requiresBloodwork: false,
+    requiresDna: false,
+    archived: false,
+    steps: [
+      { weekOffset: 4,  type: 'review',       label: 'Bilan S4 — Adhérence',         template: 'adherence' },
+      { weekOffset: 8,  type: 'review',       label: 'Bilan S8 — Résultats',         template: 'results' },
+      { weekOffset: 12, type: 'consultation', label: 'Consultation mi-parcours',      template: null },
+      { weekOffset: 16, type: 'review',       label: 'Bilan S16 — Métabolique',      template: 'metabolic' },
+      { weekOffset: 24, type: 'review',       label: 'Bilan final',                  template: 'final' },
+    ],
+  },
+
+  // ─── ANCIENS PACKS ARCHIVES (clientes en cours uniquement) ─────
+
   oneshot_180: {
     label: 'Bilan Nutritionnel',
     price: 180,
@@ -9,6 +61,7 @@ export const PACK_DEFINITIONS = {
     steps: [],
     requiresBloodwork: false,
     requiresDna: false,
+    archived: true,
   },
   oneshot_280: {
     label: 'Bilan Sanguin',
@@ -18,6 +71,7 @@ export const PACK_DEFINITIONS = {
     steps: [],
     requiresBloodwork: true,
     requiresDna: false,
+    archived: true,
   },
   oneshot_750: {
     label: 'Nutrition ADN',
@@ -27,6 +81,7 @@ export const PACK_DEFINITIONS = {
     steps: [],
     requiresBloodwork: true,
     requiresDna: true,
+    archived: true,
   },
   suivi_3m: {
     label: 'Suivi Essentiel 3 mois',
@@ -35,6 +90,7 @@ export const PACK_DEFINITIONS = {
     consultations: 2,
     requiresBloodwork: false,
     requiresDna: false,
+    archived: true,
     steps: [
       { weekOffset: 4,  type: 'review',       label: 'Bilan S4 — Adhérence',         template: 'adherence' },
       { weekOffset: 8,  type: 'consultation',  label: 'Consultation mi-parcours',      template: null },
@@ -48,6 +104,7 @@ export const PACK_DEFINITIONS = {
     consultations: 4,
     requiresBloodwork: true,
     requiresDna: false,
+    archived: true,
     steps: [
       { weekOffset: 4,  type: 'review',       label: 'Bilan S4 — Adhérence',         template: 'adherence' },
       { weekOffset: 8,  type: 'review',       label: 'Bilan S8 — Résultats',         template: 'results' },
@@ -63,6 +120,7 @@ export const PACK_DEFINITIONS = {
     consultations: 6,
     requiresBloodwork: true,
     requiresDna: true,
+    archived: true,
     steps: [
       { weekOffset: 2,  type: 'bloodwork',   label: 'Bilan sanguin MGD',            template: null },
       { weekOffset: 4,  type: 'review',      label: 'Bilan S4 — Adhérence',         template: 'adherence' },
@@ -75,6 +133,38 @@ export const PACK_DEFINITIONS = {
     ],
   },
 };
+
+// ─── HELPERS PACKS ──────────────────────────────────────────────
+
+/**
+ * Retourne uniquement les packs actifs (non archives), pour le dropdown
+ * de creation d'une nouvelle cliente. Les anciens packs restent accessibles
+ * via PACK_DEFINITIONS pour les clientes existantes.
+ *
+ * Usage : getActivePacks() => [{ key, ...packDef }, ...]
+ */
+export function getActivePacks() {
+  return Object.entries(PACK_DEFINITIONS)
+    .filter(([_, pack]) => !pack.archived)
+    .map(([key, pack]) => ({ key, ...pack }));
+}
+
+/**
+ * Retourne tous les packs (actifs + archives), utile pour l'affichage
+ * des fiches clientes en cours.
+ */
+export function getAllPacks() {
+  return Object.entries(PACK_DEFINITIONS)
+    .map(([key, pack]) => ({ key, ...pack }));
+}
+
+/**
+ * Indique si un pack donne est archive (ancien pack legacy).
+ * Utile pour afficher un badge "Pack legacy" sur les fiches clientes en cours.
+ */
+export function isPackArchived(packType) {
+  return PACK_DEFINITIONS[packType]?.archived === true;
+}
 
 // ─── TEMPLATE QUESTIONS PAR ÉTAPE ───────────────────────────────
 

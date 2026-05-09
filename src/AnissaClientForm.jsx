@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NUTRITION_INITIAL_FORM } from './formSteps';
 import { SmartTextarea } from './KeywordHints';
+import { getActivePacks } from './services/packSystem';
 
 const STEP_LABELS = [
   'Validation & Mesures',
@@ -21,7 +22,10 @@ const CONSOMMATION_REGULIERE_OPTIONS = [
 
 export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initialForm, clientId }) {
   const [form, setForm] = useState(initialForm || NUTRITION_INITIAL_FORM);
-  const [packType, setPackType] = useState('oneshot_180');
+  // Phase A migration (2026-05-09) : default sur le nouveau pack d'entree.
+  // Anciens packs (oneshot_180/280/750, suivi_3m/6m/adn) restent valides en BDD
+  // pour les clientes en cours mais ne sont plus proposes a la creation.
+  const [packType, setPackType] = useState('consultation_initiale_220');
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState(clientId ? 'full' : 'quick'); // quick = creation rapide, full = anamnese complete
   // V97.5.1 : Anissa decide si on active l'espace app cliente. Coche par
@@ -130,16 +134,11 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
                 onChange={e => setPackType(e.target.value)}
                 style={{ width: '100%' }}
               >
-                <optgroup label="Bilan individuel">
-                  <option value="oneshot_180">Bilan Nutritionnel — 180 CHF</option>
-                  <option value="oneshot_280">Bilan Sanguin — 280 CHF</option>
-                  <option value="oneshot_750">Nutrition ADN — 750 CHF</option>
-                </optgroup>
-                <optgroup label="Programmes de suivi">
-                  <option value="suivi_3m">Suivi Essentiel 3 mois — 490 CHF</option>
-                  <option value="suivi_6m">Suivi Complet 6 mois — 850 CHF</option>
-                  <option value="suivi_adn">Suivi ADN & Longévité — 1490 CHF</option>
-                </optgroup>
+                {getActivePacks().map(pack => (
+                  <option key={pack.key} value={pack.key}>
+                    {pack.label} — {pack.price} CHF
+                  </option>
+                ))}
               </select>
             </div>
 
