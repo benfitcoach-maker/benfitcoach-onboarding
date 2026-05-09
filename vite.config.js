@@ -48,6 +48,19 @@ export default defineConfig(({ mode }) => {
       __BUILD_HASH__: JSON.stringify(gitHash),
       __BUILD_DATE__: JSON.stringify(buildDate),
     },
+    // Phase B.1.b (2026-05-09) : proxy /api/* vers la prod pour permettre
+    // d'utiliser les Vercel functions (api/claude, api/client-app-proxy)
+    // pendant le dev local (npm run dev). Vite ne sert pas les serverless
+    // functions par defaut. Alternative plus lourde : `vercel dev`.
+    server: {
+      proxy: {
+        '/api': {
+          target: 'https://app.anissanutrition.ch',
+          changeOrigin: true,
+          secure: true,
+        },
+      },
+    },
     // V94.68 : sourcemap prod pour stack traces lisibles. Le SaaS est admin-only
     // (login Anissa/Benoit), pas un site public — exposer le source nous permet
     // de diagnostiquer en 30s au lieu de bisecter manuellement les 77 .split du

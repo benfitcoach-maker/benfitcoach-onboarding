@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { NUTRITION_INITIAL_FORM } from './formSteps';
 import { SmartTextarea } from './KeywordHints';
 import { getActivePacks } from './services/packSystem';
+import { supabase } from './supabaseClient';
+import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 
 const STEP_LABELS = [
   'Validation & Mesures',
@@ -20,18 +22,23 @@ const CONSOMMATION_REGULIERE_OPTIONS = [
   'Aucun des deux',
 ];
 
-export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initialForm, clientId }) {
+export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initialForm, initialPackType, clientId }) {
   const [form, setForm] = useState(initialForm || NUTRITION_INITIAL_FORM);
   // Phase A migration (2026-05-09) : default sur le nouveau pack d'entree.
   // Anciens packs (oneshot_180/280/750, suivi_3m/6m/adn) restent valides en BDD
   // pour les clientes en cours mais ne sont plus proposes a la creation.
-  const [packType, setPackType] = useState('consultation_initiale_220');
+  // Phase B.1.b : initialPackType permet de pre-charger le pack reel de la
+  // cliente en mode edition (sinon le bouton "Suggerer analyses" reste cache).
+  const [packType, setPackType] = useState(initialPackType || 'consultation_initiale_220');
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState(clientId ? 'full' : 'quick'); // quick = creation rapide, full = anamnese complete
   // V97.5.1 : Anissa decide si on active l'espace app cliente. Coche par
   // defaut (vision "ligne conductrice"), mais decochable pour les clientes
   // qui ne veulent pas de l'app (generations agees, refus tech, etc.).
   const [activateApp, setActivateApp] = useState(true);
+  // Phase B.1.b — Modale suggestion analyses (visible step 8 si clientId + pack avec analyses)
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [savePlanError, setSavePlanError] = useState(null);
   const totalSteps = 8;
 
   const updateField = (field, value) => {
@@ -50,6 +57,23 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
 
   const handleSubmit = () => {
     if (!form.prenom.trim()) return;
+    onSave(form);
+  };
+
+  // Phase B.1.b — Sauvegarde un analysis_plan en BDD via Supabase.
+  // Appele depuis la modale a la validation. La modale fournit le `plan`
+  // pre-construit (selected_tests, totals, status, notes_anissa).
+  const handleSavePlan = async (plan) => {
+    setSavePlanError(null);
+    const { error } = await supabase
+      .from('analysis_plans')
+      .insert(plan);
+    if (error) {
+      setSavePlanError(error.message);
+      throw new Error(error.message);
+    }
+    // Sauve aussi l'anamnese en cours (form a jour) pour persister
+    // les eventuelles modifications faites avant l'ouverture de la modale.
     onSave(form);
   };
 
@@ -469,11 +493,42 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
         {step < totalSteps ? (
           <button className="btn btn-primary" onClick={() => setStep(step + 1)}>Suivant</button>
         ) : (
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={!form.prenom.trim()}>
-            {clientId ? 'Sauvegarder' : 'Creer le client'}
-          </button>
+          <>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={!form.prenom.trim()}>
+              {clientId ? 'Sauvegarder' : 'Creer le client'}
+            </button>
+            {/* Phase B.1.b — Bouton suggestion analyses, visible uniquement
+                en mode edition (clientId existe) et pour packs incluant des
+                analyses (pas Consultation Initiale). */}
+            {clientId && packType !== 'consultation_initiale_220' && (
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowSuggestModal(true)}
+                disabled={!form.prenom.trim()}
+                style={{ marginLeft: 8, background: '#2d5a3d' }}
+                title="L'IA propose des analyses adaptees a l'anamnese, Anissa valide."
+              >
+                💡 Terminer &amp; suggerer les analyses
+              </button>
+            )}
+          </>
         )}
       </div>
+
+      {savePlanError && (
+        <div style={{ marginTop: 12, padding: 10, background: 'rgba(196,68,68,0.1)', color: '#c44', borderRadius: 6 }}>
+          Erreur sauvegarde plan : {savePlanError}
+        </div>
+      )}
+
+      {/* Modale suggestion analyses */}
+      <AnalysisSuggestionModal
+        isOpen={showSuggestModal}
+        onClose={() => setShowSuggestModal(false)}
+        client={{ id: clientId, form }}
+        packType={packType}
+        onValidate={handleSavePlan}
+      />
     </div>
   );
 }

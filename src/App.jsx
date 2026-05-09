@@ -1286,6 +1286,7 @@ function App() {
         {page === 'anissaEditClient' && clientId && (
           <AnissaClientForm
             initialForm={getClient(clientId)?.form}
+            initialPackType={getClient(clientId)?.packType}
             clientId={clientId}
             onSave={(formData) => {
               const existing = getClient(clientId) || {};
