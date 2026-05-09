@@ -19,6 +19,8 @@ import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import NutritionPlanTOC from './components/NutritionPlanTOC';
 // V96.20 : cockpit guide-Anissa (4 macro-etapes Preparer/Generer/Affiner/Livrer)
 import PlanCockpit from './components/PlanCockpit';
+// Phase B.2 (2026-05-09) : bloc lecture seule du plan d'analyses Ortho/MGD
+import AnalysisPlanCard from './AnalysisPlanCard';
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { FORMULES } from './formSteps';
 // V92.1 : NutritionTemplates supprime — feature non utilisee
@@ -1957,6 +1959,12 @@ ${suppText}`;
   return (
     <div className="nutrition-consultation">
       {/* V92.1 : modale NutritionTemplates supprimee — feature non utilisee en pratique */}
+
+      {/* Phase B.2 — Bloc lecture seule du plan d'analyses Ortho/MGD pour cette cliente.
+          Affiche le dernier analysis_plan trouve (ou message "aucun plan" sinon).
+          Donne a Anissa une vue immediate des analyses prescrites avant de generer
+          le programme nutritionnel adapte. */}
+      <AnalysisPlanCard clientId={clientId} />
 
       {pendingAlerts && (
         <ContraIndicationAlert
