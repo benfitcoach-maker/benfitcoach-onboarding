@@ -482,3 +482,430 @@
   color: var(--jrn-error);
   font-family: var(--jrn-font-ui);
 }
+
+/* ═════════════════════════════════════════════════════════════════════
+   JourneyPlanEditor — tabs, modals, markdown render
+   ═════════════════════════════════════════════════════════════════════ */
+
+/* ─── Tabs ──────────────────────────────────────────────────────── */
+
+.jpe-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--jrn-border);
+  margin-bottom: var(--jrn-2);
+}
+.jpe-tab {
+  background: transparent;
+  border: none;
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-sm);
+  font-weight: 500;
+  color: var(--jrn-text-muted);
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 140ms var(--jrn-ease), border-color 140ms var(--jrn-ease);
+  margin-bottom: -1px;
+}
+.jpe-tab:hover:not(:disabled) {
+  color: var(--jrn-text-soft);
+}
+.jpe-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.jpe-tab--active {
+  color: var(--jrn-accent);
+  border-bottom-color: var(--jrn-accent);
+}
+
+/* ─── Modal ─────────────────────────────────────────────────────── */
+
+.jpe-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 15, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: var(--jrn-6);
+  animation: jpe-fade-in 180ms var(--jrn-ease);
+}
+@keyframes jpe-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.jpe-modal {
+  background: var(--jrn-surface);
+  border-radius: var(--jrn-radius-lg);
+  max-width: 720px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--jrn-shadow-lg);
+  font-family: var(--jrn-font-body);
+  animation: jpe-pop-in 220ms var(--jrn-ease);
+}
+.jpe-modal--xl {
+  max-width: 1100px;
+}
+@keyframes jpe-pop-in {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.jpe-modal__header {
+  padding: var(--jrn-6) var(--jrn-8);
+  border-bottom: 1px solid var(--jrn-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jrn-4);
+  flex-shrink: 0;
+}
+.jpe-modal__title {
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: var(--jrn-text-2xl);
+  font-weight: 500;
+  color: var(--jrn-text);
+  margin: 4px 0 0;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.jpe-modal__body {
+  padding: var(--jrn-6) var(--jrn-8);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.jpe-preview {
+  background: var(--jrn-bg);
+  border: 1px solid var(--jrn-border);
+  border-radius: var(--jrn-radius);
+  padding: var(--jrn-8);
+  margin-bottom: var(--jrn-5);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* ─── Markdown render ───────────────────────────────────────────── */
+
+.jpe-md {
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-md);
+  line-height: 1.7;
+  color: var(--jrn-text);
+}
+.jpe-md__h1 {
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: var(--jrn-text-3xl);
+  font-weight: 500;
+  margin: var(--jrn-8) 0 var(--jrn-4);
+  color: var(--jrn-text);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.jpe-md__h1:first-child {
+  margin-top: 0;
+}
+.jpe-md__h2 {
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: var(--jrn-text-2xl);
+  font-weight: 500;
+  margin: var(--jrn-6) 0 var(--jrn-3);
+  color: var(--jrn-text);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.jpe-md__h3 {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-lg);
+  font-weight: 600;
+  margin: var(--jrn-5) 0 var(--jrn-2);
+  color: var(--jrn-text);
+  letter-spacing: -0.005em;
+}
+.jpe-md__h4 {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-md);
+  font-weight: 600;
+  margin: var(--jrn-4) 0 var(--jrn-2);
+  color: var(--jrn-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.jpe-md__p {
+  margin: 0 0 var(--jrn-3);
+  color: var(--jrn-text);
+}
+.jpe-md__p strong {
+  font-weight: 600;
+  color: var(--jrn-text);
+}
+.jpe-md__p em {
+  color: var(--jrn-text-soft);
+}
+.jpe-md__ul {
+  margin: var(--jrn-2) 0 var(--jrn-4);
+  padding-left: 22px;
+  color: var(--jrn-text);
+}
+.jpe-md__ul li {
+  margin-bottom: 4px;
+  line-height: 1.65;
+}
+
+/* ─── Progress bar (génération IA) ────────────────────────────── */
+
+.jpe-progress {
+  margin-top: var(--jrn-5);
+  padding: var(--jrn-5);
+  background: var(--jrn-surface-alt);
+  border: 1px solid var(--jrn-border);
+  border-radius: var(--jrn-radius);
+}
+.jpe-progress__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--jrn-3);
+  gap: var(--jrn-3);
+  flex-wrap: wrap;
+}
+.jpe-progress__label {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-sm);
+  font-weight: 500;
+  color: var(--jrn-text);
+}
+.jpe-progress__time {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-xs);
+  color: var(--jrn-text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.jpe-progress__track {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.jpe-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--jrn-accent), #4a7d5a);
+  border-radius: 999px;
+  transition: width 320ms var(--jrn-ease);
+  position: relative;
+  overflow: hidden;
+}
+.jpe-progress__fill::after {
+  /* shimmer subtle pour donner du mouvement quand la barre est lente */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
+  );
+  animation: jpe-shimmer 1.6s linear infinite;
+}
+@keyframes jpe-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.jpe-progress__hint {
+  margin-top: var(--jrn-3);
+  margin-bottom: 0;
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-xs);
+  color: var(--jrn-text-muted);
+  line-height: 1.6;
+}
+
+/* ─── AI Rewrite Toolbar ─────────────────────────────────────── */
+
+.jpe-ai-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jrn-3);
+  padding: 10px 14px;
+  background: var(--jrn-surface-alt);
+  border: 1px solid var(--jrn-border);
+  border-radius: var(--jrn-radius);
+  margin-top: var(--jrn-3);
+}
+.jpe-ai-toolbar__label {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-xs);
+  font-weight: 500;
+  color: var(--jrn-text-soft);
+  letter-spacing: 0.02em;
+}
+.jpe-ai-toolbar__actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.jpe-ai-btn {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-xs);
+  font-weight: 500;
+  padding: 6px 12px;
+  background: var(--jrn-surface);
+  border: 1px solid var(--jrn-border-strong);
+  border-radius: var(--jrn-radius-sm);
+  color: var(--jrn-text);
+  cursor: pointer;
+  transition: all 140ms var(--jrn-ease);
+  white-space: nowrap;
+}
+.jpe-ai-btn:hover:not(:disabled) {
+  background: var(--jrn-accent-soft);
+  border-color: var(--jrn-accent-tint);
+  color: var(--jrn-accent);
+}
+.jpe-ai-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ─── Plan Sections (édition par section avec IA) ─────────────── */
+
+.jpe-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jrn-5);
+}
+.jpe-section {
+  background: var(--jrn-surface);
+  border: 1px solid var(--jrn-border);
+  border-radius: var(--jrn-radius-lg);
+  overflow: hidden;
+  transition: border-color 140ms var(--jrn-ease);
+}
+.jpe-section:hover {
+  border-color: var(--jrn-border-strong);
+}
+
+.jpe-section__head {
+  display: flex;
+  align-items: center;
+  gap: var(--jrn-3);
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--jrn-border);
+  background: var(--jrn-surface-alt);
+}
+.jpe-section__num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--jrn-accent);
+  color: var(--jrn-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.jpe-section__title {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-md);
+  font-weight: 600;
+  color: var(--jrn-text);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  outline: none;
+  padding: 4px 0;
+  border-bottom: 1px solid transparent;
+  transition: border-color 140ms var(--jrn-ease);
+}
+.jpe-section__title:focus {
+  border-bottom-color: var(--jrn-accent);
+}
+.jpe-section__head-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.jpe-section__icon-btn {
+  background: transparent;
+  border: 1px solid var(--jrn-border);
+  border-radius: var(--jrn-radius-sm);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--jrn-text-soft);
+  transition: all 140ms var(--jrn-ease);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.jpe-section__icon-btn:hover {
+  background: var(--jrn-surface);
+  color: var(--jrn-text);
+  border-color: var(--jrn-border-strong);
+}
+.jpe-section__icon-btn--danger:hover {
+  background: var(--jrn-error-bg);
+  color: var(--jrn-error);
+  border-color: rgba(181, 58, 58, 0.25);
+}
+
+.jpe-section__textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 18px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--jrn-text);
+  background: var(--jrn-surface);
+  resize: vertical;
+  display: block;
+}
+.jpe-section__textarea:focus {
+  background: var(--jrn-surface-alt);
+}
+
+.jpe-section__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jrn-3);
+  padding: 10px 18px;
+  border-top: 1px solid var(--jrn-border);
+  background: var(--jrn-surface-alt);
+  flex-wrap: wrap;
+}
+.jpe-section__ai-label {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-xs);
+  font-weight: 500;
+  color: var(--jrn-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.jpe-section__ai-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}

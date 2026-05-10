@@ -1,43 +1,68 @@
 // ─────────────────────────────────────────────────────────────────
-// Phase J — Editeur de plan minimal pour Etape 6 du parcours
+// Phase J + L — Editeur de plan complet pour Etape 6 du parcours
 // Date : 2026-05-10
 //
 // UI propre alignee sur le design system journey.css. Remplace l'embed
 // de NutritionConsultation dans l'etape 6.
 //
-// Scope V1 :
-//   - Lit le dernier plan sauvegarde (table nutrition_consultations)
-//   - Bouton "Generer avec l'IA" → modal simple → callClaude → adoption
-//   - Textarea editable du markdown
-//   - Sauvegarde Supabase (insert nouvelle consultation)
-//
-// HORS scope V1 (acces via Profil ou plus tard) :
-//   - Generation supplements separee
-//   - Fiche frigo
-//   - App cliente sync
-//   - Composer beta
-//   - Multi-versions / history
-//
-// Si Anissa a besoin de ces features, elle peut ouvrir l'editeur expert
-// classique via le bouton "Mode expert" en bas.
+// Fonctionnalites V2 (Phase L) :
+//   - Lecture du dernier plan (local store + Supabase fallback)
+//   - Genération IA avec note libre + directives persistantes
+//   - Modal d'apercu plein ecran lisible (markdown render simple)
+//   - Edition markdown libre (textarea grande)
+//   - Sauvegarde Supabase
+//   - Export Word du plan principal
+//   - Onglet Fiche frigo (build + apercu + export Word)
+//   - Reformulation IA d'une selection / paragraphe
 // ─────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
 import { buildSystemPromptFr } from './services/prompts/nutrition/fr';
 import { COACH_IDENTITY } from './services/coachIdentity';
+import { exportPlanToWord } from './services/exportToWord';
+import { structurePlanSections } from './services/planFormatters';
+import FicheFrigoPreview from './FicheFrigoPreview';
 
 export default function JourneyPlanEditor({ client, onPlanSaved }) {
+  const [tab, setTab] = useState('plan'); // 'plan' | 'fridge'
   const [planText, setPlanText] = useState('');
+  const [aiDirectives, setAiDirectives] = useState('');
+  const [consultation, setConsultation] = useState(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [exporting, setExporting] = useState(null); // 'plan' | 'fridge'
   const [showGenModal, setShowGenModal] = useState(false);
-  const [genNote, setGenNote] = useState('');
-  const [genResult, setGenResult] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showFridgeModal, setShowFridgeModal] = useState(false);
   const [error, setError] = useState(null);
+  const [savedToast, setSavedToast] = useState(false);
+
+  // Phase Q : split en sections + IA par section
+  const sections = useMemo(() => splitPlanIntoSections(planText), [planText]);
+  const [aiBusy, setAiBusy] = useState(null); // { sectionIndex, action } | null
+  const [aiError, setAiError] = useState(null);
+
+  const updateSection = (index, newContent) => {
+    const next = sections.map((s, i) => i === index ? { ...s, content: newContent } : s);
+    setPlanText(joinSectionsIntoPlan(next));
+  };
+  const updateSectionTitle = (index, newTitle) => {
+    const next = sections.map((s, i) => i === index ? { ...s, title: newTitle } : s);
+    setPlanText(joinSectionsIntoPlan(next));
+  };
+  const removeSection = (index) => {
+    if (!window.confirm(`Supprimer la section "${sections[index].title}" ?`)) return;
+    const next = sections.filter((_, i) => i !== index);
+    setPlanText(joinSectionsIntoPlan(next));
+  };
+  const insertSectionAfter = (index) => {
+    const next = [...sections];
+    next.splice(index + 1, 0, { title: 'NOUVELLE SECTION', content: '' });
+    setPlanText(joinSectionsIntoPlan(next));
+  };
 
   const loadLatest = useCallback(async () => {
     if (!client?.id) {
@@ -45,41 +70,85 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
       return;
     }
     setLoadingInitial(true);
-    // 1) Local store first (rapide)
     const local = getNutritionConsultations(client.id);
     if (local && local.length > 0) {
-      setPlanText(local[0].nutritionPlan || '');
+      const last = local[0];
+      setConsultation(last);
+      setPlanText(last.nutritionPlan || '');
+      setAiDirectives(last.aiDirectives || '');
       setLoadingInitial(false);
       return;
     }
-    // 2) Sinon Supabase
     const { data } = await supabase
       .from('nutrition_consultations')
-      .select('nutrition_plan, plan_text')
+      .select('nutrition_plan, plan_text, ai_directives, fiche_frigo_json, created_at')
       .eq('client_id', client.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    setPlanText(data?.nutrition_plan || data?.plan_text || '');
+    if (data) {
+      setConsultation({
+        clientId: client.id,
+        nutritionPlan: data.nutrition_plan || data.plan_text || '',
+        aiDirectives: data.ai_directives || '',
+        ficheFrigoJson: data.fiche_frigo_json || null,
+        createdAt: data.created_at,
+      });
+      setPlanText(data.nutrition_plan || data.plan_text || '');
+      setAiDirectives(data.ai_directives || '');
+    }
     setLoadingInitial(false);
   }, [client?.id]);
 
   useEffect(() => { loadLatest(); }, [loadLatest]);
+
+  // ─── Reecriture IA d'une section ─────────────────────────────
+  const runRewriteSection = async (sectionIndex, action) => {
+    const target = sections[sectionIndex];
+    if (!target || target.content.trim().length < 10) {
+      setAiError('Cette section est trop courte pour une transformation IA.');
+      return;
+    }
+    setAiBusy({ sectionIndex, action });
+    setAiError(null);
+    try {
+      const system = REWRITE_PROMPTS[action];
+      const res = await callClaude({
+        system,
+        user: target.content,
+        model: 'claude-sonnet-4-20250514',
+        maxTokens: 4000,
+      });
+      const newText = typeof res === 'string' ? res : (res?.text || '').trim();
+      if (!newText) throw new Error('Réponse IA vide');
+      const cleaned = newText.replace(/^"|"$/g, '').trim();
+      updateSection(sectionIndex, cleaned);
+    } catch (e) {
+      setAiError(e?.message || 'Erreur réécriture IA');
+    } finally {
+      setAiBusy(null);
+    }
+  };
 
   // ─── Sauvegarde ──────────────────────────────────────────────
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     try {
-      const consultation = {
+      const next = {
+        ...(consultation || { clientId: client.id }),
         clientId: client.id,
         nutritionPlan: planText,
-        createdAt: new Date().toISOString(),
+        aiDirectives,
+        createdAt: consultation?.createdAt || new Date().toISOString(),
         status: 'a_valider',
         consultantName: COACH_IDENTITY?.name || 'Anissa',
       };
-      await saveNutritionConsultation(consultation);
+      await saveNutritionConsultation(next);
+      setConsultation(next);
       onPlanSaved?.();
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 2400);
     } catch (e) {
       setError(e?.message || 'Erreur sauvegarde');
     } finally {
@@ -87,42 +156,28 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
     }
   };
 
-  // ─── Generation IA ──────────────────────────────────────────
-  const handleGenerate = async () => {
-    setGenerating(true);
+  // ─── Export Word ─────────────────────────────────────────────
+  const handleExportPlan = async () => {
+    setExporting('plan');
     setError(null);
-    setGenResult(null);
     try {
-      const form = client.form || {};
-      const planMode = form.consultationType === 'oneshot' ? 'oneshot' : 'followup';
-      const system = buildSystemPromptFr(form, {
-        isFollowup: false,
-        clientFormule: client.formule || 'nutrition',
-        followupWeek: 0,
-        planMode,
-      });
-      const user = buildMinimalUserMessage(client, form, genNote);
-      const result = await callClaude({
-        system,
-        user,
-        model: 'claude-sonnet-4-20250514',
-        maxTokens: 16000,
-      });
-      setGenResult(typeof result === 'string' ? result : result?.text || JSON.stringify(result));
+      await exportPlanToWord(client, consultation || { clientId: client.id, date: new Date().toISOString() }, planText);
     } catch (e) {
-      setError(e?.message || 'Erreur génération IA');
+      setError(e?.message || 'Erreur export Word');
     } finally {
-      setGenerating(false);
+      setExporting(null);
     }
   };
 
-  const adoptGenResult = () => {
-    if (!genResult) return;
-    setPlanText(genResult);
-    setGenResult(null);
-    setShowGenModal(false);
-    setGenNote('');
-  };
+  // Sections parsees du plan pour FicheFrigoPreview (composant existant)
+  const fridgeSections = useMemo(() => {
+    if (!planText) return [];
+    try {
+      return structurePlanSections(planText, '', { isFollowup: false, locale: 'FR' });
+    } catch {
+      return [];
+    }
+  }, [planText]);
 
   if (loadingInitial) {
     return <div style={{ color: 'var(--jrn-text-muted)' }}>Chargement du plan…</div>;
@@ -132,55 +187,146 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
 
   return (
     <div>
-      <div className="jrn-actions" style={{ marginTop: 0, marginBottom: 'var(--jrn-5)' }}>
-        <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--primary">
-          {hasPlan ? 'Régénérer avec l\'IA' : 'Générer avec l\'IA'}
+      {/* ─── Tabs ──────────────────────────────────────────────── */}
+      <div className="jpe-tabs">
+        <button onClick={() => setTab('plan')} className={`jpe-tab ${tab === 'plan' ? 'jpe-tab--active' : ''}`}>
+          Plan nutritionnel
         </button>
-        {hasPlan && (
-          <button onClick={handleSave} disabled={saving} className="jrn-btn jrn-btn--soft">
-            {saving ? 'Sauvegarde…' : 'Sauvegarder'}
-          </button>
-        )}
+        <button onClick={() => setTab('fridge')} className={`jpe-tab ${tab === 'fridge' ? 'jpe-tab--active' : ''}`} disabled={!hasPlan}>
+          Fiche frigo
+        </button>
       </div>
 
-      {!hasPlan && (
-        <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-10)' }}>
-          <p style={{ margin: 0, color: 'var(--jrn-text-muted)' }}>
-            Aucun plan pour le moment.<br />
-            Cliquez sur <strong>Générer avec l'IA</strong> pour créer un premier brouillon.
-          </p>
-        </div>
+      {/* ─── Tab : Plan ────────────────────────────────────────── */}
+      {tab === 'plan' && (
+        <>
+          <div className="jrn-actions" style={{ marginTop: 'var(--jrn-5)', marginBottom: 'var(--jrn-5)' }}>
+            <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--primary">
+              {hasPlan ? 'Régénérer avec l\'IA' : 'Générer avec l\'IA'}
+            </button>
+            {hasPlan && (
+              <>
+                <button onClick={() => setShowPreviewModal(true)} className="jrn-btn jrn-btn--soft">
+                  Aperçu plein écran
+                </button>
+                <button onClick={handleSave} disabled={saving} className="jrn-btn jrn-btn--soft">
+                  {saving ? 'Sauvegarde…' : 'Sauvegarder'}
+                </button>
+                <button onClick={handleExportPlan} disabled={exporting === 'plan'} className="jrn-btn jrn-btn--ghost">
+                  {exporting === 'plan' ? 'Export…' : 'Exporter Word'}
+                </button>
+              </>
+            )}
+            {savedToast && <span style={{ color: 'var(--jrn-accent)', fontSize: 'var(--jrn-text-xs)' }}>✓ Sauvegardé</span>}
+          </div>
+
+          {!hasPlan && (
+            <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-12)' }}>
+              <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-md)' }}>
+                Aucun plan pour le moment.<br />
+                Cliquez sur <strong style={{ color: 'var(--jrn-text)' }}>Générer avec l'IA</strong> pour créer un premier brouillon.
+              </p>
+            </div>
+          )}
+
+          {hasPlan && (
+            <>
+              {aiError && <div className="jrn-error" style={{ marginBottom: 'var(--jrn-3)' }}>⚠ {aiError}</div>}
+
+              {/* Liste de sections editables */}
+              <div className="jpe-sections">
+                {sections.map((section, i) => (
+                  <PlanSection
+                    key={i}
+                    index={i}
+                    title={section.title}
+                    content={section.content}
+                    onTitleChange={(v) => updateSectionTitle(i, v)}
+                    onContentChange={(v) => updateSection(i, v)}
+                    onDelete={() => removeSection(i)}
+                    onInsertAfter={() => insertSectionAfter(i)}
+                    onAi={(action) => runRewriteSection(i, action)}
+                    busyAction={aiBusy?.sectionIndex === i ? aiBusy.action : null}
+                  />
+                ))}
+                {sections.length === 0 && (
+                  <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-8)' }}>
+                    <p style={{ margin: 0, color: 'var(--jrn-text-muted)' }}>
+                      Le plan n'a pas de sections (titres ##). Le contenu brut :
+                    </p>
+                    <textarea
+                      value={planText}
+                      onChange={(e) => setPlanText(e.target.value)}
+                      rows={20}
+                      className="jrn-textarea"
+                      style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, marginTop: 'var(--jrn-3)' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </>
       )}
 
-      {hasPlan && (
-        <textarea
-          value={planText}
-          onChange={(e) => setPlanText(e.target.value)}
-          rows={28}
-          className="jrn-textarea"
-          style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, lineHeight: 1.65 }}
-          placeholder="Le plan généré apparaîtra ici en markdown. Vous pouvez l'éditer librement."
-        />
+      {/* ─── Tab : Fiche frigo ─────────────────────────────────── */}
+      {tab === 'fridge' && (
+        <div style={{ marginTop: 'var(--jrn-5)' }}>
+          {!hasPlan ? (
+            <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-10)' }}>
+              <p style={{ margin: 0, color: 'var(--jrn-text-muted)' }}>
+                Générez d'abord un plan nutritionnel pour construire la fiche frigo.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="jrn-step-intro" style={{ marginTop: 0, marginBottom: 'var(--jrn-4)' }}>
+                Fiche frigo extraite automatiquement du plan. Cliquez ci-dessous pour ouvrir l'éditeur complet (3 vues : aperçu, édition, vue cliente) et l'export PDF.
+              </p>
+              <div className="jrn-actions" style={{ marginTop: 0 }}>
+                <button onClick={() => setShowFridgeModal(true)} className="jrn-btn jrn-btn--primary">
+                  Ouvrir l'éditeur fiche frigo
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {error && <div className="jrn-error">⚠ {error}</div>}
 
-      {/* ─── Modal de génération ─────────────────────────────────── */}
+      {/* ─── Modals ────────────────────────────────────────────── */}
       {showGenModal && (
         <GenerationModal
-          generating={generating}
-          result={genResult}
-          note={genNote}
-          onNoteChange={setGenNote}
-          onCancel={() => {
+          client={client}
+          aiDirectives={aiDirectives}
+          onDirectivesChange={setAiDirectives}
+          onCancel={() => setShowGenModal(false)}
+          onAdopt={(text, updatedDirectives) => {
+            setPlanText(text);
+            setAiDirectives(updatedDirectives);
             setShowGenModal(false);
-            setGenResult(null);
-            setGenNote('');
-            setError(null);
+            // Persistance auto des directives mises a jour
+            if (updatedDirectives !== aiDirectives) {
+              setTimeout(() => handleSave(), 50);
+            }
           }}
-          onGenerate={handleGenerate}
-          onAdopt={adoptGenResult}
-          error={error}
+        />
+      )}
+      {showPreviewModal && (
+        <PreviewModal text={planText} onClose={() => setShowPreviewModal(false)} />
+      )}
+      {showFridgeModal && (
+        <FicheFrigoPreview
+          consultation={{
+            ...(consultation || {}),
+            nutritionPlan: planText,
+            ficheFrigoJson: consultation?.ficheFrigoJson || consultation?.fiche_frigo_json || null,
+            date: consultation?.createdAt || new Date().toISOString(),
+          }}
+          sections={fridgeSections}
+          client={client}
+          onClose={() => setShowFridgeModal(false)}
         />
       )}
     </div>
@@ -188,88 +334,413 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Modal de génération
+// Modal de génération (plein écran lisible)
 // ═══════════════════════════════════════════════════════════════════
 
-function GenerationModal({ generating, result, note, onNoteChange, onCancel, onGenerate, onAdopt, error }) {
+function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, onAdopt }) {
+  const [draftDirectives, setDraftDirectives] = useState(aiDirectives || '');
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Barre de progression estimee : asymptote vers 92% sur ~60s, puis 100% a l'arrivee.
+  // L'API Claude ne stream pas la progression reelle ; on simule pour donner du feedback.
+  useEffect(() => {
+    if (!generating) return;
+    setProgress(0);
+    setElapsed(0);
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const sec = (Date.now() - startTime) / 1000;
+      setElapsed(sec);
+      // Courbe : 0 → 92% en ~80s, asymptotique
+      setProgress(92 * (1 - Math.exp(-sec / 28)));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [generating]);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setError(null);
+    setResult(null);
+    try {
+      const form = client.form || {};
+      const planMode = form.consultationType === 'oneshot' ? 'oneshot' : 'followup';
+      const system = buildSystemPromptFr(form, {
+        isFollowup: false,
+        clientFormule: client.formule || 'nutrition',
+        followupWeek: 0,
+        planMode,
+      });
+      const user = buildMinimalUserMessage(client, form, draftDirectives);
+      const res = await callClaude({
+        system,
+        user,
+        model: 'claude-sonnet-4-20250514',
+        maxTokens: 16000,
+      });
+      setProgress(100);
+      // micro-pause pour que la barre atteigne 100% visuellement avant de switcher
+      await new Promise((r) => setTimeout(r, 350));
+      setResult(typeof res === 'string' ? res : res?.text || JSON.stringify(res));
+      onDirectivesChange?.(draftDirectives);
+    } catch (e) {
+      setError(e?.message || 'Erreur génération IA');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
-    <div style={modalOverlayStyle} onClick={(e) => {
+    <div className="jpe-modal-overlay" onClick={(e) => {
       if (e.target === e.currentTarget && !generating) onCancel();
     }}>
-      <div style={modalCardStyle}>
-        <header style={{ marginBottom: 'var(--jrn-5)' }}>
-          <p className="jrn-step-eyebrow">Génération IA</p>
-          <h3 style={{ fontFamily: 'var(--jrn-font-display)', fontStyle: 'italic', fontSize: 'var(--jrn-text-2xl)', margin: '4px 0 0', fontWeight: 500, color: 'var(--jrn-text)' }}>
-            Nouveau plan nutritionnel
-          </h3>
+      <div className="jpe-modal jpe-modal--xl">
+        <header className="jpe-modal__header">
+          <div>
+            <p className="jrn-step-eyebrow">Génération IA</p>
+            <h3 className="jpe-modal__title">Nouveau plan nutritionnel</h3>
+          </div>
+          <button onClick={onCancel} disabled={generating} className="jrn-btn jrn-btn--ghost">Fermer</button>
         </header>
 
         {!result && (
-          <>
-            <label className="jrn-label" htmlFor="gen-note">Note pour l'IA (optionnel)</label>
+          <div className="jpe-modal__body">
+            <label className="jrn-label" htmlFor="gen-directives">
+              Directives pour l'IA (persistantes pour cette cliente)
+            </label>
             <textarea
-              id="gen-note"
-              value={note}
-              onChange={(e) => onNoteChange(e.target.value)}
-              rows={4}
+              id="gen-directives"
+              value={draftDirectives}
+              onChange={(e) => setDraftDirectives(e.target.value)}
+              rows={6}
               className="jrn-textarea"
-              placeholder="Précisions sur le contexte, contraintes spécifiques, axes prioritaires…"
+              placeholder="Ex : préférer les céréales sans gluten, intégrer 2 portions de poisson par semaine, exclure tous les édulcorants, axer sur l'énergie matinale…"
               disabled={generating}
             />
             <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', lineHeight: 1.6 }}>
-              L'IA utilisera l'anamnèse, les objectifs et la synthèse résultats pour générer un plan complet (4 semaines, menus, listes de courses).
+              Ces directives sont sauvegardées avec la cliente et réutilisées à chaque génération. Elles s'ajoutent à l'anamnèse, aux objectifs et à la synthèse résultats déjà transmis à l'IA.
             </p>
-
-            <div className="jrn-actions" style={{ marginTop: 'var(--jrn-6)' }}>
-              <button onClick={onGenerate} disabled={generating} className="jrn-btn jrn-btn--primary">
-                {generating ? 'Génération en cours…' : 'Lancer la génération'}
-              </button>
-              <button onClick={onCancel} disabled={generating} className="jrn-btn jrn-btn--ghost">
-                Annuler
-              </button>
-            </div>
-            {generating && (
-              <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-                Cela peut prendre 30 à 90 secondes selon la complexité du profil.
-              </p>
+            {!generating && (
+              <div className="jrn-actions">
+                <button onClick={handleGenerate} className="jrn-btn jrn-btn--primary">
+                  Lancer la génération
+                </button>
+              </div>
             )}
-          </>
+
+            {generating && (
+              <div className="jpe-progress">
+                <div className="jpe-progress__head">
+                  <span className="jpe-progress__label">
+                    {progress < 30 && 'Préparation du contexte…'}
+                    {progress >= 30 && progress < 60 && 'L\'IA analyse l\'anamnèse…'}
+                    {progress >= 60 && progress < 90 && 'Construction du plan nutritionnel…'}
+                    {progress >= 90 && progress < 100 && 'Finalisation…'}
+                    {progress >= 100 && 'Plan reçu ✓'}
+                  </span>
+                  <span className="jpe-progress__time">
+                    {elapsed.toFixed(0)}s · {Math.round(progress)}%
+                  </span>
+                </div>
+                <div className="jpe-progress__track">
+                  <div
+                    className="jpe-progress__fill"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <p className="jpe-progress__hint">
+                  La génération prend généralement 30 à 90 secondes. Ne fermez pas la fenêtre.
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
         {result && (
-          <>
-            <p className="jrn-label">Aperçu du plan généré</p>
-            <div style={previewBoxStyle}>{result.slice(0, 1200)}{result.length > 1200 ? '…' : ''}</div>
-            <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-              {result.length} caractères. Adopter remplace le plan actuel par ce nouveau brouillon.
-            </p>
-            <div className="jrn-actions" style={{ marginTop: 'var(--jrn-5)' }}>
-              <button onClick={onAdopt} className="jrn-btn jrn-btn--primary">
+          <div className="jpe-modal__body">
+            <div className="jpe-preview">
+              <RenderedMarkdown text={result} />
+            </div>
+            <div className="jrn-actions">
+              <button onClick={() => onAdopt(result, draftDirectives)} className="jrn-btn jrn-btn--primary">
                 Adopter ce plan
               </button>
-              <button onClick={onGenerate} className="jrn-btn jrn-btn--soft">
+              <button onClick={() => { setResult(null); }} className="jrn-btn jrn-btn--soft">
                 Régénérer
               </button>
               <button onClick={onCancel} className="jrn-btn jrn-btn--ghost">
-                Annuler
+                Fermer sans adopter
               </button>
             </div>
-          </>
+            <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
+              {result.length.toLocaleString('fr-CH')} caractères · adopter remplace le plan actuel.
+            </p>
+          </div>
         )}
 
-        {error && <div className="jrn-error">⚠ {error}</div>}
+        {error && <div className="jrn-error" style={{ padding: '0 var(--jrn-6) var(--jrn-4)' }}>⚠ {error}</div>}
       </div>
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Modal aperçu plein écran lisible (lecture du plan actuel)
+// ═══════════════════════════════════════════════════════════════════
+
+function PreviewModal({ text, onClose }) {
+  return (
+    <div className="jpe-modal-overlay" onClick={(e) => {
+      if (e.target === e.currentTarget) onClose();
+    }}>
+      <div className="jpe-modal jpe-modal--xl">
+        <header className="jpe-modal__header">
+          <div>
+            <p className="jrn-step-eyebrow">Aperçu</p>
+            <h3 className="jpe-modal__title">Plan nutritionnel actuel</h3>
+          </div>
+          <button onClick={onClose} className="jrn-btn jrn-btn--ghost">Fermer</button>
+        </header>
+        <div className="jpe-modal__body">
+          <div className="jpe-preview">
+            <RenderedMarkdown text={text} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Render markdown léger (pas de lib externe)
+// ═══════════════════════════════════════════════════════════════════
+
+function RenderedMarkdown({ text }) {
+  if (!text) return null;
+  // Rendu minimaliste : titres / paragraphes / listes
+  const lines = text.split('\n');
+  const blocks = [];
+  let buffer = [];
+  let inList = false;
+
+  const flushBuffer = () => {
+    if (buffer.length === 0) return;
+    blocks.push({ type: 'p', content: buffer.join(' ').trim() });
+    buffer = [];
+  };
+
+  lines.forEach((rawLine, i) => {
+    const line = rawLine.trimEnd();
+    if (line.startsWith('# ')) { flushBuffer(); inList = false; blocks.push({ type: 'h1', content: line.slice(2) }); return; }
+    if (line.startsWith('## ')) { flushBuffer(); inList = false; blocks.push({ type: 'h2', content: line.slice(3) }); return; }
+    if (line.startsWith('### ')) { flushBuffer(); inList = false; blocks.push({ type: 'h3', content: line.slice(4) }); return; }
+    if (line.startsWith('#### ')) { flushBuffer(); inList = false; blocks.push({ type: 'h4', content: line.slice(5) }); return; }
+    if (/^\s*[-*•]\s+/.test(line)) {
+      flushBuffer();
+      if (!inList) { blocks.push({ type: 'ul-start' }); inList = true; }
+      blocks.push({ type: 'li', content: line.replace(/^\s*[-*•]\s+/, '') });
+      return;
+    }
+    if (line === '') {
+      flushBuffer();
+      if (inList) { blocks.push({ type: 'ul-end' }); inList = false; }
+      return;
+    }
+    buffer.push(line);
+  });
+  flushBuffer();
+  if (inList) blocks.push({ type: 'ul-end' });
+
+  // Rendu
+  const out = [];
+  let listItems = [];
+  blocks.forEach((b, i) => {
+    if (b.type === 'ul-start') { listItems = []; return; }
+    if (b.type === 'li') { listItems.push(b.content); return; }
+    if (b.type === 'ul-end') {
+      out.push(<ul key={`ul-${i}`} className="jpe-md__ul">{listItems.map((it, j) => <li key={j}>{renderInline(it)}</li>)}</ul>);
+      listItems = [];
+      return;
+    }
+    if (b.type === 'h1') out.push(<h1 key={i} className="jpe-md__h1">{b.content}</h1>);
+    else if (b.type === 'h2') out.push(<h2 key={i} className="jpe-md__h2">{b.content}</h2>);
+    else if (b.type === 'h3') out.push(<h3 key={i} className="jpe-md__h3">{b.content}</h3>);
+    else if (b.type === 'h4') out.push(<h4 key={i} className="jpe-md__h4">{b.content}</h4>);
+    else if (b.type === 'p') out.push(<p key={i} className="jpe-md__p">{renderInline(b.content)}</p>);
+  });
+  return <div className="jpe-md">{out}</div>;
+}
+
+// Rendu inline : **gras** et *italique* basiques
+function renderInline(text) {
+  const parts = [];
+  let remaining = text;
+  let key = 0;
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/\*\*([^*]+)\*\*/);
+    const italMatch = remaining.match(/\*([^*]+)\*/);
+    if (boldMatch && (!italMatch || boldMatch.index <= italMatch.index)) {
+      if (boldMatch.index > 0) parts.push(remaining.slice(0, boldMatch.index));
+      parts.push(<strong key={key++}>{boldMatch[1]}</strong>);
+      remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
+    } else if (italMatch) {
+      if (italMatch.index > 0) parts.push(remaining.slice(0, italMatch.index));
+      parts.push(<em key={key++}>{italMatch[1]}</em>);
+      remaining = remaining.slice(italMatch.index + italMatch[0].length);
+    } else {
+      parts.push(remaining);
+      break;
+    }
+  }
+  return parts;
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // User message minimaliste pour la génération
 // ═══════════════════════════════════════════════════════════════════
 
-function buildMinimalUserMessage(client, form, extraNote) {
+// ═══════════════════════════════════════════════════════════════════
+// PlanSection — carte éditable d'une section du plan
+// ═══════════════════════════════════════════════════════════════════
+
+function PlanSection({ index, title, content, onTitleChange, onContentChange, onDelete, onInsertAfter, onAi, busyAction }) {
+  const isBusy = busyAction !== null;
+  return (
+    <div className="jpe-section">
+      <header className="jpe-section__head">
+        <span className="jpe-section__num">{index + 1}</span>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          className="jpe-section__title"
+          placeholder="Titre de la section"
+        />
+        <div className="jpe-section__head-actions">
+          <button onClick={onInsertAfter} className="jpe-section__icon-btn" title="Ajouter une section après">＋</button>
+          <button onClick={onDelete} className="jpe-section__icon-btn jpe-section__icon-btn--danger" title="Supprimer la section">🗑</button>
+        </div>
+      </header>
+
+      <textarea
+        value={content}
+        onChange={(e) => onContentChange(e.target.value)}
+        rows={Math.max(6, Math.min(20, (content || '').split('\n').length + 1))}
+        className="jpe-section__textarea"
+        placeholder="Contenu de la section…"
+      />
+
+      <footer className="jpe-section__footer">
+        <span className="jpe-section__ai-label">✨ Réécrire avec l'IA</span>
+        <div className="jpe-section__ai-actions">
+          {Object.entries(REWRITE_LABELS).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onAi(key)}
+              disabled={isBusy || !content || content.trim().length < 10}
+              className="jpe-ai-btn"
+              title={REWRITE_HELP[key]}
+            >
+              {busyAction === key ? '…' : label}
+            </button>
+          ))}
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Split / Join : convertit markdown ↔ sections
+// ═══════════════════════════════════════════════════════════════════
+
+function splitPlanIntoSections(text) {
+  if (!text || !text.trim()) return [];
+  const lines = text.split('\n');
+  const sections = [];
+  let current = null;
+  let preamble = [];
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^##\s+(.+)$/);
+    if (headerMatch) {
+      if (current) sections.push(current);
+      current = { title: headerMatch[1].trim(), content: '' };
+    } else if (current) {
+      current.content += (current.content ? '\n' : '') + line;
+    } else {
+      preamble.push(line);
+    }
+  }
+  if (current) sections.push(current);
+
+  // Si du contenu existe avant le 1er ##, on le met en section "Préambule"
+  const preambleText = preamble.join('\n').trim();
+  if (preambleText) {
+    sections.unshift({ title: 'PRÉAMBULE', content: preambleText });
+  }
+
+  // Trim each section content
+  return sections.map((s) => ({
+    title: s.title,
+    content: s.content.replace(/^\n+/, '').replace(/\n+$/, ''),
+  }));
+}
+
+function joinSectionsIntoPlan(sections) {
+  return sections
+    .map((s) => `## ${s.title}\n\n${s.content}`.trim())
+    .join('\n\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Réécriture IA — actions disponibles + prompts dédiés
+// ═══════════════════════════════════════════════════════════════════
+
+const REWRITE_LABELS = {
+  rewrite:     'Reformuler pro',
+  simplify:    'Simplifier',
+  adapt:       'Adapter cliente',
+  actionnable: 'Rendre actionnable',
+};
+const REWRITE_HELP = {
+  rewrite:     'Reformuler le passage avec un style fluide et professionnel',
+  simplify:    'Raccourcir et alléger le passage tout en gardant les recommandations clés',
+  adapt:       'Adapter le ton pour la cliente (vouvoiement bienveillant, vocabulaire grand public)',
+  actionnable: 'Transformer en liste d\'actions concrètes et exécutables',
+};
+const REWRITE_BASE = `Tu es Anissa Deroubaix, nutritionniste fonctionnelle suisse. Tu reécris un passage d'un programme nutritionnel.
+
+RÈGLES STRICTES :
+- Conserve EXACTEMENT les dosages, posologies, marques, nombres, doses et noms de compléments
+- Conserve la structure markdown (titres, listes, gras)
+- Réponds UNIQUEMENT avec le passage transformé — aucune introduction, aucun commentaire, aucune guillemets
+- Ne change PAS le sens médical / nutritionnel du passage`;
+
+const REWRITE_PROMPTS = {
+  rewrite: `${REWRITE_BASE}
+
+ACTION : reformuler avec un style plus fluide et professionnel. Garder la même longueur approximative.`,
+  simplify: `${REWRITE_BASE}
+
+ACTION : simplifier et raccourcir le passage. Garder uniquement l'essentiel des recommandations. Phrases plus courtes, vocabulaire plus accessible.`,
+  adapt: `${REWRITE_BASE}
+
+ACTION : adapter le ton pour la cliente — vouvoiement chaleureux et bienveillant, vocabulaire grand public, ton encourageant. Garder le contenu mais le rendre humain et personnel.`,
+  actionnable: `${REWRITE_BASE}
+
+ACTION : transformer en liste d'actions concrètes et exécutables avec des verbes d'action clairs. Format : puces avec verbes à l'infinitif (ex: "Boire 1L d'eau au réveil"). Garder dosages et marques exacts.`,
+};
+
+function buildMinimalUserMessage(client, form, directives) {
   const journey = client.journey_state || {};
   const lines = [];
+
+  // ─── Profil ─────────────────────────────────────────────────
   lines.push(`Profil cliente : ${form.prenom || 'Cliente'}, ${form.sexe || 'genre non renseigné'}`);
   if (form.dateNaissance) lines.push(`Date de naissance : ${form.dateNaissance}`);
   if (form.poids) lines.push(`Poids : ${form.poids}`);
@@ -282,53 +753,46 @@ function buildMinimalUserMessage(client, form, extraNote) {
   if (form.sommeil) lines.push(`Sommeil : ${form.sommeil}`);
   if (form.stress) lines.push(`Stress : ${form.stress}`);
   if (form.digestion) lines.push(`Digestion : ${form.digestion}`);
-  if (journey.results_synthesis) {
+
+  // ─── Résultats analyses (Phase R : structure étendue) ───────
+  // On envoie le détail brut + les notes Anissa pour chaque analyse,
+  // PUIS la synthèse globale. L'IA dispose donc de la donnée + l'interprétation.
+  const rd = journey.results_data;
+  if (rd) {
+    const fromPlan = Array.isArray(rd.from_plan) ? rd.from_plan.filter((r) => r.value || r.synthesis) : [];
+    const external = Array.isArray(rd.external) ? rd.external.filter((r) => r.name && (r.value || r.synthesis)) : [];
+
+    if (fromPlan.length > 0) {
+      lines.push(`\n--- Résultats des analyses prescrites ---`);
+      fromPlan.forEach((r) => {
+        lines.push(`\n[${r.test_name || r.test_code}]`);
+        if (r.value) lines.push(`Valeurs : ${r.value}`);
+        if (r.synthesis) lines.push(`Notes Anissa : ${r.synthesis}`);
+      });
+    }
+
+    if (external.length > 0) {
+      lines.push(`\n--- Analyses externes (déjà détenues par la cliente) ---`);
+      external.forEach((r) => {
+        lines.push(`\n[${r.name}]`);
+        if (r.value) lines.push(`Valeurs : ${r.value}`);
+        if (r.synthesis) lines.push(`Notes Anissa : ${r.synthesis}`);
+      });
+    }
+
+    if (rd.global_synthesis && rd.global_synthesis.trim()) {
+      lines.push(`\n--- Synthèse globale Anissa (priorité analytique) ---\n${rd.global_synthesis.trim()}`);
+    }
+  } else if (journey.results_synthesis) {
+    // Fallback pour les clientes pré-Phase R (juste un texte synthese)
     lines.push(`\n--- Synthèse résultats analyses ---\n${journey.results_synthesis}`);
   }
-  if (extraNote && extraNote.trim()) {
-    lines.push(`\n--- Note additionnelle Anissa ---\n${extraNote.trim()}`);
+
+  // ─── Directives Anissa (priorité maximale) ──────────────────
+  if (directives && directives.trim()) {
+    lines.push(`\n--- Directives Anissa (priorité maximale) ---\n${directives.trim()}`);
   }
-  lines.push(`\nGénère le plan nutritionnel personnalisé complet (sections 1 à 7) avec menus variés, listes de courses par semaine, et alternatives naturelles.`);
+
+  lines.push(`\nGénère le plan nutritionnel personnalisé complet (sections 1 à 7) avec menus variés, listes de courses par semaine, et alternatives naturelles. Tiens compte des résultats analyses ci-dessus pour cibler les déficits et axes prioritaires.`);
   return lines.join('\n');
 }
-
-// ═══════════════════════════════════════════════════════════════════
-// Styles modal
-// ═══════════════════════════════════════════════════════════════════
-
-const modalOverlayStyle = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(15, 15, 15, 0.5)',
-  backdropFilter: 'blur(4px)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 100,
-  padding: 24,
-};
-const modalCardStyle = {
-  background: 'var(--jrn-surface)',
-  borderRadius: 'var(--jrn-radius-lg)',
-  padding: 'var(--jrn-8)',
-  maxWidth: 640,
-  width: '100%',
-  maxHeight: '85vh',
-  overflowY: 'auto',
-  boxShadow: 'var(--jrn-shadow-lg)',
-  fontFamily: 'var(--jrn-font-body)',
-};
-const previewBoxStyle = {
-  marginTop: 'var(--jrn-2)',
-  padding: 'var(--jrn-4)',
-  background: 'var(--jrn-surface-alt)',
-  border: '1px solid var(--jrn-border)',
-  borderRadius: 'var(--jrn-radius)',
-  maxHeight: 280,
-  overflowY: 'auto',
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-  fontSize: 12,
-  lineHeight: 1.6,
-  color: 'var(--jrn-text-soft)',
-  whiteSpace: 'pre-wrap',
-};

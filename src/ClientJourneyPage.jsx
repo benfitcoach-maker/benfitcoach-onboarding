@@ -24,12 +24,43 @@ import {
 import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
 import JourneyPlanEditor from './JourneyPlanEditor';
+import ClientAppPreviewModal from './ClientAppPreviewModal';
+import { getNutritionConsultations } from './store';
 import './styles/journey.css';
 
 export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Phase T : aperçu app cliente (modal mockup téléphone)
+  const [showAppPreview, setShowAppPreview] = useState(false);
+  const [previewConsultation, setPreviewConsultation] = useState(null);
+
+  const openAppPreview = useCallback(async () => {
+    if (!clientId) return;
+    // Recup la derniere consultation : local store puis fallback Supabase
+    let consult = (getNutritionConsultations(clientId) || [])[0] || null;
+    if (!consult) {
+      const { data } = await supabase
+        .from('nutrition_consultations')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        consult = {
+          clientId,
+          nutritionPlan: data.nutrition_plan || data.plan_text || '',
+          ficheFrigoJson: data.fiche_frigo_json || null,
+          aiDirectives: data.ai_directives || '',
+          createdAt: data.created_at,
+        };
+      }
+    }
+    setPreviewConsultation(consult || { clientId, nutritionPlan: '', date: new Date().toISOString() });
+    setShowAppPreview(true);
+  }, [clientId]);
 
   const loadClient = useCallback(async () => {
     if (!clientId) return;
@@ -128,6 +159,13 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
               ← Étape précédente
             </button>
           )}
+          <button
+            onClick={openAppPreview}
+            className="jrn-btn jrn-btn--soft"
+            title="Aperçu de ce que la cliente voit dans l'app"
+          >
+            📱 Aperçu app
+          </button>
           {onEditProfile && (
             <button onClick={onEditProfile} className="jrn-btn jrn-btn--ghost" title="Éditer le profil cliente">
               Profil
@@ -164,6 +202,15 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
             Une seule étape active à la fois. La suivante se débloque automatiquement après validation. L'état est sauvegardé en continu.
           </div>
         </aside>
+
+        {/* Phase T : Modal Aperçu app cliente (mockup mobile + publish) */}
+        {showAppPreview && previewConsultation && (
+          <ClientAppPreviewModal
+            client={client}
+            consultation={previewConsultation}
+            onClose={() => setShowAppPreview(false)}
+          />
+        )}
 
         <main className="jrn-main">
           {currentStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} />}
@@ -398,9 +445,65 @@ function StepWaitingResults({ client, onChange }) {
 // ═══════════════════════════════════════════════════════════════════
 
 function StepResults({ client, onChange }) {
-  const [synthesis, setSynthesis] = useState(client.journey_state?.results_synthesis || '');
+  // Init data depuis journey_state.results_data, fallback sur l'ancien field results_synthesis
+  const initialData = client.journey_state?.results_data || {
+    from_plan: [],
+    external: [],
+    global_synthesis: client.journey_state?.results_synthesis || '',
+  };
+  const [resultsByTest, setResultsByTest] = useState(initialData.from_plan || []);
+  const [externalAnalyses, setExternalAnalyses] = useState(initialData.external || []);
+  const [globalSynthesis, setGlobalSynthesis] = useState(initialData.global_synthesis || '');
+
+  const [planTests, setPlanTests] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+
+  // Charge le analysis_plan de la cliente pour pre-remplir les cartes par test
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const { data } = await supabase
+        .from('analysis_plans')
+        .select('selected_tests')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      const tests = Array.isArray(data?.selected_tests) ? data.selected_tests : [];
+      setPlanTests(tests);
+      // Merge : on garde les valeurs deja saisies, on ajoute les tests du plan absents
+      setResultsByTest((prev) => {
+        const map = new Map(prev.map((r) => [r.test_code || r.test_name, r]));
+        const merged = tests.map((t) => {
+          const key = t.code || t.name;
+          return map.get(key) || {
+            test_code: t.code,
+            test_name: t.name || t.code,
+            value: '',
+            synthesis: '',
+          };
+        });
+        return merged;
+      });
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [client.id]);
+
+  const updateTestField = (idx, field, value) => {
+    setResultsByTest((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+  const addExternal = () => {
+    setExternalAnalyses((prev) => [...prev, { name: '', value: '', synthesis: '' }]);
+  };
+  const updateExternal = (idx, field, value) => {
+    setExternalAnalyses((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+  const removeExternal = (idx) => {
+    setExternalAnalyses((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const handleValidate = async () => {
     setBusy(true); setErr(null);
@@ -410,7 +513,13 @@ function StepResults({ client, onChange }) {
         .update({
           journey_state: {
             ...(client.journey_state || {}),
-            results_synthesis: synthesis,
+            results_data: {
+              from_plan: resultsByTest,
+              external: externalAnalyses,
+              global_synthesis: globalSynthesis,
+            },
+            // Backward compat : on garde results_synthesis pour les vieilles vues
+            results_synthesis: globalSynthesis,
           },
         })
         .eq('id', client.id);
@@ -426,16 +535,90 @@ function StepResults({ client, onChange }) {
       <StepHead
         index={4}
         title="Saisie des résultats"
-        intro="Synthèse interne pour préparer le plan. Ce texte n'est pas envoyé directement à la cliente."
+        intro="Saisissez les résultats de chaque analyse demandée et ajoutez les analyses que la cliente possédait déjà. Synthèse globale en bas pour préparer le plan."
       />
 
-      <textarea
-        value={synthesis}
-        onChange={(e) => setSynthesis(e.target.value)}
-        rows={12}
-        placeholder="Déficits identifiés, axes prioritaires, alertes laboratoire, microbiome…"
-        className="jrn-textarea"
-      />
+      {/* ─── Tests du plan d'analyses ─────────────────────────── */}
+      {planTests && planTests.length > 0 && (
+        <div style={{ marginBottom: 'var(--jrn-8)' }}>
+          <p className="jrn-label" style={{ marginBottom: 'var(--jrn-3)' }}>
+            Analyses prescrites ({planTests.length})
+          </p>
+          <div className="jpe-sections">
+            {resultsByTest.map((r, i) => (
+              <ResultCard
+                key={r.test_code || i}
+                title={r.test_name}
+                badge="Plan d'analyses"
+                badgeColor="accent"
+                value={r.value}
+                synthesis={r.synthesis}
+                onValueChange={(v) => updateTestField(i, 'value', v)}
+                onSynthesisChange={(v) => updateTestField(i, 'synthesis', v)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {planTests && planTests.length === 0 && (
+        <div className="jrn-surface jrn-surface--quiet" style={{ marginBottom: 'var(--jrn-6)', textAlign: 'center', padding: 'var(--jrn-6)' }}>
+          <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
+            Pas d'analyses prescrites pour cette cliente. Vous pouvez tout de même saisir des analyses externes ci-dessous.
+          </p>
+        </div>
+      )}
+
+      {/* ─── Analyses externes (que la cliente avait deja) ─────── */}
+      <div style={{ marginBottom: 'var(--jrn-8)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--jrn-3)' }}>
+          <p className="jrn-label" style={{ margin: 0 }}>
+            Analyses externes ({externalAnalyses.length})
+          </p>
+          <button onClick={addExternal} className="jrn-btn jrn-btn--soft">
+            + Ajouter une analyse
+          </button>
+        </div>
+        {externalAnalyses.length === 0 && (
+          <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-5)' }}>
+            <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
+              Aucune analyse externe ajoutée. Si la cliente possédait déjà des résultats avant le suivi, cliquez sur "+ Ajouter une analyse".
+            </p>
+          </div>
+        )}
+        <div className="jpe-sections">
+          {externalAnalyses.map((r, i) => (
+            <ResultCard
+              key={i}
+              editable
+              title={r.name}
+              badge="Externe"
+              badgeColor="muted"
+              value={r.value}
+              synthesis={r.synthesis}
+              onTitleChange={(v) => updateExternal(i, 'name', v)}
+              onValueChange={(v) => updateExternal(i, 'value', v)}
+              onSynthesisChange={(v) => updateExternal(i, 'synthesis', v)}
+              onDelete={() => removeExternal(i)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ─── Synthese globale ─────────────────────────────────── */}
+      <div style={{ marginBottom: 'var(--jrn-6)' }}>
+        <p className="jrn-label">Synthèse globale Anissa</p>
+        <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 0, marginBottom: 'var(--jrn-3)' }}>
+          Vue d'ensemble : déficits identifiés, axes prioritaires, alertes croisées entre analyses. Sera injectée dans le prompt IA de génération du plan.
+        </p>
+        <textarea
+          value={globalSynthesis}
+          onChange={(e) => setGlobalSynthesis(e.target.value)}
+          rows={8}
+          placeholder="Ex: Carence en B12 confirmée, microbiome déséquilibré (faible diversité), inflammation latente. Prioriser anti-inflammatoire + soutien microbiote, supplémentation B12 méthylée…"
+          className="jrn-textarea"
+        />
+      </div>
 
       <div className="jrn-actions">
         <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
@@ -444,6 +627,61 @@ function StepResults({ client, onChange }) {
       </div>
       <ErrorLine msg={err} />
     </section>
+  );
+}
+
+// Carte d'une analyse (du plan ou externe)
+function ResultCard({ title, badge, badgeColor, value, synthesis, onValueChange, onSynthesisChange, editable, onTitleChange, onDelete }) {
+  const badgeStyle = badgeColor === 'accent'
+    ? { background: 'var(--jrn-accent-soft)', color: 'var(--jrn-accent)' }
+    : { background: 'rgba(0,0,0,0.05)', color: 'var(--jrn-text-muted)' };
+
+  return (
+    <div className="jpe-section">
+      <header className="jpe-section__head">
+        {editable ? (
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            className="jpe-section__title"
+            placeholder="Nom de l'analyse"
+          />
+        ) : (
+          <span className="jpe-section__title" style={{ borderBottom: 'none', cursor: 'default' }}>{title}</span>
+        )}
+        <span style={{ ...badgeStyle, fontSize: 10, fontWeight: 600, padding: '4px 10px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>
+          {badge}
+        </span>
+        {onDelete && (
+          <button onClick={onDelete} className="jpe-section__icon-btn jpe-section__icon-btn--danger" title="Supprimer">🗑</button>
+        )}
+      </header>
+      <div style={{ padding: 'var(--jrn-4) var(--jrn-5)', display: 'grid', gap: 'var(--jrn-3)' }}>
+        <div>
+          <label className="jrn-label">Valeur(s) / Résultat brut</label>
+          <textarea
+            value={value || ''}
+            onChange={(e) => onValueChange(e.target.value)}
+            rows={2}
+            className="jrn-textarea"
+            placeholder="Ex: B12 = 1200 pg/mL (norme 200-900), Vit D = 18 ng/mL…"
+            style={{ fontSize: 'var(--jrn-text-sm)' }}
+          />
+        </div>
+        <div>
+          <label className="jrn-label">Notes Anissa (interprétation, alertes)</label>
+          <textarea
+            value={synthesis || ''}
+            onChange={(e) => onSynthesisChange(e.target.value)}
+            rows={3}
+            className="jrn-textarea"
+            placeholder="Ex: B12 surdosée, surveiller. Vit D déficitaire → supplémentation prioritaire 4000 UI/j."
+            style={{ fontSize: 'var(--jrn-text-sm)' }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -65,7 +65,7 @@ const COLORS = {
  * V92.4 : parse markdown en sections {title, content} pour reuser
  * extractFridgeDataFromSections du PDF jsPDF (qui attend ce format).
  */
-function parseMarkdownToFlatSections(markdown) {
+export function parseMarkdownToFlatSections(markdown) {
   if (!markdown?.trim()) return [];
   const lines = markdown.split('\n');
   const sections = [];
