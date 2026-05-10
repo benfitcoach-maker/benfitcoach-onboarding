@@ -108,18 +108,10 @@ export default function ClientAppIframePreview({ client, prenom, onClose }) {
           };
         }
       }
-      const planText = consult?.nutritionPlan || consult?.nutrition_plan;
-      if (!consult || !planText || !planText.trim()) {
+      if (!consult || !consult.nutritionPlan) {
         throw new Error('Aucun plan nutritionnel à publier. Générez d\'abord un plan à l\'étape 6.');
       }
-      // Adapt camelCase store local → snake_case attendu par publishConsultationToClientApp
-      const consultationForPublish = {
-        ...consult,
-        nutrition_plan: planText,
-        fiche_frigo_json: consult.ficheFrigoJson || consult.fiche_frigo_json || null,
-        ai_directives: consult.aiDirectives || consult.ai_directives || '',
-      };
-      const result = await publishConsultationToClientApp(client, consultationForPublish);
+      const result = await publishConsultationToClientApp(client, consult);
       setPublishResult(result);
       // Refresh l'iframe pour que la cliente voie immediatement le nouveau plan
       setTimeout(() => refresh(), 800);
