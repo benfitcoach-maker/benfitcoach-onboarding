@@ -178,7 +178,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
         {/* Phase U : Aperçu iframe app cliente RÉELLE (cadre iPhone) */}
         {showAppPreview && (
           <ClientAppIframePreview
-            client={client}
+            clientId={client.id}
             prenom={prenom}
             onClose={() => setShowAppPreview(false)}
           />
