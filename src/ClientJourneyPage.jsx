@@ -24,43 +24,15 @@ import {
 import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
 import JourneyPlanEditor from './JourneyPlanEditor';
-import ClientAppPreviewModal from './ClientAppPreviewModal';
-import { getNutritionConsultations } from './store';
+import ClientAppIframePreview from './ClientAppIframePreview';
 import './styles/journey.css';
 
 export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Phase T : aperçu app cliente (modal mockup téléphone)
+  // Phase U : aperçu iframe app cliente RÉELLE (cadre iPhone + token signé)
   const [showAppPreview, setShowAppPreview] = useState(false);
-  const [previewConsultation, setPreviewConsultation] = useState(null);
-
-  const openAppPreview = useCallback(async () => {
-    if (!clientId) return;
-    // Recup la derniere consultation : local store puis fallback Supabase
-    let consult = (getNutritionConsultations(clientId) || [])[0] || null;
-    if (!consult) {
-      const { data } = await supabase
-        .from('nutrition_consultations')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        consult = {
-          clientId,
-          nutritionPlan: data.nutrition_plan || data.plan_text || '',
-          ficheFrigoJson: data.fiche_frigo_json || null,
-          aiDirectives: data.ai_directives || '',
-          createdAt: data.created_at,
-        };
-      }
-    }
-    setPreviewConsultation(consult || { clientId, nutritionPlan: '', date: new Date().toISOString() });
-    setShowAppPreview(true);
-  }, [clientId]);
 
   const loadClient = useCallback(async () => {
     if (!clientId) return;
@@ -160,9 +132,9 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
             </button>
           )}
           <button
-            onClick={openAppPreview}
+            onClick={() => setShowAppPreview(true)}
             className="jrn-btn jrn-btn--soft"
-            title="Aperçu de ce que la cliente voit dans l'app"
+            title="Aperçu réel de l'app cliente dans un cadre iPhone (data réelles, lecture seule)"
           >
             📱 Aperçu app
           </button>
@@ -203,11 +175,11 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
           </div>
         </aside>
 
-        {/* Phase T : Modal Aperçu app cliente (mockup mobile + publish) */}
-        {showAppPreview && previewConsultation && (
-          <ClientAppPreviewModal
-            client={client}
-            consultation={previewConsultation}
+        {/* Phase U : Aperçu iframe app cliente RÉELLE (cadre iPhone) */}
+        {showAppPreview && (
+          <ClientAppIframePreview
+            clientId={client.id}
+            prenom={prenom}
             onClose={() => setShowAppPreview(false)}
           />
         )}
