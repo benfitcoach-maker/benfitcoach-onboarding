@@ -25,6 +25,7 @@ import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
 import JourneyPlanEditor from './JourneyPlanEditor';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
+import JourneyMessagesPanel from './JourneyMessagesPanel';
 import { getNutritionConsultations } from './store';
 import './styles/journey.css';
 
@@ -35,6 +36,8 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   // Phase T : aperçu app cliente (modal mockup téléphone)
   const [showAppPreview, setShowAppPreview] = useState(false);
   const [previewConsultation, setPreviewConsultation] = useState(null);
+  // Phase AC : panel latéral messagerie SaaS ↔ cliente
+  const [showMessages, setShowMessages] = useState(false);
 
   const openAppPreview = useCallback(async () => {
     if (!clientId) return;
@@ -120,6 +123,11 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   const progressPct = Math.round((completedCount / JOURNEY_STEPS.length) * 100);
   const currentStepIndex = STEP_META[currentStep]?.index || 1;
 
+  // Phase AJ : compteur consultations utilisées vs incluses dans le pack
+  const consultationsTotal = pack?.consultations || 0;
+  const consultationsLog = Array.isArray(journey?.consultations_log) ? journey.consultations_log : [];
+  const consultationsUsed = consultationsLog.length;
+
   const refresh = () => loadClient();
 
   return (
@@ -159,6 +167,13 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
               ← Étape précédente
             </button>
           )}
+          <button
+            onClick={() => setShowMessages(true)}
+            className="jrn-btn jrn-btn--soft"
+            title="Messages avec la cliente + ressentis reçus"
+          >
+            💬 Messages
+          </button>
           <button
             onClick={openAppPreview}
             className="jrn-btn jrn-btn--soft"
@@ -212,6 +227,14 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
           />
         )}
 
+        {/* Phase AC : Panel messagerie SaaS ↔ cliente (slide-in droite) */}
+        {showMessages && (
+          <JourneyMessagesPanel
+            client={client}
+            onClose={() => setShowMessages(false)}
+          />
+        )}
+
         <main className="jrn-main">
           {currentStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} />}
           {currentStep === 'analyses' && <StepAnalyses client={client} journey={journey} onChange={refresh} />}
@@ -220,7 +243,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
           {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'plan_editing' && <StepPlanEditing client={client} onChange={refresh} />}
           {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} />}
-          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onExit={onExit} />}
+          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} />}
         </main>
       </div>
     </div>
@@ -778,10 +801,63 @@ function StepPlanEditing({ client, onChange }) {
 function StepDelivery({ client, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [versionsCount, setVersionsCount] = useState(0);
+  const [includePaper, setIncludePaper] = useState(true); // par défaut on demande
+  const [paperExported, setPaperExported] = useState(false);
+
+  // Charge le nombre de versions pour décider le défaut du toggle
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNutritionConsultations } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        if (cancelled) return;
+        setVersionsCount(list.length);
+        // Par défaut : papier ON pour version 1 (premier cycle = livret fondateur),
+        // OFF pour les versions suivantes (ajustements = app uniquement).
+        if (list.length > 1) setIncludePaper(false);
+      } catch { /* silencieux */ }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id]);
+
+  const isFirstVersion = versionsCount <= 1;
+
+  const handleExportWord = async () => {
+    setExporting(true);
+    setErr(null);
+    try {
+      const [{ exportPlanToWord }, { getNutritionConsultations }] = await Promise.all([
+        import('./services/exportToWord'),
+        import('./store'),
+      ]);
+      const consultations = getNutritionConsultations(client.id) || [];
+      const last = consultations[0];
+      if (!last) throw new Error('Aucune consultation à exporter');
+      await exportPlanToWord(client, last, last.nutritionPlan || '');
+      setPaperExported(true);
+    } catch (e) {
+      setErr(e?.message || 'Erreur export Word');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleDelivered = async () => {
     setBusy(true); setErr(null);
     try {
+      // Tag la consultation avec paperGenerated pour l'historique étape 8
+      if (includePaper) {
+        const { getNutritionConsultations, saveNutritionConsultation } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        const last = list[0];
+        if (last) {
+          await saveNutritionConsultation({ ...last, paperGenerated: true });
+        }
+      }
       await transitions.markDelivered(client.id);
       onChange();
     } catch (e) { setErr(e?.message || 'Erreur'); }
@@ -793,21 +869,65 @@ function StepDelivery({ client, onChange }) {
       <StepHead
         index={7}
         title="Livraison à la cliente"
-        intro="Préparez le plan pour la cliente : export PDF, envoi postal, mise à disposition dans l'app. Marquez cette étape quand le plan est entre ses mains."
+        intro={isFirstVersion
+          ? 'Premier cycle : livret papier premium + activation app cliente. Le \"waouh effect\" est important — la cliente reçoit quelque chose de tangible.'
+          : 'Adaptation depuis le cycle précédent. Par défaut, on publie uniquement sur l\'app (pas de spam postal). Cochez ci-dessous pour générer aussi un nouveau document papier si le changement est majeur.'}
       />
 
-      <div className="jrn-surface">
-        <div className="jrn-label">Checklist livraison</div>
-        <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--jrn-text-soft)', fontSize: 'var(--jrn-text-sm)', lineHeight: 1.8 }}>
-          <li>PDF généré depuis l'éditeur de plan (étape précédente)</li>
-          <li>Envoi postal préparé : étiquette + plan imprimé</li>
-          <li>Plan poussé sur l'app cliente si activée</li>
-        </ul>
+      {/* ─── Toggle papier ─────────────────────────────────────── */}
+      <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={includePaper}
+            onChange={(e) => setIncludePaper(e.target.checked)}
+            style={{ marginTop: 3, width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--jrn-accent)' }}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--jrn-text)' }}>
+              📦 Plan papier nécessaire pour ce cycle
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--jrn-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+              {isFirstVersion
+                ? 'Recommandé pour le premier cycle : livret fondateur premium qui ancre l\'expérience.'
+                : 'À cocher uniquement pour les changements majeurs : nouveau cycle 4 semaines, refonte protocole, nouvelle phase (postpartum, sèche, etc.).'}
+            </div>
+          </div>
+        </label>
       </div>
+
+      {/* ─── Section app cliente (toujours présente) ─────────────── */}
+      <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
+        <div className="jrn-label">📱 App cliente</div>
+        <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, marginBottom: 12, lineHeight: 1.55 }}>
+          Le plan sera disponible sur l'app dès la publication. La cliente reçoit une notification.
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--jrn-text-muted)', margin: 0 }}>
+          → Cliquez sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser et publier.
+        </p>
+      </div>
+
+      {/* ─── Section papier (conditionnelle) ──────────────────────── */}
+      {includePaper && (
+        <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
+          <div className="jrn-label">📦 Plan papier</div>
+          <ul style={{ margin: '8px 0 12px', paddingLeft: 20, color: 'var(--jrn-text-soft)', fontSize: 13, lineHeight: 1.8 }}>
+            <li>Générer le document Word depuis l'éditeur de plan</li>
+            <li>Imprimer (recto-verso recommandé)</li>
+            <li>Préparer enveloppe + étiquette adresse cliente</li>
+            <li>Envoi postal</li>
+          </ul>
+          <div className="jrn-actions" style={{ marginTop: 0 }}>
+            <button onClick={handleExportWord} disabled={exporting} className="jrn-btn jrn-btn--soft">
+              {exporting ? 'Export…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter Word')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="jrn-actions">
         <button onClick={handleDelivered} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : 'Plan livré, passer au suivi'}
+          {busy ? '…' : (includePaper ? 'Plan livré (papier + app), passer au suivi' : 'Plan publié sur app, passer au suivi')}
         </button>
       </div>
       <ErrorLine msg={err} />
@@ -819,42 +939,318 @@ function StepDelivery({ client, onChange }) {
 // ÉTAPE 8 — SUIVI
 // ═══════════════════════════════════════════════════════════════════
 
-function StepFollowup({ client, journey, onExit }) {
+function StepFollowup({ client, journey, onChange, onExit }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [loadingFb, setLoadingFb] = useState(true);
+  const [adapting, setAdapting] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [previewVersion, setPreviewVersion] = useState(null);
   const started = !!journey?.followup_started;
+
+  // Charge l'historique des versions du plan
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNutritionConsultations } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        if (cancelled) return;
+        setVersions(list);
+      } catch {
+        if (!cancelled) setVersions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id, journey]);
+
+  // Charge les ressentis recents (14 jours)
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const { fetchClientFeedbacks } = await import('./services/fetchClientFeedbacks');
+        const res = await fetchClientFeedbacks(client, 14);
+        if (cancelled) return;
+        setFeedbacks(Array.isArray(res) ? res : (res?.feedbacks || []));
+      } catch {
+        if (!cancelled) setFeedbacks([]);
+      } finally {
+        if (!cancelled) setLoadingFb(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [client]);
 
   const handleStart = async () => {
     setBusy(true); setErr(null);
     try {
       await transitions.startFollowup(client.id);
-      onExit();
+      onChange();
+    } catch (e) { setErr(e?.message || 'Erreur'); }
+    finally { setBusy(false); }
+  };
+
+  const handleRestartEditing = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await transitions.restartPlanEditing(client.id);
+      onChange();
     } catch (e) { setErr(e?.message || 'Erreur'); setBusy(false); }
+  };
+
+  const handleAdaptFromFeedback = async () => {
+    if (feedbacks.length === 0) {
+      setErr('Aucun ressenti à exploiter pour adapter le plan.');
+      return;
+    }
+    if (!window.confirm('Adapter le plan à partir des ressentis cliente ?\n\nL\'IA va générer une nouvelle version du plan en tenant compte des derniers retours. Vous serez ensuite redirigée vers l\'éditeur étape 6 pour relire et publier.')) return;
+    setAdapting(true);
+    setErr(null);
+    try {
+      const [{ adaptPlanFromReview }, { getNutritionConsultations, saveNutritionConsultation }] = await Promise.all([
+        import('./services/aiPlanOptimizer'),
+        import('./store'),
+      ]);
+      const consultations = getNutritionConsultations(client.id) || [];
+      const lastConsult = consultations[0];
+      const currentPlan = lastConsult?.nutritionPlan || '';
+      if (!currentPlan) throw new Error('Pas de plan actuel à adapter');
+
+      // review = synthèse rapide des ressentis pour l'IA
+      const reviewText = feedbacks.slice(0, 7).map((f, i) => {
+        const date = f.created_at ? new Date(f.created_at).toLocaleDateString('fr-CH') : '';
+        const body = f.body || f.text || f.message || '';
+        return `[${date}] ${body}`;
+      }).join('\n\n');
+
+      const adaptedPlan = await adaptPlanFromReview(client.form || {}, currentPlan, reviewText, '');
+      if (!adaptedPlan) throw new Error('Adaptation IA vide');
+
+      // Sauve comme NOUVELLE version (insert, ne touche pas l'ancienne).
+      // Le plan actuel devient automatiquement archivé (puisqu'une version
+      // plus récente existe). La cliente verra uniquement la version active
+      // (la plus récente) à sa prochaine connexion via publishConsultationToClientApp.
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('fr-CH', { day: '2-digit', month: 'short', year: '2-digit' });
+      const versionNum = (versions.length + 1);
+      await saveNutritionConsultation({
+        clientId: client.id,
+        nutritionPlan: adaptedPlan,
+        createdAt: today.toISOString(),
+        status: 'a_valider',
+        label: `V${versionNum} — Adaptation depuis ressentis du ${dateStr}`,
+        consultantName: 'Anissa',
+        adaptedFrom: lastConsult?.id || null,
+        feedbacksCount: feedbacks.length,
+      });
+
+      // Bascule en mode edition pour qu'Anissa relise
+      await transitions.restartPlanEditing(client.id);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur adaptation IA');
+    } finally {
+      setAdapting(false);
+    }
   };
 
   return (
     <section>
       <StepHead
         index={8}
-        title="Suivi"
-        intro="Le plan est livré. Le suivi continue : feedbacks, ajustements, revues de cycle, suivi pack 4 semaines."
+        title="Suivi continu"
+        intro="Le plan est livré. Vous suivez l'évolution de la cliente, adaptez son plan à partir de ses ressentis, et republiez à chaque cycle."
       />
 
-      {started ? (
-        <div className="jrn-surface jrn-surface--accent">
-          ✓ Le suivi est enclenché. Le parcours guidé est officiellement terminé pour cette cliente.
-        </div>
-      ) : (
-        <div className="jrn-actions">
-          <button onClick={handleStart} disabled={busy} className="jrn-btn jrn-btn--primary">
-            {busy ? '…' : 'Marquer le suivi comme enclenché'}
-          </button>
-          <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
-            Retour dashboard
-          </button>
+      {!started && (
+        <div className="jrn-surface jrn-surface--quiet" style={{ marginBottom: 'var(--jrn-6)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)' }}>
+            Le parcours initial est complet. Marquez le suivi comme enclenché pour activer ce cockpit.
+          </p>
+          <div className="jrn-actions" style={{ marginTop: 'var(--jrn-3)' }}>
+            <button onClick={handleStart} disabled={busy} className="jrn-btn jrn-btn--primary">
+              {busy ? '…' : 'Activer le suivi continu'}
+            </button>
+          </div>
         </div>
       )}
+
+      {started && (
+        <>
+          {/* ─── Section : derniers ressentis ──────────────────── */}
+          <div style={{ marginBottom: 'var(--jrn-6)' }}>
+            <p className="jrn-label">Derniers ressentis ({feedbacks.length})</p>
+            {loadingFb && <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>}
+            {!loadingFb && feedbacks.length === 0 && (
+              <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
+                <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
+                  Aucun ressenti reçu sur les 14 derniers jours.
+                </p>
+              </div>
+            )}
+            {!loadingFb && feedbacks.length > 0 && (
+              <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
+                {feedbacks.slice(0, 5).map((f, i) => (
+                  <div key={f.id || i} style={{ padding: '12px 16px', borderBottom: i < Math.min(4, feedbacks.length - 1) ? '1px solid var(--jrn-border)' : 'none' }}>
+                    <div style={{ fontSize: 10, color: 'var(--jrn-text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>
+                      {f.created_at ? new Date(f.created_at).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' }) : ''}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--jrn-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                      {f.body || f.text || f.message || JSON.stringify(f)}
+                    </div>
+                  </div>
+                ))}
+                {feedbacks.length > 5 && (
+                  <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--jrn-text-muted)', textAlign: 'center', background: 'var(--jrn-surface-alt)' }}>
+                    + {feedbacks.length - 5} autres dans le panel Messages
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ─── Section : actions de cycle ─────────────────────── */}
+          <div style={{ marginBottom: 'var(--jrn-6)' }}>
+            <p className="jrn-label">Cycle de suivi</p>
+            <div className="jrn-actions">
+              <button
+                onClick={handleAdaptFromFeedback}
+                disabled={adapting || feedbacks.length === 0}
+                className="jrn-btn jrn-btn--primary"
+                title="L'IA adapte le plan en tenant compte des derniers ressentis cliente"
+              >
+                {adapting ? 'Adaptation IA…' : '✨ Adapter le plan depuis les ressentis'}
+              </button>
+              <button onClick={handleRestartEditing} disabled={busy} className="jrn-btn jrn-btn--soft">
+                Éditer le plan manuellement
+              </button>
+            </div>
+            <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
+              Cycle : Adapter → Éditer (étape 6) → Republier (étape 7) → retour ici.
+            </p>
+          </div>
+
+          {/* ─── Section : historique des versions ──────────────── */}
+          {versions.length > 0 && (
+            <div style={{ marginBottom: 'var(--jrn-6)' }}>
+              <p className="jrn-label">Historique des versions du plan ({versions.length})</p>
+              <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
+                {versions.map((v, i) => {
+                  const isActive = i === 0;
+                  const date = v.createdAt ? new Date(v.createdAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                  const label = v.label || (i === versions.length - 1 ? 'Plan initial' : 'Plan');
+                  const hasPaper = !!v.paperGenerated;
+                  return (
+                    <div
+                      key={v.id || i}
+                      style={{
+                        padding: '12px 16px',
+                        borderBottom: i < versions.length - 1 ? '1px solid var(--jrn-border)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        background: isActive ? 'var(--jrn-accent-soft)' : 'transparent',
+                      }}
+                    >
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '3px 8px',
+                        borderRadius: 999,
+                        background: isActive ? 'var(--jrn-accent)' : 'rgba(0,0,0,0.06)',
+                        color: isActive ? 'var(--jrn-surface)' : 'var(--jrn-text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '.04em',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {isActive ? '● Active' : 'Archivée'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--jrn-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {label}
+                          {hasPaper && (
+                            <span title="Version envoyée en papier" style={{
+                              fontSize: 10,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              background: 'rgba(184, 134, 38, 0.12)',
+                              color: '#8a6722',
+                              fontWeight: 600,
+                              letterSpacing: '.02em',
+                            }}>
+                              📦 Papier
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 2 }}>{date}</div>
+                      </div>
+                      <button
+                        onClick={() => setPreviewVersion(v)}
+                        className="jrn-btn jrn-btn--ghost"
+                        style={{ padding: '6px 10px', fontSize: 12 }}
+                      >
+                        Voir
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
+                Une nouvelle version est créée à chaque adaptation. La cliente voit uniquement la version active.
+              </p>
+            </div>
+          )}
+
+          <div className="jrn-actions">
+            <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
+              ← Retour dashboard
+            </button>
+          </div>
+        </>
+      )}
+
       <ErrorLine msg={err} />
+
+      {/* Modale aperçu d'une version archivée */}
+      {previewVersion && (
+        <PlanVersionPreviewModal version={previewVersion} onClose={() => setPreviewVersion(null)} />
+      )}
     </section>
+  );
+}
+
+// Mini modale d'aperçu lecture seule d'une version du plan
+function PlanVersionPreviewModal({ version, onClose }) {
+  const text = version.nutritionPlan || version.nutrition_plan || '';
+  const date = version.createdAt ? new Date(version.createdAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+  return (
+    <div className="jpe-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="jpe-modal jpe-modal--xl">
+        <header className="jpe-modal__header">
+          <div>
+            <p className="jrn-step-eyebrow">Version archivée</p>
+            <h3 className="jpe-modal__title">{version.label || 'Plan'}</h3>
+            <p style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 4 }}>{date}</p>
+          </div>
+          <button onClick={onClose} className="jrn-btn jrn-btn--ghost">Fermer</button>
+        </header>
+        <div className="jpe-modal__body">
+          <div className="jpe-preview">
+            <pre style={{
+              whiteSpace: 'pre-wrap',
+              fontFamily: 'inherit',
+              fontSize: 13,
+              lineHeight: 1.65,
+              color: 'var(--jrn-text)',
+              margin: 0,
+            }}>{text}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -204,8 +204,22 @@ export const transitions = {
   // reprendre la suite via les boutons de validation classiques.
   goToPreviousStep: async (clientId, currentStepKey) => {
     const idx = JOURNEY_STEPS.indexOf(currentStepKey);
-    if (idx <= 0) return null; // deja a la premiere etape
+    if (idx <= 0) return null;
     const previous = JOURNEY_STEPS[idx - 1];
     return updateJourneyState(clientId, { current_step: previous });
   },
+
+  // Phase AF : depuis l'etape 8 Suivi (cockpit vivant), permet de re-rentrer
+  // dans le cycle Editer → Livrer → Suivre sans perdre le statut "follow_up".
+  // Ne reset PAS les booleans validated/delivered/etc — juste replace le
+  // curseur sur plan_editing pour qu'Anissa adapte le plan depuis les
+  // derniers ressentis. Apres re-publication, restartFollowup revient sur
+  // l'etape 8.
+  restartPlanEditing: (clientId) => updateJourneyState(clientId, {
+    current_step: 'plan_editing',
+  }),
+  // Apres une re-publication, retour direct a l'etape 8 cockpit.
+  returnToFollowup: (clientId) => updateJourneyState(clientId, {
+    current_step: 'followup',
+  }),
 };
