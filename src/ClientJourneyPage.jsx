@@ -1,19 +1,14 @@
 // ─────────────────────────────────────────────────────────────────
-// Phase D — Page Parcours Cliente (wizard linaire)
+// Phase I — Page Parcours Cliente refondue (Design System V1)
 // Date : 2026-05-10
 //
-// Layout 3 zones :
-//   - Header : cliente / pack / statut + bouton Quitter
-//   - Sidebar gauche fixe : 4 etapes avec etat (validee/active/locked/skipped)
-//   - Centre : contenu de l'etape courante
+// Inspiration UI : Linear, Notion, Stripe Dashboard, Raycast.
+// Charte Anissa : vert #1A2E1F en accent + fond ivoire + Playfair italic
+// pour les titres premium + Lexend Deca pour body + Inter pour UI.
 //
-// Une seule etape active a la fois (cf. journeyState.getStepStatus).
-// Anissa ne peut pas naviguer librement : elle clique l'etape active,
-// fait son travail, valide, l'etape suivante se debloque automatiquement.
-//
-// Reutilise les composants existants :
-//   - AnalysisSuggestionModal (etape 1)
-//   - AnalysisPlanCard (etape 2/3 lecture seule du plan en cours)
+// Toutes les classes CSS vivent dans src/styles/journey.css. Aucun
+// inline style metier — uniquement de la composition. Permet de
+// retoucher le design sans toucher la logique.
 // ─────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from 'react';
@@ -28,7 +23,8 @@ import {
 } from './services/journeyState';
 import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
-import NutritionConsultation from './NutritionConsultation';
+import JourneyPlanEditor from './JourneyPlanEditor';
+import './styles/journey.css';
 
 export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   const [client, setClient] = useState(null);
@@ -55,109 +51,129 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
 
   useEffect(() => { loadClient(); }, [loadClient]);
 
-  if (loading) return <div style={layoutStyle}><div style={{ padding: 40 }}>Chargement…</div></div>;
-  if (error) return <div style={layoutStyle}><div style={{ padding: 40, color: '#c44' }}>Erreur : {error}</div></div>;
-  if (!client) return <div style={layoutStyle}><div style={{ padding: 40 }}>Cliente introuvable.</div></div>;
+  if (loading) {
+    return (
+      <div className="jrn-page">
+        <div style={{ padding: 60, color: 'var(--jrn-text-muted)', textAlign: 'center', fontFamily: 'var(--jrn-font-body)' }}>
+          Chargement du parcours…
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="jrn-page">
+        <div style={{ padding: 60, color: 'var(--jrn-error)', textAlign: 'center', fontFamily: 'var(--jrn-font-body)' }}>
+          Erreur : {error}
+        </div>
+      </div>
+    );
+  }
+  if (!client) {
+    return (
+      <div className="jrn-page">
+        <div style={{ padding: 60, color: 'var(--jrn-text-muted)', textAlign: 'center', fontFamily: 'var(--jrn-font-body)' }}>
+          Cliente introuvable.
+        </div>
+      </div>
+    );
+  }
 
   const journey = { ...DEFAULT_JOURNEY_STATE, ...(client.journey_state || {}) };
   const pack = PACK_DEFINITIONS[client.packType] || null;
   const prenom = client.prenom || client.form?.prenom || 'Cliente';
   const currentStep = journey.current_step || 'anamnesis';
 
-  // Progression : nombre d'etapes validees (validated|skipped) sur 8.
   const stepStatuses = JOURNEY_STEPS.map((s) => ({ step: s, status: getStepStatus(journey, s) }));
   const completedCount = stepStatuses.filter((s) => s.status === 'validated' || s.status === 'skipped').length;
   const progressPct = Math.round((completedCount / JOURNEY_STEPS.length) * 100);
   const currentStepIndex = STEP_META[currentStep]?.index || 1;
 
-  // Apres chaque transition, on relit le client (source de verite).
   const refresh = () => loadClient();
 
   return (
-    <div style={layoutStyle}>
-      {/* ─── Header premium ──────────────────────────────────────── */}
-      <header style={headerStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+    <div className="jrn-page">
+      {/* ─── Header ─────────────────────────────────────────────── */}
+      <header className="jrn-header">
+        <div className="jrn-header__identity">
           <div>
-            <div style={{ fontSize: 10, color: '#999', textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 500 }}>
-              Parcours cliente
-            </div>
-            <h1 style={{ margin: '4px 0 0', fontSize: 24, fontWeight: 600, color: '#1a4028', letterSpacing: '-.01em' }}>
-              {prenom}
-            </h1>
+            <p className="jrn-header__eyebrow">Parcours cliente</p>
+            <h1 className="jrn-header__name">{prenom}</h1>
           </div>
-          {pack && (
-            <div style={packBadgeStyle}>
-              {pack.label}
-            </div>
-          )}
+          {pack && <span className="jrn-header__pack">{pack.label}</span>}
         </div>
 
-        <div style={{ flex: 1, maxWidth: 380, margin: '0 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 6 }}>
-            <span>Étape {currentStepIndex}/{JOURNEY_STEPS.length}</span>
-            <span>{progressPct}% complété</span>
+        <div className="jrn-header__progress">
+          <div className="jrn-header__progress-meta">
+            <span>Étape {currentStepIndex} / {JOURNEY_STEPS.length}</span>
+            <span>{progressPct}%</span>
           </div>
-          <div style={progressTrackStyle}>
-            <div style={{ ...progressFillStyle, width: `${progressPct}%` }} />
+          <div className="jrn-header__progress-track">
+            <div className="jrn-header__progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          {onEditProfile && (
-            <button onClick={onEditProfile} style={secondaryHeaderButtonStyle} title="Éditer le profil cliente (anamnèse, contact, pack)">
-              👤 Profil
+        <div className="jrn-header__actions">
+          {currentStepIndex > 1 && (
+            <button
+              onClick={async () => {
+                try {
+                  await transitions.goToPreviousStep(client.id, currentStep);
+                  refresh();
+                } catch (e) { /* silencieux */ }
+              }}
+              className="jrn-btn jrn-btn--ghost"
+              title="Revenir à l'étape précédente"
+            >
+              ← Étape précédente
             </button>
           )}
-          <button onClick={onExit} style={exitButtonStyle}>
-            ← Dashboard
+          {onEditProfile && (
+            <button onClick={onEditProfile} className="jrn-btn jrn-btn--ghost" title="Éditer le profil cliente">
+              Profil
+            </button>
+          )}
+          <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
+            Dashboard
           </button>
         </div>
       </header>
 
-      <div style={contentRowStyle}>
-        {/* ─── Sidebar etapes ────────────────────────────────────── */}
-        <aside style={sidebarStyle}>
-          <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
-            Étapes
-          </div>
+      {/* ─── Body : sidebar + main ──────────────────────────────── */}
+      <div className="jrn-body">
+        <aside className="jrn-sidebar">
+          <p className="jrn-sidebar__label">Étapes</p>
           {JOURNEY_STEPS.map((step) => {
             const status = getStepStatus(journey, step);
             const meta = STEP_META[step];
-            return <StepRow key={step} step={step} meta={meta} status={status} active={step === currentStep} />;
+            const active = step === currentStep;
+            const cls = ['jrn-step'];
+            if (active) cls.push('jrn-step--active');
+            else if (status === 'validated') cls.push('jrn-step--validated');
+            else if (status === 'skipped') cls.push('jrn-step--skipped');
+            return (
+              <div key={step} className={cls.join(' ')}>
+                <span className="jrn-step__num">
+                  {status === 'validated' ? '✓' : status === 'skipped' ? '↷' : meta.index}
+                </span>
+                <span>{meta.label}</span>
+              </div>
+            );
           })}
-
-          <div style={{ marginTop: 24, padding: 10, background: 'rgba(0,0,0,0.03)', borderRadius: 6, fontSize: 11, color: '#666', lineHeight: 1.5 }}>
-            <strong>Règle :</strong> une étape verrouillée ne s'ouvre qu'après validation de la précédente. Vous pouvez quitter à tout moment, l'état est sauvegardé automatiquement.
+          <div className="jrn-sidebar__rule">
+            Une seule étape active à la fois. La suivante se débloque automatiquement après validation. L'état est sauvegardé en continu.
           </div>
         </aside>
 
-        {/* ─── Centre : contenu de l'etape courante ──────────────── */}
-        <main style={mainStyle}>
-          {currentStep === 'anamnesis' && (
-            <StepAnamnesis client={client} journey={journey} onChange={refresh} />
-          )}
-          {currentStep === 'analyses' && (
-            <StepAnalyses client={client} journey={journey} onChange={refresh} />
-          )}
-          {currentStep === 'waiting_results' && (
-            <StepWaitingResults client={client} onChange={refresh} />
-          )}
-          {currentStep === 'results' && (
-            <StepResults client={client} onChange={refresh} />
-          )}
-          {currentStep === 'plan_generation' && (
-            <StepPlanGeneration client={client} journey={journey} onChange={refresh} />
-          )}
-          {currentStep === 'plan_editing' && (
-            <StepPlanEditing client={client} onChange={refresh} />
-          )}
-          {currentStep === 'delivery' && (
-            <StepDelivery client={client} onChange={refresh} />
-          )}
-          {currentStep === 'followup' && (
-            <StepFollowup client={client} journey={journey} onExit={onExit} />
-          )}
+        <main className="jrn-main">
+          {currentStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} />}
+          {currentStep === 'analyses' && <StepAnalyses client={client} journey={journey} onChange={refresh} />}
+          {currentStep === 'waiting_results' && <StepWaitingResults client={client} onChange={refresh} />}
+          {currentStep === 'results' && <StepResults client={client} onChange={refresh} />}
+          {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
+          {currentStep === 'plan_editing' && <StepPlanEditing client={client} onChange={refresh} />}
+          {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} />}
+          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onExit={onExit} />}
         </main>
       </div>
     </div>
@@ -165,63 +181,89 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SIDEBAR ITEM
+// HELPER : header d'étape (eyebrow + title + intro)
 // ═══════════════════════════════════════════════════════════════════
 
-function StepRow({ step, meta, status, active }) {
-  const tone = {
-    validated: { bg: 'rgba(45,90,61,0.10)', color: '#1a4028', numColor: '#2d5a3d', numBg: 'rgba(45,90,61,0.18)', icon: '✓' },
-    active:    { bg: '#fff',                color: '#1a4028', numColor: '#fff',    numBg: '#2d5a3d',              icon: null },
-    locked:    { bg: 'transparent',         color: '#bbb',    numColor: '#bbb',    numBg: 'rgba(0,0,0,0.04)',     icon: null },
-    skipped:   { bg: 'rgba(0,0,0,0.04)',    color: '#999',    numColor: '#aaa',    numBg: 'rgba(0,0,0,0.06)',     icon: '↷' },
-  }[status];
+function StepHead({ index, title, intro }) {
+  return (
+    <header style={{ marginBottom: 'var(--jrn-8)' }}>
+      <p className="jrn-step-eyebrow">Étape {index} / 8</p>
+      <h2 className="jrn-step-title">{title}</h2>
+      <p className="jrn-step-intro">{intro}</p>
+    </header>
+  );
+}
+
+function ErrorLine({ msg }) {
+  if (!msg) return null;
+  return <div className="jrn-error">⚠ {msg}</div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ÉTAPE 1 — ANAMNÈSE
+// ═══════════════════════════════════════════════════════════════════
+
+function StepAnamnesis({ client, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const form = client.form || {};
+  const minimallyFilled = !!(form.objectifs || form.symptomes || form.pathologies || form.activite);
+
+  const handleValidate = async () => {
+    if (!minimallyFilled && !window.confirm('L\'anamnèse semble incomplète. Valider quand même ?')) return;
+    setBusy(true); setErr(null);
+    try {
+      await transitions.validateAnamnesis(client.id);
+      onChange();
+    } catch (e) { setErr(e?.message || 'Erreur transition'); }
+    finally { setBusy(false); }
+  };
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      padding: '11px 12px',
-      borderRadius: 8,
-      background: tone.bg,
-      border: active ? '1px solid rgba(45,90,61,0.35)' : '1px solid transparent',
-      marginBottom: 4,
-      color: tone.color,
-      transition: 'background 120ms ease',
-    }}>
-      <span style={{
-        width: 22,
-        height: 22,
-        borderRadius: '50%',
-        background: tone.numBg,
-        color: tone.numColor,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 11,
-        fontWeight: 600,
-        flexShrink: 0,
-      }}>
-        {tone.icon || meta.index}
-      </span>
-      <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, lineHeight: 1.3 }}>
-        {meta.label}
-      </span>
-    </div>
+    <section>
+      <StepHead
+        index={1}
+        title="Anamnèse"
+        intro="L'entretien initial est la fondation du parcours. Vérifiez que les informations clés sont bien renseignées avant de poursuivre."
+      />
+
+      <div className="jrn-surface">
+        <div className="jrn-label">Aperçu de l'anamnèse</div>
+        <div className="jrn-kv">
+          <div className="jrn-kv__k">Objectifs</div>
+          <div className={`jrn-kv__v ${form.objectifs ? '' : 'jrn-kv__v--empty'}`}>{form.objectifs || 'non renseigné'}</div>
+          <div className="jrn-kv__k">Symptômes</div>
+          <div className={`jrn-kv__v ${form.symptomes ? '' : 'jrn-kv__v--empty'}`}>{form.symptomes || 'non renseigné'}</div>
+          <div className="jrn-kv__k">Pathologies</div>
+          <div className={`jrn-kv__v ${form.pathologies ? '' : 'jrn-kv__v--empty'}`}>{form.pathologies || 'non renseigné'}</div>
+          <div className="jrn-kv__k">Activité</div>
+          <div className={`jrn-kv__v ${form.activite ? '' : 'jrn-kv__v--empty'}`}>{form.activite || 'non renseigné'}</div>
+        </div>
+      </div>
+
+      <div className="jrn-actions">
+        <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
+          {busy ? '…' : 'Valider l\'anamnèse'}
+        </button>
+        <span style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
+          L'édition complète se fait via Profil en haut.
+        </span>
+      </div>
+      <ErrorLine msg={err} />
+    </section>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ÉTAPE 1 — ANALYSES
+// ÉTAPE 2 — ANALYSES
 // ═══════════════════════════════════════════════════════════════════
 
 function StepAnalyses({ client, journey, onChange }) {
   const [showSuggest, setShowSuggest] = useState(false);
   const [savePlanError, setSavePlanError] = useState(null);
   const [savingTransition, setSavingTransition] = useState(false);
-  const [hasPlan, setHasPlan] = useState(null); // null = loading
+  const [hasPlan, setHasPlan] = useState(null);
 
-  // Verifie s'il existe deja un analysis_plan pour cette cliente
   useEffect(() => {
     let cancelled = false;
     async function check() {
@@ -252,42 +294,37 @@ function StepAnalyses({ client, journey, onChange }) {
     try {
       await transitions.validateAnalyses(client.id);
       onChange();
-    } catch (e) {
-      setSavePlanError(e?.message || 'Erreur validation');
-    } finally {
-      setSavingTransition(false);
-    }
+    } catch (e) { setSavePlanError(e?.message || 'Erreur'); }
+    finally { setSavingTransition(false); }
   };
 
   const handleSkip = async () => {
-    if (!window.confirm('Passer l\'étape Analyses ?\n\nLa cliente n\'aura pas d\'analyses sanguines. Le parcours saute directement à l\'édition du plan nutritionnel.')) return;
+    if (!window.confirm('Passer l\'étape Analyses ?\n\nLe parcours saute directement à la génération du plan.')) return;
     setSavingTransition(true);
     try {
       await transitions.skipAnalyses(client.id);
       onChange();
-    } catch (e) {
-      setSavePlanError(e?.message || 'Erreur skip');
-    } finally {
-      setSavingTransition(false);
-    }
+    } catch (e) { setSavePlanError(e?.message || 'Erreur'); }
+    finally { setSavingTransition(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>🧪 Étape 1 — Analyses biologiques</h2>
-      <p style={stepIntroStyle}>
-        Suggestion IA d'analyses pertinentes selon l'anamnèse et le pack acheté. Anissa décide.
-      </p>
+      <StepHead
+        index={2}
+        title="Analyses biologiques"
+        intro="Suggestion IA d'analyses pertinentes selon l'anamnèse et le pack acheté. À vous de valider ou d'écarter chaque proposition."
+      />
 
-      {hasPlan === null && <div style={{ color: '#888' }}>Vérification…</div>}
+      {hasPlan === null && <div style={{ color: 'var(--jrn-text-muted)' }}>Vérification…</div>}
 
       {hasPlan === false && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <button onClick={() => setShowSuggest(true)} style={primaryButtonStyle}>
-            ✨ Lancer la suggestion IA
+        <div className="jrn-actions">
+          <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
+            Lancer la suggestion IA
           </button>
-          <button onClick={handleSkip} disabled={savingTransition} style={secondaryButtonStyle}>
-            ↷ Passer cette étape (pas d'analyses)
+          <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
+            Passer cette étape
           </button>
         </div>
       )}
@@ -295,17 +332,15 @@ function StepAnalyses({ client, journey, onChange }) {
       {hasPlan === true && (
         <>
           <AnalysisPlanCard clientId={client.id} />
-          <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
-            <button onClick={handleValidate} disabled={savingTransition} style={primaryButtonStyle}>
-              {savingTransition ? '…' : '✓ Valider et passer en attente résultats'}
+          <div className="jrn-actions">
+            <button onClick={handleValidate} disabled={savingTransition} className="jrn-btn jrn-btn--primary">
+              {savingTransition ? '…' : 'Valider et passer en attente résultats'}
             </button>
           </div>
         </>
       )}
 
-      {savePlanError && (
-        <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {savePlanError}</div>
-      )}
+      <ErrorLine msg={savePlanError} />
 
       <AnalysisSuggestionModal
         isOpen={showSuggest}
@@ -322,7 +357,7 @@ function StepAnalyses({ client, journey, onChange }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ÉTAPE 2 — ATTENTE RÉSULTATS
+// ÉTAPE 3 — ATTENTE RÉSULTATS
 // ═══════════════════════════════════════════════════════════════════
 
 function StepWaitingResults({ client, onChange }) {
@@ -330,52 +365,46 @@ function StepWaitingResults({ client, onChange }) {
   const [err, setErr] = useState(null);
 
   const handleReceived = async () => {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
       await transitions.markResultsReceived(client.id);
       onChange();
-    } catch (e) {
-      setErr(e?.message || 'Erreur transition');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e?.message || 'Erreur'); }
+    finally { setBusy(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>⏳ Étape 2 — En attente des résultats</h2>
-      <p style={stepIntroStyle}>
-        Les analyses sont chez la cliente / au laboratoire. Pendant ce temps, le plan nutritionnel reste verrouillé. Cliquez ci-dessous quand les résultats sont reçus.
-      </p>
+      <StepHead
+        index={3}
+        title="En attente des résultats"
+        intro="Les analyses sont chez la cliente ou au laboratoire. Le plan nutritionnel reste verrouillé jusqu'à réception des résultats."
+      />
 
       <AnalysisPlanCard clientId={client.id} />
 
-      <div style={{ marginTop: 20 }}>
-        <button onClick={handleReceived} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '📥 Marquer les résultats comme reçus'}
+      <div className="jrn-actions">
+        <button onClick={handleReceived} disabled={busy} className="jrn-btn jrn-btn--primary">
+          {busy ? '…' : 'Marquer les résultats comme reçus'}
         </button>
       </div>
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+      <ErrorLine msg={err} />
     </section>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ÉTAPE 3 — SAISIE RÉSULTATS (MVP : juste synthèse Anissa)
+// ÉTAPE 4 — SAISIE RÉSULTATS
 // ═══════════════════════════════════════════════════════════════════
 
 function StepResults({ client, onChange }) {
-  const [synthesis, setSynthesis] = useState(client.results_synthesis || '');
+  const [synthesis, setSynthesis] = useState(client.journey_state?.results_synthesis || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
   const handleValidate = async () => {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
-      // Persiste la synthese sur le client (champ libre, pas de colonne dediee
-      // pour MVP — on utilise journey_state.results_synthesis)
       const { error: updErr } = await supabase
         .from('clients')
         .update({
@@ -388,91 +417,32 @@ function StepResults({ client, onChange }) {
       if (updErr) throw new Error(updErr.message);
       await transitions.validateResults(client.id);
       onChange();
-    } catch (e) {
-      setErr(e?.message || 'Erreur validation');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e?.message || 'Erreur validation'); }
+    finally { setBusy(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>📥 Étape 3 — Saisie des résultats</h2>
-      <p style={stepIntroStyle}>
-        Synthèse interne des résultats analysés. Ce texte vous sert pour préparer le plan, il n'est pas envoyé à la cliente directement.
-      </p>
+      <StepHead
+        index={4}
+        title="Saisie des résultats"
+        intro="Synthèse interne pour préparer le plan. Ce texte n'est pas envoyé directement à la cliente."
+      />
 
       <textarea
         value={synthesis}
         onChange={(e) => setSynthesis(e.target.value)}
         rows={12}
-        placeholder="Synthèse Anissa : déficits identifiés, axes prioritaires, alertes laboratoire, microbiome, etc."
-        style={textareaStyle}
+        placeholder="Déficits identifiés, axes prioritaires, alertes laboratoire, microbiome…"
+        className="jrn-textarea"
       />
 
-      <div style={{ marginTop: 16 }}>
-        <button onClick={handleValidate} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '✓ Valider et débloquer le plan nutritionnel'}
+      <div className="jrn-actions">
+        <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
+          {busy ? '…' : 'Valider et débloquer le plan nutritionnel'}
         </button>
       </div>
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
-    </section>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// ÉTAPE 1 — ANAMNÈSE
-// ═══════════════════════════════════════════════════════════════════
-
-function StepAnamnesis({ client, onChange }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
-  const form = client.form || {};
-  // On considere l'anamnese comme "remplie" si un minimum d'info clinique existe.
-  const minimallyFilled = !!(form.objectifs || form.symptomes || form.pathologies || form.activite);
-
-  const handleValidate = async () => {
-    if (!minimallyFilled && !window.confirm('L\'anamnèse semble incomplète (objectifs, symptômes, pathologies, activité tous vides). Valider quand même ?')) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      await transitions.validateAnamnesis(client.id);
-      onChange();
-    } catch (e) {
-      setErr(e?.message || 'Erreur transition');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section>
-      <h2 style={stepTitleStyle}>📋 Étape 1 — Anamnèse</h2>
-      <p style={stepIntroStyle}>
-        L'anamnèse remplie en consultation initiale est la base de tout le parcours. Validez-la une fois qu'elle est complète pour débloquer la suite.
-      </p>
-
-      <div style={infoBoxStyle}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#666', textTransform: 'uppercase', marginBottom: 8 }}>
-          Aperçu rapide de l'anamnèse
-        </div>
-        <div style={{ fontSize: 13, color: '#444', display: 'grid', gap: 6 }}>
-          <div><strong>Objectifs :</strong> {form.objectifs || <em style={{ color: '#aaa' }}>vide</em>}</div>
-          <div><strong>Symptômes :</strong> {form.symptomes || <em style={{ color: '#aaa' }}>vide</em>}</div>
-          <div><strong>Pathologies :</strong> {form.pathologies || <em style={{ color: '#aaa' }}>vide</em>}</div>
-          <div><strong>Activité :</strong> {form.activite || <em style={{ color: '#aaa' }}>vide</em>}</div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <button onClick={handleValidate} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '✓ Valider l\'anamnèse et passer aux analyses'}
-        </button>
-      </div>
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
-      <p style={{ fontSize: 12, color: '#888', marginTop: 10 }}>
-        L'édition de l'anamnèse se fait depuis la fiche cliente classique (mode édition libre, accessible via l'échappatoire en bas de la fiche).
-      </p>
+      <ErrorLine msg={err} />
     </section>
   );
 }
@@ -488,52 +458,46 @@ function StepPlanGeneration({ client, journey, onChange }) {
   const [err, setErr] = useState(null);
 
   const handleMarkGenerated = async () => {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
       await transitions.markPlanGenerated(client.id);
       onChange();
-    } catch (e) {
-      setErr(e?.message || 'Erreur transition');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e?.message || 'Erreur transition'); }
+    finally { setBusy(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>✨ Étape 5 — Génération du plan</h2>
-      <p style={stepIntroStyle}>
-        Le contexte est complet. Marquez cette étape une fois que vous avez généré (ou copié-collé) un premier brouillon de plan dans l'éditeur. L'étape suivante vous donnera l'éditeur intégré pour le finaliser.
-      </p>
+      <StepHead
+        index={5}
+        title="Génération du plan"
+        intro="Le contexte est complet. Marquez cette étape une fois qu'un premier brouillon est en place. L'étape suivante ouvre l'éditeur intégré."
+      />
 
-      {skipped && (
-        <div style={infoBoxStyle}>
-          ↷ Étape Analyses passée (pack sans analyses).
+      {(skipped || synthesis) && (
+        <div className="jrn-surface">
+          {skipped && <div style={{ marginBottom: synthesis ? 'var(--jrn-4)' : 0, color: 'var(--jrn-text-soft)' }}>↷ Étape Analyses passée — pack sans analyses.</div>}
+          {synthesis && (
+            <>
+              <div className="jrn-label">Synthèse résultats Anissa</div>
+              <div style={{ whiteSpace: 'pre-wrap', color: 'var(--jrn-text)', fontSize: 'var(--jrn-text-sm)' }}>{synthesis}</div>
+            </>
+          )}
         </div>
       )}
 
-      {synthesis && (
-        <div style={infoBoxStyle}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#666', textTransform: 'uppercase', marginBottom: 6 }}>
-            Synthèse résultats Anissa
-          </div>
-          <div style={{ fontSize: 13, color: '#444', whiteSpace: 'pre-wrap' }}>{synthesis}</div>
-        </div>
-      )}
-
-      <div style={{ marginTop: 20 }}>
-        <button onClick={handleMarkGenerated} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '✓ Plan généré, passer à l\'édition'}
+      <div className="jrn-actions">
+        <button onClick={handleMarkGenerated} disabled={busy} className="jrn-btn jrn-btn--primary">
+          {busy ? '…' : 'Plan généré, passer à l\'édition'}
         </button>
       </div>
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+      <ErrorLine msg={err} />
     </section>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ÉTAPE 6 — ÉDITION DU PLAN (embed du composer existant)
+// ÉTAPE 6 — ÉDITION DU PLAN (composer embed)
 // ═══════════════════════════════════════════════════════════════════
 
 function StepPlanEditing({ client, onChange }) {
@@ -541,41 +505,30 @@ function StepPlanEditing({ client, onChange }) {
   const [err, setErr] = useState(null);
 
   const handleValidate = async () => {
-    if (!window.confirm('Valider le plan ?\n\nLe plan passe en étape Livraison. Vous pourrez encore l\'éditer plus tard via la fiche cliente classique.')) return;
-    setBusy(true);
-    setErr(null);
+    if (!window.confirm('Valider le plan ?\n\nLe plan passe en étape Livraison.')) return;
+    setBusy(true); setErr(null);
     try {
       await transitions.validatePlan(client.id);
       onChange();
-    } catch (e) {
-      setErr(e?.message || 'Erreur transition');
-      setBusy(false);
-    }
+    } catch (e) { setErr(e?.message || 'Erreur transition'); setBusy(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>🥗 Étape 6 — Édition du plan</h2>
-      <p style={stepIntroStyle}>
-        Éditeur complet intégré ci-dessous. Affinez le plan, ajoutez vos directives, puis validez pour passer à la livraison.
-      </p>
+      <StepHead
+        index={6}
+        title="Édition du plan"
+        intro="Génération IA, édition libre, sauvegarde. Une fois le plan finalisé, validez pour passer à la livraison."
+      />
 
-      {/* Phase F : embed direct du composer / cockpit / editeur classique. */}
-      <div style={embedFrameStyle}>
-        <NutritionConsultation
-          clientId={client.id}
-          embedded={true}
-          onSave={() => { /* sauvegarde geree en interne du composer */ }}
-          onCancel={null}
-        />
-      </div>
+      <JourneyPlanEditor client={client} onPlanSaved={() => {}} />
 
-      <div style={{ marginTop: 20, position: 'sticky', bottom: 16 }}>
-        <button onClick={handleValidate} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '✓ Valider le plan et passer à la livraison'}
+      <div className="jrn-actions">
+        <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
+          {busy ? '…' : 'Valider le plan et passer à la livraison'}
         </button>
       </div>
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+      <ErrorLine msg={err} />
     </section>
   );
 }
@@ -589,42 +542,37 @@ function StepDelivery({ client, onChange }) {
   const [err, setErr] = useState(null);
 
   const handleDelivered = async () => {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
       await transitions.markDelivered(client.id);
       onChange();
-    } catch (e) {
-      setErr(e?.message || 'Erreur transition');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setErr(e?.message || 'Erreur'); }
+    finally { setBusy(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>📨 Étape 7 — Livraison à la cliente</h2>
-      <p style={stepIntroStyle}>
-        Préparez le plan pour la cliente : export PDF, envoi postal, mise à disposition dans l'app. Marquez cette étape comme faite quand le plan est entre ses mains.
-      </p>
+      <StepHead
+        index={7}
+        title="Livraison à la cliente"
+        intro="Préparez le plan pour la cliente : export PDF, envoi postal, mise à disposition dans l'app. Marquez cette étape quand le plan est entre ses mains."
+      />
 
-      <div style={infoBoxStyle}>
-        <div style={{ fontSize: 13, color: '#444', lineHeight: 1.6 }}>
-          <strong>Checklist livraison :</strong>
-          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
-            <li>PDF généré depuis la fiche cliente classique (onglet Plan complet)</li>
-            <li>Envoi postal préparé (étiquette + plan imprimé)</li>
-            <li>Plan poussé sur l'app cliente (si activée)</li>
-          </ul>
-        </div>
+      <div className="jrn-surface">
+        <div className="jrn-label">Checklist livraison</div>
+        <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--jrn-text-soft)', fontSize: 'var(--jrn-text-sm)', lineHeight: 1.8 }}>
+          <li>PDF généré depuis l'éditeur de plan (étape précédente)</li>
+          <li>Envoi postal préparé : étiquette + plan imprimé</li>
+          <li>Plan poussé sur l'app cliente si activée</li>
+        </ul>
       </div>
 
-      <div style={{ marginTop: 20 }}>
-        <button onClick={handleDelivered} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '✓ Plan livré à la cliente, passer au suivi'}
+      <div className="jrn-actions">
+        <button onClick={handleDelivered} disabled={busy} className="jrn-btn jrn-btn--primary">
+          {busy ? '…' : 'Plan livré, passer au suivi'}
         </button>
       </div>
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+      <ErrorLine msg={err} />
     </section>
   );
 }
@@ -639,183 +587,36 @@ function StepFollowup({ client, journey, onExit }) {
   const started = !!journey?.followup_started;
 
   const handleStart = async () => {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
       await transitions.startFollowup(client.id);
       onExit();
-    } catch (e) {
-      setErr(e?.message || 'Erreur transition');
-      setBusy(false);
-    }
+    } catch (e) { setErr(e?.message || 'Erreur'); setBusy(false); }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>🔄 Étape 8 — Suivi</h2>
-      <p style={stepIntroStyle}>
-        Le plan est livré. Le suivi continue dans la fiche cliente classique : feedbacks, ajustements, revues de cycle, suivi pack 4 semaines.
-      </p>
+      <StepHead
+        index={8}
+        title="Suivi"
+        intro="Le plan est livré. Le suivi continue : feedbacks, ajustements, revues de cycle, suivi pack 4 semaines."
+      />
 
       {started ? (
-        <div style={{ ...infoBoxStyle, background: 'rgba(45,90,61,0.10)' }}>
-          ✓ Le suivi est enclenché. Le parcours guidé est officiellement terminé pour cette cliente. Vous pouvez quitter et continuer le suivi depuis la fiche cliente.
+        <div className="jrn-surface jrn-surface--accent">
+          ✓ Le suivi est enclenché. Le parcours guidé est officiellement terminé pour cette cliente.
         </div>
       ) : (
-        <div style={{ marginTop: 20, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <button onClick={handleStart} disabled={busy} style={primaryButtonStyle}>
-            {busy ? '…' : '✓ Marquer le suivi comme enclenché'}
+        <div className="jrn-actions">
+          <button onClick={handleStart} disabled={busy} className="jrn-btn jrn-btn--primary">
+            {busy ? '…' : 'Marquer le suivi comme enclenché'}
           </button>
-          <button onClick={onExit} style={{ ...primaryButtonStyle, background: 'transparent', color: '#666', border: '1px solid rgba(0,0,0,0.2)' }}>
-            ← Retour fiche cliente
+          <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
+            Retour dashboard
           </button>
         </div>
       )}
-      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+      <ErrorLine msg={err} />
     </section>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════
-// STYLES
-// ═══════════════════════════════════════════════════════════════════
-
-const layoutStyle = {
-  minHeight: '100vh',
-  background: '#f9f7f3',
-  fontFamily: 'system-ui, -apple-system, sans-serif',
-  width: '100%',
-};
-const headerStyle = {
-  background: '#fff',
-  borderBottom: '1px solid rgba(0,0,0,0.08)',
-  padding: '20px 40px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 24,
-  position: 'sticky',
-  top: 0,
-  zIndex: 10,
-};
-const exitButtonStyle = {
-  background: 'transparent',
-  border: '1px solid rgba(0,0,0,0.15)',
-  borderRadius: 6,
-  padding: '8px 14px',
-  fontSize: 13,
-  cursor: 'pointer',
-  color: '#444',
-  whiteSpace: 'nowrap',
-};
-const secondaryHeaderButtonStyle = {
-  background: 'rgba(45,90,61,0.06)',
-  border: '1px solid rgba(45,90,61,0.15)',
-  borderRadius: 6,
-  padding: '8px 14px',
-  fontSize: 13,
-  cursor: 'pointer',
-  color: '#1a4028',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-};
-const packBadgeStyle = {
-  background: 'rgba(45,90,61,0.08)',
-  color: '#2d5a3d',
-  fontSize: 11,
-  fontWeight: 600,
-  padding: '5px 12px',
-  borderRadius: 999,
-  letterSpacing: '.04em',
-  textTransform: 'uppercase',
-};
-const progressTrackStyle = {
-  height: 6,
-  background: 'rgba(0,0,0,0.06)',
-  borderRadius: 999,
-  overflow: 'hidden',
-};
-const progressFillStyle = {
-  height: '100%',
-  background: 'linear-gradient(90deg, #2d5a3d, #4a7d5a)',
-  borderRadius: 999,
-  transition: 'width 280ms ease',
-};
-const contentRowStyle = {
-  display: 'grid',
-  gridTemplateColumns: '280px 1fr',
-  gap: 0,
-  alignItems: 'start',
-};
-const sidebarStyle = {
-  padding: '28px 20px',
-  borderRight: '1px solid rgba(0,0,0,0.08)',
-  background: '#fcfaf6',
-  minHeight: 'calc(100vh - 79px)',
-  position: 'sticky',
-  top: 79,
-};
-const mainStyle = {
-  padding: '36px 48px',
-  maxWidth: 1800,
-  width: '100%',
-  margin: '0 auto',
-};
-const stepTitleStyle = {
-  margin: '0 0 8px',
-  fontSize: 22,
-  fontWeight: 600,
-  color: '#1a4028',
-};
-const stepIntroStyle = {
-  margin: '0 0 24px',
-  fontSize: 14,
-  color: '#666',
-  lineHeight: 1.6,
-};
-const primaryButtonStyle = {
-  background: '#2d5a3d',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 6,
-  padding: '12px 20px',
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: 'pointer',
-  letterSpacing: '.02em',
-};
-const secondaryButtonStyle = {
-  background: 'transparent',
-  color: '#666',
-  border: '1px solid rgba(0,0,0,0.2)',
-  borderRadius: 6,
-  padding: '12px 20px',
-  fontSize: 13,
-  cursor: 'pointer',
-};
-const textareaStyle = {
-  width: '100%',
-  padding: 12,
-  fontSize: 13,
-  fontFamily: 'inherit',
-  border: '1px solid rgba(0,0,0,0.15)',
-  borderRadius: 6,
-  resize: 'vertical',
-  background: '#fff',
-};
-const infoBoxStyle = {
-  marginTop: 12,
-  padding: 14,
-  background: 'rgba(45,90,61,0.05)',
-  border: '1px solid rgba(45,90,61,0.15)',
-  borderRadius: 6,
-};
-const embedFrameStyle = {
-  marginTop: 12,
-  border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 10,
-  background: '#fff',
-  overflow: 'hidden',
-  // Refonte : on laisse le composer s'etaler naturellement. L'utilisateur
-  // scroll la page entiere — pas de scroll imbrique qui casse l'UX.
-};

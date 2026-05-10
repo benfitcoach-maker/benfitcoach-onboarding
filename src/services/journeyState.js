@@ -197,4 +197,15 @@ export const transitions = {
   startFollowup: (clientId) => updateJourneyState(clientId, {
     followup_started: true,
   }),
+
+  // Phase K : navigation libre arriere. Permet de revenir consulter une etape
+  // precedente sans perdre les booleans de validation. NE TOUCHE PAS aux
+  // _validated / _skipped : juste un curseur de navigation. La cliente peut
+  // reprendre la suite via les boutons de validation classiques.
+  goToPreviousStep: async (clientId, currentStepKey) => {
+    const idx = JOURNEY_STEPS.indexOf(currentStepKey);
+    if (idx <= 0) return null; // deja a la premiere etape
+    const previous = JOURNEY_STEPS[idx - 1];
+    return updateJourneyState(clientId, { current_step: previous });
+  },
 };
