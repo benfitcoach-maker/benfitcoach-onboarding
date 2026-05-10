@@ -20,10 +20,22 @@ const STATUS_LABELS = {
   completed: { label: 'Termine', color: '#1a4028' },
 };
 
+// Phase C (2026-05-10) — workflow Anissa
+// Transitions de statut autorisees : draft -> sent -> in_progress -> completed.
+// Pas de retour en arriere (V4 = minimal). updated_at gere par trigger BDD.
+const NEXT_STATUS = {
+  draft: { next: 'sent', label: '✉ Marquer comme envoyé' },
+  sent: { next: 'in_progress', label: '📥 Résultats reçus' },
+  in_progress: { next: 'completed', label: '✓ Marquer terminé' },
+  completed: null,
+};
+
 export default function AnalysisPlanCard({ clientId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [plan, setPlan] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
 
   useEffect(() => {
     if (!clientId) {
@@ -56,6 +68,28 @@ export default function AnalysisPlanCard({ clientId }) {
     loadLatest();
     return () => { cancelled = true; };
   }, [clientId]);
+
+  async function advanceStatus() {
+    if (!plan) return;
+    const transition = NEXT_STATUS[plan.status];
+    if (!transition) return;
+    setUpdating(true);
+    setUpdateError(null);
+    try {
+      const { data, error: err } = await supabase
+        .from('analysis_plans')
+        .update({ status: transition.next })
+        .eq('id', plan.id)
+        .select('*')
+        .maybeSingle();
+      if (err) throw new Error(err.message);
+      setPlan(data || null);
+    } catch (e) {
+      setUpdateError(e?.message || 'Erreur mise à jour');
+    } finally {
+      setUpdating(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -165,6 +199,29 @@ export default function AnalysisPlanCard({ clientId }) {
           <div style={{ fontSize: 12, color: '#555' }}>{plan.notes_anissa}</div>
         </div>
       )}
+
+      {/* Phase C : action de transition de statut (Anissa avance le workflow) */}
+      {NEXT_STATUS[plan.status] && (
+        <div style={actionRowStyle}>
+          <button
+            type="button"
+            onClick={advanceStatus}
+            disabled={updating}
+            style={{
+              ...actionButtonStyle,
+              opacity: updating ? 0.6 : 1,
+              cursor: updating ? 'wait' : 'pointer',
+            }}
+          >
+            {updating ? '…' : NEXT_STATUS[plan.status].label}
+          </button>
+          {updateError && (
+            <div style={{ fontSize: 11, color: '#c44', marginTop: 6 }}>
+              ⚠️ {updateError}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -218,4 +275,22 @@ const notesStyle = {
   background: 'rgba(255,193,7,0.08)',
   borderRadius: 6,
   borderLeft: '3px solid #ffc107',
+};
+const actionRowStyle = {
+  marginTop: 12,
+  paddingTop: 10,
+  borderTop: '1px dashed rgba(0,0,0,0.08)',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+};
+const actionButtonStyle = {
+  fontSize: 12,
+  fontWeight: 600,
+  padding: '8px 14px',
+  background: '#2d5a3d',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 6,
+  letterSpacing: '.02em',
 };

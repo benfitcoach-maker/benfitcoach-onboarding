@@ -15,6 +15,7 @@ import { COLORS, badgeStyle } from './services/uxColors';
 import { markClientReviewed } from './services/markClientReviewed';
 import { clearStatusCache } from './services/fetchClientsStatus';
 import { PARTNER_IDENTITY, emailSubjectQuestionnaire, emailSubjectFollowupReview } from './services/coachIdentity';
+import AnalysisPlansFollowupBlock from './AnalysisPlansFollowupBlock';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -1240,6 +1241,9 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
         onClickClient={onOpenClient}
         refreshTick={ownClients.length + sharedClients.length}
       />
+
+      {/* Phase C (2026-05-10) : compteur agrege des plans d'analyses par statut */}
+      <AnalysisPlansFollowupBlock />
 
       <div className="dashboard-header">
         <h2>Mes clients</h2>
