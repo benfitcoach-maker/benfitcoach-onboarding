@@ -30,7 +30,7 @@ import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
 import NutritionConsultation from './NutritionConsultation';
 
-export default function ClientJourneyPage({ clientId, onExit }) {
+export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -62,27 +62,57 @@ export default function ClientJourneyPage({ clientId, onExit }) {
   const journey = { ...DEFAULT_JOURNEY_STATE, ...(client.journey_state || {}) };
   const pack = PACK_DEFINITIONS[client.packType] || null;
   const prenom = client.prenom || client.form?.prenom || 'Cliente';
-  const currentStep = journey.current_step || 'analyses';
+  const currentStep = journey.current_step || 'anamnesis';
+
+  // Progression : nombre d'etapes validees (validated|skipped) sur 8.
+  const stepStatuses = JOURNEY_STEPS.map((s) => ({ step: s, status: getStepStatus(journey, s) }));
+  const completedCount = stepStatuses.filter((s) => s.status === 'validated' || s.status === 'skipped').length;
+  const progressPct = Math.round((completedCount / JOURNEY_STEPS.length) * 100);
+  const currentStepIndex = STEP_META[currentStep]?.index || 1;
 
   // Apres chaque transition, on relit le client (source de verite).
   const refresh = () => loadClient();
 
   return (
     <div style={layoutStyle}>
-      {/* ─── Header ─────────────────────────────────────────────── */}
+      {/* ─── Header premium ──────────────────────────────────────── */}
       <header style={headerStyle}>
-        <div>
-          <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-            Parcours cliente
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#999', textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 500 }}>
+              Parcours cliente
+            </div>
+            <h1 style={{ margin: '4px 0 0', fontSize: 24, fontWeight: 600, color: '#1a4028', letterSpacing: '-.01em' }}>
+              {prenom}
+            </h1>
           </div>
-          <h1 style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 600 }}>
-            {prenom}
-            {pack && <span style={{ fontSize: 13, color: '#888', fontWeight: 400, marginLeft: 10 }}>· {pack.label}</span>}
-          </h1>
+          {pack && (
+            <div style={packBadgeStyle}>
+              {pack.label}
+            </div>
+          )}
         </div>
-        <button onClick={onExit} style={exitButtonStyle}>
-          ← Retour fiche cliente
-        </button>
+
+        <div style={{ flex: 1, maxWidth: 380, margin: '0 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 6 }}>
+            <span>Étape {currentStepIndex}/{JOURNEY_STEPS.length}</span>
+            <span>{progressPct}% complété</span>
+          </div>
+          <div style={progressTrackStyle}>
+            <div style={{ ...progressFillStyle, width: `${progressPct}%` }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {onEditProfile && (
+            <button onClick={onEditProfile} style={secondaryHeaderButtonStyle} title="Éditer le profil cliente (anamnèse, contact, pack)">
+              👤 Profil
+            </button>
+          )}
+          <button onClick={onExit} style={exitButtonStyle}>
+            ← Dashboard
+          </button>
+        </div>
       </header>
 
       <div style={contentRowStyle}>
@@ -140,26 +170,43 @@ export default function ClientJourneyPage({ clientId, onExit }) {
 
 function StepRow({ step, meta, status, active }) {
   const tone = {
-    validated: { bg: 'rgba(45,90,61,0.10)', color: '#1a4028', icon: '✓' },
-    active: { bg: '#fff', color: '#2d5a3d', icon: '→' },
-    locked: { bg: 'transparent', color: '#aaa', icon: '🔒' },
-    skipped: { bg: 'rgba(0,0,0,0.04)', color: '#888', icon: '↷' },
+    validated: { bg: 'rgba(45,90,61,0.10)', color: '#1a4028', numColor: '#2d5a3d', numBg: 'rgba(45,90,61,0.18)', icon: '✓' },
+    active:    { bg: '#fff',                color: '#1a4028', numColor: '#fff',    numBg: '#2d5a3d',              icon: null },
+    locked:    { bg: 'transparent',         color: '#bbb',    numColor: '#bbb',    numBg: 'rgba(0,0,0,0.04)',     icon: null },
+    skipped:   { bg: 'rgba(0,0,0,0.04)',    color: '#999',    numColor: '#aaa',    numBg: 'rgba(0,0,0,0.06)',     icon: '↷' },
   }[status];
 
   return (
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 10,
-      padding: '10px 12px',
-      borderRadius: 6,
+      gap: 12,
+      padding: '11px 12px',
+      borderRadius: 8,
       background: tone.bg,
-      border: active ? '1px solid rgba(45,90,61,0.3)' : '1px solid transparent',
-      marginBottom: 6,
+      border: active ? '1px solid rgba(45,90,61,0.35)' : '1px solid transparent',
+      marginBottom: 4,
       color: tone.color,
+      transition: 'background 120ms ease',
     }}>
-      <span style={{ fontSize: 13, width: 18, textAlign: 'center' }}>{tone.icon}</span>
-      <span style={{ fontSize: 13, fontWeight: active ? 600 : 500 }}>{meta.label}</span>
+      <span style={{
+        width: 22,
+        height: 22,
+        borderRadius: '50%',
+        background: tone.numBg,
+        color: tone.numColor,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 11,
+        fontWeight: 600,
+        flexShrink: 0,
+      }}>
+        {tone.icon || meta.index}
+      </span>
+      <span style={{ fontSize: 13, fontWeight: active ? 600 : 500, lineHeight: 1.3 }}>
+        {meta.label}
+      </span>
     </div>
   );
 }
@@ -637,14 +684,19 @@ const layoutStyle = {
   minHeight: '100vh',
   background: '#f9f7f3',
   fontFamily: 'system-ui, -apple-system, sans-serif',
+  width: '100%',
 };
 const headerStyle = {
   background: '#fff',
   borderBottom: '1px solid rgba(0,0,0,0.08)',
-  padding: '18px 32px',
+  padding: '20px 40px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  gap: 24,
+  position: 'sticky',
+  top: 0,
+  zIndex: 10,
 };
 const exitButtonStyle = {
   background: 'transparent',
@@ -654,22 +706,60 @@ const exitButtonStyle = {
   fontSize: 13,
   cursor: 'pointer',
   color: '#444',
+  whiteSpace: 'nowrap',
+};
+const secondaryHeaderButtonStyle = {
+  background: 'rgba(45,90,61,0.06)',
+  border: '1px solid rgba(45,90,61,0.15)',
+  borderRadius: 6,
+  padding: '8px 14px',
+  fontSize: 13,
+  cursor: 'pointer',
+  color: '#1a4028',
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+};
+const packBadgeStyle = {
+  background: 'rgba(45,90,61,0.08)',
+  color: '#2d5a3d',
+  fontSize: 11,
+  fontWeight: 600,
+  padding: '5px 12px',
+  borderRadius: 999,
+  letterSpacing: '.04em',
+  textTransform: 'uppercase',
+};
+const progressTrackStyle = {
+  height: 6,
+  background: 'rgba(0,0,0,0.06)',
+  borderRadius: 999,
+  overflow: 'hidden',
+};
+const progressFillStyle = {
+  height: '100%',
+  background: 'linear-gradient(90deg, #2d5a3d, #4a7d5a)',
+  borderRadius: 999,
+  transition: 'width 280ms ease',
 };
 const contentRowStyle = {
   display: 'grid',
-  gridTemplateColumns: '260px 1fr',
+  gridTemplateColumns: '280px 1fr',
   gap: 0,
   alignItems: 'start',
 };
 const sidebarStyle = {
-  padding: '24px 18px',
+  padding: '28px 20px',
   borderRight: '1px solid rgba(0,0,0,0.08)',
   background: '#fcfaf6',
-  minHeight: 'calc(100vh - 71px)',
+  minHeight: 'calc(100vh - 79px)',
+  position: 'sticky',
+  top: 79,
 };
 const mainStyle = {
-  padding: '32px 40px',
-  maxWidth: 820,
+  padding: '36px 48px',
+  maxWidth: 1800,
+  width: '100%',
+  margin: '0 auto',
 };
 const stepTitleStyle = {
   margin: '0 0 8px',
@@ -722,12 +812,10 @@ const infoBoxStyle = {
 };
 const embedFrameStyle = {
   marginTop: 12,
-  border: '1px solid rgba(0,0,0,0.1)',
-  borderRadius: 8,
+  border: '1px solid rgba(0,0,0,0.08)',
+  borderRadius: 10,
   background: '#fff',
   overflow: 'hidden',
-  // Le composer NutritionConsultation est dense ; on lui donne une box scrollable
-  // pour ne pas exploser la page en hauteur.
-  maxHeight: '70vh',
-  overflowY: 'auto',
+  // Refonte : on laisse le composer s'etaler naturellement. L'utilisateur
+  // scroll la page entiere — pas de scroll imbrique qui casse l'UX.
 };

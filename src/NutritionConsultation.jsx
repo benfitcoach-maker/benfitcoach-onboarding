@@ -2105,8 +2105,9 @@ ${suppText}`;
       {/* Phase B.2 — Bloc lecture seule du plan d'analyses Ortho/MGD pour cette cliente.
           Affiche le dernier analysis_plan trouve (ou message "aucun plan" sinon).
           Donne a Anissa une vue immediate des analyses prescrites avant de generer
-          le programme nutritionnel adapte. */}
-      <AnalysisPlanCard clientId={clientId} />
+          le programme nutritionnel adapte.
+          Phase G : masque en embedded — deja vu en etape 2 du wizard. */}
+      {!embedded && <AnalysisPlanCard clientId={clientId} />}
 
       {pendingAlerts && (
         <ContraIndicationAlert
@@ -3499,8 +3500,10 @@ ${suppText}`;
                 </div>
                 {/* V96.20 — Cockpit Anissa : 4 macro-etapes (Preparer / Generer /
                     Affiner / Livrer) avec auto-detection des sous-checks. Visible
-                    sauf en mode relecture. Aide Anissa a ne rien oublier. */}
-                {!isReviewMode && (
+                    sauf en mode relecture. Aide Anissa a ne rien oublier.
+                    Phase G : masque en embedded — fait doublon avec la sidebar
+                    du wizard parcours (vrai usine a gaz si les deux coexistent). */}
+                {!isReviewMode && !embedded && (
                   <PlanCockpit
                     form={form}
                     consultation={consultation}

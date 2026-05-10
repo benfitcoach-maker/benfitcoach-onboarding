@@ -720,11 +720,12 @@ function App() {
   };
 
   // Anissa: nutrition consultation handlers
+  // Phase H : tout clic 'Consultation' depuis le dashboard ouvre maintenant
+  // le PARCOURS de la cliente. NutritionConsultation n'est plus une page
+  // autonome — elle vit uniquement embedded dans l'etape 6 du wizard.
   const handleStartConsultation = (id) => {
-    setClientId(id);
     setEditingConsultation(null);
-    setPage('nutritionConsultation');
-    setMobileMenu(false);
+    handleOpenClientJourney(id);
   };
 
   const handleSaveConsultation = (consultation) => {
@@ -778,9 +779,7 @@ function App() {
 
   const handleEditConsultation = (consultation) => {
     setEditingConsultation(consultation);
-    setClientId(consultation.clientId);
-    setPage('nutritionConsultation');
-    setMobileMenu(false);
+    handleOpenClientJourney(consultation.clientId);
   };
 
   const currentClient = clientId ? getClient(clientId) : null;
@@ -819,13 +818,25 @@ function App() {
   };
 
   // Anissa: open own client for editing
+  // Phase H : tout clic 'Ouvrir cliente' depuis le dashboard ouvre le parcours.
+  // L'edition du profil cliente (anissaEditClient) reste accessible via le bouton
+  // 'Profil' dans le header du parcours (cf. handleEditClientProfile).
   const handleAnissaOpenClient = (id) => {
+    const client = getClient(id);
+    if (!client) return;
+    setForm(client.form || {});
+    handleOpenClientJourney(id);
+  };
+
+  // Acces a l'edition du profil cliente depuis le header du parcours.
+  const handleEditClientProfile = (id) => {
     const client = getClient(id);
     if (!client) return;
     setClientId(client.id);
     setForm(client.form || {});
     setPage('anissaEditClient');
     setMobileMenu(false);
+    window.history.pushState({}, '', `/`);
   };
 
   // Phase D : ouvre le parcours wizard pour une cliente. Pousse l'URL pour
@@ -860,10 +871,8 @@ function App() {
           label: weekLabel,
           consultantName: 'Anissa',
         };
-    setClientId(client.id);
     setEditingConsultation(prefilledConsultation);
-    setPage('nutritionConsultation');
-    setMobileMenu(false);
+    handleOpenClientJourney(client.id);
     showToast('Plan adapté — vérifiez et sauvegardez');
   };
 
@@ -898,10 +907,8 @@ function App() {
         label: labelMap[diagnostic.returnProfile] || 'Plan de reprise',
         consultantName: 'Anissa',
       };
-      setClientId(client.id);
       setEditingConsultation(prefilledConsultation);
-      setPage('nutritionConsultation');
-      setMobileMenu(false);
+      handleOpenClientJourney(client.id);
       showToast('Plan de reprise généré — vérifiez et sauvegardez');
     } catch (err) {
       showToast('Erreur lors de la génération — réessayez');
@@ -1327,17 +1334,9 @@ function App() {
           />
         )}
 
-        {/* Nutrition Consultation */}
-        {page === 'nutritionConsultation' && (
-          <NutritionConsultation
-            clientId={clientId}
-            apiKey={apiKey}
-            onSave={handleSaveConsultation}
-            onCancel={goToDashboard}
-            initialConsultation={editingConsultation}
-            onOpenJourney={() => handleOpenClientJourney(clientId)}
-          />
-        )}
+        {/* Phase H (2026-05-10) : NutritionConsultation supprimee du routing principal.
+            Le composant existe toujours, utilise uniquement embedded dans l'etape 6
+            du parcours cliente (cf. ClientJourneyPage.StepPlanEditing). */}
 
         {/* Nutrition History */}
         {page === 'nutritionHistory' && (
@@ -1371,6 +1370,7 @@ function App() {
               window.history.pushState({}, '', '/');
               setPage('dashboard');
             }}
+            onEditProfile={() => handleEditClientProfile(clientId)}
           />
         )}
 
