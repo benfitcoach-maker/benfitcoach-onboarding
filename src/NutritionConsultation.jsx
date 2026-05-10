@@ -895,7 +895,7 @@ const INITIAL_FOLLOWUP = {
 
 // V94.27 : formatDate + buildRecommendedBloodTests extraits vers services/clinicalProfile.js
 
-export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation, onOpenJourney }) {
+export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation, onOpenJourney, embedded = false }) {
   const [client, setClient] = useState(() => getClient(clientId));
   const form = client?.form || {};
   const formule = FORMULES[client?.formule] || {};
@@ -947,7 +947,10 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
       });
     return () => { cancelled = true; };
   }, [clientId]);
-  const isJourneyActive = !forceClassicMode && journeyState && journeyState.plan_generated !== true;
+  // Phase F : si on est rendu en mode embedded (depuis le wizard etape 6),
+  // on bypass tout le mode parcours (le wizard l'a deja autour). Force le
+  // rendu classique sans header de section.
+  const isJourneyActive = !embedded && !forceClassicMode && journeyState && journeyState.plan_generated !== true;
 
   // Detect returning client
   const existingConsultations = getNutritionConsultations(clientId);
@@ -2056,8 +2059,10 @@ ${suppText}`;
       {/* V92.1 : modale NutritionTemplates supprimee — feature non utilisee en pratique */}
 
       {/* Phase D — Acces rapide au Parcours cliente (wizard guide etape par etape).
-          Verrouille la progression : analyses → attente → resultats → plan. */}
-      {onOpenJourney && (
+          Verrouille la progression : analyses → attente → resultats → plan.
+          Masque en mode embedded (Phase F) pour ne pas creer un bandeau imbrique
+          quand le composer est rendu DANS l'etape 6 du wizard. */}
+      {onOpenJourney && !embedded && (
         <div style={{
           margin: '12px 0',
           padding: 14,

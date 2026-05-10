@@ -28,6 +28,7 @@ import {
 } from './services/journeyState';
 import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
+import NutritionConsultation from './NutritionConsultation';
 
 export default function ClientJourneyPage({ clientId, onExit }) {
   const [client, setClient] = useState(null);
@@ -103,6 +104,9 @@ export default function ClientJourneyPage({ clientId, onExit }) {
 
         {/* ─── Centre : contenu de l'etape courante ──────────────── */}
         <main style={mainStyle}>
+          {currentStep === 'anamnesis' && (
+            <StepAnamnesis client={client} journey={journey} onChange={refresh} />
+          )}
           {currentStep === 'analyses' && (
             <StepAnalyses client={client} journey={journey} onChange={refresh} />
           )}
@@ -112,8 +116,17 @@ export default function ClientJourneyPage({ clientId, onExit }) {
           {currentStep === 'results' && (
             <StepResults client={client} onChange={refresh} />
           )}
-          {currentStep === 'plan' && (
-            <StepPlan client={client} journey={journey} onExit={onExit} />
+          {currentStep === 'plan_generation' && (
+            <StepPlanGeneration client={client} journey={journey} onChange={refresh} />
+          )}
+          {currentStep === 'plan_editing' && (
+            <StepPlanEditing client={client} onChange={refresh} />
+          )}
+          {currentStep === 'delivery' && (
+            <StepDelivery client={client} onChange={refresh} />
+          )}
+          {currentStep === 'followup' && (
+            <StepFollowup client={client} journey={journey} onExit={onExit} />
           )}
         </main>
       </div>
@@ -361,33 +374,90 @@ function StepResults({ client, onChange }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ÉTAPE 4 — PLAN NUTRITIONNEL
+// ÉTAPE 1 — ANAMNÈSE
 // ═══════════════════════════════════════════════════════════════════
 
-function StepPlan({ client, journey, onExit }) {
-  const synthesis = journey?.results_synthesis;
-  const skipped = journey?.analyses_skipped;
+function StepAnamnesis({ client, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const form = client.form || {};
+  // On considere l'anamnese comme "remplie" si un minimum d'info clinique existe.
+  const minimallyFilled = !!(form.objectifs || form.symptomes || form.pathologies || form.activite);
 
-  const handleMarkGenerated = async () => {
-    if (!window.confirm('Marquer le plan comme généré ?\n\nCela débloque l\'éditeur classique sur la fiche cliente (composer / cockpit / onglets). Le parcours guidé sera considéré comme terminé.')) return;
+  const handleValidate = async () => {
+    if (!minimallyFilled && !window.confirm('L\'anamnèse semble incomplète (objectifs, symptômes, pathologies, activité tous vides). Valider quand même ?')) return;
     setBusy(true);
     setErr(null);
     try {
-      await transitions.markPlanGenerated(client.id);
-      onExit(); // retour fiche cliente, qui basculera en mode classique
+      await transitions.validateAnamnesis(client.id);
+      onChange();
     } catch (e) {
       setErr(e?.message || 'Erreur transition');
+    } finally {
       setBusy(false);
     }
   };
 
   return (
     <section>
-      <h2 style={stepTitleStyle}>🥗 Étape 4 — Plan nutritionnel</h2>
+      <h2 style={stepTitleStyle}>📋 Étape 1 — Anamnèse</h2>
       <p style={stepIntroStyle}>
-        Le parcours préparatoire est complet. Quand vous êtes prête à éditer le plan, débloquez l'éditeur classique ci-dessous.
+        L'anamnèse remplie en consultation initiale est la base de tout le parcours. Validez-la une fois qu'elle est complète pour débloquer la suite.
+      </p>
+
+      <div style={infoBoxStyle}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#666', textTransform: 'uppercase', marginBottom: 8 }}>
+          Aperçu rapide de l'anamnèse
+        </div>
+        <div style={{ fontSize: 13, color: '#444', display: 'grid', gap: 6 }}>
+          <div><strong>Objectifs :</strong> {form.objectifs || <em style={{ color: '#aaa' }}>vide</em>}</div>
+          <div><strong>Symptômes :</strong> {form.symptomes || <em style={{ color: '#aaa' }}>vide</em>}</div>
+          <div><strong>Pathologies :</strong> {form.pathologies || <em style={{ color: '#aaa' }}>vide</em>}</div>
+          <div><strong>Activité :</strong> {form.activite || <em style={{ color: '#aaa' }}>vide</em>}</div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <button onClick={handleValidate} disabled={busy} style={primaryButtonStyle}>
+          {busy ? '…' : '✓ Valider l\'anamnèse et passer aux analyses'}
+        </button>
+      </div>
+      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+      <p style={{ fontSize: 12, color: '#888', marginTop: 10 }}>
+        L'édition de l'anamnèse se fait depuis la fiche cliente classique (mode édition libre, accessible via l'échappatoire en bas de la fiche).
+      </p>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ÉTAPE 5 — GÉNÉRATION DU PLAN
+// ═══════════════════════════════════════════════════════════════════
+
+function StepPlanGeneration({ client, journey, onChange }) {
+  const synthesis = journey?.results_synthesis;
+  const skipped = journey?.analyses_skipped;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleMarkGenerated = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await transitions.markPlanGenerated(client.id);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur transition');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2 style={stepTitleStyle}>✨ Étape 5 — Génération du plan</h2>
+      <p style={stepIntroStyle}>
+        Le contexte est complet. Marquez cette étape une fois que vous avez généré (ou copié-collé) un premier brouillon de plan dans l'éditeur. L'étape suivante vous donnera l'éditeur intégré pour le finaliser.
       </p>
 
       {skipped && (
@@ -405,18 +475,156 @@ function StepPlan({ client, journey, onExit }) {
         </div>
       )}
 
-      <div style={{ marginTop: 20, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 20 }}>
         <button onClick={handleMarkGenerated} disabled={busy} style={primaryButtonStyle}>
-          {busy ? '…' : '✓ Débloquer l\'éditeur classique sur la fiche cliente'}
-        </button>
-        <button onClick={onExit} style={{ ...primaryButtonStyle, background: 'transparent', color: '#666', border: '1px solid rgba(0,0,0,0.2)' }}>
-          ← Retour sans débloquer
+          {busy ? '…' : '✓ Plan généré, passer à l\'édition'}
         </button>
       </div>
       {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
-      <p style={{ fontSize: 12, color: '#888', marginTop: 12 }}>
-        Tant que vous ne débloquez pas, la fiche cliente reste en mode parcours minimal (sans composer ni cockpit).
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ÉTAPE 6 — ÉDITION DU PLAN (embed du composer existant)
+// ═══════════════════════════════════════════════════════════════════
+
+function StepPlanEditing({ client, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleValidate = async () => {
+    if (!window.confirm('Valider le plan ?\n\nLe plan passe en étape Livraison. Vous pourrez encore l\'éditer plus tard via la fiche cliente classique.')) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await transitions.validatePlan(client.id);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur transition');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2 style={stepTitleStyle}>🥗 Étape 6 — Édition du plan</h2>
+      <p style={stepIntroStyle}>
+        Éditeur complet intégré ci-dessous. Affinez le plan, ajoutez vos directives, puis validez pour passer à la livraison.
       </p>
+
+      {/* Phase F : embed direct du composer / cockpit / editeur classique. */}
+      <div style={embedFrameStyle}>
+        <NutritionConsultation
+          clientId={client.id}
+          embedded={true}
+          onSave={() => { /* sauvegarde geree en interne du composer */ }}
+          onCancel={null}
+        />
+      </div>
+
+      <div style={{ marginTop: 20, position: 'sticky', bottom: 16 }}>
+        <button onClick={handleValidate} disabled={busy} style={primaryButtonStyle}>
+          {busy ? '…' : '✓ Valider le plan et passer à la livraison'}
+        </button>
+      </div>
+      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ÉTAPE 7 — LIVRAISON
+// ═══════════════════════════════════════════════════════════════════
+
+function StepDelivery({ client, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleDelivered = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await transitions.markDelivered(client.id);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur transition');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2 style={stepTitleStyle}>📨 Étape 7 — Livraison à la cliente</h2>
+      <p style={stepIntroStyle}>
+        Préparez le plan pour la cliente : export PDF, envoi postal, mise à disposition dans l'app. Marquez cette étape comme faite quand le plan est entre ses mains.
+      </p>
+
+      <div style={infoBoxStyle}>
+        <div style={{ fontSize: 13, color: '#444', lineHeight: 1.6 }}>
+          <strong>Checklist livraison :</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+            <li>PDF généré depuis la fiche cliente classique (onglet Plan complet)</li>
+            <li>Envoi postal préparé (étiquette + plan imprimé)</li>
+            <li>Plan poussé sur l'app cliente (si activée)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <button onClick={handleDelivered} disabled={busy} style={primaryButtonStyle}>
+          {busy ? '…' : '✓ Plan livré à la cliente, passer au suivi'}
+        </button>
+      </div>
+      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ÉTAPE 8 — SUIVI
+// ═══════════════════════════════════════════════════════════════════
+
+function StepFollowup({ client, journey, onExit }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const started = !!journey?.followup_started;
+
+  const handleStart = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await transitions.startFollowup(client.id);
+      onExit();
+    } catch (e) {
+      setErr(e?.message || 'Erreur transition');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2 style={stepTitleStyle}>🔄 Étape 8 — Suivi</h2>
+      <p style={stepIntroStyle}>
+        Le plan est livré. Le suivi continue dans la fiche cliente classique : feedbacks, ajustements, revues de cycle, suivi pack 4 semaines.
+      </p>
+
+      {started ? (
+        <div style={{ ...infoBoxStyle, background: 'rgba(45,90,61,0.10)' }}>
+          ✓ Le suivi est enclenché. Le parcours guidé est officiellement terminé pour cette cliente. Vous pouvez quitter et continuer le suivi depuis la fiche cliente.
+        </div>
+      ) : (
+        <div style={{ marginTop: 20, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button onClick={handleStart} disabled={busy} style={primaryButtonStyle}>
+            {busy ? '…' : '✓ Marquer le suivi comme enclenché'}
+          </button>
+          <button onClick={onExit} style={{ ...primaryButtonStyle, background: 'transparent', color: '#666', border: '1px solid rgba(0,0,0,0.2)' }}>
+            ← Retour fiche cliente
+          </button>
+        </div>
+      )}
+      {err && <div style={{ marginTop: 12, color: '#c44', fontSize: 12 }}>⚠️ {err}</div>}
     </section>
   );
 }
@@ -511,4 +719,15 @@ const infoBoxStyle = {
   background: 'rgba(45,90,61,0.05)',
   border: '1px solid rgba(45,90,61,0.15)',
   borderRadius: 6,
+};
+const embedFrameStyle = {
+  marginTop: 12,
+  border: '1px solid rgba(0,0,0,0.1)',
+  borderRadius: 8,
+  background: '#fff',
+  overflow: 'hidden',
+  // Le composer NutritionConsultation est dense ; on lui donne une box scrollable
+  // pour ne pas exploser la page en hauteur.
+  maxHeight: '70vh',
+  overflowY: 'auto',
 };

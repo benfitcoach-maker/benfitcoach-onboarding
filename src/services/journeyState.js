@@ -1,69 +1,126 @@
 // ─────────────────────────────────────────────────────────────────
-// Phase D — Helpers d'etat du Parcours Cliente
+// Phase D + E — Helpers d'etat du Parcours Cliente (8 etapes)
 // Date : 2026-05-10
 //
-// Le parcours cliente est un wizard linaire : 4 etapes verrouillees
-// (Analyses → Attente → Resultats → Plan). L'etat vit dans le JSONB
+// Le parcours cliente est un wizard linaire : 8 etapes verrouillees
+// (Anamnese → Analyses → Attente → Resultats → Generation plan →
+//  Edition plan → Livraison → Suivi). L'etat vit dans le JSONB
 // `clients.journey_state` (cf. migration D.0).
 //
-// L'etape Plan se debloque si :
-//   - analyses_skipped (pack sans analyses), OU
-//   - results_validated (analyses faites + resultats traites)
+// Conditions de deblocage :
+//   - anamnesis : toujours active au depart
+//   - analyses : anamnesis_validated
+//   - waiting_results : analyses_validated (skip → saute direct a plan_generation)
+//   - results : results_received
+//   - plan_generation : analyses_skipped OR results_validated
+//   - plan_editing : plan_generated
+//   - delivery : plan_validated
+//   - followup : delivered
 //
 // Pas de "navigation libre" : seule l'etape current_step est active,
-// les autres sont locked ou validated. C'est la promesse UX V4.
+// les autres sont locked / validated / skipped.
 // ─────────────────────────────────────────────────────────────────
 
 import { supabase } from '../supabaseClient';
 
-export const JOURNEY_STEPS = ['analyses', 'waiting_results', 'results', 'plan'];
+export const JOURNEY_STEPS = [
+  'anamnesis',
+  'analyses',
+  'waiting_results',
+  'results',
+  'plan_generation',
+  'plan_editing',
+  'delivery',
+  'followup',
+];
 
 export const STEP_META = {
-  analyses: { index: 1, label: 'Analyses', icon: '🧪' },
-  waiting_results: { index: 2, label: 'Attente résultats', icon: '⏳' },
-  results: { index: 3, label: 'Saisie résultats', icon: '📥' },
-  plan: { index: 4, label: 'Plan nutritionnel', icon: '🥗' },
+  anamnesis:       { index: 1, label: 'Anamnèse',          icon: '📋' },
+  analyses:        { index: 2, label: 'Analyses',          icon: '🧪' },
+  waiting_results: { index: 3, label: 'Attente résultats', icon: '⏳' },
+  results:         { index: 4, label: 'Saisie résultats',  icon: '📥' },
+  plan_generation: { index: 5, label: 'Génération plan',   icon: '✨' },
+  plan_editing:    { index: 6, label: 'Édition plan',      icon: '🥗' },
+  delivery:        { index: 7, label: 'Livraison',         icon: '📨' },
+  followup:        { index: 8, label: 'Suivi',             icon: '🔄' },
 };
 
 export const DEFAULT_JOURNEY_STATE = {
-  current_step: 'analyses',
+  current_step: 'anamnesis',
+  anamnesis_validated: false,
   analyses_skipped: false,
   analyses_validated: false,
   results_received: false,
   results_validated: false,
-  plan_generated: false,
+  plan_generated: false,   // existe deja en BDD, devient "plan IA produit une fois"
+  plan_validated: false,   // NEW : Anissa a relu/edite le plan dans le composer
+  delivered: false,        // NEW : plan envoye a la cliente (PDF, app)
+  followup_started: false, // NEW : cycle review / suivi enclenche
 };
 
 /**
  * Statut visuel d'une etape pour la sidebar.
  * Returns 'validated' | 'active' | 'locked' | 'skipped'
  */
+// Backwards compat : les clientes pre-Phase E ont current_step='analyses'
+// (ancien defaut Phase D) sans anamnesis_validated explicite. Si on est deja
+// dans un step post-anamnesis, on considere l'anamnese comme implicitement
+// faite — evite une migration data SQL pour les 5 clientes existantes.
+const POST_ANAMNESIS_STEPS = ['analyses', 'waiting_results', 'results', 'plan_generation', 'plan_editing', 'delivery', 'followup'];
+
 export function getStepStatus(state, step) {
-  const s = state || DEFAULT_JOURNEY_STATE;
-  if (step === 'analyses') {
-    if (s.analyses_skipped) return 'skipped';
-    if (s.analyses_validated) return 'validated';
-    return s.current_step === 'analyses' ? 'active' : 'locked';
+  const s = { ...DEFAULT_JOURNEY_STATE, ...(state || {}) };
+  const isActive = (k) => s.current_step === k;
+  const effectiveAnamnesisValidated = s.anamnesis_validated || POST_ANAMNESIS_STEPS.includes(s.current_step);
+
+  switch (step) {
+    case 'anamnesis':
+      if (effectiveAnamnesisValidated) return 'validated';
+      return isActive('anamnesis') ? 'active' : 'locked';
+
+    case 'analyses':
+      if (s.analyses_skipped) return 'skipped';
+      if (s.analyses_validated) return 'validated';
+      if (!effectiveAnamnesisValidated) return 'locked';
+      return isActive('analyses') ? 'active' : 'locked';
+
+    case 'waiting_results':
+      if (s.analyses_skipped) return 'skipped';
+      if (s.results_received) return 'validated';
+      if (!s.analyses_validated) return 'locked';
+      return isActive('waiting_results') ? 'active' : 'locked';
+
+    case 'results':
+      if (s.analyses_skipped) return 'skipped';
+      if (s.results_validated) return 'validated';
+      if (!s.results_received) return 'locked';
+      return isActive('results') ? 'active' : 'locked';
+
+    case 'plan_generation': {
+      if (s.plan_generated) return 'validated';
+      const unlocked = s.analyses_skipped || s.results_validated;
+      if (!unlocked) return 'locked';
+      return isActive('plan_generation') ? 'active' : 'locked';
+    }
+
+    case 'plan_editing':
+      if (s.plan_validated) return 'validated';
+      if (!s.plan_generated) return 'locked';
+      return isActive('plan_editing') ? 'active' : 'locked';
+
+    case 'delivery':
+      if (s.delivered) return 'validated';
+      if (!s.plan_validated) return 'locked';
+      return isActive('delivery') ? 'active' : 'locked';
+
+    case 'followup':
+      if (s.followup_started) return 'validated';
+      if (!s.delivered) return 'locked';
+      return isActive('followup') ? 'active' : 'locked';
+
+    default:
+      return 'locked';
   }
-  if (step === 'waiting_results') {
-    if (s.analyses_skipped) return 'skipped';
-    if (s.results_received) return 'validated';
-    if (!s.analyses_validated) return 'locked';
-    return s.current_step === 'waiting_results' ? 'active' : 'locked';
-  }
-  if (step === 'results') {
-    if (s.analyses_skipped) return 'skipped';
-    if (s.results_validated) return 'validated';
-    if (!s.results_received) return 'locked';
-    return s.current_step === 'results' ? 'active' : 'locked';
-  }
-  if (step === 'plan') {
-    if (s.plan_generated) return 'validated';
-    const unlocked = s.analyses_skipped || s.results_validated;
-    if (!unlocked) return 'locked';
-    return s.current_step === 'plan' ? 'active' : 'locked';
-  }
-  return 'locked';
 }
 
 /**
@@ -73,7 +130,6 @@ export function getStepStatus(state, step) {
  */
 export async function updateJourneyState(clientId, patch) {
   if (!clientId) throw new Error('clientId requis');
-  // Recharge l'etat actuel (Source de verite serveur)
   const { data: current, error: loadErr } = await supabase
     .from('clients')
     .select('journey_state')
@@ -94,31 +150,51 @@ export async function updateJourneyState(clientId, patch) {
 }
 
 /**
- * Transitions metier (plus expressif que setter brut).
+ * Transitions metier pour les 8 etapes.
  */
 export const transitions = {
-  /** Etape 1 → 2 : Analyses validees, on passe en attente resultats. */
+  // Etape 1 → 2
+  validateAnamnesis: (clientId) => updateJourneyState(clientId, {
+    anamnesis_validated: true,
+    current_step: 'analyses',
+  }),
+  // Etape 2 → 3
   validateAnalyses: (clientId) => updateJourneyState(clientId, {
     analyses_validated: true,
     current_step: 'waiting_results',
   }),
-  /** Etape 1 skip : pack sans analyses, on saute direct au plan. */
+  // Etape 2 skip → 5 (saute attente, resultats — direct generation plan)
   skipAnalyses: (clientId) => updateJourneyState(clientId, {
     analyses_skipped: true,
-    current_step: 'plan',
+    current_step: 'plan_generation',
   }),
-  /** Etape 2 → 3 : Resultats recus, Anissa peut commencer la saisie. */
+  // Etape 3 → 4
   markResultsReceived: (clientId) => updateJourneyState(clientId, {
     results_received: true,
     current_step: 'results',
   }),
-  /** Etape 3 → 4 : Resultats traites, plan debloque. */
+  // Etape 4 → 5
   validateResults: (clientId) => updateJourneyState(clientId, {
     results_validated: true,
-    current_step: 'plan',
+    current_step: 'plan_generation',
   }),
-  /** Etape 4 : plan genere → fin du parcours actif. */
+  // Etape 5 → 6
   markPlanGenerated: (clientId) => updateJourneyState(clientId, {
     plan_generated: true,
+    current_step: 'plan_editing',
+  }),
+  // Etape 6 → 7
+  validatePlan: (clientId) => updateJourneyState(clientId, {
+    plan_validated: true,
+    current_step: 'delivery',
+  }),
+  // Etape 7 → 8
+  markDelivered: (clientId) => updateJourneyState(clientId, {
+    delivered: true,
+    current_step: 'followup',
+  }),
+  // Etape 8 (terminal)
+  startFollowup: (clientId) => updateJourneyState(clientId, {
+    followup_started: true,
   }),
 };
