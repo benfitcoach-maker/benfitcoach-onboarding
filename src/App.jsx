@@ -48,6 +48,7 @@ import ProgressionPanel from './ProgressionPanel';
 import BusinessDashboard from './BusinessDashboard';
 import AnissaChiffres from './AnissaChiffres';
 import SupplementsLibrary from './SupplementsLibrary';
+import ClientJourneyPage from './ClientJourneyPage';
 import LoginScreen from './LoginScreen';
 import { callAnthropic, SECTION_TITLES } from './prompt';
 import { getClients, getClient, saveClient, addGeneration, exportAllData, importAllData, pullFromCloud, retrySyncQueue, getSharedClients, getAnissaOwnClients, getBenoitClients, saveNutritionConsultation, getNutritionConsultations, updateInterviewNotes, updateClientSection, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, syncReminderNotifications, purgeExpiredDrafts, getCycleReviews, saveApiKeyToCloud, loadApiKeyFromCloud, syncPackNotifications, syncCompletedStepsFromReviews } from './store';
@@ -289,8 +290,11 @@ function App() {
   const [syncStatus, setSyncStatus] = useState('');
 
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('bfc_api_key') || '');
-  const [page, setPage] = useState('dashboard');
-  const [clientId, setClientId] = useState(null);
+  // Phase D : detection URL initiale /parcours/:clientId au mount, pour
+  // permettre les liens directs / bookmarks / reload au milieu d'un parcours.
+  const initialJourneyMatch = window.location.pathname.match(/^\/parcours\/([a-f0-9-]+)$/i);
+  const [page, setPage] = useState(initialJourneyMatch ? 'clientJourney' : 'dashboard');
+  const [clientId, setClientId] = useState(initialJourneyMatch ? initialJourneyMatch[1] : null);
   const [categorie, setCategorie] = useState('online');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -824,6 +828,16 @@ function App() {
     setMobileMenu(false);
   };
 
+  // Phase D : ouvre le parcours wizard pour une cliente. Pousse l'URL pour
+  // rester coherent avec la decision "page dediee /parcours/:clientId".
+  const handleOpenClientJourney = (id) => {
+    if (!id) return;
+    setClientId(id);
+    setPage('clientJourney');
+    setMobileMenu(false);
+    window.history.pushState({}, '', `/parcours/${id}`);
+  };
+
   const handleAdaptPlan = (client, adaptedPlan) => {
     const consultations = getNutritionConsultations(client.id);
     const lastConsultation = consultations[0] || null;
@@ -1321,6 +1335,7 @@ function App() {
             onSave={handleSaveConsultation}
             onCancel={goToDashboard}
             initialConsultation={editingConsultation}
+            onOpenJourney={() => handleOpenClientJourney(clientId)}
           />
         )}
 
@@ -1345,6 +1360,17 @@ function App() {
             currentUser="anissa"
             onBack={goToDashboard}
             onOpenClient={handleAnissaOpenClient}
+          />
+        )}
+
+        {/* Phase D (2026-05-10) : Parcours cliente — wizard guide post-anamnese */}
+        {page === 'clientJourney' && clientId && (
+          <ClientJourneyPage
+            clientId={clientId}
+            onExit={() => {
+              window.history.pushState({}, '', '/');
+              setPage('dashboard');
+            }}
           />
         )}
 

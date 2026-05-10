@@ -895,7 +895,7 @@ const INITIAL_FOLLOWUP = {
 
 // V94.27 : formatDate + buildRecommendedBloodTests extraits vers services/clinicalProfile.js
 
-export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation }) {
+export default function NutritionConsultation({ clientId, apiKey, onSave, onCancel, initialConsultation, onOpenJourney }) {
   const [client, setClient] = useState(() => getClient(clientId));
   const form = client?.form || {};
   const formule = FORMULES[client?.formule] || {};
@@ -921,6 +921,33 @@ export default function NutritionConsultation({ clientId, apiKey, onSave, onCanc
         }
       });
   }, [clientId]);
+
+  // Phase D : Mode Parcours verrouille. Tant que journey_state.plan_generated
+  // n'est pas true, on rend une vue minimale (bandeau + AnalysisPlanCard +
+  // gros CTA vers le wizard). Quand le wizard valide l'etape 4, on bascule
+  // automatiquement sur la fiche cliente classique (composer / cockpit).
+  const [journeyState, setJourneyState] = useState(null);
+  const [journeyLoading, setJourneyLoading] = useState(true);
+  const [forceClassicMode, setForceClassicMode] = useState(false);
+  useEffect(() => {
+    if (!isCloudEnabled || !clientId) {
+      setJourneyLoading(false);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('clients')
+      .select('journey_state')
+      .eq('id', clientId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setJourneyState(data?.journey_state || null);
+        setJourneyLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [clientId]);
+  const isJourneyActive = !forceClassicMode && journeyState && journeyState.plan_generated !== true;
 
   // Detect returning client
   const existingConsultations = getNutritionConsultations(clientId);
@@ -1956,9 +1983,119 @@ ${suppText}`;
   // courant (qui ferme sur le state actuel de consultation).
   handleSaveRef.current = handleSave;
 
+  // Phase D : early return en Mode Parcours (vue minimale tant que le parcours
+  // n'est pas termine). Evite que Anissa bypasse le wizard via le cockpit.
+  if (isJourneyActive) {
+    const prenom = client?.prenom || form?.prenom || 'cette cliente';
+    return (
+      <div className="nutrition-consultation" style={{ padding: '24px 32px' }}>
+        <div style={{ marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+              Mode parcours actif
+            </div>
+            <h2 style={{ margin: '4px 0 0', fontSize: 22 }}>{prenom}</h2>
+          </div>
+          <button onClick={onCancel} style={{ background: 'transparent', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 6, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>
+            ← Dashboard
+          </button>
+        </div>
+
+        <div style={{
+          padding: 20,
+          background: 'linear-gradient(135deg, rgba(45,90,61,0.10), rgba(45,90,61,0.03))',
+          border: '1px solid rgba(45,90,61,0.25)',
+          borderRadius: 10,
+          marginBottom: 18,
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#1a4028', marginBottom: 6 }}>
+            🧭 Cliente en parcours guidé
+          </div>
+          <div style={{ fontSize: 13, color: '#666', lineHeight: 1.6, marginBottom: 16 }}>
+            Le composer et l'éditeur classique sont volontairement masqués tant que le parcours n'est pas terminé. Une seule prochaine action à la fois — c'est la promesse UX du parcours.
+          </div>
+          <button
+            type="button"
+            onClick={onOpenJourney}
+            style={{
+              background: '#2d5a3d',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              padding: '14px 24px',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Continuer le parcours →
+          </button>
+        </div>
+
+        <AnalysisPlanCard clientId={clientId} />
+
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px dashed rgba(0,0,0,0.1)', textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Forcer l\'édition libre ?\n\nVous quittez le mode parcours guidé. Le composer et le cockpit redeviennent accessibles. Cette préférence vaut uniquement pour cette session — recharger la page rebascule en mode parcours si plan_generated reste à false.')) {
+                setForceClassicMode(true);
+              }
+            }}
+            style={{ background: 'transparent', border: 'none', color: '#999', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Forcer le mode édition libre (échappatoire)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="nutrition-consultation">
       {/* V92.1 : modale NutritionTemplates supprimee — feature non utilisee en pratique */}
+
+      {/* Phase D — Acces rapide au Parcours cliente (wizard guide etape par etape).
+          Verrouille la progression : analyses → attente → resultats → plan. */}
+      {onOpenJourney && (
+        <div style={{
+          margin: '12px 0',
+          padding: 14,
+          background: 'linear-gradient(90deg, rgba(45,90,61,0.08), rgba(45,90,61,0.02))',
+          border: '1px solid rgba(45,90,61,0.2)',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#1a4028' }}>
+              🧭 Parcours cliente guidé
+            </div>
+            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+              Workflow étape par étape : analyses → attente → résultats → plan. Une seule action active à la fois.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenJourney}
+            style={{
+              background: '#2d5a3d',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              padding: '10px 18px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Ouvrir le parcours →
+          </button>
+        </div>
+      )}
 
       {/* Phase B.2 — Bloc lecture seule du plan d'analyses Ortho/MGD pour cette cliente.
           Affiche le dernier analysis_plan trouve (ou message "aucun plan" sinon).
