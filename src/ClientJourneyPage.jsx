@@ -1051,6 +1051,32 @@ function StepResults({ client, onChange }) {
     return acc;
   }, {});
 
+  // BC.5D.1 : vue clinique synthétique auto-computed depuis les analyses saisies
+  // Sobre par défaut : juste compteurs status + catégories les plus présentes.
+  // Apparaît uniquement si au moins 1 analyse a un status (sinon useless).
+  const hasStatusedResults = Object.keys(statusCounts).length > 0;
+  const categoryCounts = allResults.reduce((acc, r) => {
+    if (r.category) acc[r.category] = (acc[r.category] || 0) + 1;
+    return acc;
+  }, {});
+  const topCategories = Object.entries(categoryCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 4)
+    .map(([key]) => CATEGORIES.find((c) => c.value === key)?.label || key);
+  // Tonalité globale : prioritaire > surveiller > optimal
+  const overallTone = statusCounts.prioritaire > 0
+    ? 'prioritaire'
+    : statusCounts.surveiller > 0
+    ? 'surveiller'
+    : statusCounts.optimal > 0
+    ? 'optimal'
+    : null;
+  const overallLabel = overallTone === 'prioritaire'
+    ? 'Profil avec marqueurs prioritaires'
+    : overallTone === 'surveiller'
+    ? 'Profil à surveiller'
+    : 'Profil stable';
+
   return (
     <section>
       <StepHead
@@ -1060,6 +1086,46 @@ function StepResults({ client, onChange }) {
       />
 
       {/* BC.5D : refonte étape 4 en cockpit d'analyse clinique premium */}
+
+      {/* ─── Vue clinique synthétique (BC.5D.1, conditionnel) ────
+          Sobre : apparaît dès qu'au moins 1 analyse a un status défini.
+          Donne la sensation 'quelque chose d'intelligent émerge'. */}
+      {hasStatusedResults && (
+        <div className={`jrn-clinical-overview jrn-clinical-overview--${overallTone}`}>
+          <div className="jrn-clinical-overview__head">
+            <p className="jrn-clinical-overview__eyebrow">Vue clinique détectée</p>
+            <h3 className="jrn-clinical-overview__title">{overallLabel}</h3>
+          </div>
+          <div className="jrn-clinical-overview__stats">
+            {statusCounts.prioritaire > 0 && (
+              <div className="jrn-clinical-stat jrn-clinical-stat--prioritaire">
+                <span className="jrn-clinical-stat__num">{statusCounts.prioritaire}</span>
+                <span className="jrn-clinical-stat__label">🔴 Prioritaire{statusCounts.prioritaire > 1 ? 's' : ''}</span>
+              </div>
+            )}
+            {statusCounts.surveiller > 0 && (
+              <div className="jrn-clinical-stat jrn-clinical-stat--surveiller">
+                <span className="jrn-clinical-stat__num">{statusCounts.surveiller}</span>
+                <span className="jrn-clinical-stat__label">🟡 À surveiller</span>
+              </div>
+            )}
+            {statusCounts.optimal > 0 && (
+              <div className="jrn-clinical-stat jrn-clinical-stat--optimal">
+                <span className="jrn-clinical-stat__num">{statusCounts.optimal}</span>
+                <span className="jrn-clinical-stat__label">🟢 Optimal{statusCounts.optimal > 1 ? 'es' : ''}</span>
+              </div>
+            )}
+          </div>
+          {topCategories.length > 0 && (
+            <div className="jrn-clinical-overview__axes">
+              <span className="jrn-clinical-overview__axes-label">Axes détectés</span>
+              {topCategories.map((cat) => (
+                <span key={cat} className="jrn-clinical-overview__axe">{cat}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Bloc 1 : Analyses prescrites ──────────────────────── */}
       {planTests && planTests.length > 0 && (
