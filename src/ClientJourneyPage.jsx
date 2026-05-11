@@ -366,20 +366,51 @@ function StepAnamnesis({ client, onChange }) {
         <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
           {busy ? '…' : 'Valider l\'anamnèse'}
         </button>
-        {/* AZ.1 : bouton 'Envoyer questionnaire' migré du menu Plus dashboard */}
-        <button
-          onClick={async () => {
-            const { openClientQuestionnaireMail } = await import('./services/sendClientQuestionnaire');
-            openClientQuestionnaireMail(client);
-          }}
-          className="jrn-btn jrn-btn--soft"
-          title="Ouvre Gmail avec un mail pré-rempli contenant le lien questionnaire pré-RDV"
-          disabled={!(client.form?.email || client.email)}
-        >
-          📩 Envoyer le questionnaire pré-RDV
-        </button>
       </div>
-      <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 'var(--jrn-2)' }}>
+
+      {/* BA (2026-05-11) : envoi pré-questionnaire à la cliente — 2 modes
+          'Envoyer via l'app' si app_enabled : mail Bienvenue + lien /login
+          → la cliente s'authentifie et accède au questionnaire dans son timeline
+          'Envoyer par lien' : mail Gmail avec lien direct /questionnaire web */}
+      {(client.form?.email || client.email) && (
+        <div style={{ marginTop: 'var(--jrn-6)', padding: 'var(--jrn-5)', background: 'var(--jrn-surface-alt)', border: '1px solid var(--jrn-border)', borderRadius: 'var(--jrn-radius)' }}>
+          <div className="jrn-label">Envoyer le pré-questionnaire à la cliente</div>
+          <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 6, marginBottom: 12, lineHeight: 1.55 }}>
+            Avant le RDV anamnèse, la cliente remplit un questionnaire court (5 min). 2 modes possibles :
+          </p>
+          <div className="jrn-actions" style={{ marginTop: 0 }}>
+            {client.app_enabled && (
+              <button
+                onClick={async () => {
+                  const { openClientWelcomeAppMail } = await import('./services/sendClientQuestionnaire');
+                  openClientWelcomeAppMail(client);
+                }}
+                className="jrn-btn jrn-btn--primary"
+                title="Mail Bienvenue avec lien /login de l'app cliente. Plus premium, ancre la cliente dans l'écosystème app."
+              >
+                📱 Envoyer via l'app cliente
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                const { openClientQuestionnaireMail } = await import('./services/sendClientQuestionnaire');
+                openClientQuestionnaireMail(client);
+              }}
+              className={client.app_enabled ? 'jrn-btn jrn-btn--soft' : 'jrn-btn jrn-btn--primary'}
+              title="Mail Gmail avec lien direct vers le questionnaire web (pas besoin de compte app)"
+            >
+              📩 Envoyer par lien email
+            </button>
+          </div>
+          {!client.app_enabled && (
+            <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
+              ⓘ L'app cliente n'est pas activée pour cette cliente. Pour proposer le mode 'via l'app', activez-la depuis la fiche cliente (Profil).
+            </p>
+          )}
+        </div>
+      )}
+
+      <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 'var(--jrn-3)' }}>
         L'édition complète de l'anamnèse se fait via le bouton <strong>Profil</strong> en haut.
       </p>
       <ErrorLine msg={err} />
