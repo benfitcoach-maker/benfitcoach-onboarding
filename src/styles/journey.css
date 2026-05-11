@@ -145,6 +145,17 @@
   color: var(--jrn-accent);
   white-space: nowrap;
 }
+.jrn-header__consult {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-xs);
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(184, 134, 38, 0.10);
+  color: #8a6722;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
 
 .jrn-header__progress {
   flex: 1;

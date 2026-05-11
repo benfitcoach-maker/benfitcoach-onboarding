@@ -140,6 +140,14 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
             <h1 className="jrn-header__name">{prenom}</h1>
           </div>
           {pack && <span className="jrn-header__pack">{pack.label}</span>}
+          {consultationsTotal > 0 && (
+            <span
+              className="jrn-header__consult"
+              title={`${consultationsUsed} consultation${consultationsUsed > 1 ? 's' : ''} effectuée${consultationsUsed > 1 ? 's' : ''} sur ${consultationsTotal} incluse${consultationsTotal > 1 ? 's' : ''} dans le pack`}
+            >
+              📅 {consultationsUsed}/{consultationsTotal}
+            </span>
+          )}
         </div>
 
         <div className="jrn-header__progress">
@@ -949,6 +957,44 @@ function StepFollowup({ client, journey, onChange, onExit }) {
   const [previewVersion, setPreviewVersion] = useState(null);
   const started = !!journey?.followup_started;
 
+  // Phase AJ : log des consultations effectuees
+  const pack = PACK_DEFINITIONS[client.packType] || null;
+  const consultationsTotal = pack?.consultations || 0;
+  const consultationsLog = Array.isArray(journey?.consultations_log) ? journey.consultations_log : [];
+  const consultationsUsed = consultationsLog.length;
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logNote, setLogNote] = useState('');
+  const [savingLog, setSavingLog] = useState(false);
+
+  const handleLogConsultation = async () => {
+    setSavingLog(true);
+    setErr(null);
+    try {
+      await transitions.logConsultation(client.id, { notes: logNote });
+      setLogNote('');
+      setShowLogModal(false);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur enregistrement consultation');
+    } finally {
+      setSavingLog(false);
+    }
+  };
+
+  const handleRemoveLastConsultation = async () => {
+    if (!window.confirm('Annuler la dernière consultation enregistrée ?\n\nCette action retire la dernière entrée du journal des consultations (utile en cas de clic accidentel).')) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await transitions.removeLastConsultation(client.id);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur annulation');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Charge l'historique des versions du plan
   useEffect(() => {
     if (!client?.id) return;
@@ -1081,6 +1127,92 @@ function StepFollowup({ client, journey, onChange, onExit }) {
 
       {started && (
         <>
+          {/* ─── Section : Consultations effectuées ─────────────── */}
+          <div style={{ marginBottom: 'var(--jrn-6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)' }}>
+              <p className="jrn-label" style={{ margin: 0 }}>
+                Consultations {consultationsTotal > 0 ? `(${consultationsUsed}/${consultationsTotal})` : `(${consultationsUsed})`}
+              </p>
+              <button
+                onClick={() => setShowLogModal(true)}
+                disabled={consultationsTotal > 0 && consultationsUsed >= consultationsTotal}
+                className="jrn-btn jrn-btn--primary"
+                style={{ padding: '6px 14px', fontSize: 12 }}
+                title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Marquer une nouvelle consultation effectuée'}
+              >
+                ✅ Consultation effectuée
+              </button>
+            </div>
+
+            {consultationsLog.length === 0 && (
+              <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
+                <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
+                  Aucune consultation enregistrée pour l'instant. Cliquez sur <strong>✅ Consultation effectuée</strong> après chaque RDV (cabinet ou visio).
+                </p>
+              </div>
+            )}
+
+            {consultationsLog.length > 0 && (
+              <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
+                {[...consultationsLog].reverse().map((c, i) => {
+                  const date = c.date ? new Date(c.date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+                  const num = consultationsLog.length - i;
+                  const isLast = i === 0;
+                  return (
+                    <div
+                      key={`${c.date}-${i}`}
+                      style={{
+                        padding: '12px 16px',
+                        borderBottom: i < consultationsLog.length - 1 ? '1px solid var(--jrn-border)' : 'none',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                      }}
+                    >
+                      <span style={{
+                        flexShrink: 0,
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: 'var(--jrn-accent-soft)',
+                        color: 'var(--jrn-accent)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        marginTop: 1,
+                      }}>{num}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: 'var(--jrn-text)', fontWeight: 500 }}>{date}</div>
+                        {c.notes && (
+                          <div style={{ fontSize: 12, color: 'var(--jrn-text-soft)', marginTop: 4, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{c.notes}</div>
+                        )}
+                      </div>
+                      {isLast && (
+                        <button
+                          onClick={handleRemoveLastConsultation}
+                          disabled={busy}
+                          className="jrn-btn jrn-btn--ghost"
+                          style={{ padding: '4px 8px', fontSize: 11, color: 'var(--jrn-text-muted)' }}
+                          title="Annuler la dernière consultation enregistrée (clic accidentel)"
+                        >
+                          Annuler
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {consultationsTotal > 0 && consultationsUsed >= consultationsTotal && (
+              <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-warn)' }}>
+                ⓘ Quota du pack atteint ({consultationsTotal} consultation{consultationsTotal > 1 ? 's' : ''}). Pour facturer une consultation supplémentaire, créez un nouveau pack ou ajustez le pack actuel.
+              </p>
+            )}
+          </div>
+
           {/* ─── Section : derniers ressentis ──────────────────── */}
           <div style={{ marginBottom: 'var(--jrn-6)' }}>
             <p className="jrn-label">Derniers ressentis ({feedbacks.length})</p>
@@ -1219,7 +1351,64 @@ function StepFollowup({ client, journey, onChange, onExit }) {
       {previewVersion && (
         <PlanVersionPreviewModal version={previewVersion} onClose={() => setPreviewVersion(null)} />
       )}
+
+      {/* Modale saisie consultation effectuée */}
+      {showLogModal && (
+        <LogConsultationModal
+          consultationNumber={consultationsUsed + 1}
+          totalIncluded={consultationsTotal}
+          note={logNote}
+          setNote={setLogNote}
+          onCancel={() => { setShowLogModal(false); setLogNote(''); }}
+          onConfirm={handleLogConsultation}
+          saving={savingLog}
+        />
+      )}
     </section>
+  );
+}
+
+function LogConsultationModal({ consultationNumber, totalIncluded, note, setNote, onCancel, onConfirm, saving }) {
+  return (
+    <div className="jpe-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !saving) onCancel(); }}>
+      <div className="jpe-modal">
+        <header className="jpe-modal__header">
+          <div>
+            <p className="jrn-step-eyebrow">Consultation effectuée</p>
+            <h3 className="jpe-modal__title">
+              Consultation n°{consultationNumber}
+              {totalIncluded > 0 && <span style={{ fontSize: 14, color: 'var(--jrn-text-muted)', fontStyle: 'normal', marginLeft: 8 }}>/ {totalIncluded}</span>}
+            </h3>
+          </div>
+          <button onClick={onCancel} disabled={saving} className="jrn-btn jrn-btn--ghost">Fermer</button>
+        </header>
+        <div className="jpe-modal__body">
+          <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 0, marginBottom: 'var(--jrn-3)', lineHeight: 1.6 }}>
+            Marquez cette consultation comme effectuée. Vous pouvez ajouter une note rapide (axes abordés, décisions, ressentis cliente). Cette note reste interne — non envoyée à la cliente.
+          </p>
+
+          <label className="jrn-label" htmlFor="consult-note">Note de consultation (optionnel)</label>
+          <textarea
+            id="consult-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={6}
+            className="jrn-textarea"
+            placeholder="Ex : Cliente très motivée, fatigue résolue, microbiome amélioré. Décisions : continuer protocole 2 semaines puis ajouter mélatonine si insomnie persiste."
+            disabled={saving}
+          />
+
+          <div className="jrn-actions">
+            <button onClick={onConfirm} disabled={saving} className="jrn-btn jrn-btn--primary">
+              {saving ? 'Enregistrement…' : '✅ Marquer effectuée'}
+            </button>
+            <button onClick={onCancel} disabled={saving} className="jrn-btn jrn-btn--ghost">
+              Annuler
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

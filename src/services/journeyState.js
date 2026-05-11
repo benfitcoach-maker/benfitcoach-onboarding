@@ -222,4 +222,41 @@ export const transitions = {
   returnToFollowup: (clientId) => updateJourneyState(clientId, {
     current_step: 'followup',
   }),
+
+  // Phase AJ : enregistre une consultation (RDV cabinet/visio) effectuee.
+  // Append-only dans journey_state.consultations_log = [{date, notes}].
+  // Le compteur "X/Y consultations" du header se base sur la longueur du tableau.
+  // Note : on lit l'etat courant pour merger l'array, sinon updateJourneyState
+  // ecraserait toute la cle consultations_log.
+  logConsultation: async (clientId, { notes = '' } = {}) => {
+    if (!clientId) throw new Error('clientId requis');
+    const { data: current, error: loadErr } = await supabase
+      .from('clients')
+      .select('journey_state')
+      .eq('id', clientId)
+      .maybeSingle();
+    if (loadErr) throw new Error(loadErr.message);
+    const state = current?.journey_state || {};
+    const log = Array.isArray(state.consultations_log) ? state.consultations_log : [];
+    const next = [
+      ...log,
+      { date: new Date().toISOString(), notes: (notes || '').trim() },
+    ];
+    return updateJourneyState(clientId, { consultations_log: next });
+  },
+
+  // Supprime la derniere entree du log (pour annuler un clic accidentel).
+  removeLastConsultation: async (clientId) => {
+    if (!clientId) throw new Error('clientId requis');
+    const { data: current, error: loadErr } = await supabase
+      .from('clients')
+      .select('journey_state')
+      .eq('id', clientId)
+      .maybeSingle();
+    if (loadErr) throw new Error(loadErr.message);
+    const state = current?.journey_state || {};
+    const log = Array.isArray(state.consultations_log) ? state.consultations_log : [];
+    if (log.length === 0) return state;
+    return updateJourneyState(clientId, { consultations_log: log.slice(0, -1) });
+  },
 };
