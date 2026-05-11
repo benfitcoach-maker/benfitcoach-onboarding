@@ -253,50 +253,90 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
       {/* ─── Body : sidebar + main ──────────────────────────────── */}
       <div className="jrn-body">
         <aside className="jrn-sidebar">
-          <p className="jrn-sidebar__label">Étapes</p>
-          {JOURNEY_STEPS.map((step) => {
-            const status = getStepStatus(journey, step);
-            const meta = STEP_META[step];
-            const active = step === currentStep;
-            const cls = ['jrn-step'];
-            if (active) cls.push('jrn-step--active');
-            else if (status === 'validated') cls.push('jrn-step--validated');
-            else if (status === 'skipped') cls.push('jrn-step--skipped');
-            return (
-              <div key={step} className={cls.join(' ')}>
-                <span className="jrn-step__num">
-                  {status === 'validated' ? '✓' : status === 'skipped' ? '↷' : meta.index}
-                </span>
-                <span>{meta.label}</span>
-              </div>
-            );
-          })}
-          {/* AR.3 : bloc résumé statut cliente en bas de sidebar */}
-          <div className="jrn-sidebar__summary">
-            <div className="jrn-sidebar__summary-row">
-              <span className="jrn-sidebar__summary-label">Étape</span>
-              <span className="jrn-sidebar__summary-value">{currentStepIndex} / {JOURNEY_STEPS.length}</span>
-            </div>
-            <div className="jrn-sidebar__summary-row">
-              <span className="jrn-sidebar__summary-label">Progression</span>
-              <span className="jrn-sidebar__summary-value">{progressPct}%</span>
-            </div>
-            {consultationsTotal > 0 && (
-              <div className="jrn-sidebar__summary-row">
-                <span className="jrn-sidebar__summary-label">Consultations</span>
-                <span className="jrn-sidebar__summary-value">{consultationsUsed} / {consultationsTotal}</span>
-              </div>
-            )}
-            <div className="jrn-sidebar__summary-row jrn-sidebar__summary-row--next">
-              <span className="jrn-sidebar__summary-label">Prochaine action</span>
-              <span className="jrn-sidebar__summary-value jrn-sidebar__summary-value--accent">
-                {STEP_META[currentStep]?.label || '—'}
-              </span>
-            </div>
+          {/* ─── Étapes du parcours (timeline verticale) ─────────── */}
+          <p className="jrn-sidebar__label">Parcours</p>
+          <div className="jrn-steps">
+            {JOURNEY_STEPS.map((step) => {
+              const status = getStepStatus(journey, step);
+              const meta = STEP_META[step];
+              const active = step === currentStep;
+              const cls = ['jrn-step'];
+              if (active) cls.push('jrn-step--active');
+              else if (status === 'validated') cls.push('jrn-step--validated');
+              else if (status === 'skipped') cls.push('jrn-step--skipped');
+              return (
+                <div key={step} className={cls.join(' ')}>
+                  <span className="jrn-step__num">
+                    {status === 'validated' ? '✓' : status === 'skipped' ? '↷' : meta.index}
+                  </span>
+                  <span>{meta.label}</span>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="jrn-sidebar__rule">
-            Une seule étape active à la fois. L'état est sauvegardé en continu.
+          {/* ─── BC.3B Cockpit clinique cliente ────────────────────
+              Pack actif + suivi (consultations, jour pack, dernier RDV)
+              + statut app cliente. Remplace le résumé minimal AR.3. */}
+          <div className="jrn-cockpit">
+            {pack && (
+              <div className="jrn-cockpit__section">
+                <p className="jrn-cockpit__label">Pack actif</p>
+                <p className="jrn-cockpit__pack">{pack.label}</p>
+              </div>
+            )}
+
+            {(consultationsTotal > 0 || daysSincePack || daysSinceLastConsult !== null) && (
+              <div className="jrn-cockpit__section">
+                <p className="jrn-cockpit__label">Suivi</p>
+                {consultationsTotal > 0 && (
+                  <div className="jrn-cockpit__stat">
+                    <div className="jrn-cockpit__stat-head">
+                      <span className="jrn-cockpit__stat-key">Consultations</span>
+                      <span className="jrn-cockpit__stat-val">{consultationsUsed} <span className="jrn-cockpit__stat-total">/ {consultationsTotal}</span></span>
+                    </div>
+                    <div className="jrn-cockpit__bar">
+                      <div
+                        className="jrn-cockpit__bar-fill"
+                        style={{ width: `${Math.min(100, Math.round((consultationsUsed / consultationsTotal) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {daysSincePack && (
+                  <div className="jrn-cockpit__row">
+                    <span className="jrn-cockpit__row-key">📆 Pack démarré</span>
+                    <span className="jrn-cockpit__row-val">Jour {daysSincePack}</span>
+                  </div>
+                )}
+                {daysSinceLastConsult !== null && (
+                  <div className="jrn-cockpit__row">
+                    <span className="jrn-cockpit__row-key">✓ Dernier RDV</span>
+                    <span className="jrn-cockpit__row-val">
+                      {daysSinceLastConsult === 0 ? 'aujourd\'hui' : `il y a ${daysSinceLastConsult}j`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="jrn-cockpit__section">
+              <p className="jrn-cockpit__label">Espace cliente</p>
+              <div className="jrn-cockpit__row">
+                <span className="jrn-cockpit__row-key">📱 App cliente</span>
+                <span className={`jrn-cockpit__pill ${client.app_enabled ? 'jrn-cockpit__pill--on' : 'jrn-cockpit__pill--off'}`}>
+                  {client.app_enabled ? 'Activée' : 'Non activée'}
+                </span>
+              </div>
+            </div>
+
+            <div className="jrn-cockpit__section jrn-cockpit__section--next">
+              <p className="jrn-cockpit__label">Prochaine action</p>
+              <p className="jrn-cockpit__next">
+                {STEP_META[currentStep]?.label || '—'}
+              </p>
+              <p className="jrn-cockpit__next-meta">Étape {currentStepIndex} / {JOURNEY_STEPS.length} · {progressPct}%</p>
+            </div>
           </div>
         </aside>
 
