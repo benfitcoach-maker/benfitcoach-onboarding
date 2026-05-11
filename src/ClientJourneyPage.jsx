@@ -987,16 +987,27 @@ function StepResults({ client, onChange }) {
       if (cancelled) return;
       const tests = Array.isArray(data?.selected_tests) ? data.selected_tests : [];
       setPlanTests(tests);
-      // Merge : on garde les valeurs deja saisies, on ajoute les tests du plan absents
+      // Merge : on garde les valeurs deja saisies, on ajoute les tests du plan absents.
+      // BC.5D.2 : auto-détecte la catégorie depuis le nom si pas encore définie.
       setResultsByTest((prev) => {
         const map = new Map(prev.map((r) => [r.test_code || r.test_name, r]));
         const merged = tests.map((t) => {
           const key = t.code || t.name;
-          return map.get(key) || {
+          const existing = map.get(key);
+          if (existing) {
+            // Existant : auto-fill category seulement si null (respecte choix manuel)
+            return {
+              ...existing,
+              category: existing.category || autoDetectCategory(existing.test_name || t.name),
+            };
+          }
+          return {
             test_code: t.code,
             test_name: t.name || t.code,
             value: '',
             synthesis: '',
+            category: autoDetectCategory(t.name || t.code),
+            status: null,
           };
         });
         return merged;
@@ -1013,7 +1024,16 @@ function StepResults({ client, onChange }) {
     setExternalAnalyses((prev) => [...prev, { name: '', value: '', synthesis: '', category: null, status: null }]);
   };
   const updateExternal = (idx, field, value) => {
-    setExternalAnalyses((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    setExternalAnalyses((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const next = { ...r, [field]: value };
+      // BC.5D.2 : si on tape le nom et que la catégorie n'est pas encore définie, on auto-détecte.
+      if (field === 'name' && !r.category) {
+        const detected = autoDetectCategory(value);
+        if (detected) next.category = detected;
+      }
+      return next;
+    }));
   };
   const removeExternal = (idx) => {
     setExternalAnalyses((prev) => prev.filter((_, i) => i !== idx));
@@ -1059,10 +1079,15 @@ function StepResults({ client, onChange }) {
     if (r.category) acc[r.category] = (acc[r.category] || 0) + 1;
     return acc;
   }, {});
+  // BC.5D.2 : top catégories enrichies (value/label/icon/count) pour
+  // afficher comme pills colorées au lieu de simple text.
   const topCategories = Object.entries(categoryCounts)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 4)
-    .map(([key]) => CATEGORIES.find((c) => c.value === key)?.label || key);
+    .slice(0, 5)
+    .map(([key, count]) => {
+      const meta = CATEGORIES.find((c) => c.value === key);
+      return { value: key, label: meta?.label || key, icon: meta?.icon, count };
+    });
   // Tonalité globale : prioritaire > surveiller > optimal
   const overallTone = statusCounts.prioritaire > 0
     ? 'prioritaire'
@@ -1120,7 +1145,11 @@ function StepResults({ client, onChange }) {
             <div className="jrn-clinical-overview__axes">
               <span className="jrn-clinical-overview__axes-label">Axes détectés</span>
               {topCategories.map((cat) => (
-                <span key={cat} className="jrn-clinical-overview__axe">{cat}</span>
+                <span key={cat.value} className={`jrn-cat-pill jrn-cat-pill--${cat.value}`}>
+                  <span className="jrn-cat-pill__icon">{cat.icon}</span>
+                  {cat.label}
+                  <span className="jrn-cat-pill__count">·&nbsp;{cat.count}</span>
+                </span>
               ))}
             </div>
           )}
@@ -1267,21 +1296,64 @@ function StepResults({ client, onChange }) {
 }
 
 // BC.5D : Carte d'analyse refondue en cockpit d'interprétation clinique.
-// Header : titre + badge type + select category + select status (optimal/surveiller/prioritaire)
-// 2 sections séparées : Valeurs labo (monospace fond teinté) / Lecture clinique Anissa (éditorial)
+// Header : titre + badge type + catégorie auto-détectée (cliquable) +
+// statut clinique (🟢/🟡/🔴)
+// 2 sections séparées : Valeurs labo (monospace fond teinté) / Lecture clinique
 const CATEGORIES = [
-  { value: 'hormonal',    label: 'Hormonal' },
-  { value: 'microbiote',  label: 'Microbiote' },
-  { value: 'inflammation',label: 'Inflammation' },
-  { value: 'carence',     label: 'Carence' },
-  { value: 'metabolique', label: 'Métabolique' },
-  { value: 'autre',       label: 'Autre' },
+  { value: 'hormonal',    label: 'Hormonal',     icon: '⚭' },
+  { value: 'microbiote',  label: 'Microbiote',   icon: '⚗' },
+  { value: 'inflammation',label: 'Inflammation', icon: '✦' },
+  { value: 'carence',     label: 'Carence',      icon: '◆' },
+  { value: 'metabolique', label: 'Métabolique',  icon: '◈' },
+  { value: 'autre',       label: 'Autre',        icon: '○' },
 ];
 const STATUSES = [
   { value: 'optimal',     label: 'Optimal',      icon: '🟢' },
   { value: 'surveiller',  label: 'À surveiller', icon: '🟡' },
   { value: 'prioritaire', label: 'Prioritaire',  icon: '🔴' },
 ];
+
+// BC.5D.2 : auto-détection catégorie depuis le nom de l'analyse.
+// Mapping mots-clés → catégorie. Anissa peut toujours surcharger via le badge.
+// Couvre les analyses les plus fréquentes (cortisol, vit D, microbiote, CRP, etc).
+const CATEGORY_KEYWORDS = {
+  hormonal: [
+    'cortisol', 'tsh', 't3', 't4', 'tpo', 'thyro', 'oestrog', 'estrog', 'testo',
+    'progester', 'dhea', 'acth', 'lh ', 'fsh', 'prolac', 'insuline', 'igf',
+    'hormone', 'mélatonine', 'melatoni',
+  ],
+  microbiote: [
+    'microbiot', 'microbiom', 'mikrobiom', 'candida', 'dysbi', 'iga sécr',
+    'iga secre', 'zonuline', 'akkermansia', 'firmicutes', 'bacteroidetes',
+    'calprotect', 'lactoferrin', 'flore', 'parasit', 'helmint', 'levure',
+  ],
+  inflammation: [
+    'crp', 'vs ', 'fibrinog', 'ferritine', 'il-6', 'il6', 'tnf', 'inflam',
+    'anti-tpo', 'ana ', 'rhumat', 'omega-6/3', 'omega 6/3',
+    'homocyst', 'apo b', 'lp(a)',
+  ],
+  carence: [
+    'b12', 'vit b', 'vitamine b', 'vit d', 'vitamine d', 'd3', '25-oh',
+    'folate', 'fer ', 'transferrin', 'magnés', 'magnes', 'zinc',
+    'calcium', 'cuivre', 'sélén', 'selen', 'iode', 'omega 3', 'oméga 3',
+    'vit a', 'vitamine a', 'vit c', 'vitamine c', 'vit e', 'vitamine e',
+    'vit k', 'vitamine k', 'q10', 'choline',
+  ],
+  metabolique: [
+    'glycém', 'glycem', 'hba1c', 'cholest', 'ldl', 'hdl', 'triglyc',
+    'urée', 'uree', 'créatin', 'creatin', 'tgo', 'tgp', 'alat', 'asat',
+    'gamma gt', 'ggt', 'bilirub', 'glucose', 'foie', 'rénal', 'renal',
+  ],
+};
+
+function autoDetectCategory(name) {
+  if (!name || typeof name !== 'string') return null;
+  const lower = name.toLowerCase();
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some((kw) => lower.includes(kw))) return cat;
+  }
+  return null;
+}
 
 function ResultCard({
   title, badge, badgeColor,
@@ -1291,7 +1363,11 @@ function ResultCard({
   onCategoryChange, onStatusChange,
   editable, onTitleChange, onDelete,
 }) {
+  // BC.5D.2 : badge catégorie cliquable (toggle dropdown sur clic)
+  const [editingCategory, setEditingCategory] = useState(false);
   const statusClass = status ? `jrn-result-card--${status}` : '';
+  const categoryMeta = category ? CATEGORIES.find((c) => c.value === category) : null;
+
   return (
     <div className={`jrn-result-card ${statusClass}`}>
       {/* Header : titre + badges source/category + status select */}
@@ -1310,17 +1386,42 @@ function ResultCard({
           )}
           <div className="jrn-result-card__head-badges">
             <span className={`jrn-result-card__source jrn-result-card__source--${badgeColor || 'neutral'}`}>{badge}</span>
-            <select
-              value={category || ''}
-              onChange={(e) => onCategoryChange?.(e.target.value || null)}
-              className="jrn-result-card__select"
-              title="Catégorie de l'analyse"
-            >
-              <option value="">Catégorie…</option>
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+            {/* BC.5D.2 : badge catégorie cliquable.
+                Si pas en édition : badge coloré (ou placeholder cliquable si null).
+                Si en édition : select dropdown. */}
+            {editingCategory ? (
+              <select
+                value={category || ''}
+                onChange={(e) => { onCategoryChange?.(e.target.value || null); setEditingCategory(false); }}
+                onBlur={() => setEditingCategory(false)}
+                className="jrn-result-card__select"
+                autoFocus
+              >
+                <option value="">Aucune catégorie</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
+                ))}
+              </select>
+            ) : categoryMeta ? (
+              <button
+                type="button"
+                onClick={() => setEditingCategory(true)}
+                className={`jrn-cat-pill jrn-cat-pill--${category}`}
+                title="Modifier la catégorie"
+              >
+                <span className="jrn-cat-pill__icon">{categoryMeta.icon}</span>
+                {categoryMeta.label}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingCategory(true)}
+                className="jrn-cat-pill jrn-cat-pill--empty"
+                title="Choisir une catégorie"
+              >
+                + Catégorie
+              </button>
+            )}
           </div>
         </div>
         <div className="jrn-result-card__head-right">

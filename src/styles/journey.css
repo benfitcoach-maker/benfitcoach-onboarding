@@ -1178,6 +1178,94 @@
   transition: all 140ms var(--jrn-ease);
   outline: none;
 }
+
+/* ─── BC.5D.2 : Catégories — badges colorés cliquables ──────────
+   Couleurs sourdes (palette compatible ivoire+vert+gold). Chaque
+   catégorie a sa propre teinte avec border et inset highlight, mais
+   reste élégante et discrète (pas de couleur vive). */
+.jrn-cat-pill {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: var(--jrn-surface);
+  color: var(--jrn-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 160ms var(--jrn-ease);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);
+}
+.jrn-cat-pill:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.jrn-cat-pill__icon {
+  font-size: 11px;
+  line-height: 1;
+}
+.jrn-cat-pill--empty {
+  background: transparent;
+  border: 1px dashed var(--jrn-border-strong);
+  color: var(--jrn-text-muted);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+.jrn-cat-pill--empty:hover {
+  border-color: var(--jrn-accent-tint);
+  color: var(--jrn-accent);
+  background: var(--jrn-accent-soft);
+}
+/* Hormonal : mauve poudré */
+.jrn-cat-pill--hormonal {
+  background: rgba(139, 90, 142, 0.10);
+  color: #6B4470;
+  border-color: rgba(139, 90, 142, 0.28);
+}
+/* Microbiote : ambre terre cuite */
+.jrn-cat-pill--microbiote {
+  background: rgba(196, 132, 45, 0.12);
+  color: #8B5E1F;
+  border-color: rgba(196, 132, 45, 0.30);
+}
+/* Inflammation : rouge brique sourd (distinct du rouge prioritaire) */
+.jrn-cat-pill--inflammation {
+  background: rgba(178, 90, 74, 0.10);
+  color: #8E4337;
+  border-color: rgba(178, 90, 74, 0.26);
+}
+/* Carence : olive sage */
+.jrn-cat-pill--carence {
+  background: rgba(124, 132, 96, 0.12);
+  color: #5C6645;
+  border-color: rgba(124, 132, 96, 0.32);
+}
+/* Métabolique : bleu canard sourd */
+.jrn-cat-pill--metabolique {
+  background: rgba(74, 117, 133, 0.10);
+  color: #355661;
+  border-color: rgba(74, 117, 133, 0.28);
+}
+/* Autre : neutral */
+.jrn-cat-pill--autre {
+  background: var(--jrn-bg-alt);
+  color: var(--jrn-text-soft);
+  border-color: var(--jrn-border-strong);
+}
+/* Compteur compact (utilisé dans la vue clinique synthétique) */
+.jrn-cat-pill__count {
+  font-weight: 600;
+  opacity: 0.65;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
 .jrn-result-card__select:hover {
   border-color: var(--jrn-accent-tint);
   color: var(--jrn-text);
