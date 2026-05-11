@@ -1746,11 +1746,13 @@
 
 .jrn-atelier-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  gap: var(--jrn-6);
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--jrn-5);
   align-items: start;
 }
-@media (max-width: 1300px) {
+/* BC.5G.7 : collapse en colonne unique plus tôt (1440 vs 1300)
+   pour éviter le crop de la sidebar droite sur écrans 1366-1440. */
+@media (max-width: 1440px) {
   .jrn-atelier-grid {
     grid-template-columns: 1fr;
   }
@@ -1765,8 +1767,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--jrn-4);
+  min-width: 0; /* permet aux children de shrink (textarea) */
 }
-@media (max-width: 1180px) {
+@media (max-width: 1440px) {
   .jrn-atelier-grid__side {
     position: static;
   }
@@ -1836,7 +1839,7 @@
     radial-gradient(140% 90% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
     linear-gradient(180deg, var(--jrn-accent-soft) 0%, rgba(26, 46, 31, 0.02) 100%);
   border-color: var(--jrn-accent-tint);
-  padding: 28px 30px;                /* BC.5G.5 : 24/26 → 28/30 (encore plus généreux) */
+  padding: 24px 26px;                /* BC.5G.7 : 28/30 → 24/26 (évite débordement) */
   box-shadow:
     0 0 0 1px rgba(26, 46, 31, 0.06),
     0 1px 2px rgba(40, 32, 20, 0.04),
