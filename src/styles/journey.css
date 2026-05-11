@@ -2722,7 +2722,9 @@
   background: var(--jrn-surface);
   border: 1px solid var(--jrn-border);
   border-radius: var(--jrn-radius-lg);
-  overflow: hidden;
+  /* BC.5G.10 : overflow hidden retiré pour permettre aux menus
+     absolutes (Options, IA) de sortir de la section. Compensé par
+     border-radius matching sur head + footer. */
   transition: border-color 140ms var(--jrn-ease);
 }
 .jpe-section:hover {
@@ -2736,6 +2738,9 @@
   padding: 14px 18px;
   border-bottom: 1px solid var(--jrn-border);
   background: var(--jrn-surface-alt);
+  /* BC.5G.10 : radius top pour matcher le radius du parent .jpe-section */
+  border-top-left-radius: var(--jrn-radius-lg);
+  border-top-right-radius: var(--jrn-radius-lg);
 }
 .jpe-section__num {
   width: 26px;
@@ -2832,6 +2837,9 @@
   border-top: 1px solid var(--jrn-border);
   background: var(--jrn-surface-alt);
   flex-wrap: wrap;
+  /* BC.5G.10 : radius bottom pour matcher le radius du parent .jpe-section */
+  border-bottom-left-radius: var(--jrn-radius-lg);
+  border-bottom-right-radius: var(--jrn-radius-lg);
 }
 .jpe-section__ai-label {
   font-family: var(--jrn-font-ui);
