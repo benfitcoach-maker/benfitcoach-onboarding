@@ -23,12 +23,12 @@
   --jrn-surface:      #FFFFFF;       /* cartes : blanc pur */
   --jrn-surface-alt:  #FBF8F1;       /* cartes secondaires (header bandeau, etc.) */
 
-  /* BC.4 (2026-05-11) : tokens gris darkened pour contraste lisibilité.
-     Sur fond ivoire, les anciens muted/faint étaient trop pâles. */
+  /* BC.5G.2 (2026-05-11) : tokens gris darkened encore davantage.
+     Sur fond ivoire, le contraste manquait encore — feedback Benoit. */
   --jrn-text:         #1A1A18;       /* presque noir avec touche chaude */
-  --jrn-text-soft:    #4A4842;       /* gris chaud foncé (était #525049) */
-  --jrn-text-muted:   #7A7468;       /* metadata (était #8E8A80) */
-  --jrn-text-faint:   #9A9385;       /* placeholder, faint labels (était #BDB8AA) */
+  --jrn-text-soft:    #3A3833;       /* gris chaud foncé (était #4A4842) */
+  --jrn-text-muted:   #65605A;       /* metadata (était #7A7468) */
+  --jrn-text-faint:   #847E73;       /* placeholder, faint labels (était #9A9385) */
 
   --jrn-accent:       #1A2E1F;       /* vert Anissa (inchangé) */
   --jrn-accent-hover: #0F1F12;
@@ -1548,6 +1548,107 @@
   color: var(--jrn-text-soft);
   border: 1px solid var(--jrn-border-strong);
   letter-spacing: 0.01em;
+}
+
+/* ─── BC.5G.2 : Empty state interne JourneyPlanEditor ──────────
+   Riche et contextualisé : icon + titre + checklist sources +
+   CTA hero unique. Remplace l'ancien message pauvre + bouton dupliqué. */
+
+.jrn-plan-empty {
+  margin-top: var(--jrn-5);
+  padding: var(--jrn-12) var(--jrn-10);
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #FFFFFF 0%, #FDFBF6 100%);
+  border: 1px solid rgba(40, 32, 20, 0.05);
+  border-radius: var(--jrn-radius-xl);
+  box-shadow:
+    0 0 0 1px rgba(40, 32, 20, 0.018),
+    0 1px 1px rgba(40, 32, 20, 0.025),
+    0 6px 12px -2px rgba(40, 32, 20, 0.04),
+    0 32px 64px -16px rgba(40, 32, 20, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  text-align: center;
+}
+.jrn-plan-empty__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--jrn-accent) 0%, #2B4A33 100%);
+  color: var(--jrn-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin-bottom: var(--jrn-4);
+  box-shadow:
+    0 4px 12px rgba(26, 46, 31, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 6px var(--jrn-accent-soft);
+}
+.jrn-plan-empty__title {
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--jrn-text);
+  margin: 0 0 var(--jrn-3);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.jrn-plan-empty__hint {
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-base);
+  color: var(--jrn-text-soft);
+  line-height: 1.6;
+  margin: 0 auto var(--jrn-5);
+  max-width: 540px;
+}
+.jrn-plan-empty__sources {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto var(--jrn-6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 540px;
+  text-align: left;
+}
+.jrn-plan-empty__sources li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background:
+    linear-gradient(180deg, rgba(245, 240, 232, 0.4) 0%, rgba(245, 240, 232, 0.2) 100%);
+  border: 1px solid var(--jrn-border);
+  border-radius: var(--jrn-radius);
+  font-family: var(--jrn-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--jrn-text-soft);
+}
+.jrn-plan-empty__sources strong {
+  font-weight: 700;
+  color: var(--jrn-text);
+}
+.jrn-plan-empty__check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--jrn-accent-soft);
+  color: var(--jrn-accent);
+  border: 1px solid var(--jrn-accent-tint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.jrn-plan-empty__cta {
+  /* Hérite de jrn-btn--hero, pas de override nécessaire */
 }
 
 /* ─── BC.5G : Atelier 2 colonnes (étape 6 Édition) ─────────────

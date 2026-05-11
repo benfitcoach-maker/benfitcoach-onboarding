@@ -1820,25 +1820,10 @@ function StepPlanEditing({ client, journey, onChange }) {
         {/* ─── COLONNE GAUCHE : Atelier + Validation ───────────── */}
         <div className="jrn-atelier-grid__main">
 
-          {/* Empty state hint si aucune version générée */}
-          {versionsCount === 0 && (
-            <div className="jrn-block">
-              <div className="jrn-surface jrn-surface--quiet">
-                <div className="jrn-empty">
-                  <div className="jrn-empty__icon">✦</div>
-                  <p className="jrn-empty__title">Aucun brouillon pour le moment</p>
-                  <p className="jrn-empty__hint">
-                    La première génération créera un brouillon complet avec structure alimentaire, axes prioritaires, recommandations ciblées, supplémentation et conseils lifestyle. Lance la génération depuis l'atelier ci-dessous.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Atelier d'édition (JourneyPlanEditor) */}
+          {/* Atelier d'édition (JourneyPlanEditor — empty state intégré) */}
           <div className="jrn-block">
             <div className="jrn-block__head">
-              <span className="jrn-block__num">{versionsCount === 0 ? '2' : '1'}</span>
+              <span className="jrn-block__num">1</span>
               <h3 className="jrn-block__title">Atelier d'édition</h3>
               {versionsCount > 0 && (
                 <div className="jrn-block__head-meta">
@@ -1855,7 +1840,7 @@ function StepPlanEditing({ client, journey, onChange }) {
           {/* Validation conditionnelle */}
           <div className="jrn-block">
             <div className="jrn-block__head">
-              <span className="jrn-block__num">{versionsCount === 0 ? '3' : '2'}</span>
+              <span className="jrn-block__num">2</span>
               <h3 className="jrn-block__title">Validation</h3>
             </div>
             <p className="jrn-block__intro">

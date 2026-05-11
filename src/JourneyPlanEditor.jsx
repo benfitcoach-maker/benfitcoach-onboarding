@@ -263,21 +263,23 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
       {/* ─── Tab : Plan ────────────────────────────────────────── */}
       {tab === 'plan' && (
         <>
-          {/* Phase AM : barre d'actions allégée — auto-save + actions séparées */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--jrn-3)',
-            marginTop: 'var(--jrn-5)',
-            marginBottom: 'var(--jrn-6)',
-            flexWrap: 'wrap',
-          }}>
-            <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--primary">
-              {hasPlan ? '✨ Régénérer avec l\'IA' : '✨ Générer avec l\'IA'}
-            </button>
+          {/* BC.5G.2 : barre d'actions visible uniquement si plan existe.
+              Quand pas de plan, le CTA 'Générer' est intégré dans l'empty state
+              (un seul vrai bouton primaire, pas de doublon visuel). */}
+          {hasPlan && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--jrn-3)',
+              marginTop: 'var(--jrn-5)',
+              marginBottom: 'var(--jrn-6)',
+              flexWrap: 'wrap',
+            }}>
+              <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--primary">
+                ✨ Régénérer avec l'IA
+              </button>
 
-            {hasPlan && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
                 <AutosaveIndicator state={autosaveState} />
                 <button onClick={handleAudit} disabled={auditing} className="jrn-btn jrn-btn--soft" title="Audit qualité du plan par IA (cohérence, oublis, contre-indications)">
@@ -290,15 +292,25 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
                   {exporting === 'plan' ? 'Export…' : 'Exporter Word'}
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {!hasPlan && (
-            <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-12)' }}>
-              <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-md)' }}>
-                Aucun plan pour le moment.<br />
-                Cliquez sur <strong style={{ color: 'var(--jrn-text)' }}>Générer avec l'IA</strong> pour créer un premier brouillon.
+            <div className="jrn-plan-empty">
+              <div className="jrn-plan-empty__icon">✦</div>
+              <h4 className="jrn-plan-empty__title">Aucun brouillon généré pour le moment</h4>
+              <p className="jrn-plan-empty__hint">
+                L'IA va construire un premier brouillon à partir des sources de contexte que tu as renseignées :
               </p>
+              <ul className="jrn-plan-empty__sources">
+                <li><span className="jrn-plan-empty__check">✓</span><strong>Anamnèse cliente</strong> · objectifs, symptômes, pathologies, mode de vie</li>
+                <li><span className="jrn-plan-empty__check">✓</span><strong>Analyses biologiques</strong> · résultats saisis + statuts cliniques</li>
+                <li><span className="jrn-plan-empty__check">✓</span><strong>Axes prioritaires détectés</strong> · catégories les plus présentes</li>
+                <li><span className="jrn-plan-empty__check">✓</span><strong>Directive IA</strong> · ton, philosophie, contraintes (sidebar droite)</li>
+              </ul>
+              <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--hero jrn-plan-empty__cta">
+                ✨ Générer le premier brouillon
+              </button>
             </div>
           )}
 
