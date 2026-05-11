@@ -16,7 +16,7 @@
 //   - Reformulation IA d'une selection / paragraphe
 // ─────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
@@ -38,7 +38,11 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showFridgeModal, setShowFridgeModal] = useState(false);
   const [error, setError] = useState(null);
-  const [savedToast, setSavedToast] = useState(false);
+  // Phase AM : auto-save debouncé (état : idle | dirty | saving | saved | error)
+  const [autosaveState, setAutosaveState] = useState('idle');
+  const autosaveTimerRef = useRef(null);
+  const lastSavedTextRef = useRef('');
+  // savedToast supprimé Phase AM (remplacé par AutosaveIndicator persistant)
 
   // Phase Q : split en sections + IA par section
   const sections = useMemo(() => splitPlanIntoSections(planText), [planText]);
@@ -131,8 +135,9 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
   };
 
   // ─── Sauvegarde ──────────────────────────────────────────────
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
+    setAutosaveState('saving');
     setError(null);
     try {
       const next = {
@@ -146,15 +151,38 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
       };
       await saveNutritionConsultation(next);
       setConsultation(next);
+      lastSavedTextRef.current = planText;
       onPlanSaved?.();
-      setSavedToast(true);
-      setTimeout(() => setSavedToast(false), 2400);
+      setAutosaveState('saved');
+      setTimeout(() => setAutosaveState((s) => (s === 'saved' ? 'idle' : s)), 1800);
     } catch (e) {
       setError(e?.message || 'Erreur sauvegarde');
+      setAutosaveState('error');
     } finally {
       setSaving(false);
     }
-  };
+  }, [client?.id, consultation, planText, aiDirectives, onPlanSaved]);
+
+  // Phase AM : autosave debouncé sur changement du planText (1.5s)
+  useEffect(() => {
+    if (loadingInitial) return;
+    if (planText === lastSavedTextRef.current) return;
+    setAutosaveState('dirty');
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      handleSave();
+    }, 1500);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [planText, loadingInitial, handleSave]);
+
+  // Initialise lastSavedTextRef au premier load (évite un autosave inutile)
+  useEffect(() => {
+    if (!loadingInitial && lastSavedTextRef.current === '' && planText) {
+      lastSavedTextRef.current = planText;
+    }
+  }, [loadingInitial, planText]);
 
   // ─── Export Word ─────────────────────────────────────────────
   const handleExportPlan = async () => {
@@ -200,24 +228,31 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
       {/* ─── Tab : Plan ────────────────────────────────────────── */}
       {tab === 'plan' && (
         <>
-          <div className="jrn-actions" style={{ marginTop: 'var(--jrn-5)', marginBottom: 'var(--jrn-5)' }}>
+          {/* Phase AM : barre d'actions allégée — auto-save + actions séparées */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 'var(--jrn-3)',
+            marginTop: 'var(--jrn-5)',
+            marginBottom: 'var(--jrn-6)',
+            flexWrap: 'wrap',
+          }}>
             <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--primary">
-              {hasPlan ? 'Régénérer avec l\'IA' : 'Générer avec l\'IA'}
+              {hasPlan ? '✨ Régénérer avec l\'IA' : '✨ Générer avec l\'IA'}
             </button>
+
             {hasPlan && (
-              <>
-                <button onClick={() => setShowPreviewModal(true)} className="jrn-btn jrn-btn--soft">
-                  Aperçu plein écran
-                </button>
-                <button onClick={handleSave} disabled={saving} className="jrn-btn jrn-btn--soft">
-                  {saving ? 'Sauvegarde…' : 'Sauvegarder'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
+                <AutosaveIndicator state={autosaveState} />
+                <button onClick={() => setShowPreviewModal(true)} className="jrn-btn jrn-btn--ghost">
+                  Aperçu
                 </button>
                 <button onClick={handleExportPlan} disabled={exporting === 'plan'} className="jrn-btn jrn-btn--ghost">
                   {exporting === 'plan' ? 'Export…' : 'Exporter Word'}
                 </button>
-              </>
+              </div>
             )}
-            {savedToast && <span style={{ color: 'var(--jrn-accent)', fontSize: 'var(--jrn-text-xs)' }}>✓ Sauvegardé</span>}
           </div>
 
           {!hasPlan && (
@@ -336,6 +371,32 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
 // ═══════════════════════════════════════════════════════════════════
 // Modal de génération (plein écran lisible)
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// Indicateur d'auto-save discret (4 états)
+// ═══════════════════════════════════════════════════════════════════
+
+function AutosaveIndicator({ state }) {
+  const map = {
+    idle:   { label: 'Auto-sauvegarde activée',          color: 'var(--jrn-text-muted)' },
+    dirty:  { label: '● Modifications…',                  color: 'var(--jrn-warn)' },
+    saving: { label: '⟳ Sauvegarde…',                     color: 'var(--jrn-text-muted)' },
+    saved:  { label: '✓ Sauvegardé',                      color: 'var(--jrn-accent)' },
+    error:  { label: '⚠ Erreur — réessayer',              color: 'var(--jrn-error)' },
+  };
+  const cur = map[state] || map.idle;
+  return (
+    <span style={{
+      fontFamily: 'var(--jrn-font-ui)',
+      fontSize: 'var(--jrn-text-xs)',
+      color: cur.color,
+      letterSpacing: '.02em',
+      whiteSpace: 'nowrap',
+    }}>
+      {cur.label}
+    </span>
+  );
+}
 
 function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, onAdopt }) {
   const [draftDirectives, setDraftDirectives] = useState(aiDirectives || '');
@@ -608,6 +669,24 @@ function renderInline(text) {
 
 function PlanSection({ index, title, content, onTitleChange, onContentChange, onDelete, onInsertAfter, onAi, busyAction }) {
   const isBusy = busyAction !== null;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const menuRef = useRef(null);
+  const optionsRef = useRef(null);
+
+  // Close menus on outside click
+  useEffect(() => {
+    if (!menuOpen && !optionsOpen) return;
+    const handler = (e) => {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      if (optionsOpen && optionsRef.current && !optionsRef.current.contains(e.target)) setOptionsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen, optionsOpen]);
+
+  const canRunAi = !isBusy && content && content.trim().length >= 10;
+
   return (
     <div className="jpe-section">
       <header className="jpe-section__head">
@@ -619,9 +698,27 @@ function PlanSection({ index, title, content, onTitleChange, onContentChange, on
           className="jpe-section__title"
           placeholder="Titre de la section"
         />
-        <div className="jpe-section__head-actions">
-          <button onClick={onInsertAfter} className="jpe-section__icon-btn" title="Ajouter une section après">＋</button>
-          <button onClick={onDelete} className="jpe-section__icon-btn jpe-section__icon-btn--danger" title="Supprimer la section">🗑</button>
+        {/* Menu options : "..." discret au lieu des 2 boutons + et 🗑 toujours visibles */}
+        <div ref={optionsRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setOptionsOpen((o) => !o)}
+            className="jpe-section__icon-btn"
+            title="Options de la section"
+            aria-label="Options"
+            style={{ fontSize: 16, lineHeight: 1, paddingBottom: 4 }}
+          >
+            ⋯
+          </button>
+          {optionsOpen && (
+            <div className="jpe-menu">
+              <button onClick={() => { onInsertAfter(); setOptionsOpen(false); }} className="jpe-menu__item">
+                ＋ Ajouter une section après
+              </button>
+              <button onClick={() => { onDelete(); setOptionsOpen(false); }} className="jpe-menu__item jpe-menu__item--danger">
+                🗑 Supprimer cette section
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -629,25 +726,43 @@ function PlanSection({ index, title, content, onTitleChange, onContentChange, on
         value={content}
         onChange={(e) => onContentChange(e.target.value)}
         rows={Math.max(6, Math.min(20, (content || '').split('\n').length + 1))}
-        className="jpe-section__textarea"
+        className="jpe-section__textarea jpe-section__textarea--readable"
         placeholder="Contenu de la section…"
       />
 
       <footer className="jpe-section__footer">
-        <span className="jpe-section__ai-label">✨ Réécrire avec l'IA</span>
-        <div className="jpe-section__ai-actions">
-          {Object.entries(REWRITE_LABELS).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onAi(key)}
-              disabled={isBusy || !content || content.trim().length < 10}
-              className="jpe-ai-btn"
-              title={REWRITE_HELP[key]}
-            >
-              {busyAction === key ? '…' : label}
-            </button>
-          ))}
+        <span className="jpe-section__ai-label">
+          {isBusy ? `✨ ${REWRITE_LABELS[busyAction]}…` : 'Réécriture IA disponible'}
+        </span>
+        {/* Menu IA déroulant : 1 seul bouton au lieu de 4 actions inline */}
+        <div ref={menuRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            disabled={!canRunAi}
+            className="jrn-btn jrn-btn--soft"
+            style={{ padding: '6px 14px', fontSize: 12 }}
+            title={canRunAi ? 'Choisir une action IA' : 'Section trop courte pour l\'IA (min 10 caractères)'}
+          >
+            ✨ IA ▾
+          </button>
+          {menuOpen && (
+            <div className="jpe-menu jpe-menu--right">
+              {Object.entries(REWRITE_LABELS).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => { onAi(key); setMenuOpen(false); }}
+                  disabled={isBusy}
+                  className="jpe-menu__item"
+                  title={REWRITE_HELP[key]}
+                >
+                  {label}
+                  <span style={{ display: 'block', fontSize: 10, color: 'var(--jrn-text-muted)', marginTop: 2, fontWeight: 400 }}>
+                    {REWRITE_HELP[key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </footer>
     </div>

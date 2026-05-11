@@ -797,7 +797,7 @@
 .jpe-sections {
   display: flex;
   flex-direction: column;
-  gap: var(--jrn-5);
+  gap: var(--jrn-6); /* AM : plus d'air entre sections */
 }
 .jpe-section {
   background: var(--jrn-surface);
@@ -884,7 +884,7 @@
   width: 100%;
   border: none;
   outline: none;
-  padding: 18px;
+  padding: 22px 24px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   line-height: 1.7;
@@ -892,6 +892,13 @@
   background: var(--jrn-surface);
   resize: vertical;
   display: block;
+}
+/* Phase AM : variante lisible (font normale, plus aérée) — défaut désormais */
+.jpe-section__textarea--readable {
+  font-family: var(--jrn-font-body);
+  font-size: 14px;
+  line-height: 1.75;
+  padding: 24px 28px;
 }
 .jpe-section__textarea:focus {
   background: var(--jrn-surface-alt);
@@ -919,4 +926,58 @@
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+/* ─── Menus déroulants (Phase AM) ─────────────────────────────── */
+
+.jpe-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  background: var(--jrn-surface);
+  border: 1px solid var(--jrn-border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 15, 15, 0.12), 0 2px 6px rgba(15, 15, 15, 0.05);
+  padding: 6px;
+  animation: jpe-menu-pop 140ms var(--jrn-ease);
+}
+.jpe-menu--right {
+  left: auto;
+  right: 0;
+  min-width: 280px;
+}
+@keyframes jpe-menu-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.jpe-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-sm);
+  color: var(--jrn-text);
+  cursor: pointer;
+  border-radius: 6px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background 120ms var(--jrn-ease);
+}
+.jpe-menu__item:hover:not(:disabled) {
+  background: var(--jrn-bg-alt);
+}
+.jpe-menu__item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.jpe-menu__item--danger {
+  color: var(--jrn-error);
+}
+.jpe-menu__item--danger:hover:not(:disabled) {
+  background: var(--jrn-error-bg);
 }
