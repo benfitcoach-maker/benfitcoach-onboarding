@@ -375,15 +375,61 @@
   background: rgba(0,0,0,0.03);
 }
 
-.jrn-sidebar__rule {
+/* AR.3 : bloc résumé statut cliente (sidebar bottom) */
+.jrn-sidebar__summary {
   margin-top: var(--jrn-6);
-  padding: var(--jrn-3) var(--jrn-3);
+  padding: var(--jrn-4) var(--jrn-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--jrn-3);
+  border-top: 1px solid var(--jrn-border);
+  border-bottom: 1px solid var(--jrn-border);
+}
+.jrn-sidebar__summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.jrn-sidebar__summary-row--next {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-top: var(--jrn-2);
+  padding-top: var(--jrn-3);
+  border-top: 1px dashed var(--jrn-border);
+}
+.jrn-sidebar__summary-label {
   font-family: var(--jrn-font-ui);
-  font-size: var(--jrn-text-xs);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--jrn-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.jrn-sidebar__summary-value {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-sm);
+  font-weight: 600;
+  color: var(--jrn-text);
+  font-variant-numeric: tabular-nums;
+}
+.jrn-sidebar__summary-value--accent {
+  color: var(--jrn-accent);
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.jrn-sidebar__rule {
+  margin-top: var(--jrn-5);
+  padding: 0 var(--jrn-3);
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
   color: var(--jrn-text-muted);
   line-height: 1.6;
-  border-top: 1px solid var(--jrn-border);
-  padding-top: var(--jrn-4);
+  font-style: italic;
 }
 
 /* ─── Main ────────────────────────────────────────────────────────── */
@@ -429,33 +475,55 @@
   max-width: 680px;
 }
 
-/* ─── Surface (cartes premium) ────────────────────────────────────
-   AQ.3 : padding plus généreux + radius plus large + shadow douce
-   pour donner du poids visuel et de la profondeur (cartes blanches
-   qui ressortent du fond ivoire chaud). */
+/* ─── Surface (cartes premium V3 — multi-layer shadow) ────────────
+   AR.1 : ombres multi-couches (ambient + key light) + relief subtle
+   via inset highlight + padding plus généreux. Style Notion/Linear. */
 
 .jrn-surface {
   background: var(--jrn-surface);
   border: 1px solid var(--jrn-border);
   border-radius: var(--jrn-radius-lg);
-  padding: var(--jrn-8);                 /* était var(--jrn-6) — 32px au lieu de 24 */
-  box-shadow: var(--jrn-shadow-sm);      /* nouvelle ombre subtile */
+  padding: var(--jrn-10);                /* AR.4 : 40px au lieu de 32 — plus de densité */
+  box-shadow:
+    0 1px 1px rgba(40, 32, 20, 0.03),
+    0 2px 4px rgba(40, 32, 20, 0.04),
+    0 8px 24px rgba(40, 32, 20, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);   /* relief subtle top highlight */
+  transition: box-shadow 200ms var(--jrn-ease), transform 200ms var(--jrn-ease);
+}
+.jrn-surface:hover {
+  box-shadow:
+    0 1px 1px rgba(40, 32, 20, 0.04),
+    0 4px 8px rgba(40, 32, 20, 0.06),
+    0 16px 40px rgba(40, 32, 20, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .jrn-surface--quiet {
   background: transparent;
   border: 1px dashed var(--jrn-border-strong);
   box-shadow: none;
+  padding: var(--jrn-8);                 /* moins de padding pour les empty states */
+}
+.jrn-surface--quiet:hover {
+  box-shadow: none;
 }
 .jrn-surface--accent {
   background: var(--jrn-accent-soft);
   border-color: transparent;
-  box-shadow: none;
+  box-shadow:
+    0 1px 1px rgba(26, 46, 31, 0.04),
+    0 4px 12px rgba(26, 46, 31, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
+.jrn-surface--accent:hover { box-shadow: 0 1px 1px rgba(26, 46, 31, 0.04), 0 6px 16px rgba(26, 46, 31, 0.06); }
 .jrn-surface--warn {
   background: var(--jrn-warn-bg);
   border-color: rgba(183, 121, 31, 0.18);
-  box-shadow: none;
+  box-shadow:
+    0 1px 1px rgba(183, 121, 31, 0.04),
+    0 4px 12px rgba(183, 121, 31, 0.05);
 }
+.jrn-surface--warn:hover { box-shadow: 0 1px 1px rgba(183, 121, 31, 0.04), 0 6px 16px rgba(183, 121, 31, 0.06); }
 
 .jrn-label {
   font-family: var(--jrn-font-ui);

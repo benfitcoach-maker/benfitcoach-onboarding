@@ -231,8 +231,32 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
               </div>
             );
           })}
+          {/* AR.3 : bloc résumé statut cliente en bas de sidebar */}
+          <div className="jrn-sidebar__summary">
+            <div className="jrn-sidebar__summary-row">
+              <span className="jrn-sidebar__summary-label">Étape</span>
+              <span className="jrn-sidebar__summary-value">{currentStepIndex} / {JOURNEY_STEPS.length}</span>
+            </div>
+            <div className="jrn-sidebar__summary-row">
+              <span className="jrn-sidebar__summary-label">Progression</span>
+              <span className="jrn-sidebar__summary-value">{progressPct}%</span>
+            </div>
+            {consultationsTotal > 0 && (
+              <div className="jrn-sidebar__summary-row">
+                <span className="jrn-sidebar__summary-label">Consultations</span>
+                <span className="jrn-sidebar__summary-value">{consultationsUsed} / {consultationsTotal}</span>
+              </div>
+            )}
+            <div className="jrn-sidebar__summary-row jrn-sidebar__summary-row--next">
+              <span className="jrn-sidebar__summary-label">Prochaine action</span>
+              <span className="jrn-sidebar__summary-value jrn-sidebar__summary-value--accent">
+                {STEP_META[currentStep]?.label || '—'}
+              </span>
+            </div>
+          </div>
+
           <div className="jrn-sidebar__rule">
-            Une seule étape active à la fois. La suivante se débloque automatiquement après validation. L'état est sauvegardé en continu.
+            Une seule étape active à la fois. L'état est sauvegardé en continu.
           </div>
         </aside>
 
@@ -1649,6 +1673,8 @@ function WeightTrackingSection({ client, entries, loading }) {
   );
 }
 
+// AR.2 : switch iOS-like premium (rail + bouton glissant), au lieu d'une
+// chip avec checkmark. Plus reconnaissable visuellement comme "toggle".
 function ToggleChip({ label, checked, onClick, loading, title }) {
   return (
     <button
@@ -1657,36 +1683,46 @@ function ToggleChip({ label, checked, onClick, loading, title }) {
       title={title}
       style={{
         fontFamily: 'var(--jrn-font-ui)',
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 500,
-        padding: '5px 10px 5px 8px',
+        padding: '6px 12px 6px 8px',
         borderRadius: 999,
-        border: `1px solid ${checked ? 'var(--jrn-accent)' : 'rgba(0,0,0,0.15)'}`,
-        background: checked ? 'var(--jrn-accent-soft)' : 'transparent',
-        color: checked ? 'var(--jrn-accent)' : 'var(--jrn-text-muted)',
+        border: '1px solid transparent',
+        background: 'transparent',
+        color: checked ? 'var(--jrn-text)' : 'var(--jrn-text-muted)',
         cursor: loading ? 'wait' : 'pointer',
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 10,
         whiteSpace: 'nowrap',
         opacity: loading ? 0.6 : 1,
-        transition: 'all 140ms var(--jrn-ease)',
+        transition: 'all 160ms var(--jrn-ease)',
       }}
     >
+      {/* Switch iOS-like : rail 36×20 + thumb 16×16 qui glisse */}
       <span style={{
-        width: 14,
-        height: 14,
-        borderRadius: 4,
-        background: checked ? 'var(--jrn-accent)' : 'transparent',
-        border: `1.5px solid ${checked ? 'var(--jrn-accent)' : 'rgba(0,0,0,0.25)'}`,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: 700,
+        position: 'relative',
+        width: 34,
+        height: 20,
+        borderRadius: 999,
+        background: checked ? 'var(--jrn-accent)' : 'rgba(40, 32, 20, 0.18)',
+        boxShadow: checked
+          ? 'inset 0 1px 2px rgba(15, 25, 18, 0.2)'
+          : 'inset 0 1px 2px rgba(40, 32, 20, 0.1)',
+        transition: 'background 160ms var(--jrn-ease), box-shadow 160ms var(--jrn-ease)',
+        flexShrink: 0,
       }}>
-        {checked ? '✓' : ''}
+        <span style={{
+          position: 'absolute',
+          top: 2,
+          left: checked ? 16 : 2,
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          background: '#fff',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.2), 0 1px 4px rgba(0,0,0,0.1)',
+          transition: 'left 200ms var(--jrn-ease)',
+        }} />
       </span>
       {label}
     </button>
