@@ -962,6 +962,34 @@ function StepFollowup({ client, journey, onChange, onExit }) {
   const consultationsTotal = pack?.consultations || 0;
   const consultationsLog = Array.isArray(journey?.consultations_log) ? journey.consultations_log : [];
   const consultationsUsed = consultationsLog.length;
+
+  // Phase AK : extraction des pesees depuis les feedbacks deja charges
+  // Une pesee = un feedback avec weight_kg non null (cf. migration weight_tracking).
+  // On etend la fenetre a 90 jours pour avoir une vraie courbe d'evolution.
+  const [weightEntries, setWeightEntries] = useState([]);
+  const [loadingWeight, setLoadingWeight] = useState(true);
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchClientFeedbacks } = await import('./services/fetchClientFeedbacks');
+        const list = await fetchClientFeedbacks(client, 90);
+        if (cancelled) return;
+        const fbs = Array.isArray(list) ? list : (list?.feedbacks || []);
+        const entries = fbs
+          .filter((f) => typeof f.weight_kg === 'number')
+          .map((f) => ({ date: f.date || f.created_at, weight_kg: Number(f.weight_kg) }))
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+        setWeightEntries(entries);
+      } catch {
+        if (!cancelled) setWeightEntries([]);
+      } finally {
+        if (!cancelled) setLoadingWeight(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id]);
   const [showLogModal, setShowLogModal] = useState(false);
   const [logNote, setLogNote] = useState('');
   const [savingLog, setSavingLog] = useState(false);
@@ -1213,6 +1241,13 @@ function StepFollowup({ client, journey, onChange, onExit }) {
             )}
           </div>
 
+          {/* ─── Section : suivi du poids ───────────────────────── */}
+          <WeightTrackingSection
+            entries={weightEntries}
+            loading={loadingWeight}
+            trackingEnabled={!!client.weight_tracking_enabled}
+          />
+
           {/* ─── Section : derniers ressentis ──────────────────── */}
           <div style={{ marginBottom: 'var(--jrn-6)' }}>
             <p className="jrn-label">Derniers ressentis ({feedbacks.length})</p>
@@ -1365,6 +1400,153 @@ function StepFollowup({ client, journey, onChange, onExit }) {
         />
       )}
     </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Section : Suivi du poids (étape 8 cockpit)
+// ═══════════════════════════════════════════════════════════════════
+
+function WeightTrackingSection({ entries, loading, trackingEnabled }) {
+  // Si tracking jamais activé ET aucune entrée → on cache la section
+  if (!loading && !trackingEnabled && entries.length === 0) {
+    return null;
+  }
+
+  const last = entries[0] || null;
+  const oldest = entries[entries.length - 1] || null;
+  const delta = last && oldest && entries.length > 1
+    ? Number((last.weight_kg - oldest.weight_kg).toFixed(1))
+    : null;
+
+  return (
+    <div style={{ marginBottom: 'var(--jrn-6)' }}>
+      <p className="jrn-label">
+        Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
+      </p>
+
+      {loading && (
+        <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>
+      )}
+
+      {!loading && !trackingEnabled && entries.length === 0 && (
+        <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
+          <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
+            Suivi du poids non activé pour cette cliente.<br />
+            Activez-le depuis le bouton <strong>Profil</strong> en haut.
+          </p>
+        </div>
+      )}
+
+      {!loading && entries.length === 0 && trackingEnabled && (
+        <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
+          <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
+            Suivi activé mais aucune pesée enregistrée. La cliente saisit son poids depuis l'app.
+          </p>
+        </div>
+      )}
+
+      {!loading && entries.length > 0 && (
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-5)' }}>
+          {/* Header : dernière valeur + delta */}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', marginBottom: 'var(--jrn-4)' }}>
+            <div>
+              <div style={{ fontFamily: 'var(--jrn-font-display)', fontStyle: 'italic', fontSize: 36, fontWeight: 600, color: 'var(--jrn-text)', lineHeight: 1 }}>
+                {last.weight_kg.toFixed(1)} <span style={{ fontSize: 18, color: 'var(--jrn-text-muted)', fontStyle: 'normal', fontWeight: 400 }}>kg</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                Dernière pesée — {last.date ? new Date(last.date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long' }) : ''}
+              </div>
+            </div>
+            {delta !== null && (
+              <div style={{
+                padding: '6px 12px',
+                borderRadius: 999,
+                background: delta > 0 ? 'rgba(184, 134, 38, 0.10)' : delta < 0 ? 'var(--jrn-accent-soft)' : 'rgba(0,0,0,0.04)',
+                color: delta > 0 ? '#8a6722' : delta < 0 ? 'var(--jrn-accent)' : 'var(--jrn-text-muted)',
+                fontSize: 12,
+                fontWeight: 600,
+              }}>
+                {delta > 0 ? '↗' : delta < 0 ? '↘' : '→'} {delta > 0 ? '+' : ''}{delta} kg
+                <span style={{ marginLeft: 6, fontWeight: 400, opacity: 0.8 }}>
+                  sur {entries.length > 1 ? `${entries.length} pesées` : '1 pesée'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Sparkline SVG simple */}
+          {entries.length >= 2 && (
+            <Sparkline entries={entries} />
+          )}
+
+          {/* Liste des 6 dernières pesées */}
+          <div style={{ marginTop: 'var(--jrn-4)' }}>
+            <div style={{ fontSize: 10, color: 'var(--jrn-text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
+              Historique récent
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
+              {entries.slice(0, 6).map((e, i) => (
+                <div key={i} style={{
+                  padding: '8px 10px',
+                  background: 'var(--jrn-surface-alt)',
+                  border: '1px solid var(--jrn-border)',
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}>
+                  <div style={{ color: 'var(--jrn-text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                    {e.date ? new Date(e.date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' }) : ''}
+                  </div>
+                  <div style={{ color: 'var(--jrn-text)', fontWeight: 500, marginTop: 2 }}>
+                    {e.weight_kg.toFixed(1)} kg
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Sparkline({ entries }) {
+  // Tri chronologique ascendant pour le graphique
+  const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const w = 600;
+  const h = 80;
+  const pad = 8;
+  const values = sorted.map((e) => e.weight_kg);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = (w - 2 * pad) / Math.max(1, sorted.length - 1);
+
+  const points = sorted.map((e, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((e.weight_kg - min) / range) * (h - 2 * pad);
+    return `${x},${y}`;
+  }).join(' ');
+
+  const areaPath = `M ${pad},${h - pad} L ${points.split(' ').join(' L ')} L ${w - pad},${h - pad} Z`;
+
+  return (
+    <div style={{ marginTop: 'var(--jrn-3)' }}>
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: 80, display: 'block' }}>
+        <path d={areaPath} fill="var(--jrn-accent-soft)" />
+        <polyline points={points} fill="none" stroke="var(--jrn-accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {sorted.map((e, i) => {
+          const x = pad + i * stepX;
+          const y = h - pad - ((e.weight_kg - min) / range) * (h - 2 * pad);
+          return <circle key={i} cx={x} cy={y} r="2.5" fill="var(--jrn-accent)" />;
+        })}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--jrn-text-muted)', marginTop: 4 }}>
+        <span>{sorted[0]?.date ? new Date(sorted[0].date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' }) : ''}</span>
+        <span style={{ color: 'var(--jrn-text-soft)' }}>min {min.toFixed(1)} · max {max.toFixed(1)}</span>
+        <span>{sorted[sorted.length - 1]?.date ? new Date(sorted[sorted.length - 1].date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' }) : ''}</span>
+      </div>
+    </div>
   );
 }
 
