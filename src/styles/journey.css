@@ -981,3 +981,13 @@
 .jpe-menu__item--danger:hover:not(:disabled) {
   background: var(--jrn-error-bg);
 }
+
+/* ─── Composer beta toggle (Phase AN) ─────────────────────────── */
+
+.jpe-composer-beta {
+  margin-top: var(--jrn-4);
+  padding: 14px 16px;
+  background: rgba(167, 139, 250, 0.06);
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  border-radius: 10px;
+}

@@ -20,7 +20,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
-import { buildSystemPromptFr } from './services/prompts/nutrition/fr';
+import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
 import { structurePlanSections } from './services/planFormatters';
@@ -405,6 +405,19 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  // Phase AN : composer beta profil-aware (digestif chronique, post-partum...)
+  // Toggle persisté en localStorage par cliente. Détecte le profil clinique
+  // depuis le form, injecte les modules MUST INCLUDE / INTERDITS spécifiques.
+  const [composerBeta, setComposerBeta] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`jpe_composer_beta_${client?.id}`);
+      return stored === 'true';
+    } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(`jpe_composer_beta_${client?.id}`, composerBeta ? 'true' : 'false'); } catch { /* */ }
+  }, [composerBeta, client?.id]);
+  const [detectedProfile, setDetectedProfile] = useState(null);
 
   // Barre de progression estimee : asymptote vers 92% sur ~60s, puis 100% a l'arrivee.
   // L'API Claude ne stream pas la progression reelle ; on simule pour donner du feedback.
@@ -426,15 +439,31 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     setGenerating(true);
     setError(null);
     setResult(null);
+    setDetectedProfile(null);
     try {
       const form = client.form || {};
       const planMode = form.consultationType === 'oneshot' ? 'oneshot' : 'followup';
-      const system = buildSystemPromptFr(form, {
+      const opts = {
         isFollowup: false,
         clientFormule: client.formule || 'nutrition',
         followupWeek: 0,
         planMode,
-      });
+      };
+
+      // Phase AN : choix du builder selon le toggle composer beta
+      let system;
+      if (composerBeta) {
+        const v2 = buildSystemPromptFrV2(form, opts, { useComposer: true });
+        if (v2.blocked) {
+          const reason = v2.profile?.blockReason || 'profil non supporté';
+          throw new Error(`Composer beta : profil "${reason}" pas encore supporté par les modules cliniques. Décochez "Composer beta" pour générer via le path classique.`);
+        }
+        system = v2.prompt;
+        setDetectedProfile(v2.profile || null);
+      } else {
+        system = buildSystemPromptFr(form, opts);
+      }
+
       const user = buildMinimalUserMessage(client, form, draftDirectives);
       const res = await callClaude({
         system,
@@ -443,7 +472,6 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
         maxTokens: 16000,
       });
       setProgress(100);
-      // micro-pause pour que la barre atteigne 100% visuellement avant de switcher
       await new Promise((r) => setTimeout(r, 350));
       setResult(typeof res === 'string' ? res : res?.text || JSON.stringify(res));
       onDirectivesChange?.(draftDirectives);
@@ -484,10 +512,40 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
             <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', lineHeight: 1.6 }}>
               Ces directives sont sauvegardées avec la cliente et réutilisées à chaque génération. Elles s'ajoutent à l'anamnèse, aux objectifs et à la synthèse résultats déjà transmis à l'IA.
             </p>
+
+            {/* Phase AN : toggle Composer beta — moteur profil-aware */}
+            <div className="jpe-composer-beta">
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={composerBeta}
+                  onChange={(e) => setComposerBeta(e.target.checked)}
+                  disabled={generating}
+                  style={{ marginTop: 3, width: 18, height: 18, cursor: 'pointer', accentColor: '#a78bfa' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#7e5ec7', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    ✨ Composer beta
+                    <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(167, 139, 250, 0.15)', color: '#7e5ec7', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                      Profil-aware
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--jrn-text-muted)', marginTop: 4, lineHeight: 1.55 }}>
+                    Détecte automatiquement le profil clinique (digestif chronique, post-partum, sèche, hormones féminines…) et injecte les modules MUST INCLUDE / INTERDITS spécifiques. Plus précis pour les profils complexes, plus long à générer.
+                  </div>
+                  {detectedProfile && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: '#7e5ec7' }}>
+                      Profil détecté : <strong>{detectedProfile.name || detectedProfile.id || 'profil clinique'}</strong>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
+
             {!generating && (
               <div className="jrn-actions">
                 <button onClick={handleGenerate} className="jrn-btn jrn-btn--primary">
-                  Lancer la génération
+                  {composerBeta ? '✨ Lancer la génération profil-aware' : 'Lancer la génération'}
                 </button>
               </div>
             )}
