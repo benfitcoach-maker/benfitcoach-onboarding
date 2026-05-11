@@ -793,116 +793,48 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
             </button>
           );
         })()}
-        <div style={{ position: 'relative' }}>
-          {/* V94.13 : bouton menu actions plus explicite (bordure + label + chevron)
-              Anissa ne voyait pas la croix 3-points isolee, on lui donne un vrai
-              bouton 'Plus' avec chevron qui rotates a l'ouverture. */}
+        {/* AZ.4 + AZ.5 (2026-05-11) — Menu 'Plus' supprimé. Toutes les actions
+            ont été migrées dans le parcours cliente :
+            - 📋 Voir historique         → étape 8 cockpit (bouton 'Historique complet')
+            - 📩 Envoyer questionnaire    → étape 1 Anamnèse
+            - 📅 Modifier date remise     → étape 7 Livraison
+            - ✏️ Modifier anamnèse        → bouton 'Profil' du header parcours
+            - Tous les items bilan/plan reprise → étape 8 cockpit suivi
+            Reste uniquement le bouton 'Supprimer' standalone (action destructive
+            hors flow parcours, doit rester accessible depuis le dashboard). */}
+        {isOwn && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
-            title="Plus d'actions (historique, modifier, supprimer...)"
+            onClick={handleDelete}
+            title="Supprimer cette cliente"
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(255,255,255,.04)',
-              border: '1px solid rgba(255,255,255,.18)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,.10)',
               borderRadius: 8,
-              padding: '7px 12px',
               cursor: 'pointer',
-              color: 'var(--text)',
-              fontSize: '.78rem',
-              fontWeight: 500,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-              transition: 'background .15s, border-color .15s',
+              color: 'rgba(255,255,255,.45)',
+              fontSize: '.95rem',
+              transition: 'all .15s',
             }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(106,191,138,.1)';
-              e.currentTarget.style.borderColor = 'rgba(106,191,138,.4)';
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(224,82,82,.10)';
+              e.currentTarget.style.borderColor = 'rgba(224,82,82,.35)';
+              e.currentTarget.style.color = '#e05252';
             }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(255,255,255,.04)';
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,.18)';
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,.10)';
+              e.currentTarget.style.color = 'rgba(255,255,255,.45)';
             }}
           >
-            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{'\u22ef'}</span>
-            <span>Plus</span>
-            <span style={{
-              fontSize: '.65rem',
-              transform: menuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform .15s',
-              opacity: .7,
-            }}>{'\u25be'}</span>
+            🗑
           </button>
-          {menuOpen && (
-            <div style={{
-              position: 'absolute', right: 0, top: '100%', zIndex: 50,
-              background: '#1e241f', border: '1px solid rgba(255,255,255,.1)',
-              borderRadius: 10, overflow: 'hidden', minWidth: 180,
-              boxShadow: '0 8px 24px rgba(0,0,0,.4)', marginTop: 4,
-            }}>
-              <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onViewHistory(client.id); }}
-                style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
-                  background:'none', border:'none', color:'var(--text)', cursor:'pointer',
-                  fontSize:'.85rem' }}>
-                {'\ud83d\udccb'} Voir l'historique
-              </button>
-              {/* AY (2026-05-11) — '✏️ Modifier l'anamnèse' SUPPRIMÉ du menu.
-                  Accès via le bouton 'Profil' du header parcours qui ouvre
-                  anissaEditClient avec le même résultat. */}
-              <SendQuestionnaireButton client={client} />
-              {/* AX.2 (2026-05-11) — '📱 Espace app cliente' SUPPRIMÉ du menu.
-                  L'app cliente est maintenant gérée via le parcours :
-                  - bouton '📱 Aperçu app' du header parcours (visualisation)
-                  - étape 7 Livraison (configuration tracking, enrichissement IA, publish)
-                  Le raccourci ici cassait toute la nouvelle architecture. */}
-
-              {/* AX.3 (2026-05-11) — '↺ Annuler la remise' SUPPRIMÉ. L'étape 7
-                  du parcours gère le statut de livraison avec plus de contexte
-                  (toggle papier, app, traçabilité paperGenerated sur la consultation).
-                  Conservé : 'Modifier la date de remise' (utile pour fix date erronée). */}
-              {isFollowupPack && isDelivered && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(false);
-                    setDeliveryDateInput(client.packStartedAt
-                      ? new Date(client.packStartedAt).toISOString().slice(0, 10)
-                      : new Date().toISOString().slice(0, 10));
-                    setShowDeliveryModal(true);
-                  }}
-                  style={{
-                    display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
-                    background:'none', border:'none', color:'#e8a040', cursor:'pointer',
-                    fontSize:'.85rem',
-                  }}
-                >
-                  {'\ud83d\udcc5'} Modifier la date de remise
-                </button>
-              )}
-
-              {/* AY (2026-05-11) — Items migrés dans le parcours étape 8 cockpit suivi :
-                  - '🔁 Générer plan de reprise' → bouton dans 'Cycle de suivi'
-                  - '🟢 Bilan reçu — Voir détail' → section PackReviewSection badge vert
-                  - '🟡 Bilan en attente' → section PackReviewSection badge ambre
-                  - '📋 Envoyer bilan 4 semaines' / '📋 Envoyer le bilan pack' →
-                    section PackReviewSection bouton primary
-                  Le menu Plus du dashboard est désormais focalisé sur les actions
-                  macro (voir historique, envoyer questionnaire, fix date remise, supprimer). */}
-
-              {/* Séparateur final avant Supprimer */}
-              <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
-
-              {isOwn && (
-                <button onClick={handleDelete}
-                  style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
-                    background:'none', border:'none', color:'#e05252', cursor:'pointer',
-                    fontSize:'.85rem', borderTop:'1px solid rgba(255,255,255,.06)' }}>
-                  {'\ud83d\uddd1'} Supprimer
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
       <ConfirmDialog state={confirmDialog.state} onClose={confirmDialog.close} />
     </div>

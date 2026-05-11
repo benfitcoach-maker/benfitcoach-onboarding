@@ -31,7 +31,7 @@ import PremiumSwitch from './components/PremiumSwitch';
 import { getNutritionConsultations } from './store';
 import './styles/journey.css';
 
-export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onReturnPlan, onSendPackReview }) {
+export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onReturnPlan, onSendPackReview, onViewHistory }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -294,7 +294,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
           {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'plan_editing' && <StepPlanEditing client={client} onChange={refresh} />}
           {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} />}
-          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} />}
+          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} />}
         </main>
       </div>
     </div>
@@ -366,10 +366,22 @@ function StepAnamnesis({ client, onChange }) {
         <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
           {busy ? '…' : 'Valider l\'anamnèse'}
         </button>
-        <span style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-          L'édition complète se fait via Profil en haut.
-        </span>
+        {/* AZ.1 : bouton 'Envoyer questionnaire' migré du menu Plus dashboard */}
+        <button
+          onClick={async () => {
+            const { openClientQuestionnaireMail } = await import('./services/sendClientQuestionnaire');
+            openClientQuestionnaireMail(client);
+          }}
+          className="jrn-btn jrn-btn--soft"
+          title="Ouvre Gmail avec un mail pré-rempli contenant le lien questionnaire pré-RDV"
+          disabled={!(client.form?.email || client.email)}
+        >
+          📩 Envoyer le questionnaire pré-RDV
+        </button>
       </div>
+      <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 'var(--jrn-2)' }}>
+        L'édition complète de l'anamnèse se fait via le bouton <strong>Profil</strong> en haut.
+      </p>
       <ErrorLine msg={err} />
     </section>
   );
@@ -856,6 +868,33 @@ function StepDelivery({ client, onChange }) {
   const [versionsCount, setVersionsCount] = useState(0);
   const [includePaper, setIncludePaper] = useState(true); // par défaut on demande
   const [paperExported, setPaperExported] = useState(false);
+  // AZ.2 : modification de la date de remise (migré du menu Plus dashboard)
+  const [showEditDate, setShowEditDate] = useState(false);
+  const [newDeliveryDate, setNewDeliveryDate] = useState('');
+  const [savingDate, setSavingDate] = useState(false);
+
+  const handleSaveDeliveryDate = async () => {
+    if (!newDeliveryDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDeliveryDate)) {
+      setErr('Date invalide');
+      return;
+    }
+    setSavingDate(true);
+    setErr(null);
+    try {
+      const iso = new Date(newDeliveryDate + 'T00:00:00').toISOString();
+      const { error: updErr } = await supabase
+        .from('clients')
+        .update({ packStartedAt: iso, packStartedAtConfirmed: true })
+        .eq('id', client.id);
+      if (updErr) throw new Error(updErr.message);
+      setShowEditDate(false);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur mise à jour date');
+    } finally {
+      setSavingDate(false);
+    }
+  };
 
   // Charge le nombre de versions pour décider le défaut du toggle
   useEffect(() => {
@@ -1009,6 +1048,56 @@ function StepDelivery({ client, onChange }) {
         </div>
       )}
 
+      {/* AZ.2 : Modification de la date de livraison (migré du menu Plus) */}
+      {client.packStartedAt && (
+        <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)', background: 'transparent', border: '1px dashed var(--jrn-border-strong)', padding: 'var(--jrn-5)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div className="jrn-label" style={{ marginBottom: 2 }}>Date de livraison enregistrée</div>
+              <div style={{ fontSize: 13, color: 'var(--jrn-text)', fontWeight: 500 }}>
+                {new Date(client.packStartedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
+              </div>
+            </div>
+            {!showEditDate && (
+              <button
+                onClick={() => {
+                  setNewDeliveryDate(new Date(client.packStartedAt).toISOString().slice(0, 10));
+                  setShowEditDate(true);
+                }}
+                className="jrn-btn jrn-btn--ghost"
+                style={{ fontSize: 12, padding: '6px 12px' }}
+                title="Corriger la date si erreur (la timeline du suivi démarre depuis cette date)"
+              >
+                📅 Modifier
+              </button>
+            )}
+          </div>
+          {showEditDate && (
+            <div style={{ marginTop: 'var(--jrn-3)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="date"
+                value={newDeliveryDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setNewDeliveryDate(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  border: '1px solid var(--jrn-border-strong)',
+                  borderRadius: 'var(--jrn-radius-sm)',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button onClick={handleSaveDeliveryDate} disabled={savingDate} className="jrn-btn jrn-btn--primary" style={{ padding: '8px 14px', fontSize: 12 }}>
+                {savingDate ? '…' : 'Mettre à jour'}
+              </button>
+              <button onClick={() => setShowEditDate(false)} className="jrn-btn jrn-btn--ghost" style={{ padding: '8px 14px', fontSize: 12 }}>
+                Annuler
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Hero CTA — moment important : la livraison est une étape clé */}
       <div style={{ marginTop: 'var(--jrn-10)', display: 'flex', justifyContent: 'center' }}>
         <button onClick={handleDelivered} disabled={busy} className="jrn-btn--hero">
@@ -1024,7 +1113,7 @@ function StepDelivery({ client, onChange }) {
 // ÉTAPE 8 — SUIVI
 // ═══════════════════════════════════════════════════════════════════
 
-function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendPackReview }) {
+function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendPackReview, onViewHistory }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [feedbacks, setFeedbacks] = useState([]);
@@ -1381,6 +1470,16 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                   title="Génère un plan de reprise IA après une pause (vacances, événement, rechute)"
                 >
                   🔁 Plan de reprise
+                </button>
+              )}
+              {/* AZ.3 : Voir historique complet des consultations (migré du menu Plus) */}
+              {onViewHistory && (
+                <button
+                  onClick={() => onViewHistory(client.id)}
+                  className="jrn-btn jrn-btn--ghost"
+                  title="Voir l'historique complet des consultations passées"
+                >
+                  📋 Historique complet
                 </button>
               )}
             </div>

@@ -1373,6 +1373,7 @@ function App() {
             onEditProfile={() => handleEditClientProfile(clientId)}
             onReturnPlan={handleReturnPlan}
             onSendPackReview={handleSendPackReview}
+            onViewHistory={handleViewNutritionHistory}
           />
         )}
 
