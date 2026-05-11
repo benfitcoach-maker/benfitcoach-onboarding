@@ -23,12 +23,13 @@
   --jrn-surface:      #FFFFFF;       /* cartes : blanc pur */
   --jrn-surface-alt:  #FBF8F1;       /* cartes secondaires (header bandeau, etc.) */
 
-  /* BC.5G.2 (2026-05-11) : tokens gris darkened encore davantage.
-     Sur fond ivoire, le contraste manquait encore — feedback Benoit. */
+  /* BC.5G.5 (2026-05-11) : tokens gris darkened encore (+15-25%).
+     Sur fond ivoire chaud, le contraste manquait encore pour lecture
+     confortable sur tous types d'écran. Calmes mais lisibles. */
   --jrn-text:         #1A1A18;       /* presque noir avec touche chaude */
-  --jrn-text-soft:    #3A3833;       /* gris chaud foncé (était #4A4842) */
-  --jrn-text-muted:   #65605A;       /* metadata (était #7A7468) */
-  --jrn-text-faint:   #847E73;       /* placeholder, faint labels (était #9A9385) */
+  --jrn-text-soft:    #2E2C28;       /* paragraphes secondaires (était #3A3833) */
+  --jrn-text-muted:   #534F49;       /* metadata, labels (était #65605A) */
+  --jrn-text-faint:   #6E695F;       /* placeholder, faint labels (était #847E73) */
 
   --jrn-accent:       #1A2E1F;       /* vert Anissa (inchangé) */
   --jrn-accent-hover: #0F1F12;
@@ -764,11 +765,11 @@
 /* ─── Main ────────────────────────────────────────────────────────── */
 
 .jrn-main {
-  /* BC.5G.4 (2026-05-11) : max-width 1640 → 1720 + padding lat 32 → 24.
-     Gain ~96px utiles dans la zone centrale — feedback 'encore compressé'. */
-  padding: var(--jrn-12) var(--jrn-6) var(--jrn-16);
+  /* BC.5G.5 (2026-05-11) : max-width 1720 → 1840 + padding lat 24 → 20.
+     Sur desktop large, le contenu cesse de paraître 'miniaturisé'. */
+  padding: var(--jrn-12) var(--jrn-5) var(--jrn-16);
   width: 100%;
-  max-width: 1720px;
+  max-width: 1840px;
   margin: 0 auto;
 }
 .jrn-main__inner {
@@ -1745,11 +1746,11 @@
 
 .jrn-atelier-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 400px;
   gap: var(--jrn-6);
   align-items: start;
 }
-@media (max-width: 1240px) {
+@media (max-width: 1300px) {
   .jrn-atelier-grid {
     grid-template-columns: 1fr;
   }
@@ -1776,7 +1777,7 @@
     linear-gradient(180deg, #FFFFFF 0%, #FDFBF6 100%);
   border: 1px solid rgba(40, 32, 20, 0.05);
   border-radius: var(--jrn-radius-lg);
-  padding: 20px 22px;             /* BC.5G.3 : 18/20 → 20/22 (textarea respire) */
+  padding: 22px 24px;             /* BC.5G.5 : 20/22 → 22/24 */
   box-shadow:
     0 0 0 1px rgba(40, 32, 20, 0.018),
     0 1px 2px rgba(40, 32, 20, 0.03),
@@ -1835,7 +1836,7 @@
     radial-gradient(140% 90% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
     linear-gradient(180deg, var(--jrn-accent-soft) 0%, rgba(26, 46, 31, 0.02) 100%);
   border-color: var(--jrn-accent-tint);
-  padding: 24px 26px;                /* BC.5G.4 : 20/22 → 24/26 (zone stratégique) */
+  padding: 28px 30px;                /* BC.5G.5 : 24/26 → 28/30 (encore plus généreux) */
   box-shadow:
     0 0 0 1px rgba(26, 46, 31, 0.06),
     0 1px 2px rgba(40, 32, 20, 0.04),
@@ -1848,16 +1849,16 @@
 
 .jrn-side-directive__textarea {
   width: 100%;
-  padding: 16px 18px;                /* BC.5G.4 : 12/14 → 16/18 */
+  padding: 18px 20px;                /* BC.5G.5 : 16/18 → 18/20 */
   border: 1px solid rgba(40, 32, 20, 0.06);
   border-radius: var(--jrn-radius);
   background: linear-gradient(180deg, #FFFFFF 0%, #FDFBF7 100%);
   font-family: var(--jrn-font-body);
-  font-size: 14.5px;                 /* BC.5G.4 : 13.5 → 14.5 */
-  line-height: 1.65;
+  font-size: 15px;                   /* BC.5G.5 : 14.5 → 15 */
+  line-height: 1.7;
   color: var(--jrn-text);
   resize: vertical;
-  min-height: 180px;                 /* BC.5G.4 : 160 → 180 */
+  min-height: 220px;                 /* BC.5G.5 : 180 → 220 */
   box-shadow:
     inset 0 1px 2px rgba(40, 32, 20, 0.03),
     inset 0 0 0 1px rgba(255, 255, 255, 0.7);
