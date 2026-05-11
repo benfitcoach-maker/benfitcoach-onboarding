@@ -24,6 +24,7 @@ import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/n
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
 import { structurePlanSections } from './services/planFormatters';
+import { analyzeFullPlan } from './services/aiClient';
 import FicheFrigoPreview from './FicheFrigoPreview';
 
 export default function JourneyPlanEditor({ client, onPlanSaved }) {
@@ -38,6 +39,10 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showFridgeModal, setShowFridgeModal] = useState(false);
   const [error, setError] = useState(null);
+  // Phase AP : audit IA du plan
+  const [auditing, setAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState(null);
+  const [auditError, setAuditError] = useState(null);
   // Phase AM : auto-save debouncé (état : idle | dirty | saving | saved | error)
   const [autosaveState, setAutosaveState] = useState('idle');
   const autosaveTimerRef = useRef(null);
@@ -131,6 +136,35 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
       setAiError(e?.message || 'Erreur réécriture IA');
     } finally {
       setAiBusy(null);
+    }
+  };
+
+  // ─── Audit IA du plan (Phase AP) ─────────────────────────────
+  const handleAudit = async () => {
+    if (!planText.trim()) {
+      setAuditError('Aucun plan à auditer.');
+      return;
+    }
+    setAuditing(true);
+    setAuditError(null);
+    setAuditResult(null);
+    try {
+      const result = await analyzeFullPlan(
+        client.form || {},
+        planText,
+        '', // supplementsText : pas séparé dans cette V — inclus dans planText
+        {
+          locale: 'FR',
+          composerProfile: null,
+          aiDirectives: aiDirectives || '',
+        }
+      );
+      if (!result) throw new Error('L\'IA n\'a pas pu produire d\'audit structuré');
+      setAuditResult(result);
+    } catch (e) {
+      setAuditError(e?.message || 'Erreur audit IA');
+    } finally {
+      setAuditing(false);
     }
   };
 
@@ -245,6 +279,9 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
             {hasPlan && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
                 <AutosaveIndicator state={autosaveState} />
+                <button onClick={handleAudit} disabled={auditing} className="jrn-btn jrn-btn--soft" title="Audit qualité du plan par IA (cohérence, oublis, contre-indications)">
+                  {auditing ? '🔎 Audit…' : '🔎 Audit qualité'}
+                </button>
                 <button onClick={() => setShowPreviewModal(true)} className="jrn-btn jrn-btn--ghost">
                   Aperçu
                 </button>
@@ -351,6 +388,13 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
       {showPreviewModal && (
         <PreviewModal text={planText} onClose={() => setShowPreviewModal(false)} />
       )}
+      {(auditResult || auditError) && (
+        <AuditModal
+          result={auditResult}
+          error={auditError}
+          onClose={() => { setAuditResult(null); setAuditError(null); }}
+        />
+      )}
       {showFridgeModal && (
         <FicheFrigoPreview
           consultation={{
@@ -371,6 +415,130 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
 // ═══════════════════════════════════════════════════════════════════
 // Modal de génération (plein écran lisible)
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// AuditModal — Affiche le résultat de l'audit IA (Phase AP)
+// ═══════════════════════════════════════════════════════════════════
+
+function AuditModal({ result, error, onClose }) {
+  const score = result?.score ?? null;
+  const verdict = result?.verdict || result?.summary || '';
+  const quickWins = Array.isArray(result?.quickWins) ? result.quickWins : (Array.isArray(result?.quick_wins) ? result.quick_wins : []);
+  const strengths = Array.isArray(result?.strengths) ? result.strengths : [];
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+
+  const scoreColor = score == null
+    ? 'var(--jrn-text-muted)'
+    : score >= 80
+      ? 'var(--jrn-accent)'
+      : score >= 60
+        ? '#8a6722'
+        : 'var(--jrn-error)';
+
+  return (
+    <div className="jpe-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="jpe-modal jpe-modal--xl">
+        <header className="jpe-modal__header">
+          <div>
+            <p className="jrn-step-eyebrow">🔎 Audit qualité du plan</p>
+            <h3 className="jpe-modal__title">Revue interne par IA</h3>
+          </div>
+          <button onClick={onClose} className="jrn-btn jrn-btn--ghost">Fermer</button>
+        </header>
+
+        <div className="jpe-modal__body">
+          {error && (
+            <div className="jrn-surface jrn-surface--warn">
+              <div className="jrn-label">Erreur</div>
+              <p style={{ margin: '4px 0 0', color: 'var(--jrn-text)' }}>{error}</p>
+            </div>
+          )}
+
+          {result && (
+            <>
+              {/* Score global */}
+              {score != null && (
+                <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)', display: 'flex', alignItems: 'center', gap: 'var(--jrn-5)' }}>
+                  <div style={{
+                    fontFamily: 'var(--jrn-font-display)',
+                    fontStyle: 'italic',
+                    fontSize: 56,
+                    fontWeight: 600,
+                    color: scoreColor,
+                    lineHeight: 1,
+                  }}>
+                    {score}<span style={{ fontSize: 20, color: 'var(--jrn-text-muted)', fontStyle: 'normal' }}>/100</span>
+                  </div>
+                  {verdict && (
+                    <div style={{ flex: 1, fontSize: 14, color: 'var(--jrn-text)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {verdict}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Forces */}
+              {strengths.length > 0 && (
+                <div style={{ marginBottom: 'var(--jrn-5)' }}>
+                  <div className="jrn-label" style={{ color: 'var(--jrn-accent)' }}>✓ Points forts ({strengths.length})</div>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 13, lineHeight: 1.7, color: 'var(--jrn-text)' }}>
+                    {strengths.map((s, i) => <li key={i}>{typeof s === 'string' ? s : s.text || s.message || JSON.stringify(s)}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {/* Issues */}
+              {issues.length > 0 && (
+                <div style={{ marginBottom: 'var(--jrn-5)' }}>
+                  <div className="jrn-label" style={{ color: '#b53a3a' }}>⚠ Points à améliorer ({issues.length})</div>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 13, lineHeight: 1.7, color: 'var(--jrn-text)' }}>
+                    {issues.map((issue, i) => {
+                      const text = typeof issue === 'string' ? issue : (issue.text || issue.message || issue.description || JSON.stringify(issue));
+                      const severity = issue?.severity || issue?.priority;
+                      return (
+                        <li key={i}>
+                          {text}
+                          {severity && (
+                            <span style={{
+                              marginLeft: 6,
+                              fontSize: 9,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: 'rgba(181, 58, 58, 0.1)',
+                              color: '#b53a3a',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                            }}>
+                              {severity}
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* Quick wins */}
+              {quickWins.length > 0 && (
+                <div style={{ marginBottom: 'var(--jrn-5)' }}>
+                  <div className="jrn-label" style={{ color: '#7e5ec7' }}>✨ Quick wins suggérés par l'IA ({quickWins.length})</div>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 13, lineHeight: 1.7, color: 'var(--jrn-text)' }}>
+                    {quickWins.map((q, i) => <li key={i}>{typeof q === 'string' ? q : q.text || q.action || q.message || JSON.stringify(q)}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <p style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 'var(--jrn-5)', fontStyle: 'italic' }}>
+                Cet audit est un assistant qualité interne. Anissa garde le dernier mot sur le contenu du plan.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Indicateur d'auto-save discret (4 états)
