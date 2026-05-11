@@ -51,15 +51,15 @@
   --jrn-font-body:    'Lexend Deca', 'Inter', system-ui, sans-serif;
   --jrn-font-ui:      'Inter', system-ui, sans-serif;
 
-  /* ─── Tailles upgraded V2 — plus généreuses ─────────────────── */
-  --jrn-text-xs:    11px;
-  --jrn-text-sm:    13px;
-  --jrn-text-base:  15px;       /* était 14, +1 pour plus de respiration */
-  --jrn-text-md:    17px;       /* était 16 */
-  --jrn-text-lg:    20px;       /* était 18 */
-  --jrn-text-xl:    26px;       /* était 24 */
-  --jrn-text-2xl:   34px;       /* était 32 */
-  --jrn-text-3xl:   46px;       /* était 42 — titres premium plus impactants */
+  /* ─── Tailles upgraded V3 (BC.3A) — scale +15-20% pour présence premium ── */
+  --jrn-text-xs:    12px;       /* était 11 */
+  --jrn-text-sm:    14px;       /* était 13 */
+  --jrn-text-base:  16px;       /* était 15 */
+  --jrn-text-md:    18px;       /* était 17 */
+  --jrn-text-lg:    22px;       /* était 20 */
+  --jrn-text-xl:    28px;       /* était 26 */
+  --jrn-text-2xl:   36px;       /* était 34 */
+  --jrn-text-3xl:   48px;       /* était 46 */
 
   /* Espacements (4px base) */
   --jrn-1:  4px;
@@ -140,8 +140,8 @@
 /* BC.2 : avatar cliente (initiales sur disque vert Anissa).
    42px diameter, gradient subtle, ring inset highlight, weight 600. */
 .jrn-header__avatar {
-  width: 56px;
-  height: 56px;
+  width: 64px;                    /* BC.3A : 56 → 64 (+14%) */
+  height: 64px;
   flex-shrink: 0;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--jrn-accent) 0%, #2B4A33 100%);
@@ -151,10 +151,10 @@
   justify-content: center;
   font-family: var(--jrn-font-ui);
   font-weight: 600;
-  font-size: 18px;
+  font-size: 21px;                /* BC.3A : 18 → 21 */
   letter-spacing: 0.04em;
   box-shadow:
-    0 2px 6px rgba(26, 46, 31, 0.18),
+    0 2px 8px rgba(26, 46, 31, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 0 0 4px var(--jrn-surface);
 }
@@ -172,14 +172,14 @@
 }
 .jrn-meta-chip {
   font-family: var(--jrn-font-ui);
-  font-size: 11px;
+  font-size: 13px;                /* BC.3A : 11 → 13 (+18%) */
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 7px 13px;              /* BC.3A : 5/10 → 7/13 */
   border-radius: 999px;
   letter-spacing: 0.02em;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   white-space: nowrap;
   border: 1px solid var(--jrn-border-strong);
   background: var(--jrn-surface);
@@ -187,7 +187,7 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
 }
 .jrn-meta-chip__icon {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .jrn-meta-chip--gold {
@@ -207,7 +207,7 @@
 }
 .jrn-header__eyebrow {
   font-family: var(--jrn-font-ui);
-  font-size: 10.5px;
+  font-size: 12px;                /* BC.3A : 10.5 → 12 */
   font-weight: 600;
   color: var(--jrn-text-muted);
   text-transform: uppercase;
@@ -216,21 +216,21 @@
 }
 .jrn-header__name {
   font-family: var(--jrn-font-display);
-  font-size: 38px;
+  font-size: 42px;                /* BC.3A : 38 → 42 */
   font-weight: 500;
   font-style: italic;
   color: var(--jrn-text);
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
 .jrn-header__pack {
   font-family: var(--jrn-font-ui);
-  font-size: 10.5px;
+  font-size: 12px;                /* BC.3A : 10.5 → 12 */
   font-weight: 700;
   letter-spacing: 0.10em;
   text-transform: uppercase;
-  padding: 7px 14px;
+  padding: 8px 16px;              /* BC.3A : 7/14 → 8/16 */
   border-radius: 999px;
   background: var(--jrn-accent-soft);
   color: var(--jrn-accent);
@@ -240,9 +240,9 @@
 }
 .jrn-header__consult {
   font-family: var(--jrn-font-ui);
-  font-size: 10.5px;
+  font-size: 12px;                /* BC.3A : 10.5 → 12 */
   font-weight: 700;
-  padding: 7px 12px;
+  padding: 8px 14px;              /* BC.3A : 7/12 → 8/14 */
   border-radius: 999px;
   background: var(--jrn-gold-soft);
   color: var(--jrn-gold);
@@ -262,15 +262,15 @@
   display: flex;
   justify-content: space-between;
   font-family: var(--jrn-font-ui);
-  font-size: 10.5px;
+  font-size: 12px;                /* BC.3A : 10.5 → 12 */
   font-weight: 600;
   color: var(--jrn-text-muted);
-  margin-bottom: var(--jrn-2);
+  margin-bottom: var(--jrn-3);    /* BC.3A : 2 → 3 (8 → 12) */
   letter-spacing: 0.10em;
   text-transform: uppercase;
 }
 .jrn-header__progress-track {
-  height: 6px;
+  height: 8px;                    /* BC.3A : 6 → 8 */
   background: rgba(40, 32, 20, 0.05);
   border-radius: 999px;
   overflow: hidden;
@@ -295,7 +295,7 @@
   font-family: var(--jrn-font-ui);
   font-size: var(--jrn-text-sm);
   font-weight: 500;
-  padding: 9px 16px;
+  padding: 11px 20px;       /* BC.3A : 9/16 → 11/20 (+20% présence) */
   border-radius: var(--jrn-radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
@@ -303,7 +303,7 @@
   transition: all 140ms var(--jrn-ease);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   white-space: nowrap;
   line-height: 1.2;
 }
@@ -335,9 +335,9 @@
 .jrn-btn--primary {
   background: var(--jrn-accent);
   color: var(--jrn-surface);
-  font-weight: 500;
-  padding: 13px 24px;
-  font-size: var(--jrn-text-sm);
+  font-weight: 600;                /* BC.3A : 500 → 600 (plus de prestance) */
+  padding: 15px 28px;              /* BC.3A : 13/24 → 15/28 */
+  font-size: var(--jrn-text-base); /* BC.3A : sm → base */
   box-shadow: 0 1px 2px rgba(15, 25, 18, 0.08);
 }
 .jrn-btn--primary:hover:not(:disabled) {
@@ -409,7 +409,7 @@
 }
 .jrn-sidebar__label {
   font-family: var(--jrn-font-ui);
-  font-size: 10.5px;
+  font-size: 12px;                /* BC.3A : 10.5 → 12 */
   font-weight: 600;
   color: var(--jrn-text-muted);
   text-transform: uppercase;
@@ -542,15 +542,16 @@
 /* ─── Main ────────────────────────────────────────────────────────── */
 
 .jrn-main {
-  /* AQ.2 : largeur cap pour aspect editorial premium (pas admin panel étalé) */
-  padding: var(--jrn-12) var(--jrn-12) var(--jrn-16);
+  /* BC.3A : max-width 1300 → 1520 + padding latéral réduit pour cards plus larges
+     Cible : ~1040-1100px utiles dans la card (vs ~800 avant). */
+  padding: var(--jrn-12) var(--jrn-10) var(--jrn-16);
   width: 100%;
-  max-width: 1300px;
+  max-width: 1520px;
   margin: 0 auto;
 }
 .jrn-main__inner {
   /* Conteneur secondaire pour les blocs très textuels où la lisibilité prime */
-  max-width: 920px;
+  max-width: 1000px;               /* BC.3A : 920 → 1000 */
 }
 
 .jrn-step-eyebrow {
@@ -600,7 +601,7 @@
     linear-gradient(180deg, #FFFFFF 0%, #FDFBF6 100%);
   border: 1px solid rgba(40, 32, 20, 0.05);
   border-radius: var(--jrn-radius-xl);
-  padding: var(--jrn-10);
+  padding: var(--jrn-12);          /* BC.3A : 40px → 48px (+20%) */
   box-shadow:
     0 0 0 1px rgba(40, 32, 20, 0.018),
     0 1px 1px rgba(40, 32, 20, 0.025),
