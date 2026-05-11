@@ -23,10 +23,12 @@
   --jrn-surface:      #FFFFFF;       /* cartes : blanc pur */
   --jrn-surface-alt:  #FBF8F1;       /* cartes secondaires (header bandeau, etc.) */
 
+  /* BC.4 (2026-05-11) : tokens gris darkened pour contraste lisibilité.
+     Sur fond ivoire, les anciens muted/faint étaient trop pâles. */
   --jrn-text:         #1A1A18;       /* presque noir avec touche chaude */
-  --jrn-text-soft:    #525049;       /* gris chaud (au lieu de gris froid) */
-  --jrn-text-muted:   #8E8A80;       /* metadata */
-  --jrn-text-faint:   #BDB8AA;       /* placeholder, faint labels */
+  --jrn-text-soft:    #4A4842;       /* gris chaud foncé (était #525049) */
+  --jrn-text-muted:   #7A7468;       /* metadata (était #8E8A80) */
+  --jrn-text-faint:   #9A9385;       /* placeholder, faint labels (était #BDB8AA) */
 
   --jrn-accent:       #1A2E1F;       /* vert Anissa (inchangé) */
   --jrn-accent-hover: #0F1F12;
@@ -684,8 +686,8 @@
 }
 .jrn-cockpit__row-key {
   font-family: var(--jrn-font-ui);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;                    /* BC.4 : 12 → 13 */
+  font-weight: 600;                   /* BC.4 : 500 → 600 */
   color: var(--jrn-text-soft);
   letter-spacing: 0.01em;
 }
@@ -759,10 +761,10 @@
 .jrn-step-eyebrow {
   font-family: var(--jrn-font-ui);
   font-size: var(--jrn-text-xs);
-  font-weight: 500;
+  font-weight: 600;                   /* BC.4 : 500 → 600 */
   color: var(--jrn-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;             /* BC.4 : 0.16 → 0.18 */
   margin: 0 0 var(--jrn-3);
 }
 .jrn-step-title {
@@ -778,11 +780,11 @@
 .jrn-step-intro {
   font-family: var(--jrn-font-body);
   font-size: var(--jrn-text-md);
-  font-weight: 300;
+  font-weight: 400;                   /* BC.4 : 300 → 400 (gain contraste) */
   color: var(--jrn-text-soft);
-  line-height: 1.7;
-  margin: 0 0 var(--jrn-10);          /* plus de respiration avant le contenu */
-  max-width: 680px;
+  line-height: 1.65;                  /* BC.4 : 1.7 → 1.65 */
+  margin: 0 0 var(--jrn-10);
+  max-width: 720px;                   /* BC.4 : 680 → 720 (cohérence scale) */
 }
 
 /* ─── Surface (cartes premium V3 — multi-layer shadow) ────────────
@@ -853,10 +855,10 @@
 .jrn-label {
   font-family: var(--jrn-font-ui);
   font-size: var(--jrn-text-xs);
-  font-weight: 500;
+  font-weight: 600;                   /* BC.4 : 500 → 600 (présence) */
   color: var(--jrn-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.12em;             /* BC.4 : 0.10 → 0.12 */
   margin-bottom: var(--jrn-2);
 }
 
@@ -871,8 +873,9 @@
   color: var(--jrn-text-muted);
   font-family: var(--jrn-font-ui);
   font-size: var(--jrn-text-xs);
+  font-weight: 600;                   /* BC.4 : 400 default → 600 (présence) */
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;             /* BC.4 : 0.06 → 0.08 */
   padding-top: 2px;
 }
 .jrn-kv__v {
