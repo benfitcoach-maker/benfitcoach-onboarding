@@ -112,7 +112,8 @@
   display: flex;
   align-items: center;
   gap: var(--jrn-5);
-  min-width: 0;
+  min-width: 280px;
+  flex-shrink: 0;
 }
 .jrn-header__eyebrow {
   font-family: var(--jrn-font-ui);
@@ -159,8 +160,8 @@
 
 .jrn-header__progress {
   flex: 1;
-  max-width: 380px;
-  margin: 0 var(--jrn-6);
+  max-width: 320px;
+  margin: 0 var(--jrn-6) 0 auto;
 }
 .jrn-header__progress-meta {
   display: flex;
