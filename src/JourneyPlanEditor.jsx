@@ -298,7 +298,8 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
           {!hasPlan && (
             <div className="jrn-plan-empty">
               <div className="jrn-plan-empty__icon">✦</div>
-              <h4 className="jrn-plan-empty__title">Aucun brouillon généré pour le moment</h4>
+              <span className="jrn-plan-empty__version">Version initiale · non générée</span>
+              <h4 className="jrn-plan-empty__title">Aucun brouillon pour le moment</h4>
 
               <div className="jrn-plan-empty__cols">
                 {/* Colonne sources (input) */}

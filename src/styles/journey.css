@@ -764,12 +764,11 @@
 /* ─── Main ────────────────────────────────────────────────────────── */
 
 .jrn-main {
-  /* BC.3A.1 (2026-05-11) : max-width 1520 → 1640 + padding latéral 40 → 32.
-     Cible : ~1160px utiles dans la card (vs ~1040 avant) pour casser
-     l'effet 'grand vide beige autour'. */
-  padding: var(--jrn-12) var(--jrn-8) var(--jrn-16);
+  /* BC.5G.4 (2026-05-11) : max-width 1640 → 1720 + padding lat 32 → 24.
+     Gain ~96px utiles dans la zone centrale — feedback 'encore compressé'. */
+  padding: var(--jrn-12) var(--jrn-6) var(--jrn-16);
   width: 100%;
-  max-width: 1640px;
+  max-width: 1720px;
   margin: 0 auto;
 }
 .jrn-main__inner {
@@ -1605,13 +1604,29 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 0 0 6px var(--jrn-accent-soft);
 }
+/* BC.5G.4 : eyebrow 'Version initiale · non générée' donne sensation
+   logiciel clinique avec notion de versionnage permanente. */
+.jrn-plan-empty__version {
+  display: inline-block;
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--jrn-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  padding: 5px 12px;
+  background: var(--jrn-bg-alt);
+  border: 1px solid var(--jrn-border-strong);
+  border-radius: 999px;
+  margin-bottom: var(--jrn-3);
+}
 .jrn-plan-empty__title {
   font-family: var(--jrn-font-display);
   font-style: italic;
   font-size: 26px;
   font-weight: 500;
   color: var(--jrn-text);
-  margin: 0 0 var(--jrn-3);
+  margin: 0 0 var(--jrn-5);
   letter-spacing: -0.01em;
   line-height: 1.2;
 }
@@ -1658,15 +1673,38 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 11px 14px;
   background:
-    linear-gradient(180deg, rgba(245, 240, 232, 0.4) 0%, rgba(245, 240, 232, 0.2) 100%);
+    linear-gradient(180deg, rgba(245, 240, 232, 0.5) 0%, rgba(245, 240, 232, 0.25) 100%);
   border: 1px solid var(--jrn-border);
   border-radius: var(--jrn-radius);
   font-family: var(--jrn-font-body);
-  font-size: 13.5px;
+  font-size: 14px;                 /* BC.5G.4 : 13.5 → 14 */
   line-height: 1.4;
   color: var(--jrn-text-soft);
+  transition: all 160ms var(--jrn-ease);
+}
+.jrn-plan-empty__sources li:hover,
+.jrn-plan-empty__outputs li:hover {
+  background:
+    linear-gradient(180deg, rgba(245, 240, 232, 0.7) 0%, rgba(245, 240, 232, 0.45) 100%);
+  border-color: var(--jrn-border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(40, 32, 20, 0.04);
+}
+.jrn-plan-empty__sources li:hover .jrn-plan-empty__check {
+  background: var(--jrn-accent);
+  color: var(--jrn-surface);
+  border-color: var(--jrn-accent);
+}
+.jrn-plan-empty__outputs li:hover .jrn-plan-empty__dot {
+  transform: scale(1.15);
+}
+.jrn-plan-empty__check {
+  transition: all 160ms var(--jrn-ease);
+}
+.jrn-plan-empty__dot {
+  transition: transform 160ms var(--jrn-ease);
 }
 .jrn-plan-empty__sources strong {
   font-weight: 700;
@@ -1707,11 +1745,11 @@
 
 .jrn-atelier-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--jrn-6);
   align-items: start;
 }
-@media (max-width: 1200px) {
+@media (max-width: 1240px) {
   .jrn-atelier-grid {
     grid-template-columns: 1fr;
   }
@@ -1790,13 +1828,19 @@
   color: var(--jrn-accent);
 }
 
-/* BC.5G.1 : Card Directive IA — la plus importante de la sidebar */
+/* BC.5G.1 + BC.5G.4 : Card Directive IA — la plus importante de la sidebar */
 .jrn-side-card--directive {
   position: relative;
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
+    radial-gradient(140% 90% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
     linear-gradient(180deg, var(--jrn-accent-soft) 0%, rgba(26, 46, 31, 0.02) 100%);
   border-color: var(--jrn-accent-tint);
+  padding: 24px 26px;                /* BC.5G.4 : 20/22 → 24/26 (zone stratégique) */
+  box-shadow:
+    0 0 0 1px rgba(26, 46, 31, 0.06),
+    0 1px 2px rgba(40, 32, 20, 0.04),
+    0 6px 16px -2px rgba(26, 46, 31, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 .jrn-side-card--directive .jrn-side-card__label {
   color: var(--jrn-accent);
@@ -1804,19 +1848,19 @@
 
 .jrn-side-directive__textarea {
   width: 100%;
-  padding: 12px 14px;
+  padding: 16px 18px;                /* BC.5G.4 : 12/14 → 16/18 */
   border: 1px solid rgba(40, 32, 20, 0.06);
   border-radius: var(--jrn-radius);
   background: linear-gradient(180deg, #FFFFFF 0%, #FDFBF7 100%);
   font-family: var(--jrn-font-body);
-  font-size: 13.5px;
-  line-height: 1.6;
+  font-size: 14.5px;                 /* BC.5G.4 : 13.5 → 14.5 */
+  line-height: 1.65;
   color: var(--jrn-text);
   resize: vertical;
-  min-height: 160px;
+  min-height: 180px;                 /* BC.5G.4 : 160 → 180 */
   box-shadow:
     inset 0 1px 2px rgba(40, 32, 20, 0.03),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7);
   outline: none;
   transition: border-color 140ms var(--jrn-ease), box-shadow 140ms var(--jrn-ease);
 }
