@@ -1278,9 +1278,9 @@ function StepFollowup({ client, journey, onChange, onExit }) {
 
           {/* ─── Section : suivi du poids ───────────────────────── */}
           <WeightTrackingSection
+            client={client}
             entries={weightEntries}
             loading={loadingWeight}
-            trackingEnabled={!!client.weight_tracking_enabled}
           />
 
           {/* ─── Section : derniers ressentis ──────────────────── */}
@@ -1442,12 +1442,52 @@ function StepFollowup({ client, journey, onChange, onExit }) {
 // Section : Suivi du poids (étape 8 cockpit)
 // ═══════════════════════════════════════════════════════════════════
 
-function WeightTrackingSection({ entries, loading, trackingEnabled }) {
-  // Si tracking jamais activé ET aucune entrée → on cache la section
-  if (!loading && !trackingEnabled && entries.length === 0) {
-    return null;
-  }
+function WeightTrackingSection({ client, entries, loading }) {
+  // Phase AK + suite : charge la config app cliente (toggles tracking + visible)
+  const [config, setConfig] = useState(null); // { weight_tracking_enabled, weight_visible_to_client }
+  const [loadingCfg, setLoadingCfg] = useState(true);
+  const [updating, setUpdating] = useState(null); // 'tracking' | 'visible' | null
+  const [cfgError, setCfgError] = useState(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchClientAppConfig } = await import('./services/clientAppConfig');
+        const res = await fetchClientAppConfig(client);
+        if (!cancelled) setConfig(res?.config || { weight_tracking_enabled: false, weight_visible_to_client: false });
+      } catch (e) {
+        if (!cancelled) setConfig({ weight_tracking_enabled: false, weight_visible_to_client: false });
+      } finally {
+        if (!cancelled) setLoadingCfg(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id]);
+
+  const trackingEnabled = !!config?.weight_tracking_enabled;
+  const visibleToClient = !!config?.weight_visible_to_client;
+
+  const toggleConfig = async (key) => {
+    setUpdating(key === 'weight_tracking_enabled' ? 'tracking' : 'visible');
+    setCfgError(null);
+    try {
+      const { updateClientAppConfig } = await import('./services/clientAppConfig');
+      const updates = { [key]: !config?.[key] };
+      // Si on désactive tracking, on désactive aussi visible (cohérence)
+      if (key === 'weight_tracking_enabled' && config?.[key]) {
+        updates.weight_visible_to_client = false;
+      }
+      const next = await updateClientAppConfig(client, updates);
+      setConfig(next);
+    } catch (e) {
+      setCfgError(e?.message || 'Erreur mise à jour');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  // Si tracking off ET pas de pesées historiques, on affiche quand même (pour permettre activation)
   const last = entries[0] || null;
   const oldest = entries[entries.length - 1] || null;
   const delta = last && oldest && entries.length > 1
@@ -1456,27 +1496,54 @@ function WeightTrackingSection({ entries, loading, trackingEnabled }) {
 
   return (
     <div style={{ marginBottom: 'var(--jrn-6)' }}>
-      <p className="jrn-label">
-        Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)' }}>
+        <p className="jrn-label" style={{ margin: 0 }}>
+          Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
+        </p>
+        {/* Toggles inline (Phase AK suite) */}
+        {!loadingCfg && config && (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <ToggleChip
+              label="Tracking activé"
+              checked={trackingEnabled}
+              onClick={() => toggleConfig('weight_tracking_enabled')}
+              loading={updating === 'tracking'}
+              title="Active le suivi du poids pour cette cliente"
+            />
+            {trackingEnabled && (
+              <ToggleChip
+                label="Visible cliente"
+                checked={visibleToClient}
+                onClick={() => toggleConfig('weight_visible_to_client')}
+                loading={updating === 'visible'}
+                title="Affiche le champ poids dans l'app cliente (sinon réservé coach)"
+              />
+            )}
+          </div>
+        )}
+      </div>
 
-      {loading && (
+      {cfgError && <div className="jrn-error" style={{ marginBottom: 8 }}>⚠ {cfgError}</div>}
+
+      {(loading || loadingCfg) && (
         <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>
       )}
 
-      {!loading && !trackingEnabled && entries.length === 0 && (
+      {!loading && !loadingCfg && !trackingEnabled && entries.length === 0 && (
         <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
           <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-            Suivi du poids non activé pour cette cliente.<br />
-            Activez-le depuis le bouton <strong>Profil</strong> en haut.
+            Suivi du poids désactivé.<br />
+            Cliquez sur <strong>Tracking activé</strong> ci-dessus pour l'activer pour cette cliente.
           </p>
         </div>
       )}
 
-      {!loading && entries.length === 0 && trackingEnabled && (
+      {!loading && !loadingCfg && entries.length === 0 && trackingEnabled && (
         <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
           <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-            Suivi activé mais aucune pesée enregistrée. La cliente saisit son poids depuis l'app.
+            {visibleToClient
+              ? 'Suivi activé. La cliente peut saisir son poids depuis l\'app (champ visible dans son ressenti quotidien). Aucune pesée encore reçue.'
+              : 'Suivi activé en mode coach (champ caché à la cliente). Aucune pesée enregistrée.'}
           </p>
         </div>
       )}
@@ -1542,6 +1609,50 @@ function WeightTrackingSection({ entries, loading, trackingEnabled }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ToggleChip({ label, checked, onClick, loading, title }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      title={title}
+      style={{
+        fontFamily: 'var(--jrn-font-ui)',
+        fontSize: 11,
+        fontWeight: 500,
+        padding: '5px 10px 5px 8px',
+        borderRadius: 999,
+        border: `1px solid ${checked ? 'var(--jrn-accent)' : 'rgba(0,0,0,0.15)'}`,
+        background: checked ? 'var(--jrn-accent-soft)' : 'transparent',
+        color: checked ? 'var(--jrn-accent)' : 'var(--jrn-text-muted)',
+        cursor: loading ? 'wait' : 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        whiteSpace: 'nowrap',
+        opacity: loading ? 0.6 : 1,
+        transition: 'all 140ms var(--jrn-ease)',
+      }}
+    >
+      <span style={{
+        width: 14,
+        height: 14,
+        borderRadius: 4,
+        background: checked ? 'var(--jrn-accent)' : 'transparent',
+        border: `1.5px solid ${checked ? 'var(--jrn-accent)' : 'rgba(0,0,0,0.25)'}`,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 700,
+      }}>
+        {checked ? '✓' : ''}
+      </span>
+      {label}
+    </button>
   );
 }
 
