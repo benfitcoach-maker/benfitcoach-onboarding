@@ -1035,6 +1035,325 @@
   margin: 0 0 var(--jrn-4);
   max-width: 760px;
 }
+.jrn-block__head-meta {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ─── BC.5D : Result cards — cockpit d'interprétation clinique ────
+   Carte par analyse avec header (titre + source + catégorie + statut),
+   2 sections séparées (valeurs labo monospace fond teinté + lecture
+   clinique éditoriale). Status colore le rim gauche pour scan rapide. */
+
+.jrn-result-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jrn-5);
+}
+
+.jrn-result-card {
+  position: relative;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #FFFFFF 0%, #FDFBF6 100%);
+  border: 1px solid rgba(40, 32, 20, 0.05);
+  border-radius: var(--jrn-radius-lg);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(40, 32, 20, 0.018),
+    0 1px 1px rgba(40, 32, 20, 0.025),
+    0 6px 12px -2px rgba(40, 32, 20, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: box-shadow 220ms var(--jrn-ease);
+}
+.jrn-result-card:hover {
+  box-shadow:
+    0 0 0 1px rgba(40, 32, 20, 0.025),
+    0 2px 3px rgba(40, 32, 20, 0.04),
+    0 12px 24px -4px rgba(40, 32, 20, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+/* Rim gauche colorée selon status (scan rapide visuel) */
+.jrn-result-card--optimal::before,
+.jrn-result-card--surveiller::before,
+.jrn-result-card--prioritaire::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+.jrn-result-card--optimal::before     { background: linear-gradient(180deg, #4A7D5A 0%, var(--jrn-accent) 100%); }
+.jrn-result-card--surveiller::before  { background: linear-gradient(180deg, var(--jrn-gold) 0%, #C49538 100%); }
+.jrn-result-card--prioritaire::before { background: linear-gradient(180deg, #C74848 0%, #A03434 100%); }
+
+.jrn-result-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--jrn-4);
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--jrn-border);
+  background: var(--jrn-surface-alt);
+  flex-wrap: wrap;
+}
+.jrn-result-card__head-left {
+  display: flex;
+  align-items: center;
+  gap: var(--jrn-3);
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 280px;
+}
+.jrn-result-card__head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.jrn-result-card__title {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-md);
+  font-weight: 700;
+  color: var(--jrn-text);
+  margin: 0;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+}
+.jrn-result-card__title-input {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-md);
+  font-weight: 700;
+  color: var(--jrn-text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  padding: 4px 0;
+  letter-spacing: -0.005em;
+  min-width: 180px;
+}
+.jrn-result-card__title-input:focus {
+  border-bottom-color: var(--jrn-accent);
+}
+.jrn-result-card__head-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.jrn-result-card__source {
+  font-family: var(--jrn-font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.jrn-result-card__source--accent {
+  background: var(--jrn-accent-soft);
+  color: var(--jrn-accent);
+  border-color: var(--jrn-accent-tint);
+}
+.jrn-result-card__source--muted,
+.jrn-result-card__source--neutral {
+  background: var(--jrn-bg-alt);
+  color: var(--jrn-text-muted);
+  border-color: var(--jrn-border-strong);
+}
+.jrn-result-card__select {
+  font-family: var(--jrn-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: var(--jrn-radius-sm);
+  border: 1px solid var(--jrn-border-strong);
+  background: var(--jrn-surface);
+  color: var(--jrn-text-soft);
+  cursor: pointer;
+  transition: all 140ms var(--jrn-ease);
+  outline: none;
+}
+.jrn-result-card__select:hover {
+  border-color: var(--jrn-accent-tint);
+  color: var(--jrn-text);
+}
+.jrn-result-card__select:focus {
+  border-color: var(--jrn-accent);
+  box-shadow: 0 0 0 3px var(--jrn-accent-soft);
+}
+.jrn-result-card__delete {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--jrn-radius-sm);
+  border: 1px solid var(--jrn-border);
+  background: var(--jrn-surface);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--jrn-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 140ms var(--jrn-ease);
+}
+.jrn-result-card__delete:hover {
+  background: var(--jrn-error-bg);
+  color: var(--jrn-error);
+  border-color: rgba(181, 58, 58, 0.25);
+}
+
+/* Sections internes : valeurs labo + lecture clinique */
+.jrn-result-card__values,
+.jrn-result-card__interpretation {
+  padding: 16px 24px;
+}
+.jrn-result-card__values {
+  background: rgba(245, 240, 232, 0.4); /* fond ivoire teinté pour différencier */
+  border-bottom: 1px solid var(--jrn-border);
+}
+.jrn-result-card__interpretation {
+  background: transparent;
+}
+.jrn-result-card__section-label {
+  display: block;
+  font-family: var(--jrn-font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--jrn-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin: 0 0 8px;
+}
+.jrn-result-card__section-label--accent {
+  color: var(--jrn-accent);
+}
+.jrn-result-card__values-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 8px 0;
+  background: transparent;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--jrn-text);
+  resize: vertical;
+  min-height: 50px;
+}
+.jrn-result-card__values-textarea::placeholder {
+  font-family: var(--jrn-font-body);
+  color: var(--jrn-text-faint);
+  font-style: italic;
+  font-size: 13px;
+}
+.jrn-result-card__interpretation-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 8px 0;
+  background: transparent;
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-base);
+  line-height: 1.65;
+  color: var(--jrn-text);
+  resize: vertical;
+  min-height: 72px;
+}
+.jrn-result-card__interpretation-textarea::placeholder {
+  color: var(--jrn-text-faint);
+  font-style: italic;
+}
+
+/* ─── Status pills (optimal / surveiller / prioritaire) ──────── */
+.jrn-result-pill {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.jrn-result-pill--optimal {
+  background: var(--jrn-accent-soft);
+  color: var(--jrn-accent);
+  border-color: var(--jrn-accent-tint);
+}
+.jrn-result-pill--surveiller {
+  background: var(--jrn-gold-soft);
+  color: var(--jrn-gold);
+  border-color: var(--jrn-gold-tint);
+}
+.jrn-result-pill--prioritaire {
+  background: rgba(199, 72, 72, 0.10);
+  color: #B53A3A;
+  border-color: rgba(199, 72, 72, 0.28);
+}
+
+/* ─── BC.5D : Synthèse clinique globale — carte premium éditoriale ─ */
+.jrn-synthesis {
+  position: relative;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #FFFFFF 0%, #FDFBF6 100%);
+  border: 1px solid rgba(40, 32, 20, 0.05);
+  border-radius: var(--jrn-radius-xl);
+  padding: var(--jrn-8);
+  box-shadow:
+    0 0 0 1px rgba(40, 32, 20, 0.018),
+    0 1px 1px rgba(40, 32, 20, 0.025),
+    0 6px 12px -2px rgba(40, 32, 20, 0.04),
+    0 32px 64px -16px rgba(40, 32, 20, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.jrn-synthesis__textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-md);
+  line-height: 1.75;
+  color: var(--jrn-text);
+  resize: vertical;
+  min-height: 180px;
+  letter-spacing: 0.005em;
+}
+.jrn-synthesis__textarea::placeholder {
+  color: var(--jrn-text-faint);
+  font-style: italic;
+  line-height: 1.7;
+}
+.jrn-synthesis__hints {
+  margin-top: var(--jrn-5);
+  padding-top: var(--jrn-4);
+  border-top: 1px dashed var(--jrn-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.jrn-synthesis__hint-pill {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  color: var(--jrn-text-muted);
+  background: var(--jrn-bg-alt);
+  border: 1px solid var(--jrn-border-strong);
+}
 
 /* ─── BC.5C : Timeline verticale (étapes de progression narrative) ─
    Utilisée dans StepWaitingResults pour visualiser prescription → labo →

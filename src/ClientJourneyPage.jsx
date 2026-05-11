@@ -1010,7 +1010,7 @@ function StepResults({ client, onChange }) {
     setResultsByTest((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
   };
   const addExternal = () => {
-    setExternalAnalyses((prev) => [...prev, { name: '', value: '', synthesis: '' }]);
+    setExternalAnalyses((prev) => [...prev, { name: '', value: '', synthesis: '', category: null, status: null }]);
   };
   const updateExternal = (idx, field, value) => {
     setExternalAnalyses((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
@@ -1044,21 +1044,41 @@ function StepResults({ client, onChange }) {
     finally { setBusy(false); }
   };
 
+  // BC.5D : compteur statuts pour donner sensation "intelligence visible"
+  const allResults = [...resultsByTest, ...externalAnalyses];
+  const statusCounts = allResults.reduce((acc, r) => {
+    if (r.status) acc[r.status] = (acc[r.status] || 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <section>
       <StepHead
         index={4}
         title="Saisie des résultats"
-        intro="Saisissez les résultats de chaque analyse demandée et ajoutez les analyses que la cliente possédait déjà. Synthèse globale en bas pour préparer le plan."
+        intro="Saisis les résultats de chaque analyse et ajoute celles que la cliente possédait déjà. Catégorise et priorise pour préparer une synthèse clinique structurée."
       />
 
-      {/* ─── Tests du plan d'analyses ─────────────────────────── */}
+      {/* BC.5D : refonte étape 4 en cockpit d'analyse clinique premium */}
+
+      {/* ─── Bloc 1 : Analyses prescrites ──────────────────────── */}
       {planTests && planTests.length > 0 && (
-        <div style={{ marginBottom: 'var(--jrn-8)' }}>
-          <p className="jrn-label" style={{ marginBottom: 'var(--jrn-3)' }}>
-            Analyses prescrites ({planTests.length})
+        <div className="jrn-block">
+          <div className="jrn-block__head">
+            <span className="jrn-block__num">1</span>
+            <h3 className="jrn-block__title">Analyses prescrites ({planTests.length})</h3>
+            {Object.keys(statusCounts).length > 0 && (
+              <div className="jrn-block__head-meta">
+                {statusCounts.optimal > 0 && <span className="jrn-result-pill jrn-result-pill--optimal">{statusCounts.optimal} optimal{statusCounts.optimal > 1 ? 'es' : ''}</span>}
+                {statusCounts.surveiller > 0 && <span className="jrn-result-pill jrn-result-pill--surveiller">{statusCounts.surveiller} à surveiller</span>}
+                {statusCounts.prioritaire > 0 && <span className="jrn-result-pill jrn-result-pill--prioritaire">{statusCounts.prioritaire} prioritaire{statusCounts.prioritaire > 1 ? 's' : ''}</span>}
+              </div>
+            )}
+          </div>
+          <p className="jrn-block__intro">
+            Pour chaque analyse : saisis les valeurs brutes, catégorise (hormonal, microbiote, etc), puis note ta lecture clinique. Le statut prioritaire/à surveiller/optimal aide à orienter le plan.
           </p>
-          <div className="jpe-sections">
+          <div className="jrn-result-cards">
             {resultsByTest.map((r, i) => (
               <ResultCard
                 key={r.test_code || i}
@@ -1067,8 +1087,12 @@ function StepResults({ client, onChange }) {
                 badgeColor="accent"
                 value={r.value}
                 synthesis={r.synthesis}
+                category={r.category}
+                status={r.status}
                 onValueChange={(v) => updateTestField(i, 'value', v)}
                 onSynthesisChange={(v) => updateTestField(i, 'synthesis', v)}
+                onCategoryChange={(v) => updateTestField(i, 'category', v)}
+                onStatusChange={(v) => updateTestField(i, 'status', v)}
               />
             ))}
           </div>
@@ -1076,124 +1100,208 @@ function StepResults({ client, onChange }) {
       )}
 
       {planTests && planTests.length === 0 && (
-        <div className="jrn-surface jrn-surface--quiet" style={{ marginBottom: 'var(--jrn-6)', textAlign: 'center', padding: 'var(--jrn-6)' }}>
-          <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-            Pas d'analyses prescrites pour cette cliente. Vous pouvez tout de même saisir des analyses externes ci-dessous.
-          </p>
+        <div className="jrn-block">
+          <div className="jrn-surface jrn-surface--quiet">
+            <div className="jrn-empty">
+              <div className="jrn-empty__icon">🧪</div>
+              <p className="jrn-empty__title">Aucune analyse prescrite</p>
+              <p className="jrn-empty__hint">
+                Cette cliente n'a pas de plan d'analyses validé. Tu peux tout de même saisir des analyses externes ci-dessous.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ─── Analyses externes (que la cliente avait deja) ─────── */}
-      <div style={{ marginBottom: 'var(--jrn-8)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--jrn-3)' }}>
-          <p className="jrn-label" style={{ margin: 0 }}>
-            Analyses externes ({externalAnalyses.length})
-          </p>
-          <button onClick={addExternal} className="jrn-btn jrn-btn--soft">
+      {/* ─── Bloc 2 : Analyses externes ─────────────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{planTests && planTests.length > 0 ? '2' : '1'}</span>
+          <h3 className="jrn-block__title">Analyses externes ({externalAnalyses.length})</h3>
+          <button onClick={addExternal} className="jrn-btn jrn-btn--soft" style={{ marginLeft: 'auto' }}>
             + Ajouter une analyse
           </button>
         </div>
+        <p className="jrn-block__intro">
+          Analyses que la cliente possédait avant le suivi (autres laboratoires, anciens bilans, dosages spécifiques).
+        </p>
         {externalAnalyses.length === 0 && (
-          <div className="jrn-surface jrn-surface--quiet" style={{ textAlign: 'center', padding: 'var(--jrn-5)' }}>
-            <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-              Aucune analyse externe ajoutée. Si la cliente possédait déjà des résultats avant le suivi, cliquez sur "+ Ajouter une analyse".
-            </p>
+          <div className="jrn-surface jrn-surface--quiet">
+            <div className="jrn-empty">
+              <div className="jrn-empty__icon">📋</div>
+              <p className="jrn-empty__title">Aucune analyse externe</p>
+              <p className="jrn-empty__hint">
+                Si la cliente t'a transmis des résultats antérieurs au suivi, ajoute-les ici pour enrichir le contexte clinique.
+              </p>
+            </div>
           </div>
         )}
-        <div className="jpe-sections">
-          {externalAnalyses.map((r, i) => (
-            <ResultCard
-              key={i}
-              editable
-              title={r.name}
-              badge="Externe"
-              badgeColor="muted"
-              value={r.value}
-              synthesis={r.synthesis}
-              onTitleChange={(v) => updateExternal(i, 'name', v)}
-              onValueChange={(v) => updateExternal(i, 'value', v)}
-              onSynthesisChange={(v) => updateExternal(i, 'synthesis', v)}
-              onDelete={() => removeExternal(i)}
-            />
-          ))}
+        {externalAnalyses.length > 0 && (
+          <div className="jrn-result-cards">
+            {externalAnalyses.map((r, i) => (
+              <ResultCard
+                key={i}
+                editable
+                title={r.name}
+                badge="Externe"
+                badgeColor="muted"
+                value={r.value}
+                synthesis={r.synthesis}
+                category={r.category}
+                status={r.status}
+                onTitleChange={(v) => updateExternal(i, 'name', v)}
+                onValueChange={(v) => updateExternal(i, 'value', v)}
+                onSynthesisChange={(v) => updateExternal(i, 'synthesis', v)}
+                onCategoryChange={(v) => updateExternal(i, 'category', v)}
+                onStatusChange={(v) => updateExternal(i, 'status', v)}
+                onDelete={() => removeExternal(i)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Bloc 3 : Synthèse clinique globale (carte premium) ─ */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{planTests && planTests.length > 0 ? '3' : '2'}</span>
+          <h3 className="jrn-block__title">Synthèse clinique globale</h3>
+        </div>
+        <p className="jrn-block__intro">
+          Vue d'ensemble éditoriale : priorités détectées, axes nutritionnels, alertes croisées. Sera injectée dans le prompt IA de génération du plan.
+        </p>
+        <div className="jrn-synthesis">
+          <textarea
+            value={globalSynthesis}
+            onChange={(e) => setGlobalSynthesis(e.target.value)}
+            rows={9}
+            placeholder="Ex: Carence en B12 confirmée, microbiome déséquilibré (faible diversité), inflammation latente. Prioriser anti-inflammatoire + soutien microbiote, supplémentation B12 méthylée…"
+            className="jrn-synthesis__textarea"
+          />
+          <div className="jrn-synthesis__hints">
+            <span className="jrn-synthesis__hint-pill">Priorités détectées</span>
+            <span className="jrn-synthesis__hint-pill">Axes nutritionnels</span>
+            <span className="jrn-synthesis__hint-pill">Points inflammatoires</span>
+            <span className="jrn-synthesis__hint-pill">Alertes croisées</span>
+          </div>
         </div>
       </div>
 
-      {/* ─── Synthese globale ─────────────────────────────────── */}
-      <div style={{ marginBottom: 'var(--jrn-6)' }}>
-        <p className="jrn-label">Synthèse globale Anissa</p>
-        <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 0, marginBottom: 'var(--jrn-3)' }}>
-          Vue d'ensemble : déficits identifiés, axes prioritaires, alertes croisées entre analyses. Sera injectée dans le prompt IA de génération du plan.
-        </p>
-        <textarea
-          value={globalSynthesis}
-          onChange={(e) => setGlobalSynthesis(e.target.value)}
-          rows={8}
-          placeholder="Ex: Carence en B12 confirmée, microbiome déséquilibré (faible diversité), inflammation latente. Prioriser anti-inflammatoire + soutien microbiote, supplémentation B12 méthylée…"
-          className="jrn-textarea"
-        />
-      </div>
-
-      <div className="jrn-actions">
-        <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : 'Valider et débloquer le plan nutritionnel'}
-        </button>
+      {/* ─── Bloc 4 : Validation ──────────────────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-actions" style={{ marginTop: 0 }}>
+          <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--hero">
+            {busy ? '…' : '✓ Valider et débloquer le plan nutritionnel →'}
+          </button>
+        </div>
       </div>
       <ErrorLine msg={err} />
     </section>
   );
 }
 
-// Carte d'une analyse (du plan ou externe)
-function ResultCard({ title, badge, badgeColor, value, synthesis, onValueChange, onSynthesisChange, editable, onTitleChange, onDelete }) {
-  const badgeStyle = badgeColor === 'accent'
-    ? { background: 'var(--jrn-accent-soft)', color: 'var(--jrn-accent)' }
-    : { background: 'rgba(0,0,0,0.05)', color: 'var(--jrn-text-muted)' };
+// BC.5D : Carte d'analyse refondue en cockpit d'interprétation clinique.
+// Header : titre + badge type + select category + select status (optimal/surveiller/prioritaire)
+// 2 sections séparées : Valeurs labo (monospace fond teinté) / Lecture clinique Anissa (éditorial)
+const CATEGORIES = [
+  { value: 'hormonal',    label: 'Hormonal' },
+  { value: 'microbiote',  label: 'Microbiote' },
+  { value: 'inflammation',label: 'Inflammation' },
+  { value: 'carence',     label: 'Carence' },
+  { value: 'metabolique', label: 'Métabolique' },
+  { value: 'autre',       label: 'Autre' },
+];
+const STATUSES = [
+  { value: 'optimal',     label: 'Optimal',      icon: '🟢' },
+  { value: 'surveiller',  label: 'À surveiller', icon: '🟡' },
+  { value: 'prioritaire', label: 'Prioritaire',  icon: '🔴' },
+];
 
+function ResultCard({
+  title, badge, badgeColor,
+  value, synthesis,
+  category, status,
+  onValueChange, onSynthesisChange,
+  onCategoryChange, onStatusChange,
+  editable, onTitleChange, onDelete,
+}) {
+  const statusClass = status ? `jrn-result-card--${status}` : '';
   return (
-    <div className="jpe-section">
-      <header className="jpe-section__head">
-        {editable ? (
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => onTitleChange(e.target.value)}
-            className="jpe-section__title"
-            placeholder="Nom de l'analyse"
-          />
-        ) : (
-          <span className="jpe-section__title" style={{ borderBottom: 'none', cursor: 'default' }}>{title}</span>
-        )}
-        <span style={{ ...badgeStyle, fontSize: 10, fontWeight: 600, padding: '4px 10px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap' }}>
-          {badge}
-        </span>
-        {onDelete && (
-          <button onClick={onDelete} className="jpe-section__icon-btn jpe-section__icon-btn--danger" title="Supprimer">🗑</button>
-        )}
+    <div className={`jrn-result-card ${statusClass}`}>
+      {/* Header : titre + badges source/category + status select */}
+      <header className="jrn-result-card__head">
+        <div className="jrn-result-card__head-left">
+          {editable ? (
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => onTitleChange(e.target.value)}
+              className="jrn-result-card__title-input"
+              placeholder="Nom de l'analyse"
+            />
+          ) : (
+            <h4 className="jrn-result-card__title">{title}</h4>
+          )}
+          <div className="jrn-result-card__head-badges">
+            <span className={`jrn-result-card__source jrn-result-card__source--${badgeColor || 'neutral'}`}>{badge}</span>
+            <select
+              value={category || ''}
+              onChange={(e) => onCategoryChange?.(e.target.value || null)}
+              className="jrn-result-card__select"
+              title="Catégorie de l'analyse"
+            >
+              <option value="">Catégorie…</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="jrn-result-card__head-right">
+          {status && (
+            <span className={`jrn-result-pill jrn-result-pill--${status}`}>
+              {STATUSES.find((s) => s.value === status)?.icon} {STATUSES.find((s) => s.value === status)?.label}
+            </span>
+          )}
+          <select
+            value={status || ''}
+            onChange={(e) => onStatusChange?.(e.target.value || null)}
+            className="jrn-result-card__select jrn-result-card__select--status"
+            title="Statut clinique"
+          >
+            <option value="">Statut…</option>
+            {STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>{s.icon} {s.label}</option>
+            ))}
+          </select>
+          {onDelete && (
+            <button onClick={onDelete} className="jrn-result-card__delete" title="Supprimer">🗑</button>
+          )}
+        </div>
       </header>
-      <div style={{ padding: 'var(--jrn-4) var(--jrn-5)', display: 'grid', gap: 'var(--jrn-3)' }}>
-        <div>
-          <label className="jrn-label">Valeur(s) / Résultat brut</label>
-          <textarea
-            value={value || ''}
-            onChange={(e) => onValueChange(e.target.value)}
-            rows={2}
-            className="jrn-textarea"
-            placeholder="Ex: B12 = 1200 pg/mL (norme 200-900), Vit D = 18 ng/mL…"
-            style={{ fontSize: 'var(--jrn-text-sm)' }}
-          />
-        </div>
-        <div>
-          <label className="jrn-label">Notes Anissa (interprétation, alertes)</label>
-          <textarea
-            value={synthesis || ''}
-            onChange={(e) => onSynthesisChange(e.target.value)}
-            rows={3}
-            className="jrn-textarea"
-            placeholder="Ex: B12 surdosée, surveiller. Vit D déficitaire → supplémentation prioritaire 4000 UI/j."
-            style={{ fontSize: 'var(--jrn-text-sm)' }}
-          />
-        </div>
+
+      {/* Section 1 : Valeurs laboratoire (compact, monospace, fond teinté) */}
+      <div className="jrn-result-card__values">
+        <label className="jrn-result-card__section-label">Valeurs laboratoire</label>
+        <textarea
+          value={value || ''}
+          onChange={(e) => onValueChange(e.target.value)}
+          rows={2}
+          className="jrn-result-card__values-textarea"
+          placeholder="Ex&nbsp;: B12 = 1200 pg/mL (norme 200-900) · Vit D = 18 ng/mL · Ferritine = 22 ng/mL…"
+        />
+      </div>
+
+      {/* Section 2 : Lecture clinique Anissa (éditorial, plus lisible) */}
+      <div className="jrn-result-card__interpretation">
+        <label className="jrn-result-card__section-label jrn-result-card__section-label--accent">Lecture clinique</label>
+        <textarea
+          value={synthesis || ''}
+          onChange={(e) => onSynthesisChange(e.target.value)}
+          rows={3}
+          className="jrn-result-card__interpretation-textarea"
+          placeholder="Profil compatible avec… Pistes nutritionnelles envisagées : magnésium, gestion glycémique, soutien circadien."
+        />
       </div>
     </div>
   );
