@@ -134,8 +134,76 @@
   display: flex;
   align-items: center;
   gap: var(--jrn-5);
-  min-width: 280px;
+  min-width: 320px;
   flex-shrink: 0;
+}
+/* BC.2 : avatar cliente (initiales sur disque vert Anissa).
+   42px diameter, gradient subtle, ring inset highlight, weight 600. */
+.jrn-header__avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--jrn-accent) 0%, #2B4A33 100%);
+  color: var(--jrn-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--jrn-font-ui);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  box-shadow:
+    0 2px 6px rgba(26, 46, 31, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 4px var(--jrn-surface);
+}
+.jrn-header__id {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Stats pills sous le nom (consultations, jour pack, dernier RDV) */
+.jrn-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.jrn-meta-chip {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  border: 1px solid var(--jrn-border-strong);
+  background: var(--jrn-surface);
+  color: var(--jrn-text-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+.jrn-meta-chip__icon {
+  font-size: 11px;
+  line-height: 1;
+}
+.jrn-meta-chip--gold {
+  background: var(--jrn-gold-soft);
+  color: var(--jrn-gold);
+  border-color: var(--jrn-gold-tint);
+}
+.jrn-meta-chip--accent {
+  background: var(--jrn-accent-soft);
+  color: var(--jrn-accent);
+  border-color: var(--jrn-accent-tint);
+}
+.jrn-meta-chip--neutral {
+  background: var(--jrn-bg-alt);
+  color: var(--jrn-text-soft);
+  border-color: var(--jrn-border);
 }
 .jrn-header__eyebrow {
   font-family: var(--jrn-font-ui);
@@ -319,10 +387,16 @@
 
 .jrn-body {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  /* BC.2 : sidebar 280 → 320 pour plus de présence cockpit */
+  grid-template-columns: 320px 1fr;
   align-items: start;
 }
 
+/* BC.2 (2026-05-11) : Sidebar premium V2.
+   Plus large (320 vs 280), steps plus hautes (14px vs 10px), numéros
+   en vrais badges (28x28 vs 22x22), hover lift subtle, active state
+   plus marqué avec accent border-left + shadow. Sensation protocole
+   clinique premium plutôt que liste de navigation admin. */
 .jrn-sidebar {
   padding: var(--jrn-8) var(--jrn-5);
   border-right: 1px solid var(--jrn-border);
@@ -335,49 +409,61 @@
 }
 .jrn-sidebar__label {
   font-family: var(--jrn-font-ui);
-  font-size: var(--jrn-text-xs);
-  font-weight: 500;
+  font-size: 10.5px;
+  font-weight: 600;
   color: var(--jrn-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin: 0 0 var(--jrn-3) var(--jrn-3);
+  letter-spacing: 0.16em;
+  margin: 0 0 var(--jrn-4) var(--jrn-3);
 }
 
 .jrn-step {
   display: flex;
   align-items: center;
   gap: var(--jrn-3);
-  padding: 10px 12px;
-  border-radius: var(--jrn-radius-sm);
-  margin-bottom: 2px;
+  padding: 14px 14px;
+  border-radius: var(--jrn-radius);
+  margin-bottom: 4px;
   font-family: var(--jrn-font-ui);
   font-size: var(--jrn-text-sm);
-  font-weight: 400;
+  font-weight: 500;
   color: var(--jrn-text-faint);
-  transition: background 140ms var(--jrn-ease);
+  transition: background 160ms var(--jrn-ease), color 160ms var(--jrn-ease), transform 160ms var(--jrn-ease);
+  position: relative;
 }
 .jrn-step__num {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 600;
-  background: rgba(0,0,0,0.04);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(40, 32, 20, 0.06);
   color: var(--jrn-text-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  transition: all 160ms var(--jrn-ease);
 }
 .jrn-step--active {
   background: var(--jrn-surface);
   color: var(--jrn-text);
-  font-weight: 500;
-  box-shadow: var(--jrn-shadow-sm);
+  font-weight: 600;
+  box-shadow:
+    0 1px 2px rgba(40, 32, 20, 0.04),
+    0 4px 12px rgba(40, 32, 20, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-left: 3px solid var(--jrn-accent);
+  padding-left: 11px;
 }
 .jrn-step--active .jrn-step__num {
   background: var(--jrn-accent);
   color: var(--jrn-surface);
+  box-shadow:
+    0 2px 6px rgba(26, 46, 31, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 .jrn-step--validated {
   color: var(--jrn-text-soft);
@@ -385,13 +471,15 @@
 .jrn-step--validated .jrn-step__num {
   background: var(--jrn-accent-soft);
   color: var(--jrn-accent);
+  border: 1px solid var(--jrn-accent-tint);
 }
 .jrn-step--skipped {
   color: var(--jrn-text-muted);
   font-style: italic;
 }
 .jrn-step--skipped .jrn-step__num {
-  background: rgba(0,0,0,0.03);
+  background: rgba(40, 32, 20, 0.04);
+  color: var(--jrn-text-faint);
 }
 
 /* AR.3 : bloc résumé statut cliente (sidebar bottom) */

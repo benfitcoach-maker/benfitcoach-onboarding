@@ -120,6 +120,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const journey = { ...DEFAULT_JOURNEY_STATE, ...(client.journey_state || {}) };
   const pack = PACK_DEFINITIONS[client.packType] || null;
   const prenom = client.prenom || client.form?.prenom || 'Cliente';
+  const nom = client.nom || client.form?.nom || '';
   const currentStep = journey.current_step || 'anamnesis';
 
   const stepStatuses = JOURNEY_STEPS.map((s) => ({ step: s, status: getStepStatus(journey, s) }));
@@ -132,26 +133,64 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const consultationsLog = Array.isArray(journey?.consultations_log) ? journey.consultations_log : [];
   const consultationsUsed = consultationsLog.length;
 
+  // BC.2 (2026-05-11) : helpers cockpit cliente
+  // Initiales pour avatar (FB depuis "Farid Benyahia", F si pas de nom)
+  const initials = (
+    (prenom?.[0] || '') + (nom?.[0] || '')
+  ).toUpperCase() || '?';
+  // Jour J du pack (depuis packStartedAt si dispo)
+  const daysSincePack = client.packStartedAt
+    ? Math.max(1, Math.floor((Date.now() - new Date(client.packStartedAt).getTime()) / 86400000) + 1)
+    : null;
+  // Dernière consultation effectuée (pour "dernier check-in")
+  const lastConsultation = consultationsLog.length > 0 ? consultationsLog[consultationsLog.length - 1] : null;
+  const daysSinceLastConsult = lastConsultation
+    ? Math.floor((Date.now() - new Date(lastConsultation.date).getTime()) / 86400000)
+    : null;
+
   const refresh = () => loadClient();
 
   return (
     <div className="jrn-page">
       {/* ─── Header ─────────────────────────────────────────────── */}
       <header className="jrn-header">
+        {/* BC.2 (2026-05-11) : header refondu en cockpit cliente.
+            Avatar initiales + bloc identité (nom complet + eyebrow méta)
+            + ligne stats pills (pack / consultations / jour pack / dernier check-in)
+            + progression à droite + actions. */}
         <div className="jrn-header__identity">
-          <div>
-            <p className="jrn-header__eyebrow">Parcours cliente</p>
-            <h1 className="jrn-header__name">{prenom}</h1>
+          <div className="jrn-header__avatar" aria-hidden="true">{initials}</div>
+          <div className="jrn-header__id">
+            <p className="jrn-header__eyebrow">
+              Parcours cliente{pack ? ` · ${pack.label}` : ''}
+            </p>
+            <h1 className="jrn-header__name">
+              {prenom}{nom ? ` ${nom}` : ''}
+            </h1>
+            <div className="jrn-header__meta">
+              {consultationsTotal > 0 && (
+                <span
+                  className="jrn-meta-chip jrn-meta-chip--gold"
+                  title={`${consultationsUsed} consultation${consultationsUsed > 1 ? 's' : ''} effectuée${consultationsUsed > 1 ? 's' : ''} sur ${consultationsTotal} incluse${consultationsTotal > 1 ? 's' : ''}`}
+                >
+                  <span className="jrn-meta-chip__icon">📅</span>
+                  {consultationsUsed} / {consultationsTotal} consultations
+                </span>
+              )}
+              {daysSincePack && (
+                <span className="jrn-meta-chip jrn-meta-chip--neutral" title={`Pack démarré le ${new Date(client.packStartedAt).toLocaleDateString('fr-CH')}`}>
+                  <span className="jrn-meta-chip__icon">📆</span>
+                  Jour {daysSincePack} du pack
+                </span>
+              )}
+              {daysSinceLastConsult !== null && (
+                <span className="jrn-meta-chip jrn-meta-chip--accent" title={`Dernière consultation : ${new Date(lastConsultation.date).toLocaleDateString('fr-CH')}`}>
+                  <span className="jrn-meta-chip__icon">✓</span>
+                  Dernier RDV {daysSinceLastConsult === 0 ? 'aujourd\'hui' : `il y a ${daysSinceLastConsult}j`}
+                </span>
+              )}
+            </div>
           </div>
-          {pack && <span className="jrn-header__pack">{pack.label}</span>}
-          {consultationsTotal > 0 && (
-            <span
-              className="jrn-header__consult"
-              title={`${consultationsUsed} consultation${consultationsUsed > 1 ? 's' : ''} effectuée${consultationsUsed > 1 ? 's' : ''} sur ${consultationsTotal} incluse${consultationsTotal > 1 ? 's' : ''} dans le pack`}
-            >
-              📅 {consultationsUsed}/{consultationsTotal}
-            </span>
-          )}
         </div>
 
         <div className="jrn-header__progress">
