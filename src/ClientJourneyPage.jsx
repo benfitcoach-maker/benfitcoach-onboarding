@@ -404,7 +404,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
           {currentStep === 'waiting_results' && <StepWaitingResults client={client} onChange={refresh} />}
           {currentStep === 'results' && <StepResults client={client} onChange={refresh} />}
           {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
-          {currentStep === 'plan_editing' && <StepPlanEditing client={client} onChange={refresh} />}
+          {currentStep === 'plan_editing' && <StepPlanEditing client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} />}
           {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} />}
         </main>
@@ -1661,9 +1661,36 @@ function StepPlanGeneration({ client, journey, onChange }) {
 // ÉTAPE 6 — ÉDITION DU PLAN (composer embed)
 // ═══════════════════════════════════════════════════════════════════
 
-function StepPlanEditing({ client, onChange }) {
+function StepPlanEditing({ client, journey, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [versionsCount, setVersionsCount] = useState(0);
+  const [, setRefreshTick] = useState(0); // re-render après save plan
+
+  // BC.5F : fetch nombre de versions pour pouvoir conditionner la validation.
+  // Une sauvegarde dans JourneyPlanEditor déclenche onPlanSaved → on refresh.
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNutritionConsultations } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        if (!cancelled) setVersionsCount(list.length);
+      } catch { /* silencieux */ }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id, journey]);
+
+  const handlePlanSaved = async () => {
+    // Refresh du compteur après une sauvegarde dans l'éditeur
+    try {
+      const { getNutritionConsultations } = await import('./store');
+      const list = getNutritionConsultations(client.id) || [];
+      setVersionsCount(list.length);
+      setRefreshTick((t) => t + 1);
+    } catch { /* silencieux */ }
+  };
 
   const handleValidate = async () => {
     if (!window.confirm('Valider le plan ?\n\nLe plan passe en étape Livraison.')) return;
@@ -1674,21 +1701,126 @@ function StepPlanEditing({ client, onChange }) {
     } catch (e) { setErr(e?.message || 'Erreur transition'); setBusy(false); }
   };
 
+  // BC.5F : contexte clinique mobilisé pour la composition (reuse de step 5)
+  const resultsData = journey?.results_data || { from_plan: [], external: [] };
+  const allResults = [
+    ...(resultsData.from_plan || []),
+    ...(resultsData.external || []),
+  ];
+  const statusCounts = allResults.reduce((acc, r) => {
+    if (r.status) acc[r.status] = (acc[r.status] || 0) + 1;
+    return acc;
+  }, {});
+  const categoryCounts = allResults.reduce((acc, r) => {
+    if (r.category) acc[r.category] = (acc[r.category] || 0) + 1;
+    return acc;
+  }, {});
+  const topCategories = Object.entries(categoryCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([key, count]) => {
+      const meta = CATEGORIES.find((c) => c.value === key);
+      return { value: key, label: meta?.label || key, icon: meta?.icon, count };
+    });
+  const hasClinicalContext = allResults.length > 0 || topCategories.length > 0;
+
   return (
     <section>
       <StepHead
         index={6}
-        title="Édition du plan"
-        intro="Génération IA, édition libre, sauvegarde. Une fois le plan finalisé, validez pour passer à la livraison."
+        title="Atelier de composition"
+        intro="Génère un brouillon IA, ré-écris librement, sauvegarde plusieurs versions. Une fois le protocole finalisé, valide pour passer à la livraison."
       />
 
-      <JourneyPlanEditor client={client} onPlanSaved={() => {}} />
+      {/* ─── Bloc 1 : Contexte clinique mobilisé ───────────────── */}
+      {hasClinicalContext && (
+        <div className="jrn-block">
+          <div className="jrn-block__head">
+            <span className="jrn-block__num">1</span>
+            <h3 className="jrn-block__title">Contexte clinique mobilisé</h3>
+          </div>
+          <p className="jrn-block__intro">
+            Voici les signaux que l'IA va croiser pour composer le protocole. Tu peux les réviser à l'étape 4 si besoin.
+          </p>
+          <div className="jrn-surface" style={{ padding: '20px 24px' }}>
+            <div className="jrn-prep__stats" style={{ marginBottom: topCategories.length > 0 ? 'var(--jrn-4)' : 0 }}>
+              {statusCounts.prioritaire > 0 && (
+                <div className="jrn-clinical-stat jrn-clinical-stat--prioritaire">
+                  <span className="jrn-clinical-stat__num">{statusCounts.prioritaire}</span>
+                  <span className="jrn-clinical-stat__label">🔴 Prioritaire{statusCounts.prioritaire > 1 ? 's' : ''}</span>
+                </div>
+              )}
+              {statusCounts.surveiller > 0 && (
+                <div className="jrn-clinical-stat jrn-clinical-stat--surveiller">
+                  <span className="jrn-clinical-stat__num">{statusCounts.surveiller}</span>
+                  <span className="jrn-clinical-stat__label">🟡 À surveiller</span>
+                </div>
+              )}
+              {statusCounts.optimal > 0 && (
+                <div className="jrn-clinical-stat jrn-clinical-stat--optimal">
+                  <span className="jrn-clinical-stat__num">{statusCounts.optimal}</span>
+                  <span className="jrn-clinical-stat__label">🟢 Optimal{statusCounts.optimal > 1 ? 'es' : ''}</span>
+                </div>
+              )}
+            </div>
+            {topCategories.length > 0 && (
+              <div className="jrn-prep__axes" style={{ marginTop: 0, paddingTop: Object.keys(statusCounts).length > 0 ? 'var(--jrn-4)' : 0, borderTop: Object.keys(statusCounts).length > 0 ? '1px dashed var(--jrn-border)' : 'none' }}>
+                <span className="jrn-prep__axes-label">Axes prioritaires</span>
+                <div className="jrn-prep__axes-list">
+                  {topCategories.map((cat) => (
+                    <span key={cat.value} className={`jrn-cat-pill jrn-cat-pill--${cat.value}`}>
+                      <span className="jrn-cat-pill__icon">{cat.icon}</span>
+                      {cat.label}
+                      <span className="jrn-cat-pill__count">·&nbsp;{cat.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-      <div className="jrn-actions">
-        <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : 'Valider le plan et passer à la livraison'}
-        </button>
+      {/* ─── Bloc 2 : Atelier d'édition (JourneyPlanEditor) ──── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{hasClinicalContext ? '2' : '1'}</span>
+          <h3 className="jrn-block__title">Atelier d'édition</h3>
+          {versionsCount > 0 && (
+            <div className="jrn-block__head-meta">
+              <span className="jrn-result-pill jrn-result-pill--optimal">{versionsCount} version{versionsCount > 1 ? 's' : ''} sauvegardée{versionsCount > 1 ? 's' : ''}</span>
+            </div>
+          )}
+        </div>
+        <p className="jrn-block__intro">
+          Génère un brouillon IA, ré-écris à la main, audite la cohérence clinique et sauvegarde autant de versions que nécessaire avant validation.
+        </p>
+        <JourneyPlanEditor client={client} onPlanSaved={handlePlanSaved} />
       </div>
+
+      {/* ─── Bloc 3 : Validation (conditionnelle au nb versions) ─ */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{hasClinicalContext ? '3' : '2'}</span>
+          <h3 className="jrn-block__title">Validation</h3>
+        </div>
+        <p className="jrn-block__intro">
+          {versionsCount === 0
+            ? 'Sauvegarde au moins une version du plan dans l\'atelier ci-dessus avant de valider. Tu pourras toujours revenir éditer après validation.'
+            : 'Le plan est prêt. Valide pour passer à la livraison (étape 7). Tu pourras toujours adapter le plan ensuite depuis le cockpit de suivi.'}
+        </p>
+        <div className="jrn-actions" style={{ marginTop: 0 }}>
+          <button
+            onClick={handleValidate}
+            disabled={busy || versionsCount === 0}
+            className="jrn-btn jrn-btn--hero"
+            title={versionsCount === 0 ? 'Sauvegarde une version dans l\'atelier avant de valider' : 'Valider le plan et passer à la livraison'}
+          >
+            {busy ? '…' : '✓ Valider le plan et passer à la livraison →'}
+          </button>
+        </div>
+      </div>
+
       <ErrorLine msg={err} />
     </section>
   );
