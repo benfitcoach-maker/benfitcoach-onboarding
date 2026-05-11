@@ -26,6 +26,7 @@ import AnalysisPlanCard from './AnalysisPlanCard';
 import JourneyPlanEditor from './JourneyPlanEditor';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import JourneyMessagesPanel from './JourneyMessagesPanel';
+import JourneyNotesPanel from './JourneyNotesPanel';
 import { getNutritionConsultations } from './store';
 import './styles/journey.css';
 
@@ -38,6 +39,8 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
   const [previewConsultation, setPreviewConsultation] = useState(null);
   // Phase AC : panel latéral messagerie SaaS ↔ cliente
   const [showMessages, setShowMessages] = useState(false);
+  // Phase AE : panel latéral notes internes Anissa
+  const [showNotes, setShowNotes] = useState(false);
 
   const openAppPreview = useCallback(async () => {
     if (!clientId) return;
@@ -183,6 +186,13 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
             💬 Messages
           </button>
           <button
+            onClick={() => setShowNotes(true)}
+            className="jrn-btn jrn-btn--soft"
+            title="Notes internes privées sur la cliente (jamais envoyées)"
+          >
+            📝 Notes
+          </button>
+          <button
             onClick={openAppPreview}
             className="jrn-btn jrn-btn--soft"
             title="Aperçu de ce que la cliente voit dans l'app"
@@ -240,6 +250,14 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
           <JourneyMessagesPanel
             client={client}
             onClose={() => setShowMessages(false)}
+          />
+        )}
+
+        {/* Phase AE : Panel notes internes Anissa (slide-in droite) */}
+        {showNotes && (
+          <JourneyNotesPanel
+            client={client}
+            onClose={() => setShowNotes(false)}
           />
         )}
 
@@ -910,8 +928,25 @@ function StepDelivery({ client, onChange }) {
         <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, marginBottom: 12, lineHeight: 1.55 }}>
           Le plan sera disponible sur l'app dès la publication. La cliente reçoit une notification.
         </p>
+
+        {/* Phase AD : guide enrichissement IA avant publish */}
+        <div style={{
+          padding: '10px 14px',
+          background: 'rgba(120, 80, 200, 0.06)',
+          border: '1px solid rgba(120, 80, 200, 0.18)',
+          borderRadius: 8,
+          marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#7e5ec7', marginBottom: 4, letterSpacing: '.02em' }}>
+            ✨ Astuce — enrichir avant publication
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--jrn-text-soft)', lineHeight: 1.55 }}>
+            Dans <strong>📱 Aperçu app</strong>, cliquez sur le bouton <strong>✨ Enrichir</strong> pour que l'IA ajoute une intro narrative personnalisée, des points clés et une signature pour la cliente. Recommandé pour la version V1 (livret fondateur).
+          </div>
+        </div>
+
         <p style={{ fontSize: 12, color: 'var(--jrn-text-muted)', margin: 0 }}>
-          → Cliquez sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser et publier.
+          → Cliquez sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser, enrichir et publier.
         </p>
       </div>
 
