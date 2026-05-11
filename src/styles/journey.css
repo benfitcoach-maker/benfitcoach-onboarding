@@ -92,6 +92,9 @@
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* L'app SaaS a un header position:fixed (~80px haut). En mode app-wide,
+     on doit pousser le contenu en dessous pour ne pas être recouvert. */
+  padding-top: 80px;
 }
 
 .jrn-header {
@@ -103,7 +106,8 @@
   justify-content: space-between;
   gap: var(--jrn-6);
   position: sticky;
-  top: 0;
+  /* Sticky se cale 80px sous le viewport top, juste en dessous du header SaaS fixed */
+  top: 80px;
   z-index: 10;
   backdrop-filter: saturate(140%) blur(8px);
 }
@@ -269,9 +273,11 @@
   padding: var(--jrn-8) var(--jrn-5);
   border-right: 1px solid var(--jrn-border);
   background: var(--jrn-surface-alt);
-  min-height: calc(100vh - 80px);
+  /* Hauteur viewport - header SaaS (80px) - header parcours (~80px) */
+  min-height: calc(100vh - 160px);
   position: sticky;
-  top: 80px;
+  /* Sticky sous le header SaaS (80px) + le header parcours (~80px) */
+  top: 160px;
 }
 .jrn-sidebar__label {
   font-family: var(--jrn-font-ui);
