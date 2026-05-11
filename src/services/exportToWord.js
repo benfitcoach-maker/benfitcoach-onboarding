@@ -43,6 +43,8 @@ import {
 import { saveAs } from "file-saver";
 // V92.5 : reuse extraction logique fiche frigo (sources multiples comme FicheFrigoPreview)
 import { extractFridgeDataFromSections, extractMeals, extractSupplements } from "../nutritionPdf";
+// Compliance (2026-05-11) : profil légal du praticien (source unique)
+import { PRACTITIONER_LEGAL_PROFILE, getPractitionerSignatureLine } from "./practitionerProfile";
 // V94.3 : parser canonical pour les entrees supplements (meme que jsPDF)
 import { parseSupplementEntriesStructured } from "./nutritionParsers";
 // V94.63 : parser unifie aliments interdits (partage avec FicheFrigoPreview + clientAppMapper)
@@ -1290,6 +1292,17 @@ export async function exportPlanToWord(client, consultation, finalText) {
   });
 
   // V93.0 : footer 3 colonnes (signature à gauche · pagination centre · "Confidentiel" droite)
+  // Compliance : ligne disclaimer juridique ajoutée au footer.
+  // Apparaît sur chaque page du contenu — pas dispositif médical.
+  const complianceDisclaimerPara = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 80, after: 0 },
+    children: [new TextRun({
+      text: PRACTITIONER_LEGAL_PROFILE.disclaimerShort,
+      font: "Calibri", size: 13, italics: true, color: COLORS.textMute,
+    })],
+  });
+
   const docFooter = new Footer({
     children: [
       new Table({
@@ -1344,6 +1357,7 @@ export async function exportPlanToWord(client, consultation, finalText) {
           ],
         })],
       }),
+      complianceDisclaimerPara,
     ],
   });
 
@@ -1372,10 +1386,26 @@ export async function exportPlanToWord(client, consultation, finalText) {
       children: [new TextRun({ text: "" })],
     }),
     pSpacer(280),
-    pCover("Anissa Deroubaix Nutrition", { size: 22, bold: true, color: COLORS.green }),
-    pCover("AB Coaching Sarl · Rue de Rive 28, 1260 Nyon", { size: 16, color: COLORS.textMute }),
+    pCover(PRACTITIONER_LEGAL_PROFILE.name, { size: 22, bold: true, color: COLORS.green }),
+    // Compliance : ligne signature avec titre exact (depuis practitionerProfile)
+    pCover(getPractitionerSignatureLine(), { size: 14, color: COLORS.textMute }),
+    pSpacer(120),
+    pCover(`${PRACTITIONER_LEGAL_PROFILE.company} · Rue de Rive 28, 1260 Nyon`, { size: 14, color: COLORS.textMute }),
+    pSpacer(120),
+    // Mention validation + date (compliance : supervision humaine visible)
+    pCover(`Plan validé le ${date}`, { size: 13, italic: true, color: COLORS.textMute }),
     pSpacer(280),
-    pCover("Document confidentiel — usage personnel uniquement", { size: 14, color: COLORS.textMute }),
+    // Disclaimer juridique complet (compliance : ne se substitue pas à un avis médical)
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      indent: { left: convertInchesToTwip(1.2), right: convertInchesToTwip(1.2) },
+      children: [new TextRun({
+        text: PRACTITIONER_LEGAL_PROFILE.disclaimer,
+        font: "Calibri", size: 13, italics: true, color: COLORS.textMute,
+      })],
+    }),
+    pSpacer(160),
+    pCover("Document confidentiel — usage personnel uniquement", { size: 12, color: COLORS.textMute }),
   ];
 
   // ─── DOCUMENT ASSEMBLY ────────────────────────────────────────

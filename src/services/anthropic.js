@@ -27,6 +27,8 @@
 //   // Reponse brute (data.content[0].text sans trim ni post-process)
 //   const raw = await callClaude({ system, user, raw: true });
 
+import { SYSTEM_PROMPT_VOCABULARY_GUARD, sanitizeText } from './complianceVocabulary';
+
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 const DEFAULT_MAX_TOKENS = 1500;
 
@@ -58,6 +60,12 @@ export function safeParseJson(text) {
 /**
  * Appelle Claude via le proxy /api/claude.
  *
+ * Compliance (2026-05-11) : par defaut, le guard vocabulaire clinique est
+ * injecté dans le system prompt pour éviter que l'IA dérive vers du
+ * vocabulaire pseudo-diagnostique (détecte, maladie, traitement...).
+ * Opt-out via `skipVocabularyGuard: true` pour les appels admin / hors
+ * domaine clinique (ex: extraction JSON, suggestions UI techniques).
+ *
  * @param {object} opts
  * @param {string} opts.system    - system prompt
  * @param {string} opts.user      - user message
@@ -66,6 +74,8 @@ export function safeParseJson(text) {
  * @param {boolean} [opts.parseJson=false] - parse + return JSON object (null si fail)
  * @param {boolean} [opts.raw=false] - return data.content?.[0]?.text sans trim
  * @param {boolean} [opts.trim=true] - trim le texte retourne (defaut true)
+ * @param {boolean} [opts.skipVocabularyGuard=false] - opt-out du guard clinique
+ * @param {boolean} [opts.sanitizeOutput=false] - applique sanitizeText sur la réponse (filet de sécurité supplémentaire si l'IA glisse malgré le guard)
  * @returns {Promise<string|object|null>}
  * @throws {ClaudeApiError} sur erreur HTTP/reseau
  */
@@ -77,7 +87,15 @@ export async function callClaude({
   parseJson = false,
   raw = false,
   trim = true,
+  skipVocabularyGuard = false,
+  sanitizeOutput = false,
 } = {}) {
+  // Compliance : injecte le guard vocabulaire à la source (au début du
+  // system prompt) sauf opt-out explicite. Plus fiable que de tout
+  // sanitizer en sortie.
+  const effectiveSystem = skipVocabularyGuard
+    ? system
+    : `${SYSTEM_PROMPT_VOCABULARY_GUARD}\n\n${system || ''}`.trim();
   // V96.35 : header x-fallback-key utile uniquement en dev/preview (le proxy
   // l'ignore en prod). Permet a Anissa de tester localement sans config Vercel.
   const apiKey = (() => {
@@ -94,7 +112,7 @@ export async function callClaude({
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system,
+        system: effectiveSystem,
         messages: [{ role: 'user', content: user }],
       }),
     });
@@ -118,6 +136,10 @@ export async function callClaude({
 
   let text = data?.content?.[0]?.text || '';
   if (trim) text = text.trim();
+
+  // Compliance : filet de sécurité supplémentaire — applique sanitizeText
+  // si demandé pour rattraper d'éventuelles dérives résiduelles.
+  if (sanitizeOutput && text) text = sanitizeText(text);
 
   if (parseJson) return safeParseJson(text);
   if (raw) return data;
