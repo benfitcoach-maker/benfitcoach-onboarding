@@ -368,45 +368,47 @@ function StepAnamnesis({ client, onChange }) {
         </button>
       </div>
 
-      {/* BA (2026-05-11) : envoi pré-questionnaire à la cliente — 2 modes
-          'Envoyer via l'app' si app_enabled : mail Bienvenue + lien /login
-          → la cliente s'authentifie et accède au questionnaire dans son timeline
-          'Envoyer par lien' : mail Gmail avec lien direct /questionnaire web */}
+      {/* BA (2026-05-11) — Envoi pré-questionnaire : 2 modes toujours visibles
+          (comme dans la création cliente AnissaClientForm V97.5).
+          Anissa choisit selon le profil cliente, pas selon un flag BDD.
+          - 📱 'Via l'app' : mail Bienvenue + lien /login (compte permanent)
+          - 📩 'Par lien' : mail Gmail avec lien direct /questionnaire web */}
       {(client.form?.email || client.email) && (
         <div style={{ marginTop: 'var(--jrn-6)', padding: 'var(--jrn-5)', background: 'var(--jrn-surface-alt)', border: '1px solid var(--jrn-border)', borderRadius: 'var(--jrn-radius)' }}>
           <div className="jrn-label">Envoyer le pré-questionnaire à la cliente</div>
           <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 6, marginBottom: 12, lineHeight: 1.55 }}>
-            Avant le RDV anamnèse, la cliente remplit un questionnaire court (5 min). 2 modes possibles :
+            Avant le RDV anamnèse, la cliente remplit un questionnaire court (5 min). Choisissez le mode d'envoi selon le profil cliente :
           </p>
           <div className="jrn-actions" style={{ marginTop: 0 }}>
-            {client.app_enabled && (
-              <button
-                onClick={async () => {
-                  const { openClientWelcomeAppMail } = await import('./services/sendClientQuestionnaire');
-                  openClientWelcomeAppMail(client);
-                }}
-                className="jrn-btn jrn-btn--primary"
-                title="Mail Bienvenue avec lien /login de l'app cliente. Plus premium, ancre la cliente dans l'écosystème app."
-              >
-                📱 Envoyer via l'app cliente
-              </button>
-            )}
+            <button
+              onClick={async () => {
+                const { openClientWelcomeAppMail } = await import('./services/sendClientQuestionnaire');
+                openClientWelcomeAppMail(client);
+              }}
+              className="jrn-btn jrn-btn--primary"
+              title="Mail Bienvenue avec lien /login de l'app cliente. La cliente garde un accès permanent à son espace (parcours, plan, suivi)."
+            >
+              📱 Envoyer via l'app cliente
+            </button>
             <button
               onClick={async () => {
                 const { openClientQuestionnaireMail } = await import('./services/sendClientQuestionnaire');
                 openClientQuestionnaireMail(client);
               }}
-              className={client.app_enabled ? 'jrn-btn jrn-btn--soft' : 'jrn-btn jrn-btn--primary'}
-              title="Mail Gmail avec lien direct vers le questionnaire web (pas besoin de compte app)"
+              className="jrn-btn jrn-btn--soft"
+              title="Mail Gmail avec lien direct vers le questionnaire web. La cliente remplit une seule fois, pas besoin de compte."
             >
               📩 Envoyer par lien email
             </button>
           </div>
-          {!client.app_enabled && (
-            <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-              ⓘ L'app cliente n'est pas activée pour cette cliente. Pour proposer le mode 'via l'app', activez-la depuis la fiche cliente (Profil).
+          <div style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 4px' }}>
+              <strong>📱 Via l'app</strong> : compte permanent avec timeline, notifications, suivi continu. Recommandé pour les suivis longs.
             </p>
-          )}
+            <p style={{ margin: 0 }}>
+              <strong>📩 Par lien</strong> : un seul questionnaire à remplir, pas de compte. Plus simple pour une consultation unique ou cliente non technophile.
+            </p>
+          </div>
         </div>
       )}
 
