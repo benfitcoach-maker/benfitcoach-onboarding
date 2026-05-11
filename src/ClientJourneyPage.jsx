@@ -1479,8 +1479,6 @@ function ResultCard({
 // ═══════════════════════════════════════════════════════════════════
 
 function StepPlanGeneration({ client, journey, onChange }) {
-  const synthesis = journey?.results_synthesis;
-  const skipped = journey?.analyses_skipped;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -1493,31 +1491,167 @@ function StepPlanGeneration({ client, journey, onChange }) {
     finally { setBusy(false); }
   };
 
+  // BC.5E (2026-05-11) : refonte étape 5 en cockpit de préparation premium.
+  // Au lieu d'un sas vide, on met en scène l'intelligence clinique qui va
+  // nourrir la composition du plan : contexte détecté + données dispo +
+  // preview de l'output IA.
+
+  const skipped = journey?.analyses_skipped;
+  const resultsData = journey?.results_data || { from_plan: [], external: [] };
+  const allResults = [
+    ...(resultsData.from_plan || []),
+    ...(resultsData.external || []),
+  ];
+  const globalSynthesis = journey?.results_data?.global_synthesis || journey?.results_synthesis || '';
+
+  // Statuts et catégories détectés depuis les analyses saisies
+  const statusCounts = allResults.reduce((acc, r) => {
+    if (r.status) acc[r.status] = (acc[r.status] || 0) + 1;
+    return acc;
+  }, {});
+  const categoryCounts = allResults.reduce((acc, r) => {
+    if (r.category) acc[r.category] = (acc[r.category] || 0) + 1;
+    return acc;
+  }, {});
+  const topCategories = Object.entries(categoryCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([key, count]) => {
+      const meta = CATEGORIES.find((c) => c.value === key);
+      return { value: key, label: meta?.label || key, icon: meta?.icon, count };
+    });
+  const hasContext = !skipped && (allResults.length > 0 || globalSynthesis);
+
+  // Données dispo pour la composition (sources d'input du plan)
+  const form = client.form || {};
+  const pack = PACK_DEFINITIONS[client.packType] || null;
+  const dataInputs = [
+    { key: 'anamnesis', label: 'Anamnèse', detail: 'Objectifs, symptômes, pathologies, mode de vie', available: !!(form.objectifs || form.symptomes || form.activite) },
+    { key: 'analyses', label: 'Analyses biologiques', detail: skipped ? 'Étape passée — pack sans analyses' : `${allResults.length} test${allResults.length > 1 ? 's' : ''} saisi${allResults.length > 1 ? 's' : ''}`, available: skipped || allResults.length > 0 },
+    { key: 'synthesis', label: 'Synthèse clinique', detail: globalSynthesis ? `${globalSynthesis.length} caractères` : 'Pas encore rédigée', available: !!globalSynthesis },
+    { key: 'pack', label: 'Pack acheté', detail: pack?.label || 'Sans pack défini', available: !!pack },
+  ];
+
   return (
     <section>
       <StepHead
         index={5}
-        title="Génération du plan"
-        intro="Le contexte est complet. Marquez cette étape une fois qu'un premier brouillon est en place. L'étape suivante ouvre l'éditeur intégré."
+        title="Composition du plan"
+        intro="Tu disposes maintenant de tout le contexte clinique. L'étape suivante ouvre l'atelier où l'IA générera un brouillon que tu pourras peaufiner."
       />
 
-      {(skipped || synthesis) && (
-        <div className="jrn-surface">
-          {skipped && <div style={{ marginBottom: synthesis ? 'var(--jrn-4)' : 0, color: 'var(--jrn-text-soft)' }}>↷ Étape Analyses passée — pack sans analyses.</div>}
-          {synthesis && (
-            <>
-              <div className="jrn-label">Synthèse résultats Anissa</div>
-              <div style={{ whiteSpace: 'pre-wrap', color: 'var(--jrn-text)', fontSize: 'var(--jrn-text-sm)' }}>{synthesis}</div>
-            </>
-          )}
+      {/* ─── Bloc 1 : Synthèse clinique détectée (conditionnel) ──── */}
+      {hasContext && (
+        <div className="jrn-block">
+          <div className="jrn-block__head">
+            <span className="jrn-block__num">1</span>
+            <h3 className="jrn-block__title">Synthèse clinique détectée</h3>
+          </div>
+          <p className="jrn-block__intro">
+            Voici ce que l'analyse a fait émerger. Ces signaux orienteront la composition du protocole.
+          </p>
+
+          <div className="jrn-surface">
+            {Object.keys(statusCounts).length > 0 && (
+              <div className="jrn-prep__stats">
+                {statusCounts.prioritaire > 0 && (
+                  <div className="jrn-clinical-stat jrn-clinical-stat--prioritaire">
+                    <span className="jrn-clinical-stat__num">{statusCounts.prioritaire}</span>
+                    <span className="jrn-clinical-stat__label">🔴 Prioritaire{statusCounts.prioritaire > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+                {statusCounts.surveiller > 0 && (
+                  <div className="jrn-clinical-stat jrn-clinical-stat--surveiller">
+                    <span className="jrn-clinical-stat__num">{statusCounts.surveiller}</span>
+                    <span className="jrn-clinical-stat__label">🟡 À surveiller</span>
+                  </div>
+                )}
+                {statusCounts.optimal > 0 && (
+                  <div className="jrn-clinical-stat jrn-clinical-stat--optimal">
+                    <span className="jrn-clinical-stat__num">{statusCounts.optimal}</span>
+                    <span className="jrn-clinical-stat__label">🟢 Optimal{statusCounts.optimal > 1 ? 'es' : ''}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {topCategories.length > 0 && (
+              <div className="jrn-prep__axes">
+                <span className="jrn-prep__axes-label">Axes prioritaires détectés</span>
+                <div className="jrn-prep__axes-list">
+                  {topCategories.map((cat) => (
+                    <span key={cat.value} className={`jrn-cat-pill jrn-cat-pill--${cat.value}`}>
+                      <span className="jrn-cat-pill__icon">{cat.icon}</span>
+                      {cat.label}
+                      <span className="jrn-cat-pill__count">·&nbsp;{cat.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {globalSynthesis && (
+              <div className="jrn-prep__synthesis">
+                <span className="jrn-label">Lecture clinique Anissa</span>
+                <p className="jrn-prep__synthesis-text">{globalSynthesis}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="jrn-actions">
-        <button onClick={handleMarkGenerated} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : 'Plan généré, passer à l\'édition'}
-        </button>
+      {/* ─── Bloc 2 : Données disponibles pour la composition ────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{hasContext ? '2' : '1'}</span>
+          <h3 className="jrn-block__title">Données disponibles</h3>
+        </div>
+        <p className="jrn-block__intro">
+          Voici les sources de contexte que l'IA mobilisera pour la composition.
+        </p>
+        <div className="jrn-input-list">
+          {dataInputs.map((it) => (
+            <div key={it.key} className={`jrn-input-item ${it.available ? 'jrn-input-item--ok' : 'jrn-input-item--missing'}`}>
+              <span className="jrn-input-item__check">{it.available ? '✓' : '○'}</span>
+              <div className="jrn-input-item__body">
+                <span className="jrn-input-item__label">{it.label}</span>
+                <span className="jrn-input-item__detail">{it.detail}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* ─── Bloc 3 : Ce que l'IA va composer (preview narrative) ─ */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{hasContext ? '3' : '2'}</span>
+          <h3 className="jrn-block__title">Ce que l'IA va composer</h3>
+        </div>
+        <p className="jrn-block__intro">
+          Le brouillon généré dans l'atelier suivant couvrira ces axes. Tu garderas la main pour ajuster, ré-écrire ou enrichir chaque section.
+        </p>
+        <ul className="jrn-output-list">
+          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Structure alimentaire</strong> · répartition journée, équivalences, exemples</li>
+          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Axes prioritaires personnalisés</strong> · adaptés aux signaux cliniques détectés</li>
+          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Recommandations ciblées</strong> · par catégorie (hormonal, microbiote, carences…)</li>
+          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Supplémentation potentielle</strong> · suggestions à valider</li>
+          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Conseils lifestyle</strong> · sommeil, stress, mouvement, ancrages quotidiens</li>
+        </ul>
+      </div>
+
+      {/* ─── Bloc 4 : CTA — Ouvrir l'atelier ──────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-actions" style={{ marginTop: 0 }}>
+          <button onClick={handleMarkGenerated} disabled={busy} className="jrn-btn jrn-btn--hero">
+            {busy ? '…' : '✨ Ouvrir l\'atelier de composition →'}
+          </button>
+        </div>
+        <p className="jrn-block__intro" style={{ marginTop: 'var(--jrn-3)', marginBottom: 0, fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+          L'éditeur intégré te permettra de générer un brouillon IA, le ré-écrire librement et le sauvegarder en plusieurs versions.
+        </p>
+      </div>
+
       <ErrorLine msg={err} />
     </section>
   );
