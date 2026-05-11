@@ -366,7 +366,7 @@ function StepAnamnesis({ client, onChange }) {
   };
 
   const handleValidate = async () => {
-    if (!minimallyFilled && !window.confirm('L\'anamnèse semble vide. Valider quand même ?\n\nLa cliente n\'a pas encore rempli le pré-questionnaire ou tu n\'as pas encore fait le RDV.')) return;
+    if (!minimallyFilled && !window.confirm('Continuer sans avoir reçu les réponses du pré-questionnaire ?\n\nLa cliente n\'a pas encore rempli le pré-questionnaire ou tu n\'as pas encore fait le RDV.')) return;
     setBusy(true); setErr(null);
     try {
       await transitions.validateAnamnesis(client.id);
@@ -549,7 +549,7 @@ function StepAnamnesis({ client, onChange }) {
         </p>
         <div className="jrn-actions" style={{ marginTop: 0 }}>
           <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
-            {busy ? '…' : (questionnaireReceived ? 'Valider l\'onboarding et passer aux analyses' : '⚠ Valider quand même (anamnèse vide)')}
+            {busy ? '…' : (questionnaireReceived ? 'Valider l\'onboarding et passer aux analyses' : 'Continuer le parcours →')}
           </button>
         </div>
       </div>
