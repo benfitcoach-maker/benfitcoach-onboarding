@@ -1667,6 +1667,12 @@ function StepPlanEditing({ client, journey, onChange }) {
   const [versions, setVersions] = useState([]);
   const versionsCount = versions.length;
 
+  // BC.5G.1 : Directive IA visible en permanence dans la sidebar.
+  // State + autosave debounced + suggestion auto-fill basée contexte cliente.
+  const [aiDirectives, setAiDirectives] = useState('');
+  const [aiDirectivesLoaded, setAiDirectivesLoaded] = useState(false);
+  const [savingDirectives, setSavingDirectives] = useState('idle'); // 'idle' | 'saving' | 'saved'
+
   // BC.5G : fetch la liste complète des versions (pas juste count) pour
   // afficher l'historique dans la sidebar contextuelle.
   useEffect(() => {
@@ -1677,10 +1683,43 @@ function StepPlanEditing({ client, journey, onChange }) {
         const { getNutritionConsultations } = await import('./store');
         const list = getNutritionConsultations(client.id) || [];
         if (!cancelled) setVersions(list);
+        // Charge la directive IA depuis la dernière consultation
+        const last = list[0];
+        if (!cancelled && !aiDirectivesLoaded) {
+          setAiDirectives(last?.aiDirectives || '');
+          setAiDirectivesLoaded(true);
+        }
       } catch { /* silencieux */ }
     })();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client?.id, journey]);
+
+  // Autosave debounced 1.5s — persiste la directive sur la dernière consultation
+  useEffect(() => {
+    if (!aiDirectivesLoaded || !client?.id) return;
+    const handle = setTimeout(async () => {
+      try {
+        setSavingDirectives('saving');
+        const { getNutritionConsultations, saveNutritionConsultation } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        const last = list[0];
+        if (last) {
+          await saveNutritionConsultation({ ...last, aiDirectives });
+          setSavingDirectives('saved');
+          setTimeout(() => setSavingDirectives('idle'), 1500);
+        } else {
+          // Pas encore de consultation : on garde la directive en mémoire,
+          // elle sera injectée à la première génération.
+          setSavingDirectives('idle');
+        }
+      } catch {
+        setSavingDirectives('idle');
+      }
+    }, 1500);
+    return () => clearTimeout(handle);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiDirectives]);
 
   const handlePlanSaved = async () => {
     // Refresh des versions après une sauvegarde dans l'éditeur
@@ -1722,6 +1761,51 @@ function StepPlanEditing({ client, journey, onChange }) {
       return { value: key, label: meta?.label || key, icon: meta?.icon, count };
     });
   const hasClinicalContext = allResults.length > 0 || topCategories.length > 0;
+
+  // BC.5G.1 : suggestion de directive IA basée sur le contexte cliente.
+  // Construit un texte structuré à partir de l'anamnèse + statuts + catégories.
+  const buildSuggestedDirective = () => {
+    const form = client?.form || {};
+    const pack = PACK_DEFINITIONS[client?.packType];
+    const lines = [];
+
+    // Pack + intro contextuelle
+    if (pack?.label) lines.push(`Pack : ${pack.label}.`);
+
+    // Objectifs
+    if (form.objectifs) lines.push(`Objectifs : ${form.objectifs.split('\n')[0].slice(0, 140)}.`);
+
+    // Pathologies / contraintes
+    if (form.pathologies) lines.push(`Contraintes médicales : ${form.pathologies.split('\n')[0].slice(0, 120)}.`);
+
+    // Allergies / aversions
+    if (form.allergies) lines.push(`Allergies : ${form.allergies.slice(0, 100)}.`);
+
+    // Top catégories (axes prioritaires)
+    if (topCategories.length > 0) {
+      const cats = topCategories.slice(0, 4).map((c) => c.label).join(', ').toLowerCase();
+      lines.push(`Axes prioritaires détectés : ${cats}.`);
+    }
+
+    // Marqueurs prioritaires
+    if (statusCounts.prioritaire > 0) {
+      lines.push(`${statusCounts.prioritaire} marqueur${statusCounts.prioritaire > 1 ? 's' : ''} prioritaire${statusCounts.prioritaire > 1 ? 's' : ''} à adresser en premier.`);
+    }
+
+    // Ton et approche par défaut
+    lines.push('');
+    lines.push('Approche : progressive, pédagogique, sans frustration.');
+    lines.push('Style : clinique premium, ton chaleureux mais rigoureux.');
+    lines.push('Inclure : structure journée, équivalences, conseils lifestyle, supplémentation suggérée à valider.');
+
+    return lines.join('\n');
+  };
+
+  const handleSuggestDirective = () => {
+    const suggested = buildSuggestedDirective();
+    if (aiDirectives && !window.confirm('Remplacer la directive actuelle par une suggestion construite depuis le contexte cliente ?')) return;
+    setAiDirectives(suggested);
+  };
 
   return (
     <section>
@@ -1796,6 +1880,37 @@ function StepPlanEditing({ client, journey, onChange }) {
 
         {/* ─── COLONNE DROITE : Cockpit contextuel sticky ───── */}
         <aside className="jrn-atelier-grid__side">
+          {/* BC.5G.1 : Directive IA — cerveau du protocole, toujours visible */}
+          <div className="jrn-side-card jrn-side-card--directive">
+            <div className="jrn-side-card__head">
+              <p className="jrn-side-card__label">
+                ✦ Directive IA
+              </p>
+              <span className={`jrn-side-card__save-status jrn-side-card__save-status--${savingDirectives}`}>
+                {savingDirectives === 'saving' && '⏳ Enregistrement…'}
+                {savingDirectives === 'saved' && '✓ Enregistré'}
+              </span>
+            </div>
+            <p className="jrn-side-card__sub-hint">
+              Le cerveau du protocole : ton, philosophie, contraintes, exclusions. Sera injecté dans toutes les générations IA.
+            </p>
+            <textarea
+              value={aiDirectives}
+              onChange={(e) => setAiDirectives(e.target.value)}
+              placeholder="Ex : approche douce, sans gluten, focus microbiote + fatigue, éviter restriction agressive, style pédagogique…"
+              rows={9}
+              className="jrn-side-directive__textarea"
+            />
+            <button
+              type="button"
+              onClick={handleSuggestDirective}
+              className="jrn-side-directive__suggest"
+              title="Construire une suggestion depuis l'anamnèse, le pack et les analyses"
+            >
+              ✨ Suggérer depuis le contexte cliente
+            </button>
+          </div>
+
           {/* Contexte clinique */}
           {hasClinicalContext && (
             <div className="jrn-side-card">
