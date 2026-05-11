@@ -299,15 +299,32 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
             <div className="jrn-plan-empty">
               <div className="jrn-plan-empty__icon">✦</div>
               <h4 className="jrn-plan-empty__title">Aucun brouillon généré pour le moment</h4>
-              <p className="jrn-plan-empty__hint">
-                L'IA va construire un premier brouillon à partir des sources de contexte que tu as renseignées :
-              </p>
-              <ul className="jrn-plan-empty__sources">
-                <li><span className="jrn-plan-empty__check">✓</span><strong>Anamnèse cliente</strong> · objectifs, symptômes, pathologies, mode de vie</li>
-                <li><span className="jrn-plan-empty__check">✓</span><strong>Analyses biologiques</strong> · résultats saisis + statuts cliniques</li>
-                <li><span className="jrn-plan-empty__check">✓</span><strong>Axes prioritaires détectés</strong> · catégories les plus présentes</li>
-                <li><span className="jrn-plan-empty__check">✓</span><strong>Directive IA</strong> · ton, philosophie, contraintes (sidebar droite)</li>
-              </ul>
+
+              <div className="jrn-plan-empty__cols">
+                {/* Colonne sources (input) */}
+                <div className="jrn-plan-empty__col">
+                  <p className="jrn-plan-empty__col-label">L'IA utilisera</p>
+                  <ul className="jrn-plan-empty__sources">
+                    <li><span className="jrn-plan-empty__check">✓</span><strong>Anamnèse</strong></li>
+                    <li><span className="jrn-plan-empty__check">✓</span><strong>Analyses biologiques</strong></li>
+                    <li><span className="jrn-plan-empty__check">✓</span><strong>Axes prioritaires</strong></li>
+                    <li><span className="jrn-plan-empty__check">✓</span><strong>Directive IA</strong></li>
+                  </ul>
+                </div>
+
+                {/* Colonne outputs (preview du brouillon) */}
+                <div className="jrn-plan-empty__col">
+                  <p className="jrn-plan-empty__col-label">Le brouillon contiendra</p>
+                  <ul className="jrn-plan-empty__outputs">
+                    <li><span className="jrn-plan-empty__dot">✦</span>Structure des repas</li>
+                    <li><span className="jrn-plan-empty__dot">✦</span>Timing nutritionnel</li>
+                    <li><span className="jrn-plan-empty__dot">✦</span>Supplémentation suggérée</li>
+                    <li><span className="jrn-plan-empty__dot">✦</span>Recommandations lifestyle</li>
+                    <li><span className="jrn-plan-empty__dot">✦</span>Fiches pratiques</li>
+                  </ul>
+                </div>
+              </div>
+
               <button onClick={() => setShowGenModal(true)} className="jrn-btn jrn-btn--hero jrn-plan-empty__cta">
                 ✨ Générer le premier brouillon
               </button>

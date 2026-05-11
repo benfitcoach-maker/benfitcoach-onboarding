@@ -315,14 +315,16 @@
   gap: 8px;
   font-family: var(--jrn-font-ui);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 800;                /* BC.5G.3 : 700 → 800 (plus contrasté) */
+  letter-spacing: 0.08em;          /* BC.5G.3 : 0.06 → 0.08 */
   text-transform: uppercase;
-  padding: 7px 14px;
+  padding: 8px 14px;
   border-radius: 999px;
   white-space: nowrap;
   border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.7),
+    0 1px 2px rgba(40, 32, 20, 0.04);
 }
 .jrn-status-pill__dot {
   width: 7px;
@@ -444,6 +446,23 @@
 .jrn-btn--hero:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* BC.5G.3 : variante 'locked' premium pour disabled — vert désaturé +
+   lock icon + signal visuel 'pas mort, juste pas encore prêt'. */
+.jrn-btn--hero-locked {
+  background: linear-gradient(180deg, rgba(26, 46, 31, 0.18) 0%, rgba(26, 46, 31, 0.14) 100%) !important;
+  color: rgba(26, 46, 31, 0.62) !important;
+  cursor: not-allowed !important;
+  border: 1px solid rgba(26, 46, 31, 0.12) !important;
+  box-shadow:
+    0 1px 2px rgba(26, 46, 31, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+.jrn-btn--hero-locked:hover {
+  background: linear-gradient(180deg, rgba(26, 46, 31, 0.20) 0%, rgba(26, 46, 31, 0.16) 100%) !important;
+  transform: none !important;
 }
 
 .jrn-btn--link {
@@ -1596,40 +1615,64 @@
   letter-spacing: -0.01em;
   line-height: 1.2;
 }
-.jrn-plan-empty__hint {
-  font-family: var(--jrn-font-body);
-  font-size: var(--jrn-text-base);
-  color: var(--jrn-text-soft);
-  line-height: 1.6;
-  margin: 0 auto var(--jrn-5);
-  max-width: 540px;
-}
-.jrn-plan-empty__sources {
-  list-style: none;
-  padding: 0;
+/* BC.5G.3 : empty state passe en 2 colonnes (input / output) pour
+   densifier le bloc central et réduire le vide vertical. */
+.jrn-plan-empty__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--jrn-5);
   margin: 0 auto var(--jrn-6);
+  max-width: 720px;
+  text-align: left;
+}
+@media (max-width: 640px) {
+  .jrn-plan-empty__cols {
+    grid-template-columns: 1fr;
+  }
+}
+.jrn-plan-empty__col {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 540px;
-  text-align: left;
 }
-.jrn-plan-empty__sources li {
+.jrn-plan-empty__col-label {
+  font-family: var(--jrn-font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--jrn-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin: 0 0 4px;
+}
+.jrn-plan-empty__sources,
+.jrn-plan-empty__outputs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+}
+.jrn-plan-empty__sources li,
+.jrn-plan-empty__outputs li {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background:
     linear-gradient(180deg, rgba(245, 240, 232, 0.4) 0%, rgba(245, 240, 232, 0.2) 100%);
   border: 1px solid var(--jrn-border);
   border-radius: var(--jrn-radius);
   font-family: var(--jrn-font-body);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13.5px;
+  line-height: 1.4;
   color: var(--jrn-text-soft);
 }
 .jrn-plan-empty__sources strong {
   font-weight: 700;
+  color: var(--jrn-text);
+}
+.jrn-plan-empty__outputs li {
   color: var(--jrn-text);
 }
 .jrn-plan-empty__check {
@@ -1645,10 +1688,17 @@
   justify-content: center;
   font-size: 12px;
   font-weight: 700;
-  margin-top: 1px;
+}
+.jrn-plan-empty__dot {
+  flex-shrink: 0;
+  color: var(--jrn-gold);
+  font-size: 14px;
+  font-weight: 700;
+  width: 18px;
+  text-align: center;
 }
 .jrn-plan-empty__cta {
-  /* Hérite de jrn-btn--hero, pas de override nécessaire */
+  /* Hérite de jrn-btn--hero */
 }
 
 /* ─── BC.5G : Atelier 2 colonnes (étape 6 Édition) ─────────────
@@ -1657,11 +1707,11 @@
 
 .jrn-atelier-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: var(--jrn-6);
   align-items: start;
 }
-@media (max-width: 1180px) {
+@media (max-width: 1200px) {
   .jrn-atelier-grid {
     grid-template-columns: 1fr;
   }
@@ -1688,7 +1738,7 @@
     linear-gradient(180deg, #FFFFFF 0%, #FDFBF6 100%);
   border: 1px solid rgba(40, 32, 20, 0.05);
   border-radius: var(--jrn-radius-lg);
-  padding: 18px 20px;
+  padding: 20px 22px;             /* BC.5G.3 : 18/20 → 20/22 (textarea respire) */
   box-shadow:
     0 0 0 1px rgba(40, 32, 20, 0.018),
     0 1px 2px rgba(40, 32, 20, 0.03),

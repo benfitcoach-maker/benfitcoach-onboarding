@@ -1852,10 +1852,12 @@ function StepPlanEditing({ client, journey, onChange }) {
               <button
                 onClick={handleValidate}
                 disabled={busy || versionsCount === 0}
-                className="jrn-btn jrn-btn--hero"
+                className={`jrn-btn jrn-btn--hero ${versionsCount === 0 ? 'jrn-btn--hero-locked' : ''}`}
                 title={versionsCount === 0 ? 'Sauvegarde une version dans l\'atelier avant de valider' : 'Valider le plan et passer à la livraison'}
               >
-                {busy ? '…' : '✓ Valider le plan et passer à la livraison →'}
+                {busy ? '…' : versionsCount === 0
+                  ? '🔒 Générez un brouillon pour valider'
+                  : '✓ Valider le plan et passer à la livraison →'}
               </button>
             </div>
           </div>
