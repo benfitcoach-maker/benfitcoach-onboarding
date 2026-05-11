@@ -14,27 +14,35 @@
    ───────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Couleurs — palette restreinte */
-  --jrn-bg:           #FAFAF7;
-  --jrn-bg-alt:       #F5F2EB;
-  --jrn-surface:      #FFFFFF;
-  --jrn-surface-alt:  #FAFAF7;
+  /* ─── Couleurs — palette upgraded V2 ──────────────────────────
+     Ivoire chaud (background) + blanc pur (cartes) + vert Anissa profond
+     (accent principal) + gold léger (highlights). Donne de la profondeur
+     entre fond et cartes pour la sensation premium. */
+  --jrn-bg:           #F4EFE5;       /* ivoire chaud (était #FAFAF7) */
+  --jrn-bg-alt:       #ECE5D6;       /* ivoire un peu plus foncé pour zones secondaires */
+  --jrn-surface:      #FFFFFF;       /* cartes : blanc pur */
+  --jrn-surface-alt:  #FBF8F1;       /* cartes secondaires (header bandeau, etc.) */
 
-  --jrn-text:         #0F0F0F;
-  --jrn-text-soft:    #5C5C5C;
-  --jrn-text-muted:   #9A9A9A;
-  --jrn-text-faint:   #C4C4C4;
+  --jrn-text:         #1A1A18;       /* presque noir avec touche chaude */
+  --jrn-text-soft:    #525049;       /* gris chaud (au lieu de gris froid) */
+  --jrn-text-muted:   #8E8A80;       /* metadata */
+  --jrn-text-faint:   #BDB8AA;       /* placeholder, faint labels */
 
-  --jrn-accent:       #1A2E1F;       /* vert Anissa */
+  --jrn-accent:       #1A2E1F;       /* vert Anissa (inchangé) */
   --jrn-accent-hover: #0F1F12;
-  --jrn-accent-soft:  rgba(26, 46, 31, 0.06);
-  --jrn-accent-tint:  rgba(26, 46, 31, 0.12);
+  --jrn-accent-soft:  rgba(26, 46, 31, 0.07);
+  --jrn-accent-tint:  rgba(26, 46, 31, 0.14);
 
-  --jrn-border:        rgba(15, 15, 15, 0.06);
-  --jrn-border-strong: rgba(15, 15, 15, 0.12);
+  /* Accent gold — touches premium discrètes (badges, séparateurs, CTAs secondaires) */
+  --jrn-gold:        #B8862A;
+  --jrn-gold-soft:   rgba(184, 134, 42, 0.08);
+  --jrn-gold-tint:   rgba(184, 134, 42, 0.16);
+
+  --jrn-border:        rgba(40, 32, 20, 0.07);
+  --jrn-border-strong: rgba(40, 32, 20, 0.14);
 
   --jrn-warn:    #B7791F;
-  --jrn-warn-bg: rgba(183, 121, 31, 0.08);
+  --jrn-warn-bg: rgba(183, 121, 31, 0.09);
   --jrn-error:   #B53A3A;
   --jrn-error-bg: rgba(181, 58, 58, 0.06);
 
@@ -43,15 +51,15 @@
   --jrn-font-body:    'Lexend Deca', 'Inter', system-ui, sans-serif;
   --jrn-font-ui:      'Inter', system-ui, sans-serif;
 
-  /* Tailles */
+  /* ─── Tailles upgraded V2 — plus généreuses ─────────────────── */
   --jrn-text-xs:    11px;
   --jrn-text-sm:    13px;
-  --jrn-text-base:  14px;
-  --jrn-text-md:    16px;
-  --jrn-text-lg:    18px;
-  --jrn-text-xl:    24px;
-  --jrn-text-2xl:   32px;
-  --jrn-text-3xl:   42px;
+  --jrn-text-base:  15px;       /* était 14, +1 pour plus de respiration */
+  --jrn-text-md:    17px;       /* était 16 */
+  --jrn-text-lg:    20px;       /* était 18 */
+  --jrn-text-xl:    26px;       /* était 24 */
+  --jrn-text-2xl:   34px;       /* était 32 */
+  --jrn-text-3xl:   46px;       /* était 42 — titres premium plus impactants */
 
   /* Espacements (4px base) */
   --jrn-1:  4px;
@@ -66,16 +74,16 @@
   --jrn-16: 64px;
   --jrn-20: 80px;
 
-  /* Radius */
-  --jrn-radius-sm: 6px;
-  --jrn-radius:    10px;
-  --jrn-radius-lg: 14px;
-  --jrn-radius-xl: 20px;
+  /* ─── Radius upgraded V2 — plus généreux pour aspect premium ── */
+  --jrn-radius-sm: 8px;       /* était 6 */
+  --jrn-radius:    14px;      /* était 10 */
+  --jrn-radius-lg: 20px;      /* était 14 */
+  --jrn-radius-xl: 28px;      /* était 20 */
 
-  /* Shadows — Linear-style subtle */
-  --jrn-shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.04);
-  --jrn-shadow:    0 4px 16px rgba(15, 15, 15, 0.06), 0 1px 3px rgba(15, 15, 15, 0.04);
-  --jrn-shadow-lg: 0 12px 40px rgba(15, 15, 15, 0.10), 0 2px 6px rgba(15, 15, 15, 0.04);
+  /* ─── Shadows upgraded V2 — teinte chaude + plus douces ─────── */
+  --jrn-shadow-sm: 0 1px 2px rgba(40, 32, 20, 0.05);
+  --jrn-shadow:    0 6px 20px rgba(40, 32, 20, 0.07), 0 1px 3px rgba(40, 32, 20, 0.04);
+  --jrn-shadow-lg: 0 18px 48px rgba(40, 32, 20, 0.12), 0 2px 8px rgba(40, 32, 20, 0.05);
 
   /* Transitions */
   --jrn-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -241,11 +249,38 @@
   background: var(--jrn-accent);
   color: var(--jrn-surface);
   font-weight: 500;
-  padding: 11px 20px;
+  padding: 13px 24px;
   font-size: var(--jrn-text-sm);
+  box-shadow: 0 1px 2px rgba(15, 25, 18, 0.08);
 }
 .jrn-btn--primary:hover:not(:disabled) {
   background: var(--jrn-accent-hover);
+  box-shadow: 0 4px 12px rgba(15, 25, 18, 0.18);
+}
+/* Variante "moment important" — gros CTA premium pour les transitions clés
+   (Plan livré, Valider analyses, Adopter ce plan…) */
+.jrn-btn--hero {
+  background: var(--jrn-accent);
+  color: var(--jrn-surface);
+  border: none;
+  font-family: var(--jrn-font-ui);
+  font-weight: 600;
+  padding: 18px 36px;
+  font-size: var(--jrn-text-md);
+  border-radius: var(--jrn-radius);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 4px rgba(15, 25, 18, 0.10), 0 8px 24px rgba(15, 25, 18, 0.08);
+  transition: all 160ms var(--jrn-ease);
+}
+.jrn-btn--hero:hover:not(:disabled) {
+  background: var(--jrn-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(15, 25, 18, 0.14), 0 12px 32px rgba(15, 25, 18, 0.14);
+}
+.jrn-btn--hero:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .jrn-btn--link {
@@ -354,16 +389,14 @@
 /* ─── Main ────────────────────────────────────────────────────────── */
 
 .jrn-main {
-  padding: var(--jrn-10) var(--jrn-12) var(--jrn-16);
+  /* AQ.2 : largeur cap pour aspect editorial premium (pas admin panel étalé) */
+  padding: var(--jrn-12) var(--jrn-12) var(--jrn-16);
   width: 100%;
-  /* Pleine largeur — pas de max-width. La sidebar fait 280px, le main prend
-     tout le reste de l'ecran. Lisibilite preservee via padding genereux. */
+  max-width: 1300px;
+  margin: 0 auto;
 }
 .jrn-main__inner {
-  /* Conteneur pour limiter la largeur de lecture sur les blocs textuels
-     (intro, kv, surfaces) sans contraindre les composants larges (textarea
-     plan, embeds). Appliquer .jrn-main__inner uniquement la ou la lisibilite
-     compte. */
+  /* Conteneur secondaire pour les blocs très textuels où la lisibilité prime */
   max-width: 920px;
 }
 
@@ -379,41 +412,49 @@
 .jrn-step-title {
   font-family: var(--jrn-font-display);
   font-size: var(--jrn-text-3xl);
+  font-style: italic;                  /* signature Anissa */
   font-weight: 500;
   color: var(--jrn-text);
-  margin: 0 0 var(--jrn-3);
-  letter-spacing: -0.015em;
-  line-height: 1.1;
+  margin: 0 0 var(--jrn-4);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
 }
 .jrn-step-intro {
   font-family: var(--jrn-font-body);
   font-size: var(--jrn-text-md);
   font-weight: 300;
   color: var(--jrn-text-soft);
-  line-height: 1.65;
-  margin: 0 0 var(--jrn-8);
-  max-width: 620px;
+  line-height: 1.7;
+  margin: 0 0 var(--jrn-10);          /* plus de respiration avant le contenu */
+  max-width: 680px;
 }
 
-/* ─── Surface (la carte hero d'une étape) ─────────────────────────── */
+/* ─── Surface (cartes premium) ────────────────────────────────────
+   AQ.3 : padding plus généreux + radius plus large + shadow douce
+   pour donner du poids visuel et de la profondeur (cartes blanches
+   qui ressortent du fond ivoire chaud). */
 
 .jrn-surface {
   background: var(--jrn-surface);
   border: 1px solid var(--jrn-border);
   border-radius: var(--jrn-radius-lg);
-  padding: var(--jrn-6);
+  padding: var(--jrn-8);                 /* était var(--jrn-6) — 32px au lieu de 24 */
+  box-shadow: var(--jrn-shadow-sm);      /* nouvelle ombre subtile */
 }
 .jrn-surface--quiet {
   background: transparent;
   border: 1px dashed var(--jrn-border-strong);
+  box-shadow: none;
 }
 .jrn-surface--accent {
   background: var(--jrn-accent-soft);
   border-color: transparent;
+  box-shadow: none;
 }
 .jrn-surface--warn {
   background: var(--jrn-warn-bg);
   border-color: rgba(183, 121, 31, 0.18);
+  box-shadow: none;
 }
 
 .jrn-label {

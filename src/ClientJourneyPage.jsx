@@ -896,8 +896,8 @@ function StepDelivery({ client, onChange }) {
         index={7}
         title="Livraison à la cliente"
         intro={isFirstVersion
-          ? 'Premier cycle : livret papier premium + activation app cliente. Le \"waouh effect\" est important — la cliente reçoit quelque chose de tangible.'
-          : 'Adaptation depuis le cycle précédent. Par défaut, on publie uniquement sur l\'app (pas de spam postal). Cochez ci-dessous pour générer aussi un nouveau document papier si le changement est majeur.'}
+          ? 'Votre cliente reçoit maintenant son protocole personnalisé et l\'accès à son espace de suivi. Un moment important du parcours.'
+          : 'Vous adaptez son protocole. Par défaut, le nouveau plan est publié sur son app — sa lecture quotidienne reste fluide. Activez le format papier ci-dessous si ce cycle marque un changement majeur.'}
       />
 
       {/* ─── Toggle papier ─────────────────────────────────────── */}
@@ -989,9 +989,10 @@ function StepDelivery({ client, onChange }) {
         </div>
       )}
 
-      <div className="jrn-actions">
-        <button onClick={handleDelivered} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : (includePaper ? 'Plan livré (papier + app), passer au suivi' : 'Plan publié sur app, passer au suivi')}
+      {/* Hero CTA — moment important : la livraison est une étape clé */}
+      <div style={{ marginTop: 'var(--jrn-10)', display: 'flex', justifyContent: 'center' }}>
+        <button onClick={handleDelivered} disabled={busy} className="jrn-btn--hero">
+          {busy ? 'Livraison…' : (includePaper ? '🎁 Confirmer la livraison (papier + app)' : '🎁 Confirmer la livraison')}
         </button>
       </div>
       <ErrorLine msg={err} />
