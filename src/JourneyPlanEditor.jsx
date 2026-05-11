@@ -598,12 +598,32 @@ function AutosaveIndicator({ state }) {
 }
 
 function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, onAdopt }) {
+  // BC.5G.6 : la directive est éditée dans la sidebar atelier (source unique).
+  // À l'ouverture, on refetch la dernière directive en BDD pour être à jour
+  // (la sidebar peut avoir été modifiée après le mount de JourneyPlanEditor).
   const [draftDirectives, setDraftDirectives] = useState(aiDirectives || '');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+
+  // Re-sync depuis la BDD au mount (catch les updates récents de la sidebar)
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNutritionConsultations } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        const last = list[0];
+        if (!cancelled && last?.aiDirectives) {
+          setDraftDirectives(last.aiDirectives);
+        }
+      } catch { /* silencieux */ }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id]);
   // Phase AN : composer beta profil-aware (digestif chronique, post-partum...)
   // Toggle persisté en localStorage par cliente. Détecte le profil clinique
   // depuis le form, injecte les modules MUST INCLUDE / INTERDITS spécifiques.
@@ -696,21 +716,24 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
 
         {!result && (
           <div className="jpe-modal__body">
-            <label className="jrn-label" htmlFor="gen-directives">
-              Directives pour l'IA (persistantes pour cette cliente)
-            </label>
-            <textarea
-              id="gen-directives"
-              value={draftDirectives}
-              onChange={(e) => setDraftDirectives(e.target.value)}
-              rows={6}
-              className="jrn-textarea"
-              placeholder="Ex : préférer les céréales sans gluten, intégrer 2 portions de poisson par semaine, exclure tous les édulcorants, axer sur l'énergie matinale…"
-              disabled={generating}
-            />
-            <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', lineHeight: 1.6 }}>
-              Ces directives sont sauvegardées avec la cliente et réutilisées à chaque génération. Elles s'ajoutent à l'anamnèse, aux objectifs et à la synthèse résultats déjà transmis à l'IA.
-            </p>
+            {/* BC.5G.6 : la directive vit dans la sidebar atelier (source unique).
+                Ici on affiche juste un récap en lecture seule pour confirmer
+                ce qui sera injecté dans la génération. */}
+            <div className="jpe-modal-directive-recap">
+              <div className="jpe-modal-directive-recap__head">
+                <span className="jpe-modal-directive-recap__label">✦ Directive IA utilisée</span>
+                <span className="jpe-modal-directive-recap__hint">éditable dans la sidebar atelier</span>
+              </div>
+              {draftDirectives ? (
+                <p className="jpe-modal-directive-recap__text">{draftDirectives}</p>
+              ) : (
+                <p className="jpe-modal-directive-recap__empty">
+                  Aucune directive personnalisée — la génération utilisera les sources standard
+                  (anamnèse, objectifs, analyses). Pour orienter le ton/style, renseigne la
+                  directive dans la sidebar de l'atelier.
+                </p>
+              )}
+            </div>
 
             {/* Phase AN + AU : toggle Composer beta — switch premium (au lieu de checkbox) */}
             <div className="jpe-composer-beta">

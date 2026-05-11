@@ -2897,6 +2897,59 @@
   background: var(--jrn-error-bg);
 }
 
+/* ─── BC.5G.6 : récap directive IA en lecture seule dans modal ─
+   La source unique est la sidebar atelier. La modal affiche juste
+   un récap pour confirmer ce qui sera injecté. */
+
+.jpe-modal-directive-recap {
+  background: var(--jrn-accent-soft);
+  border: 1px solid var(--jrn-accent-tint);
+  border-radius: var(--jrn-radius);
+  padding: 16px 18px;
+  margin-bottom: var(--jrn-5);
+}
+.jpe-modal-directive-recap__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.jpe-modal-directive-recap__label {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--jrn-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.jpe-modal-directive-recap__hint {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--jrn-text-muted);
+  font-style: italic;
+}
+.jpe-modal-directive-recap__text {
+  font-family: var(--jrn-font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--jrn-text);
+  margin: 0;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.jpe-modal-directive-recap__empty {
+  font-family: var(--jrn-font-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--jrn-text-soft);
+  font-style: italic;
+  margin: 0;
+}
+
 /* ─── Composer beta toggle (Phase AN) ─────────────────────────── */
 
 .jpe-composer-beta {
