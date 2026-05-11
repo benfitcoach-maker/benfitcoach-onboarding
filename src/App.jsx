@@ -990,7 +990,7 @@ function App() {
     );
 
     return (
-      <div className={`app anissa-theme${page === 'nutritionConsultation' ? ' app-wide' : ''}`}>
+      <div className={`app anissa-theme${page === 'nutritionConsultation' || page === 'clientJourney' ? ' app-wide' : ''}`}>
         <DesktopOnlyBanner />
         <Toast message={toast.message} visible={toast.visible} type={toast.type} />
         <VersionBadge />
