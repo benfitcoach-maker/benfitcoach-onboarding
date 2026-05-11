@@ -35,7 +35,13 @@ export const JOURNEY_STEPS = [
 ];
 
 export const STEP_META = {
-  anamnesis:       { index: 1, label: 'Anamnèse',          icon: '📋' },
+  // BB.1 (2026-05-11) : 'Anamnèse' → 'Onboarding'. La 1ère étape n'est plus
+  // juste 'vérifier l'anamnèse' mais l'onboarding complet : configurer le
+  // mode d'accompagnement (app, papier, poids, notifs) + envoyer le pré-
+  // questionnaire + recevoir les réponses + valider. Plus large et plus
+  // proche du workflow réel d'Anissa. Clé interne 'anamnesis' conservée pour
+  // backward compat (clientes existantes en BDD avec current_step='anamnesis').
+  anamnesis:       { index: 1, label: 'Onboarding',        icon: '🎯' },
   analyses:        { index: 2, label: 'Analyses',          icon: '🧪' },
   waiting_results: { index: 3, label: 'Attente résultats', icon: '⏳' },
   results:         { index: 4, label: 'Saisie résultats',  icon: '📥' },

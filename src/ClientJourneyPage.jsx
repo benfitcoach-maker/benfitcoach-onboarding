@@ -324,14 +324,49 @@ function ErrorLine({ msg }) {
 // ÉTAPE 1 — ANAMNÈSE
 // ═══════════════════════════════════════════════════════════════════
 
+// BB.2 (2026-05-11) : Étape 1 refondue en cockpit Onboarding (4 blocs).
+// Reflète le workflow réel d'Anissa :
+//   1. Configurer le mode d'accompagnement (app/papier/poids/notifs)
+//   2. Envoyer le pré-questionnaire
+//   3. Recevoir les réponses
+//   4. Valider l'onboarding (= passer aux analyses)
 function StepAnamnesis({ client, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [sendingQuestionnaire, setSendingQuestionnaire] = useState(null); // 'app' | 'link' | null
   const form = client.form || {};
+  const journey = client.journey_state || {};
+
+  // ─── Détection statuts ──────────────────────────────────────────
+  // Réponses reçues : le form a au moins un champ clé rempli (objectifs/symptômes/pathologies/activité)
   const minimallyFilled = !!(form.objectifs || form.symptomes || form.pathologies || form.activite);
+  const questionnaireSentAt = journey.questionnaire_sent_at || null;
+  const questionnaireMode = journey.questionnaire_mode || null; // 'app' | 'link'
+  const questionnaireReceived = minimallyFilled;
+
+  const handleSendQuestionnaire = async (mode) => {
+    setSendingQuestionnaire(mode);
+    setErr(null);
+    try {
+      const { openClientWelcomeAppMail, openClientQuestionnaireMail } = await import('./services/sendClientQuestionnaire');
+      if (mode === 'app') openClientWelcomeAppMail(client);
+      else openClientQuestionnaireMail(client);
+      // Track l'envoi dans journey_state
+      const { updateJourneyState } = await import('./services/journeyState');
+      await updateJourneyState(client.id, {
+        questionnaire_sent_at: new Date().toISOString(),
+        questionnaire_mode: mode,
+      });
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur envoi');
+    } finally {
+      setSendingQuestionnaire(null);
+    }
+  };
 
   const handleValidate = async () => {
-    if (!minimallyFilled && !window.confirm('L\'anamnèse semble incomplète. Valider quand même ?')) return;
+    if (!minimallyFilled && !window.confirm('L\'anamnèse semble vide. Valider quand même ?\n\nLa cliente n\'a pas encore rempli le pré-questionnaire ou tu n\'as pas encore fait le RDV.')) return;
     setBusy(true); setErr(null);
     try {
       await transitions.validateAnamnesis(client.id);
@@ -340,83 +375,228 @@ function StepAnamnesis({ client, onChange }) {
     finally { setBusy(false); }
   };
 
+  const hasEmail = !!(client.form?.email || client.email);
+
   return (
     <section>
       <StepHead
         index={1}
-        title="Anamnèse"
-        intro="L'entretien initial est la fondation du parcours. Vérifiez que les informations clés sont bien renseignées avant de poursuivre."
+        title="Onboarding cliente"
+        intro="Configurez l'expérience cliente, envoyez le pré-questionnaire, recueillez les réponses, puis validez pour lancer le parcours."
       />
 
-      <div className="jrn-surface">
-        <div className="jrn-label">Aperçu de l'anamnèse</div>
-        <div className="jrn-kv">
-          <div className="jrn-kv__k">Objectifs</div>
-          <div className={`jrn-kv__v ${form.objectifs ? '' : 'jrn-kv__v--empty'}`}>{form.objectifs || 'non renseigné'}</div>
-          <div className="jrn-kv__k">Symptômes</div>
-          <div className={`jrn-kv__v ${form.symptomes ? '' : 'jrn-kv__v--empty'}`}>{form.symptomes || 'non renseigné'}</div>
-          <div className="jrn-kv__k">Pathologies</div>
-          <div className={`jrn-kv__v ${form.pathologies ? '' : 'jrn-kv__v--empty'}`}>{form.pathologies || 'non renseigné'}</div>
-          <div className="jrn-kv__k">Activité</div>
-          <div className={`jrn-kv__v ${form.activite ? '' : 'jrn-kv__v--empty'}`}>{form.activite || 'non renseigné'}</div>
+      {/* ═══ BLOC 1 — Mode d'accompagnement ════════════════════════ */}
+      <div style={{ marginBottom: 'var(--jrn-6)' }}>
+        <p className="jrn-label">1 · Mode d'accompagnement</p>
+        <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+          Décide ici comment la cliente va vivre son parcours : app permanente, livraison papier, tracking poids. Ces choix peuvent être ajustés plus tard.
+        </p>
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--jrn-4)' }}>
+            <OnboardingOption
+              icon="📱"
+              title="App cliente"
+              description="Compte permanent avec timeline, notifications, suivi continu. Recommandé pour les suivis longs."
+              status={client.app_enabled ? 'active' : 'inactive'}
+              hint={client.app_enabled ? 'Activée — la cliente peut se connecter via /login' : 'Activable depuis le bouton Profil en haut'}
+            />
+            <OnboardingOption
+              icon="⚖️"
+              title="Suivi du poids"
+              description="La cliente saisit son poids dans son ressenti quotidien. Configurable étape 7 Livraison."
+              status="config-elsewhere"
+              hint="Configurer dans étape 7 Livraison (toggles tracking + visible)"
+            />
+            <OnboardingOption
+              icon="📦"
+              title="Plan papier"
+              description="Livret fondateur premium imprimé envoyé par poste. À confirmer étape 7 Livraison."
+              status="config-elsewhere"
+              hint="Configurer dans étape 7 Livraison (toggle papier)"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="jrn-actions">
-        <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : 'Valider l\'anamnèse'}
-        </button>
+      {/* ═══ BLOC 2 — Pré-questionnaire ════════════════════════════ */}
+      <div style={{ marginBottom: 'var(--jrn-6)' }}>
+        <p className="jrn-label">2 · Pré-questionnaire</p>
+        <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+          Envoie le questionnaire à la cliente. Elle remplit 5 minutes avant le RDV anamnèse.
+        </p>
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+          {!hasEmail && (
+            <p style={{ margin: 0, fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-warn)' }}>
+              ⚠ Cliente sans email — impossible d'envoyer. Renseignez l'email via Profil.
+            </p>
+          )}
+          {hasEmail && !questionnaireSentAt && (
+            <>
+              <div className="jrn-actions" style={{ marginTop: 0 }}>
+                <button
+                  onClick={() => handleSendQuestionnaire('app')}
+                  disabled={sendingQuestionnaire !== null}
+                  className="jrn-btn jrn-btn--primary"
+                  title="Mail Bienvenue + lien /login de l'app cliente. Compte permanent."
+                >
+                  {sendingQuestionnaire === 'app' ? 'Envoi…' : '📱 Envoyer via l\'app cliente'}
+                </button>
+                <button
+                  onClick={() => handleSendQuestionnaire('link')}
+                  disabled={sendingQuestionnaire !== null}
+                  className="jrn-btn jrn-btn--soft"
+                  title="Mail Gmail avec lien direct /questionnaire. Pas besoin de compte."
+                >
+                  {sendingQuestionnaire === 'link' ? 'Envoi…' : '📩 Envoyer par lien email'}
+                </button>
+              </div>
+              <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', lineHeight: 1.55 }}>
+                <strong>App</strong> = compte permanent (timeline + notifs + suivi). <strong>Lien</strong> = un seul questionnaire à remplir, pas de compte.
+              </p>
+            </>
+          )}
+          {hasEmail && questionnaireSentAt && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: 'var(--jrn-accent-soft)',
+                color: 'var(--jrn-accent)',
+                textTransform: 'uppercase',
+                letterSpacing: '.04em',
+              }}>
+                ✓ Envoyé {questionnaireMode === 'app' ? '— mode app' : '— mode lien'}
+              </span>
+              <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                le {new Date(questionnaireSentAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => handleSendQuestionnaire(questionnaireMode || 'app')}
+                disabled={sendingQuestionnaire !== null}
+                className="jrn-btn jrn-btn--ghost"
+                style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 12px' }}
+              >
+                ↻ Renvoyer
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* BA (2026-05-11) — Envoi pré-questionnaire : 2 modes toujours visibles
-          (comme dans la création cliente AnissaClientForm V97.5).
-          Anissa choisit selon le profil cliente, pas selon un flag BDD.
-          - 📱 'Via l'app' : mail Bienvenue + lien /login (compte permanent)
-          - 📩 'Par lien' : mail Gmail avec lien direct /questionnaire web */}
-      {(client.form?.email || client.email) && (
-        <div style={{ marginTop: 'var(--jrn-6)', padding: 'var(--jrn-5)', background: 'var(--jrn-surface-alt)', border: '1px solid var(--jrn-border)', borderRadius: 'var(--jrn-radius)' }}>
-          <div className="jrn-label">Envoyer le pré-questionnaire à la cliente</div>
-          <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 6, marginBottom: 12, lineHeight: 1.55 }}>
-            Avant le RDV anamnèse, la cliente remplit un questionnaire court (5 min). Choisissez le mode d'envoi selon le profil cliente :
-          </p>
-          <div className="jrn-actions" style={{ marginTop: 0 }}>
-            <button
-              onClick={async () => {
-                const { openClientWelcomeAppMail } = await import('./services/sendClientQuestionnaire');
-                openClientWelcomeAppMail(client);
-              }}
-              className="jrn-btn jrn-btn--primary"
-              title="Mail Bienvenue avec lien /login de l'app cliente. La cliente garde un accès permanent à son espace (parcours, plan, suivi)."
-            >
-              📱 Envoyer via l'app cliente
-            </button>
-            <button
-              onClick={async () => {
-                const { openClientQuestionnaireMail } = await import('./services/sendClientQuestionnaire');
-                openClientQuestionnaireMail(client);
-              }}
-              className="jrn-btn jrn-btn--soft"
-              title="Mail Gmail avec lien direct vers le questionnaire web. La cliente remplit une seule fois, pas besoin de compte."
-            >
-              📩 Envoyer par lien email
-            </button>
-          </div>
-          <div style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', lineHeight: 1.6 }}>
-            <p style={{ margin: '0 0 4px' }}>
-              <strong>📱 Via l'app</strong> : compte permanent avec timeline, notifications, suivi continu. Recommandé pour les suivis longs.
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>📩 Par lien</strong> : un seul questionnaire à remplir, pas de compte. Plus simple pour une consultation unique ou cliente non technophile.
-            </p>
-          </div>
+      {/* ═══ BLOC 3 — Réponses reçues ══════════════════════════════ */}
+      <div style={{ marginBottom: 'var(--jrn-6)' }}>
+        <p className="jrn-label">3 · Réponses reçues</p>
+        <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+          Les réponses arrivent quand la cliente soumet le formulaire (ou pendant le RDV si tu remplis manuellement).
+        </p>
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+          {questionnaireReceived ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', marginBottom: 'var(--jrn-3)' }}>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  background: 'var(--jrn-accent-soft)',
+                  color: 'var(--jrn-accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.04em',
+                }}>
+                  🟢 Reçu
+                </span>
+              </div>
+              <div className="jrn-kv">
+                <div className="jrn-kv__k">Objectifs</div>
+                <div className={`jrn-kv__v ${form.objectifs ? '' : 'jrn-kv__v--empty'}`}>{form.objectifs || 'non renseigné'}</div>
+                <div className="jrn-kv__k">Symptômes</div>
+                <div className={`jrn-kv__v ${form.symptomes ? '' : 'jrn-kv__v--empty'}`}>{form.symptomes || 'non renseigné'}</div>
+                <div className="jrn-kv__k">Pathologies</div>
+                <div className={`jrn-kv__v ${form.pathologies ? '' : 'jrn-kv__v--empty'}`}>{form.pathologies || 'non renseigné'}</div>
+                <div className="jrn-kv__k">Activité</div>
+                <div className={`jrn-kv__v ${form.activite ? '' : 'jrn-kv__v--empty'}`}>{form.activite || 'non renseigné'}</div>
+              </div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)' }}>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: 'rgba(184, 134, 38, 0.10)',
+                color: '#8a6722',
+                textTransform: 'uppercase',
+                letterSpacing: '.04em',
+              }}>
+                🟡 En attente
+              </span>
+              <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                Aucune réponse pour l'instant. La cliente n'a pas encore rempli le questionnaire.
+              </span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 'var(--jrn-3)' }}>
+      {/* ═══ BLOC 4 — Validation onboarding (CTA final) ═══════════ */}
+      <div style={{ marginBottom: 'var(--jrn-6)' }}>
+        <p className="jrn-label">4 · Validation</p>
+        <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+          Une fois le RDV anamnèse fait et les informations clés vérifiées, validez pour passer à l'étape Analyses.
+        </p>
+        <div className="jrn-actions" style={{ marginTop: 0 }}>
+          <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
+            {busy ? '…' : (questionnaireReceived ? 'Valider l\'onboarding et passer aux analyses' : '⚠ Valider quand même (anamnèse vide)')}
+          </button>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)', marginTop: 'var(--jrn-4)' }}>
         L'édition complète de l'anamnèse se fait via le bouton <strong>Profil</strong> en haut.
       </p>
       <ErrorLine msg={err} />
     </section>
+  );
+}
+
+// Bloc OnboardingOption — option avec icône, titre, description, statut
+function OnboardingOption({ icon, title, description, status, hint }) {
+  // status: 'active' | 'inactive' | 'config-elsewhere'
+  const badgeProps = {
+    active:           { label: 'Activé',         bg: 'var(--jrn-accent-soft)',     color: 'var(--jrn-accent)' },
+    inactive:         { label: 'Inactif',        bg: 'rgba(40,32,20,0.06)',         color: 'var(--jrn-text-muted)' },
+    'config-elsewhere':{ label: 'À configurer',  bg: 'rgba(184,134,38,0.10)',       color: '#8a6722' },
+  }[status] || { label: status, bg: 'rgba(0,0,0,0.05)', color: 'var(--jrn-text-muted)' };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--jrn-4)' }}>
+      <span style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-2)', marginBottom: 4, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--jrn-text)' }}>{title}</span>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 600,
+            padding: '3px 8px',
+            borderRadius: 999,
+            background: badgeProps.bg,
+            color: badgeProps.color,
+            textTransform: 'uppercase',
+            letterSpacing: '.04em',
+            whiteSpace: 'nowrap',
+          }}>
+            {badgeProps.label}
+          </span>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--jrn-text-soft)', lineHeight: 1.55 }}>{description}</div>
+        {hint && (
+          <div style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 4, fontStyle: 'italic' }}>{hint}</div>
+        )}
+      </div>
+    </div>
   );
 }
 
