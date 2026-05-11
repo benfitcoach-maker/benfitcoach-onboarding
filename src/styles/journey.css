@@ -107,6 +107,7 @@
   /* L'app SaaS a un header position:fixed (~80px haut). En mode app-wide,
      on doit pousser le contenu en dessous pour ne pas être recouvert. */
   padding-top: 80px;
+  /* Pas d'overflow-x:hidden ici : casserait position:sticky des sidebars */
 }
 
 /* BC.1a (2026-05-11) : Header parcours premium foundation.
@@ -2864,7 +2865,8 @@
 .jpe-menu--right {
   left: auto;
   right: 0;
-  min-width: 280px;
+  min-width: 240px;          /* BC.5G.9 : 280 → 240 (\u00e9vite d\u00e9bordement) */
+  max-width: calc(100vw - 32px);
 }
 @keyframes jpe-menu-pop {
   from { opacity: 0; transform: translateY(-4px); }
