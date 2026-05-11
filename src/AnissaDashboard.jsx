@@ -846,16 +846,9 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                   fontSize:'.85rem' }}>
                 {'\ud83d\udccb'} Voir l'historique
               </button>
-              {/* V86.5 : bouton Modifier l'anamnese disponible pour tous les clients
-                  (own ET shared). Pour les shared, onOpen pointe aussi vers anissaEditClient. */}
-              {onOpen && (
-                <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onOpen(client.id); }}
-                  style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
-                    background:'none', border:'none', color:'var(--text)', cursor:'pointer',
-                    fontSize:'.85rem' }}>
-                  {'\u270f\ufe0f'} Modifier l'anamn{'\u00e8'}se
-                </button>
-              )}
+              {/* AY (2026-05-11) — '✏️ Modifier l'anamnèse' SUPPRIMÉ du menu.
+                  Accès via le bouton 'Profil' du header parcours qui ouvre
+                  anissaEditClient avec le même résultat. */}
               <SendQuestionnaireButton client={client} />
               {/* AX.2 (2026-05-11) — '📱 Espace app cliente' SUPPRIMÉ du menu.
                   L'app cliente est maintenant gérée via le parcours :
@@ -887,100 +880,17 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                 </button>
               )}
 
-              {/* Séparateur */}
+              {/* AY (2026-05-11) — Items migrés dans le parcours étape 8 cockpit suivi :
+                  - '🔁 Générer plan de reprise' → bouton dans 'Cycle de suivi'
+                  - '🟢 Bilan reçu — Voir détail' → section PackReviewSection badge vert
+                  - '🟡 Bilan en attente' → section PackReviewSection badge ambre
+                  - '📋 Envoyer bilan 4 semaines' / '📋 Envoyer le bilan pack' →
+                    section PackReviewSection bouton primary
+                  Le menu Plus du dashboard est désormais focalisé sur les actions
+                  macro (voir historique, envoyer questionnaire, fix date remise, supprimer). */}
+
+              {/* Séparateur final avant Supprimer */}
               <div style={{ height:1, background:'rgba(255,255,255,.06)', margin:'4px 0' }} />
-
-              {/* Plan de reprise */}
-              {isReturn && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(false);
-                    onReturnPlan(client);
-                  }}
-                  style={{
-                    display:'block', width:'100%', textAlign:'left',
-                    padding:'10px 16px', background:'none', border:'none',
-                    color:'#60a5fa', cursor:'pointer', fontSize:'.85rem',
-                    transition:'background .15s',
-                    borderBottom:'1px solid rgba(255,255,255,.06)',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(96,165,250,.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background='none'}
-                >
-                  🔁 Générer plan de reprise
-                </button>
-              )}
-
-              {/* Badge statut bilan */}
-              {reviewStatus === 'submitted' && latestReview && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(false);
-                    onViewReview(latestReview, client);
-                  }}
-                  style={{
-                    display:'block', width:'100%', textAlign:'left',
-                    padding:'10px 16px', background:'none', border:'none',
-                    color:'#4ade80', cursor:'pointer', fontSize:'.85rem',
-                    transition:'background .15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(74,222,128,.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background='none'}
-                >
-                  🟢 Bilan reçu — Voir le détail
-                </button>
-              )}
-              {reviewStatus === 'sent' && (
-                <div style={{ padding:'8px 14px', fontSize:'.78rem',
-                  color:'#fbbf24', display:'flex', alignItems:'center', gap:6 }}>
-                  🟡 Bilan en attente
-                </div>
-              )}
-              {(reviewStatus === 'not_sent' || reviewStatus === 'loading') && (
-                <button
-                  onClick={handleSendReview}
-                  style={{
-                    display:'block', width:'100%', textAlign:'left',
-                    padding:'10px 16px', background:'none', border:'none',
-                    color:'var(--text)', cursor:'pointer', fontSize:'.85rem',
-                    transition:'background .15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(106,191,138,.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background='none'}
-                >
-                  📋 Envoyer bilan 4 semaines
-                </button>
-              )}
-
-              {isOwn && showSendBtn && (
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (sending) return;
-                    setMenuOpen(false);
-                    setSending(true);
-                    try {
-                      await onSendPackReview?.(client, nextStep);
-                    } finally {
-                      setSending(false);
-                    }
-                  }}
-                  disabled={sending}
-                  style={{
-                    display:'block', width:'100%', textAlign:'left',
-                    padding:'10px 16px', background:'none', border:'none',
-                    color: sending ? 'rgba(197,176,122,.4)' : '#c5b07a',
-                    cursor: sending ? 'not-allowed' : 'pointer',
-                    fontSize:'.85rem', transition:'background .15s',
-                  }}
-                  onMouseEnter={e => { if (!sending) e.currentTarget.style.background='rgba(197,176,122,.08)'; }}
-                  onMouseLeave={e => e.currentTarget.style.background='none'}
-                >
-                  {sending ? '⏳ Envoi...' : '📋 Envoyer le bilan'}
-                </button>
-              )}
 
               {isOwn && (
                 <button onClick={handleDelete}

@@ -31,7 +31,7 @@ import PremiumSwitch from './components/PremiumSwitch';
 import { getNutritionConsultations } from './store';
 import './styles/journey.css';
 
-export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
+export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onReturnPlan, onSendPackReview }) {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -294,7 +294,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile }) {
           {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'plan_editing' && <StepPlanEditing client={client} onChange={refresh} />}
           {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} />}
-          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} />}
+          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} />}
         </main>
       </div>
     </div>
@@ -1024,7 +1024,7 @@ function StepDelivery({ client, onChange }) {
 // ÉTAPE 8 — SUIVI
 // ═══════════════════════════════════════════════════════════════════
 
-function StepFollowup({ client, journey, onChange, onExit }) {
+function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendPackReview }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [feedbacks, setFeedbacks] = useState([]);
@@ -1357,7 +1357,7 @@ function StepFollowup({ client, journey, onChange, onExit }) {
             )}
           </div>
 
-          {/* ─── Section : actions de cycle ─────────────────────── */}
+          {/* ─── Section : actions de cycle (AY : enrichie) ─────── */}
           <div style={{ marginBottom: 'var(--jrn-6)' }}>
             <p className="jrn-label">Cycle de suivi</p>
             <div className="jrn-actions">
@@ -1370,13 +1370,28 @@ function StepFollowup({ client, journey, onChange, onExit }) {
                 {adapting ? 'Adaptation IA…' : '✨ Adapter le plan depuis les ressentis'}
               </button>
               <button onClick={handleRestartEditing} disabled={busy} className="jrn-btn jrn-btn--soft">
-                Éditer le plan manuellement
+                Éditer manuellement
               </button>
+              {/* AY : Plan de reprise (migré du menu Plus du dashboard) */}
+              {onReturnPlan && (
+                <button
+                  onClick={() => onReturnPlan(client)}
+                  disabled={busy}
+                  className="jrn-btn jrn-btn--ghost"
+                  title="Génère un plan de reprise IA après une pause (vacances, événement, rechute)"
+                >
+                  🔁 Plan de reprise
+                </button>
+              )}
             </div>
             <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-              Cycle : Adapter → Éditer (étape 6) → Republier (étape 7) → retour ici.
+              Cycle : Adapter → Éditer (étape 6) → Republier (étape 7) → retour ici. Plan de reprise = relance après pause.
             </p>
           </div>
+
+          {/* ─── Section : Bilan pack 4 semaines (AY : migré du menu Plus) ─── */}
+          <PackReviewSection client={client} onSendPackReview={onSendPackReview} />
+
 
           {/* ─── Section : historique des versions ──────────────── */}
           {versions.length > 0 && (
@@ -1760,6 +1775,151 @@ function Sparkline({ entries }) {
         <span>{sorted[0]?.date ? new Date(sorted[0].date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' }) : ''}</span>
         <span style={{ color: 'var(--jrn-text-soft)' }}>min {min.toFixed(1)} · max {max.toFixed(1)}</span>
         <span>{sorted[sorted.length - 1]?.date ? new Date(sorted[sorted.length - 1].date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' }) : ''}</span>
+      </div>
+    </div>
+  );
+}
+
+// AY : section Bilan pack 4 semaines — migrée du menu Plus du dashboard.
+// Affiche le statut du prochain bilan dû selon le pack (S4 / S8 / S12 / S24)
+// + bouton d'envoi + résumé du bilan reçu si déjà soumis.
+function PackReviewSection({ client, onSendPackReview }) {
+  const [status, setStatus] = useState('loading'); // loading | none | sent | submitted
+  const [latestReview, setLatestReview] = useState(null);
+  const [nextStep, setNextStep] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ getCycleReviews }, { getNextPendingStep, canSendPackReview }] = await Promise.all([
+          import('./store'),
+          import('./services/packSystem'),
+        ]);
+        const reviews = await getCycleReviews(client.id);
+        if (cancelled) return;
+        const next = getNextPendingStep(client);
+        setNextStep(next);
+        const sortedReviews = Array.isArray(reviews) ? [...reviews].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) : [];
+        const submitted = sortedReviews.find((r) => r.status === 'submitted');
+        const sent = sortedReviews.find((r) => r.status === 'sent');
+        if (submitted) {
+          setStatus('submitted');
+          setLatestReview(submitted);
+        } else if (sent) {
+          setStatus('sent');
+          setLatestReview(sent);
+        } else if (next && canSendPackReview(next)) {
+          setStatus('none');
+        } else {
+          setStatus('none');
+        }
+      } catch {
+        if (!cancelled) setStatus('none');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client]);
+
+  const handleSend = async () => {
+    if (!nextStep || !onSendPackReview) return;
+    setSending(true);
+    setErr(null);
+    try {
+      await onSendPackReview(client, nextStep);
+      setStatus('sent');
+    } catch (e) {
+      setErr(e?.message || 'Erreur envoi bilan');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (status === 'loading') return null;
+  // Si pas de pack de suivi détecté → on cache la section
+  const isFollowupPack = !!client?.packType?.startsWith('suivi');
+  if (!isFollowupPack) return null;
+
+  return (
+    <div style={{ marginBottom: 'var(--jrn-6)' }}>
+      <p className="jrn-label">Bilan 4 semaines</p>
+      <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+        {status === 'submitted' && latestReview && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: 'var(--jrn-accent-soft)',
+                color: 'var(--jrn-accent)',
+                textTransform: 'uppercase',
+                letterSpacing: '.04em',
+              }}>🟢 Bilan reçu</span>
+              <span style={{ fontSize: 12, color: 'var(--jrn-text-muted)' }}>
+                {latestReview.created_at ? new Date(latestReview.created_at).toLocaleDateString('fr-CH') : ''}
+              </span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', margin: 0 }}>
+              La cliente a soumis son bilan {latestReview.step_number ? `S${latestReview.step_number}` : ''}. Lecture du détail disponible via l'historique cliente.
+            </p>
+          </>
+        )}
+
+        {status === 'sent' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: 'rgba(184, 134, 38, 0.10)',
+                color: '#8a6722',
+                textTransform: 'uppercase',
+                letterSpacing: '.04em',
+              }}>🟡 Bilan en attente</span>
+              {latestReview?.created_at && (
+                <span style={{ fontSize: 12, color: 'var(--jrn-text-muted)' }}>
+                  envoyé le {new Date(latestReview.created_at).toLocaleDateString('fr-CH')}
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', margin: 0 }}>
+              Le bilan a été envoyé à la cliente. En attente de sa soumission.
+            </p>
+          </>
+        )}
+
+        {status === 'none' && nextStep && (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', margin: '0 0 12px' }}>
+              Prochain bilan : <strong>{nextStep.label || `S${nextStep.stepNumber}`}</strong>
+              {nextStep.dueDate && (
+                <span style={{ color: 'var(--jrn-text-muted)' }}> · à envoyer {new Date(nextStep.dueDate).toLocaleDateString('fr-CH')}</span>
+              )}
+            </p>
+            <button
+              onClick={handleSend}
+              disabled={sending || !onSendPackReview}
+              className="jrn-btn jrn-btn--primary"
+            >
+              {sending ? 'Envoi…' : `📋 Envoyer bilan ${nextStep.label || `S${nextStep.stepNumber}`}`}
+            </button>
+          </>
+        )}
+
+        {status === 'none' && !nextStep && (
+          <p style={{ fontSize: 13, color: 'var(--jrn-text-muted)', margin: 0, fontStyle: 'italic' }}>
+            Aucun bilan en attente pour ce cycle.
+          </p>
+        )}
+
+        {err && <div className="jrn-error" style={{ marginTop: 10 }}>⚠ {err}</div>}
       </div>
     </div>
   );

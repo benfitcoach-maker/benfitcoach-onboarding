@@ -1371,6 +1371,8 @@ function App() {
               setPage('dashboard');
             }}
             onEditProfile={() => handleEditClientProfile(clientId)}
+            onReturnPlan={handleReturnPlan}
+            onSendPackReview={handleSendPackReview}
           />
         )}
 

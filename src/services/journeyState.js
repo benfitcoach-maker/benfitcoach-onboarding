@@ -189,10 +189,35 @@ export const transitions = {
     current_step: 'delivery',
   }),
   // Etape 7 → 8
-  markDelivered: (clientId) => updateJourneyState(clientId, {
-    delivered: true,
-    current_step: 'followup',
-  }),
+  // AY (2026-05-11) : en plus du journey_state, on update aussi les champs
+  // pack côté client (packStartedAt + packStartedAtConfirmed) pour que la
+  // timeline pack du dashboard (S4 → S24) se déclenche automatiquement.
+  // Avant : il fallait cliquer 'Marquer comme remis' séparément. Maintenant :
+  // valider la livraison étape 7 → timeline + cockpit suivi automatiques.
+  markDelivered: async (clientId) => {
+    const now = new Date().toISOString();
+    const next = await updateJourneyState(clientId, {
+      delivered: true,
+      current_step: 'followup',
+      delivered_at: now,
+    });
+    // Update pack delivery flags pour activer la timeline dashboard
+    try {
+      await supabase
+        .from('clients')
+        .update({
+          packStartedAt: now,
+          packStartedAtConfirmed: true,
+        })
+        .eq('id', clientId);
+    } catch (e) {
+      // Pas bloquant : le journey_state est déjà mis à jour. La timeline
+      // peut être activée manuellement via 'Modifier la date de remise' du menu Plus.
+      // eslint-disable-next-line no-console
+      console.warn('[markDelivered] Could not update pack flags:', e?.message);
+    }
+    return next;
+  },
   // Etape 8 (terminal)
   startFollowup: (clientId) => updateJourneyState(clientId, {
     followup_started: true,
