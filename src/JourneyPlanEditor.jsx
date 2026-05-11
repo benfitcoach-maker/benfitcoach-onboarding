@@ -989,7 +989,7 @@ function PlanSection({ index, title, content, onTitleChange, onContentChange, on
             ⋯
           </button>
           {optionsOpen && (
-            <div className="jpe-menu">
+            <div className="jpe-menu jpe-menu--right">
               <button onClick={() => { onInsertAfter(); setOptionsOpen(false); }} className="jpe-menu__item">
                 ＋ Ajouter une section après
               </button>
