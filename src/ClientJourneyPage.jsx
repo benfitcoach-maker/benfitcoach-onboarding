@@ -774,28 +774,71 @@ function StepAnalyses({ client, journey, onChange }) {
         intro="Suggestion IA d'analyses pertinentes selon l'anamnèse et le pack acheté. À vous de valider ou d'écarter chaque proposition."
       />
 
-      {hasPlan === null && <div style={{ color: 'var(--jrn-text-muted)' }}>Vérification…</div>}
+      {/* BC.5B : structure en blocs numérotés style étape 1 (Onboarding) */}
 
-      {hasPlan === false && (
-        <div className="jrn-actions">
-          <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
-            Lancer la suggestion IA
-          </button>
-          <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
-            Passer cette étape
-          </button>
+      {/* ─── Bloc 1 : Plan d'analyses ────────────────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">1</span>
+          <h3 className="jrn-block__title">Plan d'analyses</h3>
         </div>
-      )}
+        <p className="jrn-block__intro">
+          {hasPlan === false
+            ? 'Lance la suggestion IA pour proposer un plan d\'analyses adapté à l\'anamnèse. Tu valideras ensuite chaque test individuellement avant prescription.'
+            : hasPlan === true
+            ? 'Le plan d\'analyses est en place. Vérifie les tests sélectionnés ci-dessous avant validation.'
+            : 'Chargement du statut…'}
+        </p>
 
+        {hasPlan === null && (
+          <div className="jrn-surface jrn-surface--quiet">
+            <div className="jrn-empty">
+              <div className="jrn-empty__icon">⏳</div>
+              <p className="jrn-empty__title">Vérification en cours</p>
+              <p className="jrn-empty__hint">Chargement du plan d'analyses de la cliente…</p>
+            </div>
+          </div>
+        )}
+
+        {hasPlan === false && (
+          <div className="jrn-surface jrn-surface--quiet">
+            <div className="jrn-empty">
+              <div className="jrn-empty__icon">🧪</div>
+              <p className="jrn-empty__title">Aucun plan d'analyses</p>
+              <p className="jrn-empty__hint">
+                L'IA va proposer des tests en croisant l'anamnèse, le pack acheté et les axes prioritaires. Tu garderas la main pour valider, écarter ou ajouter.
+              </p>
+              <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
+                <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
+                  ✨ Lancer la suggestion IA
+                </button>
+                <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
+                  Passer cette étape
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {hasPlan === true && <AnalysisPlanCard clientId={client.id} />}
+      </div>
+
+      {/* ─── Bloc 2 : Validation (si plan en place) ─────────────── */}
       {hasPlan === true && (
-        <>
-          <AnalysisPlanCard clientId={client.id} />
-          <div className="jrn-actions">
-            <button onClick={handleValidate} disabled={savingTransition} className="jrn-btn jrn-btn--primary">
-              {savingTransition ? '…' : 'Valider et passer en attente résultats'}
+        <div className="jrn-block">
+          <div className="jrn-block__head">
+            <span className="jrn-block__num">2</span>
+            <h3 className="jrn-block__title">Validation</h3>
+          </div>
+          <p className="jrn-block__intro">
+            Une fois les tests vérifiés, valide pour passer en attente des résultats.
+          </p>
+          <div className="jrn-actions" style={{ marginTop: 0 }}>
+            <button onClick={handleValidate} disabled={savingTransition} className="jrn-btn jrn-btn--hero">
+              {savingTransition ? '…' : 'Valider et passer en attente résultats →'}
             </button>
           </div>
-        </>
+        </div>
       )}
 
       <ErrorLine msg={savePlanError} />
@@ -839,13 +882,73 @@ function StepWaitingResults({ client, onChange }) {
         intro="Les analyses sont chez la cliente ou au laboratoire. Le plan nutritionnel reste verrouillé jusqu'à réception des résultats."
       />
 
-      <AnalysisPlanCard clientId={client.id} />
+      {/* BC.5C : narration timeline visuelle + bloc actions */}
 
-      <div className="jrn-actions">
-        <button onClick={handleReceived} disabled={busy} className="jrn-btn jrn-btn--primary">
-          {busy ? '…' : 'Marquer les résultats comme reçus'}
-        </button>
+      {/* ─── Bloc 1 : Timeline d'envoi ────────────────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">1</span>
+          <h3 className="jrn-block__title">Statut d'envoi</h3>
+        </div>
+        <p className="jrn-block__intro">
+          La cliente a reçu sa prescription. Voici le parcours type des analyses.
+        </p>
+
+        <div className="jrn-surface">
+          <ol className="jrn-timeline">
+            <li className="jrn-timeline__item jrn-timeline__item--done">
+              <span className="jrn-timeline__dot">✓</span>
+              <div>
+                <div className="jrn-timeline__title">Prescription remise</div>
+                <p className="jrn-timeline__hint">Liste des analyses transmise à la cliente.</p>
+              </div>
+            </li>
+            <li className="jrn-timeline__item jrn-timeline__item--active">
+              <span className="jrn-timeline__dot">⏳</span>
+              <div>
+                <div className="jrn-timeline__title">Prélèvement & laboratoire</div>
+                <p className="jrn-timeline__hint">La cliente effectue les prélèvements. Le labo renvoie les résultats sous 5–10 jours.</p>
+              </div>
+            </li>
+            <li className="jrn-timeline__item">
+              <span className="jrn-timeline__dot">•</span>
+              <div>
+                <div className="jrn-timeline__title">Réception résultats</div>
+                <p className="jrn-timeline__hint">Une fois les résultats reçus, tu pourras les saisir et débloquer le plan nutritionnel.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
       </div>
+
+      {/* ─── Bloc 2 : Plan d'analyses rappel ──────────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">2</span>
+          <h3 className="jrn-block__title">Plan d'analyses prescrit</h3>
+        </div>
+        <p className="jrn-block__intro">
+          Récapitulatif des tests demandés. Sert de référence pour la saisie à l'étape suivante.
+        </p>
+        <AnalysisPlanCard clientId={client.id} />
+      </div>
+
+      {/* ─── Bloc 3 : Action — Marquer reçus ──────────────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">3</span>
+          <h3 className="jrn-block__title">Réception</h3>
+        </div>
+        <p className="jrn-block__intro">
+          Dès que la cliente t'a transmis ses résultats (PDF, papier, ou par mail), marque comme reçu pour ouvrir l'étape de saisie.
+        </p>
+        <div className="jrn-actions" style={{ marginTop: 0 }}>
+          <button onClick={handleReceived} disabled={busy} className="jrn-btn jrn-btn--hero">
+            {busy ? '…' : '✓ Marquer les résultats comme reçus'}
+          </button>
+        </div>
+      </div>
+
       <ErrorLine msg={err} />
     </section>
   );
@@ -1313,20 +1416,12 @@ function StepDelivery({ client, onChange }) {
           Le plan sera disponible sur l'app dès la publication. La cliente reçoit une notification.
         </p>
 
-        {/* Configuration suivi du poids — synchronisé avec étape 8 cockpit */}
-        <div style={{
-          padding: '12px 14px',
-          background: 'rgba(45, 90, 61, 0.04)',
-          border: '1px solid rgba(45, 90, 61, 0.12)',
-          borderRadius: 8,
-          marginBottom: 12,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--jrn-text)' }}>
-                ⚖️ Suivi du poids
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 2, lineHeight: 1.5 }}>
+        {/* BC.5A : configuration suivi du poids — utilise jrn-inline-card accent */}
+        <div className="jrn-inline-card jrn-inline-card--accent">
+          <div className="jrn-inline-card__row">
+            <div className="jrn-inline-card__body">
+              <div className="jrn-inline-card__title">⚖️ Suivi du poids</div>
+              <div className="jrn-inline-card__hint">
                 Si activé + visible : la cliente saisit son poids dans son ressenti quotidien.
               </div>
             </div>
@@ -1334,23 +1429,15 @@ function StepDelivery({ client, onChange }) {
           </div>
         </div>
 
-        {/* Phase AD : guide enrichissement IA avant publish */}
-        <div style={{
-          padding: '10px 14px',
-          background: 'rgba(120, 80, 200, 0.06)',
-          border: '1px solid rgba(120, 80, 200, 0.18)',
-          borderRadius: 8,
-          marginBottom: 12,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#7e5ec7', marginBottom: 4, letterSpacing: '.02em' }}>
-            ✨ Astuce — enrichir avant publication
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--jrn-text-soft)', lineHeight: 1.55 }}>
+        {/* BC.5A : guide enrichissement IA — palette gold (au lieu de violet hors palette) */}
+        <div className="jrn-inline-card jrn-inline-card--gold">
+          <div className="jrn-inline-card__title">✨ Astuce — enrichir avant publication</div>
+          <div className="jrn-inline-card__hint">
             Dans <strong>📱 Aperçu app</strong>, cliquez sur le bouton <strong>✨ Enrichir</strong> pour que l'IA ajoute une intro narrative personnalisée, des points clés et une signature pour la cliente. Recommandé pour la version V1 (livret fondateur).
           </div>
         </div>
 
-        <p style={{ fontSize: 12, color: 'var(--jrn-text-muted)', margin: 0 }}>
+        <p className="jrn-inline-card__cta-hint">
           → Cliquez sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser, enrichir et publier.
         </p>
       </div>

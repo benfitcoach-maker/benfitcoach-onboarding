@@ -887,6 +887,244 @@
   font-style: italic;
 }
 
+/* ─── BC.5A : Inline card — bandeau d'info contextuel à l'intérieur d'une jrn-surface ─
+   Remplace les inline styles divergents (rgba violet, rgba vert custom) par
+   un composant cohérent avec la palette. Utilisable en accent (vert) ou gold. */
+
+.jrn-inline-card {
+  padding: 14px 16px;
+  border-radius: var(--jrn-radius);
+  margin-bottom: var(--jrn-3);
+  border: 1px solid transparent;
+}
+.jrn-inline-card--accent {
+  background: var(--jrn-accent-soft);
+  border-color: var(--jrn-accent-tint);
+}
+.jrn-inline-card--gold {
+  background: var(--jrn-gold-soft);
+  border-color: var(--jrn-gold-tint);
+}
+.jrn-inline-card--neutral {
+  background: var(--jrn-bg-alt);
+  border-color: var(--jrn-border-strong);
+}
+.jrn-inline-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--jrn-3);
+  flex-wrap: wrap;
+}
+.jrn-inline-card__body {
+  flex: 1;
+  min-width: 200px;
+}
+.jrn-inline-card__title {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-sm);
+  font-weight: 700;
+  color: var(--jrn-text);
+  letter-spacing: 0.01em;
+  margin-bottom: 4px;
+}
+.jrn-inline-card--gold .jrn-inline-card__title {
+  color: var(--jrn-gold);
+}
+.jrn-inline-card--accent .jrn-inline-card__title {
+  color: var(--jrn-accent);
+}
+.jrn-inline-card__hint {
+  font-family: var(--jrn-font-body);
+  font-size: 13px;
+  color: var(--jrn-text-soft);
+  line-height: 1.55;
+  margin: 0;
+}
+.jrn-inline-card__hint strong {
+  font-weight: 600;
+  color: var(--jrn-text);
+}
+.jrn-inline-card__cta-hint {
+  font-family: var(--jrn-font-body);
+  font-size: 13px;
+  color: var(--jrn-text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.jrn-inline-card__cta-hint strong {
+  font-weight: 600;
+  color: var(--jrn-text);
+}
+
+/* ─── BC.5A : Empty state — composant unifié pour zones vides ───
+   Remplace les <p muted> inline. Sensation premium clinique. */
+
+.jrn-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--jrn-8) var(--jrn-6);
+  gap: var(--jrn-3);
+}
+.jrn-empty__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--jrn-bg-alt);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--jrn-text-muted);
+  border: 1px solid var(--jrn-border-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+}
+.jrn-empty__title {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-base);
+  font-weight: 600;
+  color: var(--jrn-text);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+.jrn-empty__hint {
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-sm);
+  color: var(--jrn-text-muted);
+  margin: 0;
+  max-width: 520px;
+  line-height: 1.55;
+}
+
+/* ─── BC.5A : Step block — bloc numéroté style étape 1 (Onboarding)
+   Réutilisable pour structurer les autres étapes (Analyses, Génération, etc) */
+
+.jrn-block {
+  margin-bottom: var(--jrn-8);
+}
+.jrn-block__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--jrn-3);
+}
+.jrn-block__num {
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--jrn-text-muted);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.jrn-block__title {
+  font-family: var(--jrn-font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--jrn-text);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.jrn-block__intro {
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-base);
+  color: var(--jrn-text-soft);
+  line-height: 1.6;
+  margin: 0 0 var(--jrn-4);
+  max-width: 760px;
+}
+
+/* ─── BC.5C : Timeline verticale (étapes de progression narrative) ─
+   Utilisée dans StepWaitingResults pour visualiser prescription → labo →
+   réception. Dot avec border, ligne verticale entre les dots. */
+
+.jrn-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--jrn-5);
+}
+.jrn-timeline__item {
+  display: flex;
+  gap: var(--jrn-4);
+  align-items: flex-start;
+  position: relative;
+  color: var(--jrn-text-muted);
+}
+.jrn-timeline__item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 38px;
+  bottom: -22px;
+  width: 2px;
+  background: var(--jrn-border-strong);
+  border-radius: 2px;
+}
+.jrn-timeline__dot {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--jrn-bg-alt);
+  border: 1px solid var(--jrn-border-strong);
+  color: var(--jrn-text-muted);
+  font-size: 14px;
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
+}
+.jrn-timeline__item--done {
+  color: var(--jrn-text-soft);
+}
+.jrn-timeline__item--done .jrn-timeline__dot {
+  background: var(--jrn-accent-soft);
+  border-color: var(--jrn-accent-tint);
+  color: var(--jrn-accent);
+}
+.jrn-timeline__item--done:not(:last-child)::after {
+  background: linear-gradient(180deg, var(--jrn-accent-tint) 0%, var(--jrn-border-strong) 100%);
+}
+.jrn-timeline__item--active {
+  color: var(--jrn-text);
+}
+.jrn-timeline__item--active .jrn-timeline__dot {
+  background: linear-gradient(135deg, var(--jrn-gold) 0%, #C49538 100%);
+  border-color: var(--jrn-gold-tint);
+  color: var(--jrn-surface);
+  box-shadow:
+    0 2px 6px rgba(184, 134, 42, 0.28),
+    0 0 0 3px var(--jrn-gold-soft);
+  animation: jrn-pulse-gold-soft 2.4s ease-in-out infinite;
+}
+@keyframes jrn-pulse-gold-soft {
+  0%, 100% { box-shadow: 0 2px 6px rgba(184, 134, 42, 0.28), 0 0 0 3px var(--jrn-gold-soft); }
+  50%      { box-shadow: 0 2px 8px rgba(184, 134, 42, 0.35), 0 0 0 5px var(--jrn-gold-soft); }
+}
+.jrn-timeline__title {
+  font-family: var(--jrn-font-ui);
+  font-size: var(--jrn-text-base);
+  font-weight: 600;
+  color: var(--jrn-text);
+  margin: 6px 0 0;
+  letter-spacing: -0.005em;
+}
+.jrn-timeline__hint {
+  font-family: var(--jrn-font-body);
+  font-size: var(--jrn-text-sm);
+  color: var(--jrn-text-soft);
+  line-height: 1.55;
+  margin: 4px 0 0;
+  max-width: 540px;
+}
+
 /* ─── Action bar (boutons en bas d'étape) ─────────────────────────── */
 
 .jrn-actions {
