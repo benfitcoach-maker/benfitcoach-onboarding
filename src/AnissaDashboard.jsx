@@ -447,57 +447,10 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
               </div>
             )}
 
-            {/* V96.28 — Etat "Programme à remettre" — clinique pro */}
-            {isFollowupPack && !isDelivered && !showDeliveryModal && (
-              <div style={{
-                marginBottom: 12,
-                padding: '14px 16px',
-                borderRadius: 12,
-                background: 'linear-gradient(135deg, rgba(197,176,122,.06) 0%, rgba(197,176,122,.02) 100%)',
-                border: '1px solid rgba(197,176,122,.18)',
-                display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
-              }}>
-                <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 36, height: 36, borderRadius: 10,
-                    background: 'rgba(197,176,122,.12)',
-                    border: '1px solid rgba(197,176,122,.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '1.1rem', flexShrink: 0,
-                  }}>
-                    {'\ud83d\udce6'}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '.82rem', fontWeight: 600, color: '#d8c89a', marginBottom: 2, letterSpacing: '.01em' }}>
-                      Programme à remettre
-                    </div>
-                    <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,.45)', lineHeight: 1.45 }}>
-                      Le suivi clinique démarre dès la remise. Marquer la date pour activer la timeline.
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeliveryDateInput(new Date().toISOString().slice(0, 10));
-                    setShowDeliveryModal(true);
-                  }}
-                  style={{
-                    padding: '9px 16px', borderRadius: 9, border: '1px solid rgba(197,176,122,.4)',
-                    background: 'rgba(197,176,122,.15)', color: '#e0cd96',
-                    fontSize: '.76rem', fontWeight: 600, cursor: 'pointer',
-                    whiteSpace: 'nowrap', letterSpacing: '.02em',
-                    transition: 'all .15s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(197,176,122,.22)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(197,176,122,.15)'; }}
-                >
-                  Marquer comme remis
-                </button>
-              </div>
-            )}
+            {/* AX.1 (2026-05-11) — Encart 'Programme à remettre' + bouton
+                'Marquer comme remis' SUPPRIMÉ. L'étape 7 Livraison du parcours
+                gère ça avec plus de contexte (papier vs app, checklist, date).
+                Règle produit : dashboard = actions macro / parcours = opérations. */}
 
             {/* V96.28 — Mini-modal date remise — design clinique */}
             {showDeliveryModal && (
@@ -815,14 +768,28 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
             );
           }
 
-          // Bouton standard
+          // AX.4 (2026-05-11) — Bouton renommé selon le statut du parcours.
+          // 'Nouvelle consultation' était ambigu maintenant que tout passe par
+          // le parcours. Le label reflète l'intention : démarrer vs continuer.
+          const hasConsultations = consultations.length > 0;
+          const journeyState = client?.journey_state || null;
+          const isFollowingUp = !!journeyState?.followup_started;
+          let label;
+          if (isFollowingUp) {
+            label = 'Continuer le suivi';
+          } else if (hasConsultations) {
+            label = 'Continuer le parcours';
+          } else {
+            label = 'Commencer le parcours';
+          }
           return (
             <button
               className="btn btn-sm btn-anissa-primary"
               style={{ width: 'auto', padding: '8px 18px', whiteSpace: 'nowrap' }}
               onClick={(e) => { e.stopPropagation(); onConsultation(client.id); }}
+              title="Ouvrir le parcours guidé de cette cliente"
             >
-              + Nouvelle consultation
+              {label} →
             </button>
           );
         })()}
@@ -890,85 +857,34 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
                 </button>
               )}
               <SendQuestionnaireButton client={client} />
-              {/* V94.60 : raccourci direct vers l'onglet 'App cliente' de la
-                  consultation. Set un flag localStorage que NutritionConsultation
-                  lit au mount pour ouvrir direct sur le hub App cliente.
-                  V96.8 (fix) : ouvre la derniere consultation existante via
-                  onEditConsultation (au lieu de demarrer une nouvelle conso vide
-                  via onConsultation). Bouton desactive si pas de consultation. */}
-              {(() => {
-                const lastConsultation = consultations[0] || null;
-                const disabled = !lastConsultation || !onEditConsultation;
-                return (
-                  <button
-                    disabled={disabled}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (disabled) return;
-                      setMenuOpen(false);
-                      try { localStorage.setItem('bfc_open_consultation_tab', 'app'); } catch { /* */ }
-                      onEditConsultation(lastConsultation);
-                    }}
-                    title={disabled ? 'Aucune consultation existante — cree une consultation d\'abord' : ''}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'left',
-                      padding: '10px 16px', background: 'none', border: 'none',
-                      color: disabled ? 'rgba(130,195,158,.35)' : '#82c39e',
-                      cursor: disabled ? 'not-allowed' : 'pointer',
-                      fontSize: '.85rem',
-                      opacity: disabled ? 0.5 : 1,
-                      transition: 'background .15s',
-                    }}
-                    onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = 'rgba(130,195,158,.08)'; }}
-                    onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = 'none'; }}
-                  >
-                    📱 Espace app cliente
-                  </button>
-                );
-              })()}
+              {/* AX.2 (2026-05-11) — '📱 Espace app cliente' SUPPRIMÉ du menu.
+                  L'app cliente est maintenant gérée via le parcours :
+                  - bouton '📱 Aperçu app' du header parcours (visualisation)
+                  - étape 7 Livraison (configuration tracking, enrichissement IA, publish)
+                  Le raccourci ici cassait toute la nouvelle architecture. */}
 
-              {/* V96.27 — Actions sur le marquage de remise programme (pack suivi uniquement) */}
+              {/* AX.3 (2026-05-11) — '↺ Annuler la remise' SUPPRIMÉ. L'étape 7
+                  du parcours gère le statut de livraison avec plus de contexte
+                  (toggle papier, app, traçabilité paperGenerated sur la consultation).
+                  Conservé : 'Modifier la date de remise' (utile pour fix date erronée). */}
               {isFollowupPack && isDelivered && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(false);
-                      setDeliveryDateInput(client.packStartedAt
-                        ? new Date(client.packStartedAt).toISOString().slice(0, 10)
-                        : new Date().toISOString().slice(0, 10));
-                      setShowDeliveryModal(true);
-                    }}
-                    style={{
-                      display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
-                      background:'none', border:'none', color:'#e8a040', cursor:'pointer',
-                      fontSize:'.85rem',
-                    }}
-                  >
-                    {'\ud83d\udcc5'} Modifier la date de remise
-                  </button>
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const ok = await confirmDialog.ask({
-                        title: 'Annuler la remise ?',
-                        message: 'La timeline du suivi sera mise en pause jusqu\'à un nouveau marquage.',
-                        confirmLabel: 'Annuler la remise',
-                        danger: true,
-                      });
-                      if (!ok) return;
-                      setMenuOpen(false);
-                      onUnmarkProgramDelivered?.(client.id);
-                    }}
-                    style={{
-                      display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
-                      background:'none', border:'none', color:'rgba(255,255,255,.55)', cursor:'pointer',
-                      fontSize:'.85rem',
-                    }}
-                  >
-                    {'\u21ba'} Annuler la remise
-                  </button>
-                </>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setDeliveryDateInput(client.packStartedAt
+                      ? new Date(client.packStartedAt).toISOString().slice(0, 10)
+                      : new Date().toISOString().slice(0, 10));
+                    setShowDeliveryModal(true);
+                  }}
+                  style={{
+                    display:'block', width:'100%', textAlign:'left', padding:'10px 16px',
+                    background:'none', border:'none', color:'#e8a040', cursor:'pointer',
+                    fontSize:'.85rem',
+                  }}
+                >
+                  {'\ud83d\udcc5'} Modifier la date de remise
+                </button>
               )}
 
               {/* Séparateur */}
