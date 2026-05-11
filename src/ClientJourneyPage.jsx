@@ -929,6 +929,27 @@ function StepDelivery({ client, onChange }) {
           Le plan sera disponible sur l'app dès la publication. La cliente reçoit une notification.
         </p>
 
+        {/* Configuration suivi du poids — synchronisé avec étape 8 cockpit */}
+        <div style={{
+          padding: '12px 14px',
+          background: 'rgba(45, 90, 61, 0.04)',
+          border: '1px solid rgba(45, 90, 61, 0.12)',
+          borderRadius: 8,
+          marginBottom: 12,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--jrn-text)' }}>
+                ⚖️ Suivi du poids
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 2, lineHeight: 1.5 }}>
+                Si activé + visible : la cliente saisit son poids dans son ressenti quotidien.
+              </div>
+            </div>
+            <WeightTogglesInline client={client} compact />
+          </div>
+        </div>
+
         {/* Phase AD : guide enrichissement IA avant publish */}
         <div style={{
           padding: '10px 14px',
@@ -1442,11 +1463,12 @@ function StepFollowup({ client, journey, onChange, onExit }) {
 // Section : Suivi du poids (étape 8 cockpit)
 // ═══════════════════════════════════════════════════════════════════
 
-function WeightTrackingSection({ client, entries, loading }) {
-  // Phase AK + suite : charge la config app cliente (toggles tracking + visible)
-  const [config, setConfig] = useState(null); // { weight_tracking_enabled, weight_visible_to_client }
+// Composant factorisé : toggles tracking + visible (utilisé étape 7 ET étape 8)
+// Source de vérité unique : clientAppConfig (API admin /api/admin/client-config)
+function useClientWeightConfig(client) {
+  const [config, setConfig] = useState(null);
   const [loadingCfg, setLoadingCfg] = useState(true);
-  const [updating, setUpdating] = useState(null); // 'tracking' | 'visible' | null
+  const [updating, setUpdating] = useState(null);
   const [cfgError, setCfgError] = useState(null);
 
   useEffect(() => {
@@ -1465,16 +1487,12 @@ function WeightTrackingSection({ client, entries, loading }) {
     return () => { cancelled = true; };
   }, [client?.id]);
 
-  const trackingEnabled = !!config?.weight_tracking_enabled;
-  const visibleToClient = !!config?.weight_visible_to_client;
-
   const toggleConfig = async (key) => {
     setUpdating(key === 'weight_tracking_enabled' ? 'tracking' : 'visible');
     setCfgError(null);
     try {
       const { updateClientAppConfig } = await import('./services/clientAppConfig');
       const updates = { [key]: !config?.[key] };
-      // Si on désactive tracking, on désactive aussi visible (cohérence)
       if (key === 'weight_tracking_enabled' && config?.[key]) {
         updates.weight_visible_to_client = false;
       }
@@ -1487,6 +1505,46 @@ function WeightTrackingSection({ client, entries, loading }) {
     }
   };
 
+  return { config, loadingCfg, updating, cfgError, toggleConfig };
+}
+
+function WeightTogglesInline({ client, compact = false }) {
+  const { config, loadingCfg, updating, cfgError, toggleConfig } = useClientWeightConfig(client);
+  if (loadingCfg) return null;
+  const trackingEnabled = !!config?.weight_tracking_enabled;
+  const visibleToClient = !!config?.weight_visible_to_client;
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <ToggleChip
+          label={compact ? 'Tracking' : 'Tracking activé'}
+          checked={trackingEnabled}
+          onClick={() => toggleConfig('weight_tracking_enabled')}
+          loading={updating === 'tracking'}
+          title="Active le suivi du poids pour cette cliente"
+        />
+        {trackingEnabled && (
+          <ToggleChip
+            label={compact ? 'Visible cliente' : 'Visible cliente'}
+            checked={visibleToClient}
+            onClick={() => toggleConfig('weight_visible_to_client')}
+            loading={updating === 'visible'}
+            title="Affiche le champ poids dans l'app cliente (sinon réservé coach)"
+          />
+        )}
+      </div>
+      {cfgError && <div className="jrn-error" style={{ marginTop: 6 }}>⚠ {cfgError}</div>}
+    </>
+  );
+}
+
+function WeightTrackingSection({ client, entries, loading }) {
+  // Hook factorisé pour la section étape 8 cockpit
+  const { config, loadingCfg } = useClientWeightConfig(client);
+  const trackingEnabled = !!config?.weight_tracking_enabled;
+  const visibleToClient = !!config?.weight_visible_to_client;
+
   // Si tracking off ET pas de pesées historiques, on affiche quand même (pour permettre activation)
   const last = entries[0] || null;
   const oldest = entries[entries.length - 1] || null;
@@ -1496,34 +1554,12 @@ function WeightTrackingSection({ client, entries, loading }) {
 
   return (
     <div style={{ marginBottom: 'var(--jrn-6)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)', flexWrap: 'wrap', gap: 8 }}>
         <p className="jrn-label" style={{ margin: 0 }}>
           Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
         </p>
-        {/* Toggles inline (Phase AK suite) */}
-        {!loadingCfg && config && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <ToggleChip
-              label="Tracking activé"
-              checked={trackingEnabled}
-              onClick={() => toggleConfig('weight_tracking_enabled')}
-              loading={updating === 'tracking'}
-              title="Active le suivi du poids pour cette cliente"
-            />
-            {trackingEnabled && (
-              <ToggleChip
-                label="Visible cliente"
-                checked={visibleToClient}
-                onClick={() => toggleConfig('weight_visible_to_client')}
-                loading={updating === 'visible'}
-                title="Affiche le champ poids dans l'app cliente (sinon réservé coach)"
-              />
-            )}
-          </div>
-        )}
+        <WeightTogglesInline client={client} />
       </div>
-
-      {cfgError && <div className="jrn-error" style={{ marginBottom: 8 }}>⚠ {cfgError}</div>}
 
       {(loading || loadingCfg) && (
         <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>
