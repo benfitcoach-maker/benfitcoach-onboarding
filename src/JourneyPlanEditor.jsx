@@ -26,6 +26,7 @@ import { exportPlanToWord } from './services/exportToWord';
 import { structurePlanSections } from './services/planFormatters';
 import { analyzeFullPlan } from './services/aiClient';
 import FicheFrigoPreview from './FicheFrigoPreview';
+import PremiumSwitch from './components/PremiumSwitch';
 
 export default function JourneyPlanEditor({ client, onPlanSaved }) {
   const [tab, setTab] = useState('plan'); // 'plan' | 'fridge'
@@ -681,24 +682,23 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
               Ces directives sont sauvegardées avec la cliente et réutilisées à chaque génération. Elles s'ajoutent à l'anamnèse, aux objectifs et à la synthèse résultats déjà transmis à l'IA.
             </p>
 
-            {/* Phase AN : toggle Composer beta — moteur profil-aware */}
+            {/* Phase AN + AU : toggle Composer beta — switch premium (au lieu de checkbox) */}
             <div className="jpe-composer-beta">
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                <PremiumSwitch
                   checked={composerBeta}
-                  onChange={(e) => setComposerBeta(e.target.checked)}
+                  onChange={setComposerBeta}
                   disabled={generating}
-                  style={{ marginTop: 3, width: 18, height: 18, cursor: 'pointer', accentColor: '#a78bfa' }}
+                  accent="#a78bfa"
                 />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#7e5ec7', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ flex: 1, cursor: generating ? 'not-allowed' : 'pointer' }} onClick={() => !generating && setComposerBeta(!composerBeta)}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#7e5ec7', display: 'flex', alignItems: 'center', gap: 8 }}>
                     ✨ Composer beta
-                    <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(167, 139, 250, 0.15)', color: '#7e5ec7', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 4, background: 'rgba(167, 139, 250, 0.15)', color: '#7e5ec7', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                       Profil-aware
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--jrn-text-muted)', marginTop: 4, lineHeight: 1.55 }}>
+                  <div style={{ fontSize: 12, color: 'var(--jrn-text-muted)', marginTop: 6, lineHeight: 1.55 }}>
                     Détecte automatiquement le profil clinique (digestif chronique, post-partum, sèche, hormones féminines…) et injecte les modules MUST INCLUDE / INTERDITS spécifiques. Plus précis pour les profils complexes, plus long à générer.
                   </div>
                   {detectedProfile && (
@@ -707,7 +707,7 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                     </div>
                   )}
                 </div>
-              </label>
+              </div>
             </div>
 
             {!generating && (

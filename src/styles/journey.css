@@ -480,23 +480,29 @@
    via inset highlight + padding plus généreux. Style Notion/Linear. */
 
 .jrn-surface {
-  background: var(--jrn-surface);
-  border: 1px solid var(--jrn-border);
+  /* AT : sensation matériau — fond avec gradient subtle (du blanc pur en haut
+     vers un blanc-ivoire ultra subtil en bas) pour donner du volume.
+     Border quasi invisible. Multi-shadow ultra diffuse type Arc/Linear. */
+  background:
+    linear-gradient(180deg, #FFFFFF 0%, #FDFBF7 100%);
+  border: 1px solid rgba(40, 32, 20, 0.04);
   border-radius: var(--jrn-radius-lg);
-  padding: var(--jrn-10);                /* AR.4 : 40px au lieu de 32 — plus de densité */
+  padding: var(--jrn-10);
   box-shadow:
-    0 1px 1px rgba(40, 32, 20, 0.03),
-    0 2px 4px rgba(40, 32, 20, 0.04),
-    0 8px 24px rgba(40, 32, 20, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);   /* relief subtle top highlight */
-  transition: box-shadow 200ms var(--jrn-ease), transform 200ms var(--jrn-ease);
+    0 0 0 1px rgba(40, 32, 20, 0.02),
+    0 1px 2px rgba(40, 32, 20, 0.03),
+    0 4px 8px rgba(40, 32, 20, 0.03),
+    0 16px 40px rgba(40, 32, 20, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: box-shadow 220ms var(--jrn-ease), transform 220ms var(--jrn-ease);
 }
 .jrn-surface:hover {
   box-shadow:
-    0 1px 1px rgba(40, 32, 20, 0.04),
-    0 4px 8px rgba(40, 32, 20, 0.06),
-    0 16px 40px rgba(40, 32, 20, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    0 0 0 1px rgba(40, 32, 20, 0.03),
+    0 2px 4px rgba(40, 32, 20, 0.04),
+    0 8px 16px rgba(40, 32, 20, 0.05),
+    0 24px 56px rgba(40, 32, 20, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 .jrn-surface--quiet {
   background: transparent;

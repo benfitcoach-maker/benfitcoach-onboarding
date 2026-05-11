@@ -27,6 +27,7 @@ import JourneyPlanEditor from './JourneyPlanEditor';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
 import JourneyMessagesPanel from './JourneyMessagesPanel';
 import JourneyNotesPanel from './JourneyNotesPanel';
+import PremiumSwitch from './components/PremiumSwitch';
 import { getNutritionConsultations } from './store';
 import './styles/journey.css';
 
@@ -924,26 +925,21 @@ function StepDelivery({ client, onChange }) {
           : 'Vous adaptez son protocole. Par défaut, le nouveau plan est publié sur son app — sa lecture quotidienne reste fluide. Activez le format papier ci-dessous si ce cycle marque un changement majeur.'}
       />
 
-      {/* ─── Toggle papier ─────────────────────────────────────── */}
+      {/* ─── Toggle papier (AU : switch premium au lieu de checkbox) ─ */}
       <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={includePaper}
-            onChange={(e) => setIncludePaper(e.target.checked)}
-            style={{ marginTop: 3, width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--jrn-accent)' }}
-          />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--jrn-text)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
+          <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setIncludePaper(!includePaper)}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--jrn-text)', letterSpacing: '-0.005em' }}>
               📦 Plan papier nécessaire pour ce cycle
             </div>
-            <div style={{ fontSize: 12, color: 'var(--jrn-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, lineHeight: 1.55 }}>
               {isFirstVersion
                 ? 'Recommandé pour le premier cycle : livret fondateur premium qui ancre l\'expérience.'
-                : 'À cocher uniquement pour les changements majeurs : nouveau cycle 4 semaines, refonte protocole, nouvelle phase (postpartum, sèche, etc.).'}
+                : 'À activer uniquement pour les changements majeurs : nouveau cycle 4 semaines, refonte protocole, nouvelle phase (postpartum, sèche, etc.).'}
             </div>
           </div>
-        </label>
+        </div>
       </div>
 
       {/* ─── Section app cliente (toujours présente) ─────────────── */}
