@@ -148,6 +148,23 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
     ? Math.floor((Date.now() - new Date(lastConsultation.date).getTime()) / 86400000)
     : null;
 
+  // BC.3C (2026-05-11) : status contextuel parcours pour pill premium header.
+  // Donne un signal émotionnel ("Onboarding actif", "Plan en édition"...)
+  // au lieu de juste afficher le step courant en bas.
+  const statusContext = (() => {
+    switch (currentStep) {
+      case 'anamnesis':       return { label: 'Onboarding actif', tone: 'accent' };
+      case 'analyses':        return { label: 'Phase analyses',   tone: 'accent' };
+      case 'waiting_results': return { label: 'Attente résultats', tone: 'neutral' };
+      case 'results':         return { label: 'Saisie résultats',  tone: 'accent' };
+      case 'plan_generation': return { label: 'Génération du plan', tone: 'gold' };
+      case 'plan_editing':    return { label: 'Plan en édition',   tone: 'gold' };
+      case 'delivery':        return { label: 'Livraison en cours', tone: 'gold' };
+      case 'followup':        return { label: 'Suivi en cours',    tone: 'accent' };
+      default:                return { label: 'Parcours',          tone: 'neutral' };
+    }
+  })();
+
   const refresh = () => loadClient();
 
   return (
@@ -168,6 +185,11 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
               {prenom}{nom ? ` ${nom}` : ''}
             </h1>
             <div className="jrn-header__meta">
+              {/* BC.3C : status contextuel premium en premier (pill avec dot pulse) */}
+              <span className={`jrn-status-pill jrn-status-pill--${statusContext.tone}`}>
+                <span className="jrn-status-pill__dot" aria-hidden="true" />
+                {statusContext.label}
+              </span>
               {consultationsTotal > 0 && (
                 <span
                   className="jrn-meta-chip jrn-meta-chip--gold"
@@ -203,50 +225,61 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
           </div>
         </div>
 
+        {/* BC.3C : actions header groupées en 2 zones distinctes.
+            Zone 1 (actions cliente — soft accent) : Messages / Notes / Aperçu app
+            Séparateur visuel
+            Zone 2 (navigation — ghost) : Étape précédente / Profil / Dashboard */}
         <div className="jrn-header__actions">
-          {currentStepIndex > 1 && (
+          <div className="jrn-header__actions-group">
             <button
-              onClick={async () => {
-                try {
-                  await transitions.goToPreviousStep(client.id, currentStep);
-                  refresh();
-                } catch (e) { /* silencieux */ }
-              }}
-              className="jrn-btn jrn-btn--ghost"
-              title="Revenir à l'étape précédente"
+              onClick={() => setShowMessages(true)}
+              className="jrn-btn jrn-btn--soft"
+              title="Messages avec la cliente + ressentis reçus"
             >
-              ← Étape précédente
+              💬 Messages
             </button>
-          )}
-          <button
-            onClick={() => setShowMessages(true)}
-            className="jrn-btn jrn-btn--soft"
-            title="Messages avec la cliente + ressentis reçus"
-          >
-            💬 Messages
-          </button>
-          <button
-            onClick={() => setShowNotes(true)}
-            className="jrn-btn jrn-btn--soft"
-            title="Notes internes privées sur la cliente (jamais envoyées)"
-          >
-            📝 Notes
-          </button>
-          <button
-            onClick={openAppPreview}
-            className="jrn-btn jrn-btn--soft"
-            title="Aperçu de ce que la cliente voit dans l'app"
-          >
-            📱 Aperçu app
-          </button>
-          {onEditProfile && (
-            <button onClick={onEditProfile} className="jrn-btn jrn-btn--ghost" title="Éditer le profil cliente">
-              Profil
+            <button
+              onClick={() => setShowNotes(true)}
+              className="jrn-btn jrn-btn--soft"
+              title="Notes internes privées sur la cliente (jamais envoyées)"
+            >
+              📝 Notes
             </button>
-          )}
-          <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
-            Dashboard
-          </button>
+            <button
+              onClick={openAppPreview}
+              className="jrn-btn jrn-btn--soft"
+              title="Aperçu de ce que la cliente voit dans l'app"
+            >
+              📱 Aperçu app
+            </button>
+          </div>
+
+          <span className="jrn-header__actions-sep" aria-hidden="true" />
+
+          <div className="jrn-header__actions-group">
+            {currentStepIndex > 1 && (
+              <button
+                onClick={async () => {
+                  try {
+                    await transitions.goToPreviousStep(client.id, currentStep);
+                    refresh();
+                  } catch (e) { /* silencieux */ }
+                }}
+                className="jrn-btn jrn-btn--ghost"
+                title="Revenir à l'étape précédente"
+              >
+                ←
+              </button>
+            )}
+            {onEditProfile && (
+              <button onClick={onEditProfile} className="jrn-btn jrn-btn--ghost" title="Éditer le profil cliente">
+                Profil
+              </button>
+            )}
+            <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
+              Dashboard
+            </button>
+          </div>
         </div>
       </header>
 

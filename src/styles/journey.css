@@ -284,9 +284,83 @@
   box-shadow: 0 0 8px rgba(26, 46, 31, 0.25);
 }
 
+/* BC.3C : actions header en 2 groupes (cliente / navigation)
+   séparés par un trait vertical discret. Plus d'air, hiérarchie marquée. */
 .jrn-header__actions {
   display: flex;
-  gap: var(--jrn-2);
+  align-items: center;
+  gap: var(--jrn-4);
+}
+.jrn-header__actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.jrn-header__actions-sep {
+  display: inline-block;
+  width: 1px;
+  height: 28px;
+  background: var(--jrn-border-strong);
+  flex-shrink: 0;
+}
+
+/* BC.3C : status pill contextuel premium (avec dot pulse).
+   Affiche l'état émotionnel du parcours : 'Onboarding actif',
+   'Plan en édition', 'Livraison en cours'... */
+.jrn-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--jrn-font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+.jrn-status-pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 0 currentColor;
+  animation: jrn-pulse 2.4s var(--jrn-ease) infinite;
+}
+@keyframes jrn-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(26, 46, 31, 0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(26, 46, 31, 0);  }
+  100% { box-shadow: 0 0 0 0 rgba(26, 46, 31, 0);    }
+}
+.jrn-status-pill--accent {
+  background: var(--jrn-accent-soft);
+  color: var(--jrn-accent);
+  border-color: var(--jrn-accent-tint);
+}
+.jrn-status-pill--gold {
+  background: var(--jrn-gold-soft);
+  color: var(--jrn-gold);
+  border-color: var(--jrn-gold-tint);
+}
+.jrn-status-pill--gold .jrn-status-pill__dot {
+  animation-name: jrn-pulse-gold;
+}
+@keyframes jrn-pulse-gold {
+  0%   { box-shadow: 0 0 0 0 rgba(184, 134, 42, 0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(184, 134, 42, 0);  }
+  100% { box-shadow: 0 0 0 0 rgba(184, 134, 42, 0);    }
+}
+.jrn-status-pill--neutral {
+  background: var(--jrn-bg-alt);
+  color: var(--jrn-text-soft);
+  border-color: var(--jrn-border-strong);
+}
+.jrn-status-pill--neutral .jrn-status-pill__dot {
+  animation: none;
+  background: var(--jrn-text-muted);
 }
 
 /* ─── Boutons ─────────────────────────────────────────────────────── */
@@ -417,18 +491,19 @@
   margin: 0 0 var(--jrn-4) var(--jrn-3);
 }
 
-/* BC.3B : conteneur steps avec timeline verticale discrète
-   reliant les numéros (ligne 1px ivoire entre les badges). */
+/* BC.3B.1 (2026-05-11) : Steps premium V2 — plus de puissance visuelle.
+   Badges plus gros (32px), labels base + weight 600, step active avec
+   glow accent + fond dense, transition fluide. */
 .jrn-steps {
   position: relative;
 }
 .jrn-steps::before {
   content: '';
   position: absolute;
-  /* Ligne centrée verticalement sur les num (28px wide, padding step 14, badge 28) */
-  left: calc(14px + 14px); /* padding-left step + num-width/2 */
-  top: 22px;               /* milieu du 1er badge */
-  bottom: 22px;            /* milieu du dernier */
+  /* Ligne centrée verticalement sur les num (32px wide, padding step 16, badge 32) */
+  left: calc(16px + 16px); /* padding-left step + num-width/2 */
+  top: 26px;               /* milieu du 1er badge */
+  bottom: 26px;            /* milieu du dernier */
   width: 2px;
   background: linear-gradient(180deg,
     transparent 0%,
@@ -443,50 +518,56 @@
   display: flex;
   align-items: center;
   gap: var(--jrn-3);
-  padding: 14px 14px;
+  padding: 16px 16px;              /* BC.3B.1 : 14 → 16 */
   border-radius: var(--jrn-radius);
   margin-bottom: 4px;
   font-family: var(--jrn-font-ui);
-  font-size: var(--jrn-text-sm);
+  font-size: var(--jrn-text-base); /* BC.3B.1 : sm → base */
   font-weight: 500;
   color: var(--jrn-text-faint);
-  transition: background 160ms var(--jrn-ease), color 160ms var(--jrn-ease), transform 160ms var(--jrn-ease);
+  transition: background 200ms var(--jrn-ease), color 200ms var(--jrn-ease), transform 200ms var(--jrn-ease), box-shadow 200ms var(--jrn-ease);
   position: relative;
   z-index: 1;
 }
+.jrn-step:not(.jrn-step--active):hover {
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--jrn-text-soft);
+}
 .jrn-step__num {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 32px;                     /* BC.3B.1 : 28 → 32 */
+  height: 32px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 14px;                 /* BC.3B.1 : 12 → 14 */
   font-weight: 700;
   background: rgba(40, 32, 20, 0.06);
   color: var(--jrn-text-faint);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
-  transition: all 160ms var(--jrn-ease);
+  transition: all 200ms var(--jrn-ease);
 }
 .jrn-step--active {
   background: var(--jrn-surface);
   color: var(--jrn-text);
-  font-weight: 600;
+  font-weight: 700;                /* BC.3B.1 : 600 → 700 */
   box-shadow:
-    0 1px 2px rgba(40, 32, 20, 0.04),
-    0 4px 12px rgba(40, 32, 20, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    0 1px 2px rgba(40, 32, 20, 0.05),
+    0 6px 16px rgba(40, 32, 20, 0.08),
+    0 0 0 1px rgba(26, 46, 31, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
   border-left: 3px solid var(--jrn-accent);
-  padding-left: 11px;
+  padding-left: 13px;
 }
 .jrn-step--active .jrn-step__num {
-  background: var(--jrn-accent);
+  background: linear-gradient(135deg, var(--jrn-accent) 0%, #2B4A33 100%);
   color: var(--jrn-surface);
   box-shadow:
-    0 2px 6px rgba(26, 46, 31, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 2px 8px rgba(26, 46, 31, 0.32),
+    0 0 0 3px var(--jrn-accent-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 .jrn-step--validated {
   color: var(--jrn-text-soft);
@@ -495,6 +576,7 @@
   background: var(--jrn-accent-soft);
   color: var(--jrn-accent);
   border: 1px solid var(--jrn-accent-tint);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
 }
 .jrn-step--skipped {
   color: var(--jrn-text-muted);
