@@ -18,9 +18,10 @@
 // naturellement via les feedbacks.
 // ─────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { sendCoachMessage, fetchCoachMessages } from './services/sendCoachMessage';
 import { fetchClientFeedbacks } from './services/fetchClientFeedbacks';
+import { MESSAGE_TEMPLATES } from './templates';
 
 export default function JourneyMessagesPanel({ client, onClose }) {
   const email = client?.form?.email || client?.email || '';
@@ -123,6 +124,7 @@ export default function JourneyMessagesPanel({ client, onClose }) {
               onSend={handleSend}
               sending={sending}
               disabled={!email}
+              prenom={prenom}
             />
           )}
           {tab === 'feedbacks' && (
@@ -267,6 +269,52 @@ export default function JourneyMessagesPanel({ client, onClose }) {
           line-height: 1.55;
           white-space: pre-wrap;
         }
+        .jmp-templates-menu {
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 0;
+          z-index: 30;
+          width: 320px;
+          background: var(--jrn-surface);
+          border: 1px solid var(--jrn-border-strong);
+          border-radius: 10px;
+          box-shadow: 0 12px 32px rgba(15, 15, 15, 0.12), 0 2px 6px rgba(15, 15, 15, 0.05);
+          overflow: hidden;
+          animation: jmp-menu-pop 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        @keyframes jmp-menu-pop {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .jmp-templates-menu__head {
+          padding: 10px 14px;
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--jrn-text-muted);
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          border-bottom: 1px solid var(--jrn-border);
+          background: var(--jrn-surface-alt);
+        }
+        .jmp-templates-menu__list {
+          max-height: 320px;
+          overflow-y: auto;
+          padding: 4px;
+        }
+        .jmp-templates-menu__item {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 10px 12px;
+          background: transparent;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: background 120ms ease;
+        }
+        .jmp-templates-menu__item:hover {
+          background: var(--jrn-bg-alt);
+        }
       `}</style>
     </>
   );
@@ -276,7 +324,29 @@ export default function JourneyMessagesPanel({ client, onClose }) {
 // Tab : Conversation
 // ═════════════════════════════════════════════════════════════
 
-function ConversationTab({ messages, loading, draft, setDraft, onSend, sending, disabled }) {
+function ConversationTab({ messages, loading, draft, setDraft, onSend, sending, disabled, prenom }) {
+  const [showTemplates, setShowTemplates] = useState(false);
+  const templatesRef = useRef(null);
+
+  useEffect(() => {
+    if (!showTemplates) return;
+    const handler = (e) => {
+      if (templatesRef.current && !templatesRef.current.contains(e.target)) setShowTemplates(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTemplates]);
+
+  const applyTemplate = (tpl) => {
+    // Remplace [PRENOM] par le prénom + remplace signature "Benoit" par "Anissa"
+    // (les templates existent en FR pour Benfitcoach, on les recycle pour Anissa)
+    let body = tpl.fr || tpl.en || '';
+    body = body.replace(/\[PRENOM\]/g, prenom || '');
+    body = body.replace(/\b(Benoit)$/m, 'Anissa');
+    setDraft(body);
+    setShowTemplates(false);
+  };
+
   return (
     <>
       <div className="jmp-conv">
@@ -309,8 +379,41 @@ function ConversationTab({ messages, loading, draft, setDraft, onSend, sending, 
           }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, color: 'var(--jrn-text-muted)' }}>
-            Cmd/Ctrl + Entrée pour envoyer
+          <div ref={templatesRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowTemplates((s) => !s)}
+              disabled={disabled || sending}
+              className="jrn-btn jrn-btn--ghost"
+              style={{ fontSize: 11, padding: '5px 10px' }}
+              title="Insérer un modèle de message"
+            >
+              📚 Templates ▾
+            </button>
+            {showTemplates && (
+              <div className="jmp-templates-menu">
+                <div className="jmp-templates-menu__head">Insérer un modèle</div>
+                <div className="jmp-templates-menu__list">
+                  {MESSAGE_TEMPLATES.map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      onClick={() => applyTemplate(tpl)}
+                      className="jmp-templates-menu__item"
+                    >
+                      <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--jrn-text)' }}>{tpl.title}</div>
+                      <div style={{ fontSize: 10, color: 'var(--jrn-text-muted)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                        {tpl.category}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ padding: '8px 12px', fontSize: 10, color: 'var(--jrn-text-muted)', borderTop: '1px solid var(--jrn-border)' }}>
+                  [PRENOM] est remplacé automatiquement. La signature est adaptée à Anissa.
+                </div>
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: 10, color: 'var(--jrn-text-muted)', flex: 1, textAlign: 'right', marginRight: 8 }}>
+            Cmd/Ctrl + Entrée
           </span>
           <button
             onClick={onSend}
