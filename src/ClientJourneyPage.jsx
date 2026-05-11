@@ -125,8 +125,16 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
 
   const stepStatuses = JOURNEY_STEPS.map((s) => ({ step: s, status: getStepStatus(journey, s) }));
   const completedCount = stepStatuses.filter((s) => s.status === 'validated' || s.status === 'skipped').length;
-  const progressPct = Math.round((completedCount / JOURNEY_STEPS.length) * 100);
   const currentStepIndex = STEP_META[currentStep]?.index || 1;
+  // BC.5G.12 : la barre suit la position courante (currentStepIndex - 1) et
+  // pas les flags _validated. Comme ça quand Anissa revient en arrière via
+  // la flèche ←, la barre redescend pour refléter où elle est vraiment.
+  // Cas particulier : si on est à l'étape 8 et que followup_started=true,
+  // le parcours est complet → 100%.
+  const isParcoursComplete = currentStep === 'followup' && journey.followup_started;
+  const progressPct = isParcoursComplete
+    ? 100
+    : Math.round(((currentStepIndex - 1) / JOURNEY_STEPS.length) * 100);
 
   // Phase AJ : compteur consultations utilisées vs incluses dans le pack
   const consultationsTotal = pack?.consultations || 0;
