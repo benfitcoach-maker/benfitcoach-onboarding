@@ -1295,7 +1295,19 @@ function App() {
                   ? 'Cliente creee — espace app active + email Bienvenue pret'
                   : 'Cliente creee — questionnaire pret a envoyer'
               );
-              setTimeout(() => goToDashboard(), 1800);
+              // V97.8.1 (2026-05-12) UX : ouvre directement le parcours de la
+              // cliente au lieu de retourner sur le dashboard. Anissa voit
+              // immediatement la timeline 8 etapes (Onboarding actif) et sait
+              // ou aller ensuite. Avant ce fix, retour dashboard sans guidance
+              // = Anissa ne savait pas ou cliquer pour suivre sa cliente.
+              setTimeout(() => {
+                setClientId(client.id);
+                setPage('clientJourney');
+                setMobileMenu(false);
+                try {
+                  window.history.pushState({}, '', `/parcours/${client.id}`);
+                } catch { /* navigation history non bloquante */ }
+              }, 1800);
             }}
             onCancel={goToDashboard}
           />

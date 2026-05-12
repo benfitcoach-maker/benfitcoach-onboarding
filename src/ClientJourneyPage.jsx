@@ -513,7 +513,26 @@ function StepAnamnesis({ client, onChange }) {
 
   // ─── Détection statuts ──────────────────────────────────────────
   // Réponses reçues : le form a au moins un champ clé rempli (objectifs/symptômes/pathologies/activité)
-  const minimallyFilled = !!(form.objectifs || form.symptomes || form.pathologies || form.activite);
+  // V97.8.1 (2026-05-12) : détection mise à jour pour matcher les champs
+  // du pré-questionnaire app cliente (5 sections / 15 champs essentiels).
+  // Avant ce fix, on cherchait des champs legacy SaaS (`objectifs` avec s,
+  // `symptomes`, `activite`) qui ne sont pas remplis par le pre-q in-app.
+  // Maintenant on accepte aussi les champs réellement remplis par Camille.
+  const minimallyFilled = !!(
+    // Pre-q V97.8.1 — champs essentiels remplis = pre-q soumis
+    form.objectif_primaire
+    || form.dureeProbleme
+    || form.ressentiDigestion
+    || form.energieJournee
+    || form.traitements
+    || form.allergies
+    || form.contraception
+    // Legacy SaaS — Anissa peut avoir saisi manuellement
+    || form.objectifs
+    || form.symptomes
+    || form.pathologies
+    || form.activite
+  );
   const questionnaireSentAt = journey.questionnaire_sent_at || null;
   const questionnaireMode = journey.questionnaire_mode || null; // 'app' | 'link'
   const questionnaireReceived = minimallyFilled;
@@ -688,15 +707,60 @@ function StepAnamnesis({ client, onChange }) {
                   🟢 Reçu
                 </span>
               </div>
+              {/* V97.8.1 (2026-05-12) : affichage des champs réellement remplis
+                  par le pré-questionnaire app cliente. On affiche le résumé
+                  clinique essentiel — pas la totalité (Anissa creusera au RDV).
+                  Champs legacy gardés en fallback si Anissa avait saisi
+                  manuellement. */}
               <div className="jrn-kv">
-                <div className="jrn-kv__k">Objectifs</div>
-                <div className={`jrn-kv__v ${form.objectifs ? '' : 'jrn-kv__v--empty'}`}>{form.objectifs || 'non renseigné'}</div>
-                <div className="jrn-kv__k">Symptômes</div>
-                <div className={`jrn-kv__v ${form.symptomes ? '' : 'jrn-kv__v--empty'}`}>{form.symptomes || 'non renseigné'}</div>
+                <div className="jrn-kv__k">Objectif principal</div>
+                <div className={`jrn-kv__v ${form.objectif_primaire || form.objectifs ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.objectif_primaire || form.objectifs || 'non renseigné'}
+                </div>
+                <div className="jrn-kv__k">Depuis combien de temps</div>
+                <div className={`jrn-kv__v ${form.dureeProbleme ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.dureeProbleme || 'non renseigné'}
+                </div>
+                <div className="jrn-kv__k">Urgence</div>
+                <div className={`jrn-kv__v ${form.objectif_urgency ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.objectif_urgency === 'urgent_moins_1m' ? 'Urgent (< 1 mois)'
+                    : form.objectif_urgency === 'moyen_3_6m' ? 'Moyen terme (3–6 mois)'
+                    : form.objectif_urgency === 'long_terme' ? 'Long terme (transformation durable)'
+                    : 'non renseigné'}
+                </div>
+                <div className="jrn-kv__k">Digestion ressentie</div>
+                <div className={`jrn-kv__v ${form.ressentiDigestion ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.ressentiDigestion === 'Confortable' ? 'Confortable'
+                    : form.ressentiDigestion === 'Inconfort_occasionnel' ? 'Inconfort occasionnel'
+                    : form.ressentiDigestion === 'Inconfort_frequent' ? 'Inconfort fréquent'
+                    : form.ressentiDigestion === 'Inconfort_quotidien' ? 'Inconfort quotidien'
+                    : 'non renseigné'}
+                </div>
+                <div className="jrn-kv__k">Énergie au quotidien</div>
+                <div className={`jrn-kv__v ${form.energieJournee ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.energieJournee || 'non renseigné'}
+                </div>
                 <div className="jrn-kv__k">Pathologies</div>
-                <div className={`jrn-kv__v ${form.pathologies ? '' : 'jrn-kv__v--empty'}`}>{form.pathologies || 'non renseigné'}</div>
-                <div className="jrn-kv__k">Activité</div>
-                <div className={`jrn-kv__v ${form.activite ? '' : 'jrn-kv__v--empty'}`}>{form.activite || 'non renseigné'}</div>
+                <div className={`jrn-kv__v ${form.pathologies ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.pathologies || 'aucune signalée'}
+                </div>
+                <div className="jrn-kv__k">Traitements</div>
+                <div className={`jrn-kv__v ${form.traitements ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.traitements || 'aucun signalé'}
+                </div>
+                <div className="jrn-kv__k">Allergies</div>
+                <div className={`jrn-kv__v ${form.allergies ? '' : 'jrn-kv__v--empty'}`}>
+                  {form.allergies || 'aucune signalée'}
+                </div>
+                <div className="jrn-kv__k">Cycle hormonal</div>
+                <div className={`jrn-kv__v ${form.grossesseActuelle || form.contraception ? '' : 'jrn-kv__v--empty'}`}>
+                  {(() => {
+                    const parts = [];
+                    if (form.grossesseActuelle && form.grossesseActuelle !== 'Non') parts.push(form.grossesseActuelle);
+                    if (form.contraception) parts.push(`Contraception : ${form.contraception}`);
+                    return parts.length > 0 ? parts.join(' · ') : 'non renseigné';
+                  })()}
+                </div>
               </div>
             </>
           ) : (
