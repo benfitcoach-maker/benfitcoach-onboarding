@@ -62,6 +62,18 @@ export const MICROBIOME_RULES = [
       hasMarkerWithStatus(index, 'calprotectine', 'prioritaire'),
     reason: 'Candida à surveiller + calprotectine prioritaire (inflammation aiguë)',
   },
+  // V3.G : ajout post-validation cas 3. Renforce P1 quand le pattern
+  // candida+parasites coexiste, sans surclasser un candida isolé.
+  // weight intentionnellement bas (1) pour éviter sur-classification.
+  {
+    id: 'candida_avec_pathogene',
+    phase: 1,
+    weight: 1,
+    when: ({ index }) =>
+      hasMarkerWithStatus(index, 'candida_albicans', 'prioritaire') &&
+      hasMarkerWithStatus(index, 'parasites_qpcr', 'prioritaire', 'surveiller'),
+    reason: 'Candida prioritaire + parasites (qPCR) flaggés (pattern pathogène)',
+  },
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 2 — RECOLONISATION (stabiliser terrain)
@@ -83,14 +95,35 @@ export const MICROBIOME_RULES = [
       !hasMarkerWithStatus(index, 'calprotectine', 'prioritaire'),
     reason: 'Diversité microbiote flaggée sans inflammation aiguë → recolonisation envisageable',
   },
+  // V3.G : ajout post-validation cas 2. Diversité prioritaire ISOLÉE
+  // (= aucun marker barrière/inflammation prioritaire) est un pattern
+  // P2 cliniquement net qui n'avait pas assez de votes auparavant.
+  // weight 2 → permet de franchir le seuil sans dépendre de combos.
+  {
+    id: 'diversite_prioritaire_isolee',
+    phase: 2,
+    weight: 2,
+    when: ({ index }) =>
+      hasMarkerWithStatus(index, 'diversite_microbiote', 'prioritaire') &&
+      countMarkersWithStatus(
+        index,
+        ['zonuline', 'calprotectine', 'candida_albicans', 'iga_secretoire'],
+        'prioritaire',
+      ) === 0,
+    reason: 'Diversité microbiote prioritaire isolée (aucun marker barrière/inflammation prioritaire)',
+  },
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 3 — MUQUEUSE / IMMUNORÉGULATION (réparer barrière)
   // ═══════════════════════════════════════════════════════════════
   {
+    // V3.G : weight 2 → 3 après validation cas 1.
+    // Le pattern zonuline + (IgA OU calprotectine) est cliniquement très
+    // fort. Le poids 2 le faisait perdre par discordance face à des
+    // règles P2 collatérales. Poids 3 → écrase P2 même quand il fire.
     id: 'permeabilite_pattern',
     phase: 3,
-    weight: 2,
+    weight: 3,
     when: ({ index }) =>
       hasMarkerWithStatus(index, 'zonuline', 'prioritaire', 'surveiller') &&
       anyMarkerWithStatus(index, ['iga_secretoire', 'calprotectine'], 'prioritaire', 'surveiller'),

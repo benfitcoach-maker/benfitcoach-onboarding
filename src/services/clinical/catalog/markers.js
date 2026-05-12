@@ -330,6 +330,34 @@ export const MARKERS_CATALOG = {
     axis: 'microbiote',
   },
 
+  // ─── V3.G : ajouts post-validation cas réels (2026-05-12) ──────
+  // Markers cliniquement utiles repérés pendant la validation V3.G
+  // mais absents du squelette V3.A. Permettent aux règles microbiome
+  // de fire sur des patterns qu'elles manquaient avant (diversité +
+  // butyrate / histamine intestinale / pathogènes parasitaires).
+  producteurs_butyrate: {
+    code: 'producteurs_butyrate',
+    label: 'Producteurs de butyrate',
+    unit: 'abondance',
+    axis: 'microbiote',
+    notes: 'Bactéries productrices de butyrate (Faecalibacterium, Roseburia, Eubacterium rectale). Marqueur fonctionnel clé de la phase 2 recolonisation et 5 stabilisation.',
+  },
+  histamine_stool: {
+    code: 'histamine_stool',
+    label: 'Histamine intestinale (selles)',
+    unit: 'µg/g',
+    axis: 'microbiote',
+    secondary_axes: ['inflammation'],
+    notes: 'Histamine fécale reflétant la charge histaminergique intestinale. Élevée évoque dysbiose histaminergique / SIBO histaminergique.',
+  },
+  parasites_qpcr: {
+    code: 'parasites_qpcr',
+    label: 'Parasites (qPCR)',
+    unit: 'détection',
+    axis: 'microbiote',
+    notes: 'PCR quantitative pour parasites intestinaux (Blastocystis, Dientamoeba, Giardia, etc.). Pertinent en phase 1 éradication aux côtés de Candida.',
+  },
+
   // ⚠️ TODO V3.A à compléter après RDV2 Anissa/Marie-Aude :
   // - métaux lourds (HMA capillaire)
   // - ADN (génétique nutrition) — polymorphismes MTHFR, COMT, APOE, FTO, etc.

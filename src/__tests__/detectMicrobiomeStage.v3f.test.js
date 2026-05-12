@@ -216,3 +216,112 @@ describe('V3.F — detectMicrobiomeStage', () => {
     expect(out.allowed_interventions).toEqual(out.allowed_axes);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// V3.G — Régressions sur les 3 cas réels anonymisés validés 2026-05-12.
+// Ces tests verrouillent les comportements attendus post-ajustements :
+//   - permeabilite_pattern.weight 2 → 3
+//   - règle diversite_prioritaire_isolee (P2, weight 2)
+//   - règle candida_avec_pathogene (P1, weight 1)
+//   - markers producteurs_butyrate / histamine_stool / parasites_qpcr ajoutés
+// ═══════════════════════════════════════════════════════════════════
+
+describe('V3.G — régressions cas réels validés', () => {
+
+  it('Cas 1 — pattern perméabilité → P3 inférée (P3 écrase P2)', () => {
+    // Avant V3.G : null (discordance P3=2 vs P2=1)
+    // Après V3.G : P3=3 (permeabilite_pattern weight 3) vs P2=1 → P3 gagne
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'zonuline', label: 'Zonuline', status: 'prioritaire' },
+        { marker_code: 'iga_secretoire', label: 'IgA sécrétoire', status: 'surveiller' },
+        { marker_code: 'calprotectine', label: 'Calprotectine', status: 'surveiller' },
+        { marker_code: 'diversite_microbiote', label: 'Diversité', status: 'surveiller' },
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'optimal' },
+      ]],
+    ]);
+    const out = detectMicrobiomeStage({ journeyState: journey });
+    expect(out.inferred_phase).toBe(3);
+    expect(out.final_phase).toBe(3);
+    expect(out.label).toBe('Muqueuse / immunorégulation');
+    // 3 votes (permeabilite_pattern weight 3) → modérée
+    expect(out.confidence).toBe('modérée');
+    expect(out.reasons.some((r) => /perméabilité/i.test(r))).toBe(true);
+  });
+
+  it('Cas 2 — diversité prio + akkermansia bas → P2 inférée via diversite_prioritaire_isolee', () => {
+    // Avant V3.G : null (sous-seuil, 1 vote isolé)
+    // Après V3.G : nouvelle règle diversite_prioritaire_isolee weight 2
+    //   + diversite_basse_sans_inflammation_aigue weight 1 = 3 votes
+    // → P2 inférée, confidence modérée
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'diversite_microbiote', label: 'Diversité', status: 'prioritaire' },
+        { marker_code: 'producteurs_butyrate', label: 'Producteurs butyrate', status: 'surveiller' },
+        { marker_code: 'akkermansia', label: 'Akkermansia', status: 'surveiller' },
+        { marker_code: 'histamine_stool', label: 'Histamine intestinale', status: 'optimal' },
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'optimal' },
+      ]],
+    ]);
+    const out = detectMicrobiomeStage({ journeyState: journey });
+    expect(out.inferred_phase).toBe(2);
+    expect(out.final_phase).toBe(2);
+    expect(out.label).toBe('Recolonisation');
+    // Au moins une des règles diversité doit avoir fire
+    expect(out.reasons.some((r) => /diversité/i.test(r) || /Diversité/i.test(r))).toBe(true);
+  });
+
+  it('Cas 3 — candida prio + parasites surveiller → P1 inférée, confidence renforcée par candida_avec_pathogene', () => {
+    // Avant V3.G : P1 inférée mais confidence faible (2 votes)
+    // Après V3.G : nouvelle règle candida_avec_pathogene weight 1
+    //   candida_prioritaire (2) + candida_avec_pathogene (1) = 3 votes
+    // → P1 inférée, confidence modérée
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'prioritaire' },
+        { marker_code: 'parasites_qpcr', label: 'Parasites qPCR', status: 'surveiller' },
+        { marker_code: 'calprotectine', label: 'Calprotectine', status: 'optimal' },
+        { marker_code: 'zonuline', label: 'Zonuline', status: 'optimal' },
+        { marker_code: 'iga_secretoire', label: 'IgA sécrétoire', status: 'optimal' },
+      ]],
+    ]);
+    const out = detectMicrobiomeStage({ journeyState: journey });
+    expect(out.inferred_phase).toBe(1);
+    expect(out.final_phase).toBe(1);
+    expect(out.label).toBe('Éradication');
+    expect(out.confidence).toBe('modérée');
+    expect(out.reasons.some((r) => /pathogène/i.test(r) || /parasites/i.test(r))).toBe(true);
+  });
+
+  // Garde-fous : nouvelles règles ne doivent pas surclasser des cas
+  // qui n'auraient pas dû fire.
+
+  it('Garde-fou diversite_prioritaire_isolee : ne fire PAS si un marker barrière est prioritaire', () => {
+    // Diversité prio + zonuline prio → règle ne doit pas fire (pas isolée)
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'diversite_microbiote', label: 'Diversité', status: 'prioritaire' },
+        { marker_code: 'zonuline', label: 'Zonuline', status: 'prioritaire' },
+        // Ajout pour faire pencher vers P3 : permeabilite_pattern doit fire (zonuline + calprotectine)
+        { marker_code: 'calprotectine', label: 'Calprotectine', status: 'surveiller' },
+      ]],
+    ]);
+    const out = detectMicrobiomeStage({ journeyState: journey });
+    // P3 doit gagner (permeabilite_pattern weight 3) sur ce profil
+    expect(out.inferred_phase).toBe(3);
+    expect(out.reasons.every((r) => !/isolée/i.test(r))).toBe(true);
+  });
+
+  it('Garde-fou candida_avec_pathogene : ne fire PAS sans candida prioritaire', () => {
+    // parasites surveiller mais candida optimal → règle ne doit pas fire
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'optimal' },
+        { marker_code: 'parasites_qpcr', label: 'Parasites', status: 'surveiller' },
+      ]],
+    ]);
+    const out = detectMicrobiomeStage({ journeyState: journey });
+    expect(out.reasons.every((r) => !/pathogène/i.test(r))).toBe(true);
+  });
+});
+
