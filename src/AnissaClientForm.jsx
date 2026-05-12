@@ -435,6 +435,95 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
                 ))}
               </div>
             </div>
+
+            {/* V97.4 V3.H Gap #2 — Transit détaillé (consommé par moteur microbiome) */}
+            <div className="field full-width">
+              <label>Fréquence des selles</label>
+              <div className="radio-group">
+                {[
+                  { value: 'moins_3_par_semaine', label: '< 3 fois / semaine' },
+                  { value: '1_par_jour', label: '1 fois / jour' },
+                  { value: '2_3_par_jour', label: '2–3 fois / jour' },
+                  { value: 'plus_3_par_jour', label: '> 3 fois / jour' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="frequence_selles" value={opt.value}
+                      checked={form.frequence_selles === opt.value}
+                      onChange={e => updateField('frequence_selles', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Type de selles (Bristol simplifié)</label>
+              <div className="radio-group">
+                {[
+                  { value: '1_2', label: 'Type 1–2 (dures, en billes)' },
+                  { value: '3_4', label: 'Type 3–4 (normales, formées)' },
+                  { value: '5', label: 'Type 5 (molles)' },
+                  { value: '6_7', label: 'Type 6–7 (liquides, diarrhéiques)' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="bristol_selles" value={opt.value}
+                      checked={form.bristol_selles === opt.value}
+                      onChange={e => updateField('bristol_selles', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Douleurs digestives</label>
+              <div className="radio-group">
+                {[
+                  { value: 'non', label: 'Non' },
+                  { value: 'occasionnelles', label: 'Occasionnelles' },
+                  { value: 'frequentes', label: 'Fréquentes' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="douleurs_digestives" value={opt.value}
+                      checked={form.douleurs_digestives === opt.value}
+                      onChange={e => updateField('douleurs_digestives', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Reflux / brûlures gastriques</label>
+              <div className="radio-group">
+                {[
+                  { value: 'non', label: 'Non' },
+                  { value: 'occasionnel', label: 'Occasionnel' },
+                  { value: 'frequent', label: 'Fréquent' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="reflux" value={opt.value}
+                      checked={form.reflux === opt.value}
+                      onChange={e => updateField('reflux', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Ballonnements après les repas</label>
+              <div className="radio-group">
+                {[
+                  { value: 'non', label: 'Non' },
+                  { value: 'occasionnels', label: 'Occasionnels' },
+                  { value: 'frequents', label: 'Fréquents' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="ballonnements_post_repas" value={opt.value}
+                      checked={form.ballonnements_post_repas === opt.value}
+                      onChange={e => updateField('ballonnements_post_repas', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -162,6 +162,18 @@ export const MICROBIOME_RULES = [
       !!antibioSignals?.hasHeavyAntibioticHistory,
     reason: 'Infections récurrentes + antibiotiques répétés (terrain immunitaire fragilisé)',
   },
+  // V3.H Gap #2 : constipation chronique + ballonnements post-repas.
+  // Pattern dysbiose fermentaire / méthanogène. Oriente vers
+  // recolonisation prudente (P2). Weight 1 isolé, renforce les markers.
+  {
+    id: 'transit_constipation_pattern',
+    phase: 2,
+    weight: 1,
+    when: ({ transitSignals }) =>
+      !!transitSignals?.hasConstipation &&
+      !!transitSignals?.hasPostprandialBloating,
+    reason: 'Constipation + ballonnements post-repas (pattern dysbiose fermentaire)',
+  },
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 3 — MUQUEUSE / IMMUNORÉGULATION (réparer barrière)
@@ -187,6 +199,28 @@ export const MICROBIOME_RULES = [
       hasMarkerWithStatus(index, 'calprotectine', 'prioritaire') &&
       !hasMarkerWithStatus(index, 'candida_albicans', 'prioritaire'),
     reason: 'Calprotectine prioritaire sans candida aigu → inflammation locale, focus muqueuse',
+  },
+  // V3.H Gap #2 : diarrhée + douleurs digestives fréquentes.
+  // Pattern inflammatoire intestinal probable. Weight 1.
+  {
+    id: 'transit_inflammation_pattern',
+    phase: 3,
+    weight: 1,
+    when: ({ transitSignals }) =>
+      !!transitSignals?.hasDiarrhea &&
+      !!transitSignals?.hasFrequentDigestivePain,
+    reason: 'Diarrhée + douleurs digestives fréquentes (pattern inflammatoire local)',
+  },
+  // V3.H Gap #2 : reflux chronique + ballonnements post-repas.
+  // Suggère SIBO haut / hypochlorhydrie. Oriente muqueuse haute. Weight 1.
+  {
+    id: 'transit_reflux_avec_bloating',
+    phase: 3,
+    weight: 1,
+    when: ({ transitSignals }) =>
+      !!transitSignals?.hasChronicReflux &&
+      !!transitSignals?.hasPostprandialBloating,
+    reason: 'Reflux chronique + ballonnements post-repas (suggère SIBO haut / hypochlorhydrie)',
   },
 
   // ═══════════════════════════════════════════════════════════════

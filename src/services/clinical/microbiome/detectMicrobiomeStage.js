@@ -16,7 +16,7 @@
 //
 // Ne throw jamais. Retourne toujours un objet (avec phase null si rien).
 
-import { getMarkerStatusIndex, getFormAntibioticSignals } from './microbiomeSignals';
+import { getMarkerStatusIndex, getFormAntibioticSignals, getFormTransitSignals } from './microbiomeSignals';
 import { MICROBIOME_RULES } from './microbiomeRules';
 import { getPhase } from './phases';
 
@@ -65,7 +65,14 @@ export function detectMicrobiomeStage({ journeyState, form } = {}) {
   } catch {
     antibioSignals = null;
   }
-  const signals = { index, antibioSignals };
+  // V3.H Gap #2 : signaux transit depuis le form (best-effort).
+  let transitSignals = null;
+  try {
+    transitSignals = form ? getFormTransitSignals(form) : null;
+  } catch {
+    transitSignals = null;
+  }
+  const signals = { index, antibioSignals, transitSignals };
 
   // 2. Évaluer les règles
   const votesByPhase = new Map(); // phase → total weight

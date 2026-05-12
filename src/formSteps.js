@@ -69,6 +69,13 @@ export const NUTRITION_INITIAL_FORM = {
   antibiotiques_frequence_12mois: '', // 'aucune' | '1_cure' | '2_3_cures' | '4_plus_cures'
   antifongiques_recents: '',          // 'oui_12_mois' | 'non'
   infections_recurrentes: '',         // 'aucune' | 'occasionnelles' | 'frequentes'
+  // V97.4 V3.H Gap #2 — Transit détaillé (le moteur microbiome y est sensible).
+  // Consommé par detectMicrobiomeStage via microbiomeSignals.getFormTransitSignals.
+  frequence_selles: '',         // 'moins_3_par_semaine' | '1_par_jour' | '2_3_par_jour' | 'plus_3_par_jour'
+  bristol_selles: '',           // '1_2' (dures) | '3_4' (normales) | '5' (molles) | '6_7' (liquides)
+  douleurs_digestives: '',      // 'non' | 'occasionnelles' | 'frequentes'
+  reflux: '',                   // 'non' | 'occasionnel' | 'frequent'
+  ballonnements_post_repas: '', // 'non' | 'occasionnels' | 'frequents'
   // Etape 8 - Inflammation & Immunite
   douleursInflammations: '',
   frequenceMaladies: '',

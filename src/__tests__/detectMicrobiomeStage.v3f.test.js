@@ -416,3 +416,119 @@ describe('V3.H Gap #1 — règles antibiotiques (form)', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// V3.H Gap #2 — Transit détaillé depuis l'anamnèse.
+// ═══════════════════════════════════════════════════════════════════
+
+describe('V3.H Gap #2 — règles transit (form)', () => {
+
+  it('Bristol 1-2 + ballonnements fréquents seul → sous-seuil (1 vote isolé)', () => {
+    const form = {
+      bristol_selles: '1_2',
+      ballonnements_post_repas: 'frequents',
+    };
+    const out = detectMicrobiomeStage({ journeyState: {}, form });
+    // 1 vote P2 isolé → null
+    expect(out.inferred_phase).toBeNull();
+    expect(out.reasons.some((r) => /Constipation.{0,30}ballonnements/i.test(r))).toBe(true);
+  });
+
+  it('Bristol 1-2 + ballonnements + diversité prio → P2 modérée (combo)', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'diversite_microbiote', label: 'Diversité', status: 'prioritaire' },
+      ]],
+    ]);
+    const form = {
+      bristol_selles: '1_2',
+      ballonnements_post_repas: 'frequents',
+    };
+    const out = detectMicrobiomeStage({ journeyState: journey, form });
+    // diversite_prioritaire_isolee (2) + transit_constipation_pattern (1)
+    // + diversite_basse_sans_inflammation_aigue (1) = 4 votes P2
+    expect(out.inferred_phase).toBe(2);
+    expect(out.confidence).toBe('forte'); // ≥4
+  });
+
+  it('Diarrhée Bristol 6-7 + douleurs fréquentes → P3 sous-seuil isolé', () => {
+    const form = {
+      bristol_selles: '6_7',
+      douleurs_digestives: 'frequentes',
+    };
+    const out = detectMicrobiomeStage({ journeyState: {}, form });
+    // 1 vote P3 isolé → null mais reason listée
+    expect(out.inferred_phase).toBeNull();
+    expect(out.reasons.some((r) => /Diarrh\u00e9e.{0,30}douleurs/i.test(r))).toBe(true);
+  });
+
+  it('Diarrhée + douleurs + zonuline prio + calprotectine surveiller → P3 forte', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'zonuline', label: 'Zonuline', status: 'prioritaire' },
+        { marker_code: 'calprotectine', label: 'Calprotectine', status: 'surveiller' },
+      ]],
+    ]);
+    const form = {
+      bristol_selles: '6_7',
+      douleurs_digestives: 'frequentes',
+    };
+    const out = detectMicrobiomeStage({ journeyState: journey, form });
+    // permeabilite_pattern (3) + transit_inflammation_pattern (1) = 4 votes P3
+    expect(out.inferred_phase).toBe(3);
+    expect(out.confidence).toBe('forte');
+  });
+
+  it('Reflux fréquent + ballonnements fréquents → P3 sous-seuil isolé', () => {
+    const form = {
+      reflux: 'frequent',
+      ballonnements_post_repas: 'frequents',
+    };
+    const out = detectMicrobiomeStage({ journeyState: {}, form });
+    // 1 vote P3 isolé → null mais reason listée
+    expect(out.inferred_phase).toBeNull();
+    expect(out.reasons.some((r) => /Reflux.*SIBO/i.test(r))).toBe(true);
+  });
+
+  it('Reflux + bloating + zonuline prio + IgA surveiller → P3 forte (combo)', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'zonuline', label: 'Zonuline', status: 'prioritaire' },
+        { marker_code: 'iga_secretoire', label: 'IgA', status: 'surveiller' },
+      ]],
+    ]);
+    const form = {
+      reflux: 'frequent',
+      ballonnements_post_repas: 'frequents',
+    };
+    const out = detectMicrobiomeStage({ journeyState: journey, form });
+    // permeabilite_pattern (3) + transit_reflux_avec_bloating (1) = 4 votes P3
+    expect(out.inferred_phase).toBe(3);
+    expect(out.confidence).toBe('forte');
+  });
+
+  it('Garde-fou : Bristol 3-4 + ballonnements non → aucune règle transit ne fire', () => {
+    const form = {
+      bristol_selles: '3_4',
+      ballonnements_post_repas: 'non',
+      reflux: 'non',
+      douleurs_digestives: 'non',
+    };
+    const out = detectMicrobiomeStage({ journeyState: {}, form });
+    expect(out.inferred_phase).toBeNull();
+    expect(out.reasons.every((r) => !/Constipation|Diarrh\u00e9e|Reflux/i.test(r))).toBe(true);
+  });
+
+  it('Rétro-compat : form sans champ transit → V3.H Gap #1 inchangé', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'prioritaire' },
+      ]],
+    ]);
+    const formGap1 = { antibiotiques_recents: 'moins_3_mois' };
+    const out = detectMicrobiomeStage({ journeyState: journey, form: formGap1 });
+    // Comportement identique au test Gap #1 antibio < 3 mois + candida
+    expect(out.inferred_phase).toBe(1);
+    expect(out.confidence).toBe('forte');
+  });
+});
+

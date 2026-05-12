@@ -146,3 +146,45 @@ export function getFormAntibioticSignals(form) {
     hasRecurrentInfections,
   };
 }
+
+/**
+ * V97.4 V3.H Gap #2 — Extrait les signaux transit depuis le form.
+ *
+ * Conservateur : on combine plusieurs champs pour qualifier un pattern,
+ * jamais un seul signal isolé (anti-faux-positifs).
+ *
+ *   - hasConstipation        : frequence < 3/semaine OU Bristol 1-2
+ *   - hasDiarrhea            : frequence > 3/jour OU Bristol 6-7
+ *   - hasFrequentDigestivePain : douleurs digestives "frequentes"
+ *   - hasChronicReflux       : reflux "frequent"
+ *   - hasPostprandialBloating: ballonnements post-repas "frequents"
+ *
+ * Tout absent → tous les flags à false (pas de signal).
+ *
+ * @param {object} form
+ * @returns {{ hasConstipation: boolean, hasDiarrhea: boolean,
+ *            hasFrequentDigestivePain: boolean, hasChronicReflux: boolean,
+ *            hasPostprandialBloating: boolean }}
+ */
+export function getFormTransitSignals(form) {
+  const safe = form || {};
+  const freq = safe.frequence_selles;
+  const bristol = safe.bristol_selles;
+  const douleurs = safe.douleurs_digestives;
+  const reflux = safe.reflux;
+  const bloating = safe.ballonnements_post_repas;
+
+  const hasConstipation = freq === 'moins_3_par_semaine' || bristol === '1_2';
+  const hasDiarrhea = freq === 'plus_3_par_jour' || bristol === '6_7';
+  const hasFrequentDigestivePain = douleurs === 'frequentes';
+  const hasChronicReflux = reflux === 'frequent';
+  const hasPostprandialBloating = bloating === 'frequents';
+
+  return {
+    hasConstipation,
+    hasDiarrhea,
+    hasFrequentDigestivePain,
+    hasChronicReflux,
+    hasPostprandialBloating,
+  };
+}
