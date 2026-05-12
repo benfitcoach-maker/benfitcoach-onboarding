@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { supabase } from '../supabaseClient';
+import { trackStepTransition } from './observability';
 
 export const JOURNEY_STEPS = [
   'anamnesis',
@@ -157,43 +158,52 @@ export async function updateJourneyState(clientId, patch) {
 
 /**
  * Transitions metier pour les 8 etapes.
+ * Chaque transition emet un event step_transition (best-effort, ne bloque jamais)
+ * pour la couche observabilite — captures temps reel d'utilisation Anissa.
  */
 export const transitions = {
   // Etape 1 → 2
-  validateAnamnesis: (clientId) => updateJourneyState(clientId, {
-    anamnesis_validated: true,
-    current_step: 'analyses',
-  }),
+  validateAnamnesis: async (clientId) => {
+    const r = await updateJourneyState(clientId, { anamnesis_validated: true, current_step: 'analyses' });
+    trackStepTransition({ clientId, fromStep: 'anamnesis', toStep: 'analyses' });
+    return r;
+  },
   // Etape 2 → 3
-  validateAnalyses: (clientId) => updateJourneyState(clientId, {
-    analyses_validated: true,
-    current_step: 'waiting_results',
-  }),
+  validateAnalyses: async (clientId) => {
+    const r = await updateJourneyState(clientId, { analyses_validated: true, current_step: 'waiting_results' });
+    trackStepTransition({ clientId, fromStep: 'analyses', toStep: 'waiting_results' });
+    return r;
+  },
   // Etape 2 skip → 5 (saute attente, resultats — direct generation plan)
-  skipAnalyses: (clientId) => updateJourneyState(clientId, {
-    analyses_skipped: true,
-    current_step: 'plan_generation',
-  }),
+  skipAnalyses: async (clientId) => {
+    const r = await updateJourneyState(clientId, { analyses_skipped: true, current_step: 'plan_generation' });
+    trackStepTransition({ clientId, fromStep: 'analyses', toStep: 'plan_generation', direction: 'skip' });
+    return r;
+  },
   // Etape 3 → 4
-  markResultsReceived: (clientId) => updateJourneyState(clientId, {
-    results_received: true,
-    current_step: 'results',
-  }),
+  markResultsReceived: async (clientId) => {
+    const r = await updateJourneyState(clientId, { results_received: true, current_step: 'results' });
+    trackStepTransition({ clientId, fromStep: 'waiting_results', toStep: 'results' });
+    return r;
+  },
   // Etape 4 → 5
-  validateResults: (clientId) => updateJourneyState(clientId, {
-    results_validated: true,
-    current_step: 'plan_generation',
-  }),
+  validateResults: async (clientId) => {
+    const r = await updateJourneyState(clientId, { results_validated: true, current_step: 'plan_generation' });
+    trackStepTransition({ clientId, fromStep: 'results', toStep: 'plan_generation' });
+    return r;
+  },
   // Etape 5 → 6
-  markPlanGenerated: (clientId) => updateJourneyState(clientId, {
-    plan_generated: true,
-    current_step: 'plan_editing',
-  }),
+  markPlanGenerated: async (clientId) => {
+    const r = await updateJourneyState(clientId, { plan_generated: true, current_step: 'plan_editing' });
+    trackStepTransition({ clientId, fromStep: 'plan_generation', toStep: 'plan_editing' });
+    return r;
+  },
   // Etape 6 → 7
-  validatePlan: (clientId) => updateJourneyState(clientId, {
-    plan_validated: true,
-    current_step: 'delivery',
-  }),
+  validatePlan: async (clientId) => {
+    const r = await updateJourneyState(clientId, { plan_validated: true, current_step: 'delivery' });
+    trackStepTransition({ clientId, fromStep: 'plan_editing', toStep: 'delivery' });
+    return r;
+  },
   // Etape 7 → 8
   // AY (2026-05-11) : en plus du journey_state, on update aussi les champs
   // pack côté client (packStartedAt + packStartedAtConfirmed) pour que la
@@ -222,9 +232,10 @@ export const transitions = {
       // eslint-disable-next-line no-console
       console.warn('[markDelivered] Could not update pack flags:', e?.message);
     }
+    trackStepTransition({ clientId, fromStep: 'delivery', toStep: 'followup' });
     return next;
   },
-  // Etape 8 (terminal)
+  // Etape 8 (terminal — pas de transition, juste flag)
   startFollowup: (clientId) => updateJourneyState(clientId, {
     followup_started: true,
   }),
@@ -237,7 +248,9 @@ export const transitions = {
     const idx = JOURNEY_STEPS.indexOf(currentStepKey);
     if (idx <= 0) return null;
     const previous = JOURNEY_STEPS[idx - 1];
-    return updateJourneyState(clientId, { current_step: previous });
+    const r = await updateJourneyState(clientId, { current_step: previous });
+    trackStepTransition({ clientId, fromStep: currentStepKey, toStep: previous, direction: 'backward' });
+    return r;
   },
 
   // Phase AF : depuis l'etape 8 Suivi (cockpit vivant), permet de re-rentrer
@@ -246,13 +259,17 @@ export const transitions = {
   // curseur sur plan_editing pour qu'Anissa adapte le plan depuis les
   // derniers ressentis. Apres re-publication, restartFollowup revient sur
   // l'etape 8.
-  restartPlanEditing: (clientId) => updateJourneyState(clientId, {
-    current_step: 'plan_editing',
-  }),
+  restartPlanEditing: async (clientId) => {
+    const r = await updateJourneyState(clientId, { current_step: 'plan_editing' });
+    trackStepTransition({ clientId, fromStep: 'followup', toStep: 'plan_editing', direction: 'backward' });
+    return r;
+  },
   // Apres une re-publication, retour direct a l'etape 8 cockpit.
-  returnToFollowup: (clientId) => updateJourneyState(clientId, {
-    current_step: 'followup',
-  }),
+  returnToFollowup: async (clientId) => {
+    const r = await updateJourneyState(clientId, { current_step: 'followup' });
+    trackStepTransition({ clientId, fromStep: 'plan_editing', toStep: 'followup' });
+    return r;
+  },
 
   // Phase AJ : enregistre une consultation (RDV cabinet/visio) effectuee.
   // Append-only dans journey_state.consultations_log = [{date, notes}].
