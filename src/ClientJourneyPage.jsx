@@ -458,8 +458,58 @@ function StepAnamnesis({ client, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [sendingQuestionnaire, setSendingQuestionnaire] = useState(null); // 'app' | 'link' | null
+  // V97.4 — état local pour le CTA "Activer l'espace cliente" intégré
+  // directement dans la carte App cliente (anciennement renvoyait vers Profil).
+  const [activatingApp, setActivatingApp] = useState(false);
+  const [activationError, setActivationError] = useState(null);
   const form = client.form || {};
   const journey = client.journey_state || {};
+
+  // V97.4 — Active l'app cliente in-place depuis l'onboarding étape 1.
+  // Logique miroir de App.jsx ligne 1218 (création rapide) : POST
+  // invite-client + update Supabase clients.app_enabled=true.
+  // Best-effort : si l'invite échoue, on n'écrit pas app_enabled=true
+  // et on affiche l'erreur à Anissa pour qu'elle puisse retry.
+  const handleActivateApp = async () => {
+    setActivatingApp(true);
+    setActivationError(null);
+    try {
+      const email = client.form?.email || client.email;
+      if (!email) throw new Error('Cliente sans email — impossible d\'activer l\'app');
+
+      const { clientAppFetch } = await import('./services/clientAppFetch');
+      const packType = client.packType || client.pack_type || '';
+      const appMode = packType.startsWith('suivi_') ? 'followup' : 'oneshot';
+      const saasOrigin = window.location.origin;
+
+      const inviteRes = await clientAppFetch('/api/admin/invite-client', {
+        method: 'POST',
+        payload: {
+          email,
+          first_name: client.form?.prenom || client.prenom || 'Cliente',
+          mode: appMode,
+          questionnaire_url: `${saasOrigin}/questionnaire/${client.id}`,
+        },
+      });
+
+      if (!inviteRes?.ok) {
+        throw new Error(inviteRes?.error || 'L\'app cliente n\'a pas répondu correctement');
+      }
+
+      // Update local Supabase clients.app_enabled
+      const { error: updErr } = await supabase
+        .from('clients')
+        .update({ app_enabled: true })
+        .eq('id', client.id);
+      if (updErr) throw new Error(updErr.message);
+
+      onChange?.();
+    } catch (e) {
+      setActivationError(e?.message || 'Erreur d\'activation');
+    } finally {
+      setActivatingApp(false);
+    }
+  };
 
   // ─── Détection statuts ──────────────────────────────────────────
   // Réponses reçues : le form a au moins un champ clé rempli (objectifs/symptômes/pathologies/activité)
@@ -522,7 +572,13 @@ function StepAnamnesis({ client, onChange }) {
               title="App cliente"
               description="Compte permanent avec timeline, notifications, suivi continu. Recommandé pour les suivis longs."
               status={client.app_enabled ? 'active' : 'inactive'}
-              hint={client.app_enabled ? 'Activée — la cliente peut se connecter via /login' : 'Activable depuis le bouton Profil en haut'}
+              hint={client.app_enabled
+                ? 'Activée — la cliente peut se connecter via son lien reçu par email.'
+                : 'Inactive — clique sur "Activer" pour créer son espace et lui envoyer le magic link.'}
+              ctaLabel={client.app_enabled ? null : 'Activer l\'espace cliente'}
+              onCtaClick={client.app_enabled ? null : handleActivateApp}
+              ctaBusy={activatingApp}
+              ctaError={activationError}
             />
             <OnboardingOption
               icon="⚖️"
@@ -687,7 +743,11 @@ function StepAnamnesis({ client, onChange }) {
 }
 
 // Bloc OnboardingOption — option avec icône, titre, description, statut
-function OnboardingOption({ icon, title, description, status, hint }) {
+// V97.4 (2026-05-12) : ajout props optionnelles ctaLabel + onCtaClick +
+// ctaBusy + ctaError pour transformer la carte d'un affichage passif en
+// CTA opérationnel. Utilisé pour activer l'app cliente directement depuis
+// l'onboarding étape 1 sans passer par le bouton Profil (= ancien doublon UX).
+function OnboardingOption({ icon, title, description, status, hint, ctaLabel, onCtaClick, ctaBusy, ctaError }) {
   // status: 'active' | 'inactive' | 'config-elsewhere'
   const badgeProps = {
     active:           { label: 'Activé',         bg: 'var(--jrn-accent-soft)',     color: 'var(--jrn-accent)' },
@@ -718,6 +778,26 @@ function OnboardingOption({ icon, title, description, status, hint }) {
         <div style={{ fontSize: 13, color: 'var(--jrn-text-soft)', lineHeight: 1.55 }}>{description}</div>
         {hint && (
           <div style={{ fontSize: 11, color: 'var(--jrn-text-muted)', marginTop: 4, fontStyle: 'italic' }}>{hint}</div>
+        )}
+        {/* V97.4 — CTA fonctionnel quand on a un callback (typiquement
+            "Activer l'espace cliente" pour App cliente inactive). */}
+        {ctaLabel && onCtaClick && (
+          <div style={{ marginTop: 'var(--jrn-3)' }}>
+            <button
+              type="button"
+              onClick={onCtaClick}
+              disabled={ctaBusy}
+              className="jrn-btn jrn-btn--soft"
+              style={{ fontSize: 13 }}
+            >
+              {ctaBusy ? '…' : ctaLabel}
+            </button>
+            {ctaError && (
+              <div style={{ marginTop: 'var(--jrn-2)', fontSize: 12, color: 'var(--jrn-error, #b22222)' }}>
+                {ctaError}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
