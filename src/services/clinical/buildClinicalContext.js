@@ -170,9 +170,9 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
     if (!Array.isArray(r.markers)) continue;
     const testLabel = r.test_name || r.test_code || 'Test sans nom';
     for (const m of r.markers) {
-      if (!m) continue;
+      if (!m || !m.marker_code) continue; // V3.H : exige marker_code (cohérence avec microbiomeSignals)
       if (!m.value && !m.synthesis) continue;
-      const markerLabel = m.label || m.marker_code || 'Marqueur';
+      const markerLabel = m.label || m.marker_code;
       markerLevelEntries.push({
         label: `${testLabel} → ${markerLabel}`,
         value: m.value || '',
@@ -225,10 +225,10 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
     if (!Array.isArray(r.markers)) continue;
     const testLabel = r.test_name || r.test_code || 'Test';
     for (const m of r.markers) {
-      if (!m) continue;
+      if (!m || !m.marker_code) continue; // V3.H : exige marker_code (cohérence cross-couche)
       const status = m.status;
       if (status !== 'prioritaire' && status !== 'surveiller') continue;
-      const markerLabel = m.label || m.marker_code || 'Marqueur';
+      const markerLabel = m.label || m.marker_code;
       const composed = `${testLabel} → ${markerLabel}`;
       markerLevelSignals.push({
         id: `${status}_${slugify(`${testLabel}_${markerLabel}`)}`,
