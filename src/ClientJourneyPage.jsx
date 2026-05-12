@@ -2499,36 +2499,49 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
       />
 
       {!started && (
-        <div className="jrn-surface jrn-surface--quiet" style={{ marginBottom: 'var(--jrn-6)' }}>
-          <p style={{ margin: 0, fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)' }}>
-            Le parcours initial est complet. Marquez le suivi comme enclenché pour activer ce cockpit.
-          </p>
-          <div className="jrn-actions" style={{ marginTop: 'var(--jrn-3)' }}>
-            <button onClick={handleStart} disabled={busy} className="jrn-btn jrn-btn--primary">
-              {busy ? '…' : 'Activer le suivi continu'}
-            </button>
+        <div className="jrn-block">
+          <div className="jrn-surface jrn-surface--quiet">
+            <div className="jrn-empty">
+              <div className="jrn-empty__icon">🔄</div>
+              <p className="jrn-empty__title">Suivi non démarré</p>
+              <p className="jrn-empty__hint">
+                Le parcours initial est complet (livraison validée à l'étape 7). Active le cockpit de suivi pour commencer à logger les consultations, ressentis et adaptations.
+              </p>
+              <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
+                <button onClick={handleStart} disabled={busy} className="jrn-btn jrn-btn--hero">
+                  {busy ? '…' : '🔄 Activer le suivi continu'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {started && (
         <>
-          {/* ─── Section : Consultations effectuées ─────────────── */}
-          <div style={{ marginBottom: 'var(--jrn-6)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)' }}>
-              <p className="jrn-label" style={{ margin: 0 }}>
-                Consultations {consultationsTotal > 0 ? `(${consultationsUsed}/${consultationsTotal})` : `(${consultationsUsed})`}
-              </p>
-              <button
-                onClick={() => setShowLogModal(true)}
-                disabled={consultationsTotal > 0 && consultationsUsed >= consultationsTotal}
-                className="jrn-btn jrn-btn--primary"
-                style={{ padding: '6px 14px', fontSize: 12 }}
-                title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Marquer une nouvelle consultation effectuée'}
-              >
-                ✅ Consultation effectuée
-              </button>
+          {/* BC.5 Étape 8 : refonte en blocs numérotés (alignement étapes 1-7) */}
+
+          {/* ─── Bloc 1 : Consultations ─────────────────────────── */}
+          <div className="jrn-block">
+            <div className="jrn-block__head">
+              <span className="jrn-block__num">1</span>
+              <h3 className="jrn-block__title">
+                Consultations {consultationsTotal > 0 ? `· ${consultationsUsed}/${consultationsTotal}` : `· ${consultationsUsed}`}
+              </h3>
+              <div className="jrn-block__head-meta">
+                <button
+                  onClick={() => setShowLogModal(true)}
+                  disabled={consultationsTotal > 0 && consultationsUsed >= consultationsTotal}
+                  className="jrn-btn jrn-btn--soft"
+                  title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Marquer une nouvelle consultation effectuée'}
+                >
+                  ✅ Consultation effectuée
+                </button>
+              </div>
             </div>
+            <p className="jrn-block__intro">
+              Chaque RDV cabinet ou visio doit être enregistré ici. Le compteur alimente la timeline du pack et limite à la quantité incluse.
+            </p>
 
             {consultationsLog.length === 0 && (
               <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
@@ -2599,16 +2612,31 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             )}
           </div>
 
-          {/* ─── Section : suivi du poids ───────────────────────── */}
-          <WeightTrackingSection
-            client={client}
-            entries={weightEntries}
-            loading={loadingWeight}
-          />
+          {/* ─── Bloc 2 : Suivi du poids ─────────────────────────── */}
+          <div className="jrn-block">
+            <div className="jrn-block__head">
+              <span className="jrn-block__num">2</span>
+              <h3 className="jrn-block__title">Suivi du poids{weightEntries.length > 0 ? ` · ${weightEntries.length} pesée${weightEntries.length > 1 ? 's' : ''}` : ''}</h3>
+            </div>
+            <WeightTrackingSection
+              client={client}
+              entries={weightEntries}
+              loading={loadingWeight}
+            />
+          </div>
 
-          {/* ─── Section : derniers ressentis ──────────────────── */}
-          <div style={{ marginBottom: 'var(--jrn-6)' }}>
-            <p className="jrn-label">Derniers ressentis ({feedbacks.length})</p>
+          {/* ─── Bloc 3 : Derniers ressentis ─────────────────────── */}
+          <div className="jrn-block">
+            <div className="jrn-block__head">
+              <span className="jrn-block__num">3</span>
+              <h3 className="jrn-block__title">Derniers ressentis · {feedbacks.length}</h3>
+              <div className="jrn-block__head-meta">
+                <span className="jrn-meta-chip jrn-meta-chip--neutral">14 derniers jours</span>
+              </div>
+            </div>
+            <p className="jrn-block__intro">
+              Les ressentis quotidiens de la cliente nourrissent l'adaptation IA du plan (bloc 4 ci-dessous).
+            </p>
             {loadingFb && <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>}
             {!loadingFb && feedbacks.length === 0 && (
               <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
@@ -2638,22 +2666,27 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             )}
           </div>
 
-          {/* ─── Section : actions de cycle (AY : enrichie) ─────── */}
-          <div style={{ marginBottom: 'var(--jrn-6)' }}>
-            <p className="jrn-label">Cycle de suivi</p>
-            <div className="jrn-actions">
+          {/* ─── Bloc 4 : Cycle de suivi — actions ─────────────── */}
+          <div className="jrn-block">
+            <div className="jrn-block__head">
+              <span className="jrn-block__num">4</span>
+              <h3 className="jrn-block__title">Cycle de suivi — actions</h3>
+            </div>
+            <p className="jrn-block__intro">
+              Cycle : <strong>Adapter</strong> (IA depuis ressentis) → <strong>Éditer</strong> (étape 6) → <strong>Republier</strong> (étape 7) → retour ici. Plan de reprise = relance après pause.
+            </p>
+            <div className="jrn-actions" style={{ marginTop: 0 }}>
               <button
                 onClick={handleAdaptFromFeedback}
                 disabled={adapting || feedbacks.length === 0}
-                className="jrn-btn jrn-btn--primary"
-                title="L'IA adapte le plan en tenant compte des derniers ressentis cliente"
+                className="jrn-btn jrn-btn--hero"
+                title={feedbacks.length === 0 ? 'Aucun ressenti à exploiter' : "L'IA adapte le plan en tenant compte des derniers ressentis cliente"}
               >
-                {adapting ? 'Adaptation IA…' : '✨ Adapter le plan depuis les ressentis'}
+                {adapting ? 'Adaptation IA…' : '✨ Adapter le plan depuis les ressentis →'}
               </button>
               <button onClick={handleRestartEditing} disabled={busy} className="jrn-btn jrn-btn--soft">
                 Éditer manuellement
               </button>
-              {/* AY : Plan de reprise (migré du menu Plus du dashboard) */}
               {onReturnPlan && (
                 <button
                   onClick={() => onReturnPlan(client)}
@@ -2664,7 +2697,6 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                   🔁 Plan de reprise
                 </button>
               )}
-              {/* AZ.3 : Voir historique complet des consultations (migré du menu Plus) */}
               {onViewHistory && (
                 <button
                   onClick={() => onViewHistory(client.id)}
@@ -2675,19 +2707,27 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                 </button>
               )}
             </div>
-            <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-              Cycle : Adapter → Éditer (étape 6) → Republier (étape 7) → retour ici. Plan de reprise = relance après pause.
-            </p>
           </div>
 
-          {/* ─── Section : Bilan pack 4 semaines (AY : migré du menu Plus) ─── */}
-          <PackReviewSection client={client} onSendPackReview={onSendPackReview} />
+          {/* ─── Bloc 5 : Bilan pack 4 semaines ─────────────────── */}
+          <div className="jrn-block">
+            <div className="jrn-block__head">
+              <span className="jrn-block__num">5</span>
+              <h3 className="jrn-block__title">Bilan de cycle</h3>
+            </div>
+            <PackReviewSection client={client} onSendPackReview={onSendPackReview} />
+          </div>
 
-
-          {/* ─── Section : historique des versions ──────────────── */}
+          {/* ─── Bloc 6 : Historique des versions ─────────────── */}
           {versions.length > 0 && (
-            <div style={{ marginBottom: 'var(--jrn-6)' }}>
-              <p className="jrn-label">Historique des versions du plan ({versions.length})</p>
+            <div className="jrn-block">
+              <div className="jrn-block__head">
+                <span className="jrn-block__num">6</span>
+                <h3 className="jrn-block__title">Historique des versions · {versions.length}</h3>
+              </div>
+              <p className="jrn-block__intro">
+                Une nouvelle version est créée à chaque adaptation. La cliente voit uniquement la version active.
+              </p>
               <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
                 {versions.map((v, i) => {
                   const isActive = i === 0;
@@ -2749,13 +2789,11 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                   );
                 })}
               </div>
-              <p style={{ marginTop: 'var(--jrn-2)', fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
-                Une nouvelle version est créée à chaque adaptation. La cliente voit uniquement la version active.
-              </p>
             </div>
           )}
 
-          <div className="jrn-actions">
+          {/* ─── Footer : Retour dashboard ─────────────────────── */}
+          <div className="jrn-actions" style={{ marginTop: 'var(--jrn-6)' }}>
             <button onClick={onExit} className="jrn-btn jrn-btn--ghost">
               ← Retour dashboard
             </button>
