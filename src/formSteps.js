@@ -63,6 +63,12 @@ export const NUTRITION_INITIAL_FORM = {
   transitType: '',
   alimentsProblematiques: '',
   consommationReguliere: [],
+  // V97.4 V3.H Gap #1 — Pression antibiotique (impact microbiote majeur).
+  // Consommé par detectMicrobiomeStage via microbiomeSignals.getFormAntibioticSignals.
+  antibiotiques_recents: '',          // 'aucun' | 'moins_3_mois' | 'moins_12_mois' | 'plus_12_mois'
+  antibiotiques_frequence_12mois: '', // 'aucune' | '1_cure' | '2_3_cures' | '4_plus_cures'
+  antifongiques_recents: '',          // 'oui_12_mois' | 'non'
+  infections_recurrentes: '',         // 'aucune' | 'occasionnelles' | 'frequentes'
   // Etape 8 - Inflammation & Immunite
   douleursInflammations: '',
   frequenceMaladies: '',

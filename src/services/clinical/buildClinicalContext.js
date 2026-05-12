@@ -62,7 +62,7 @@ import { detectMicrobiomeStage } from './microbiome/detectMicrobiomeStage';
  * @returns {object} clinicalContext au format _clinicalContext.fr.js
  */
 // eslint-disable-next-line no-unused-vars
-export function buildClinicalContext({ journeyState, form: _form, catalog: _catalog } = {}) {
+export function buildClinicalContext({ journeyState, form, catalog: _catalog } = {}) {
   // Garde-fous : ne throw jamais, retourne toujours un objet valide
   const journey = journeyState || {};
   const rd = journey.results_data || {};
@@ -256,7 +256,8 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
   // label, goal, allowed_interventions, blocked_interventions).
   let microbiomeStage = null;
   try {
-    const stage = detectMicrobiomeStage({ journeyState });
+    // V3.H Gap #1 : on passe form pour activer les règles antibiotiques.
+    const stage = detectMicrobiomeStage({ journeyState, form });
     // On n'expose le bloc à l'IA QUE si on a quelque chose d'utile :
     // soit une phase finale, soit des raisons audit non-vides.
     if (stage && (stage.final_phase || (Array.isArray(stage.reasons) && stage.reasons.length > 0))) {

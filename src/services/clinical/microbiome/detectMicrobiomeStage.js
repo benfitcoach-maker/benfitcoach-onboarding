@@ -16,7 +16,7 @@
 //
 // Ne throw jamais. Retourne toujours un objet (avec phase null si rien).
 
-import { getMarkerStatusIndex } from './microbiomeSignals';
+import { getMarkerStatusIndex, getFormAntibioticSignals } from './microbiomeSignals';
 import { MICROBIOME_RULES } from './microbiomeRules';
 import { getPhase } from './phases';
 
@@ -43,20 +43,29 @@ const DISCORDANCE_MARGIN = 1;         // si runner-up est à ≤1 vote du leader
  */
 
 /**
- * Détecte la phase microbiome probable depuis le journey_state.
+ * Détecte la phase microbiome probable depuis le journey_state + form.
  *
  * @param {object} args
  * @param {object} [args.journeyState]
+ * @param {object} [args.form] - V3.H Gap #1 : signaux anamnèse antibiotiques.
+ *   Non requis pour rétro-compat ; si absent les règles form-based ne fire pas.
  * @returns {MicrobiomeStageOutput}
  */
-export function detectMicrobiomeStage({ journeyState } = {}) {
+export function detectMicrobiomeStage({ journeyState, form } = {}) {
   const journey = journeyState || {};
   const rd = journey.results_data || {};
   const fromPlan = Array.isArray(rd.from_plan) ? rd.from_plan : [];
 
   // 1. Index marker → status[]
   const index = getMarkerStatusIndex(fromPlan);
-  const signals = { index };
+  // V3.H Gap #1 : signaux antibiotiques depuis le form (best-effort, ne throw jamais).
+  let antibioSignals = null;
+  try {
+    antibioSignals = form ? getFormAntibioticSignals(form) : null;
+  } catch {
+    antibioSignals = null;
+  }
+  const signals = { index, antibioSignals };
 
   // 2. Évaluer les règles
   const votesByPhase = new Map(); // phase → total weight

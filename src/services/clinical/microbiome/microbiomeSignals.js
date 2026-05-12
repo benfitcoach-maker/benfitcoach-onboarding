@@ -100,3 +100,49 @@ export function getKnownMarkerCodes(index) {
   if (!index) return [];
   return Array.from(index.keys());
 }
+
+/**
+ * V97.4 V3.H Gap #1 — Extrait les signaux pression antibiotique depuis le form.
+ *
+ * Logique : retourne un objet booléen / numérique normalisé pour que les
+ * règles microbiome n'aient pas à parser les valeurs brutes du form.
+ *
+ *   - hasRecentAntibiotics       : antibio dans les 12 derniers mois
+ *   - hasVeryRecentAntibiotics   : antibio dans les 3 derniers mois (très fort signal)
+ *   - hasHeavyAntibioticHistory  : 2+ cures sur 12 mois OU cure prolongée
+ *   - hasRecentAntifungals       : antifongiques dans 12 mois (signal candida potentiel)
+ *   - hasRecurrentInfections     : infections fréquentes ou occasionnelles
+ *
+ * Tout absent → retourne tous les flags à false (pas de signal).
+ *
+ * @param {object} form
+ * @returns {{ hasRecentAntibiotics: boolean, hasVeryRecentAntibiotics: boolean,
+ *            hasHeavyAntibioticHistory: boolean, hasRecentAntifungals: boolean,
+ *            hasRecurrentInfections: boolean }}
+ */
+export function getFormAntibioticSignals(form) {
+  const safe = form || {};
+  const recents = safe.antibiotiques_recents;
+  const freq = safe.antibiotiques_frequence_12mois;
+  const antifongiques = safe.antifongiques_recents;
+  const infections = safe.infections_recurrentes;
+
+  const hasVeryRecentAntibiotics = recents === 'moins_3_mois';
+  const hasRecentAntibiotics =
+    recents === 'moins_3_mois' || recents === 'moins_12_mois';
+
+  const hasHeavyAntibioticHistory =
+    freq === '2_3_cures' || freq === '4_plus_cures';
+
+  const hasRecentAntifungals = antifongiques === 'oui_12_mois';
+  const hasRecurrentInfections =
+    infections === 'occasionnelles' || infections === 'frequentes';
+
+  return {
+    hasRecentAntibiotics,
+    hasVeryRecentAntibiotics,
+    hasHeavyAntibioticHistory,
+    hasRecentAntifungals,
+    hasRecurrentInfections,
+  };
+}

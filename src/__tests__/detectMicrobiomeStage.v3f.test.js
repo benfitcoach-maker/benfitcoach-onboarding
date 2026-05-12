@@ -325,3 +325,94 @@ describe('V3.G — régressions cas réels validés', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// V3.H Gap #1 — Pression antibiotique depuis l'anamnèse.
+// ═══════════════════════════════════════════════════════════════════
+
+describe('V3.H Gap #1 — règles antibiotiques (form)', () => {
+
+  it('antibio < 3 mois + candida flaggé → P1 renforcée', () => {
+    // antibio_recent_avec_candida (P1, w2) + candida_prioritaire (P1, w2) = 4 votes
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'prioritaire' },
+      ]],
+    ]);
+    const form = { antibiotiques_recents: 'moins_3_mois' };
+    const out = detectMicrobiomeStage({ journeyState: journey, form });
+    expect(out.inferred_phase).toBe(1);
+    expect(out.confidence).toBe('forte'); // ≥ 4 votes
+    expect(out.reasons.some((r) => /Antibiotiques.{0,5}< 3 mois.{0,30}Candida/i.test(r))).toBe(true);
+  });
+
+  it('antibio récent SANS candida → P2 recolonisation', () => {
+    // antibio_recent_sans_candida (P2, w2) seul = 2 votes
+    const form = { antibiotiques_recents: 'moins_12_mois' };
+    const out = detectMicrobiomeStage({ journeyState: { results_data: { from_plan: [], external: [] } }, form });
+    expect(out.inferred_phase).toBe(2);
+    expect(out.reasons.some((r) => /recolonisation post-antibiotique/i.test(r))).toBe(true);
+  });
+
+  it('antibio_recent_sans_candida ne fire PAS si candida flaggé (laisse antibio_avec_candida prendre P1)', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'surveiller' },
+      ]],
+    ]);
+    const form = { antibiotiques_recents: 'moins_3_mois' };
+    const out = detectMicrobiomeStage({ journeyState: journey, form });
+    expect(out.inferred_phase).toBe(1);
+    // La raison "recolonisation post-antibiotique" ne doit PAS être dans le résultat
+    expect(out.reasons.every((r) => !/recolonisation post-antibiotique/i.test(r))).toBe(true);
+  });
+
+  it('antifongiques récents seuls → P1 weight 1 (sous-seuil isolément)', () => {
+    const form = { antifongiques_recents: 'oui_12_mois' };
+    const out = detectMicrobiomeStage({ journeyState: {}, form });
+    // 1 vote sous le seuil → final_phase null, mais reasons listées
+    expect(out.inferred_phase).toBeNull();
+    expect(out.reasons.some((r) => /Antifongiques/i.test(r))).toBe(true);
+  });
+
+  it('antifongiques + candida prio → P1 modérée (combo)', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'prioritaire' },
+      ]],
+    ]);
+    const form = { antifongiques_recents: 'oui_12_mois' };
+    const out = detectMicrobiomeStage({ journeyState: journey, form });
+    expect(out.inferred_phase).toBe(1);
+    expect(out.confidence).toBe('modérée'); // 2 + 1 = 3 votes
+  });
+
+  it('infections récurrentes + heavy antibio history (combo) → P2 modérée', () => {
+    const form = {
+      infections_recurrentes: 'frequentes',
+      antibiotiques_frequence_12mois: '4_plus_cures',
+    };
+    const out = detectMicrobiomeStage({ journeyState: {}, form });
+    // antibio_recent_sans_candida fire (heavy history compte comme signal antibio, pas de candida) → 2
+    // infections_recurrentes_avec_antibio fire → 1
+    // Total P2 = 3 votes, confidence modérée.
+    expect(out.inferred_phase).toBe(2);
+    expect(out.confidence).toBe('modérée');
+    expect(out.reasons.some((r) => /Infections récurrentes/i.test(r))).toBe(true);
+  });
+
+  it('Form vide / absent → comportement identique à V3.G (rétro-compat)', () => {
+    const journey = makeJourney([
+      ['ortho_microbiome_complete_plus', [
+        { marker_code: 'candida_albicans', label: 'Candida', status: 'prioritaire' },
+      ]],
+    ]);
+    const outNoForm = detectMicrobiomeStage({ journeyState: journey });
+    const outEmptyForm = detectMicrobiomeStage({ journeyState: journey, form: {} });
+    // Phase identique aux 2 cas (form n'ajoute rien)
+    expect(outNoForm.inferred_phase).toBe(1);
+    expect(outEmptyForm.inferred_phase).toBe(1);
+    // Aucune règle form n'a fire
+    expect(outNoForm.reasons.every((r) => !/Antibiotiques/i.test(r))).toBe(true);
+  });
+});
+

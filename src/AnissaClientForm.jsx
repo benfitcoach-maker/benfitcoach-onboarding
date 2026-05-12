@@ -364,6 +364,77 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
             </div>
             <div className="field full-width"><label>Regimes suivis</label><SmartTextarea value={form.regimesSuivis || ''} onChange={e => updateField('regimesSuivis', e.target.value)} placeholder="Cetogene, paleo, jeune intermittent..." rows={2} /></div>
             <div className="field full-width"><label>Mastication / grignotages</label><SmartTextarea value={form.mastication} onChange={e => updateField('mastication', e.target.value)} placeholder="Vitesse de mastication, grignotages..." rows={2} /></div>
+
+            {/* V97.4 V3.H Gap #1 — Pression antibiotique (consommé par moteur microbiome) */}
+            <div className="field full-width">
+              <label>Antibiotiques récents</label>
+              <div className="radio-group">
+                {[
+                  { value: 'aucun', label: 'Aucun depuis &gt; 12 mois' },
+                  { value: 'moins_3_mois', label: 'Dans les 3 derniers mois' },
+                  { value: 'moins_12_mois', label: 'Dans les 12 derniers mois' },
+                  { value: 'plus_12_mois', label: 'Plus ancien' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="antibiotiques_recents" value={opt.value}
+                      checked={form.antibiotiques_recents === opt.value}
+                      onChange={e => updateField('antibiotiques_recents', e.target.value)} />
+                    <span dangerouslySetInnerHTML={{ __html: opt.label }} />
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Fréquence cures antibiotiques (12 derniers mois)</label>
+              <div className="radio-group">
+                {[
+                  { value: 'aucune', label: 'Aucune' },
+                  { value: '1_cure', label: '1 cure' },
+                  { value: '2_3_cures', label: '2–3 cures' },
+                  { value: '4_plus_cures', label: '4+ cures ou cure prolongée' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="antibiotiques_frequence_12mois" value={opt.value}
+                      checked={form.antibiotiques_frequence_12mois === opt.value}
+                      onChange={e => updateField('antibiotiques_frequence_12mois', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Antifongiques récents (12 derniers mois)</label>
+              <div className="radio-group">
+                {[
+                  { value: 'non', label: 'Non' },
+                  { value: 'oui_12_mois', label: 'Oui' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="antifongiques_recents" value={opt.value}
+                      checked={form.antifongiques_recents === opt.value}
+                      onChange={e => updateField('antifongiques_recents', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="field full-width">
+              <label>Infections récurrentes (ORL, urinaires, mycoses…)</label>
+              <div className="radio-group">
+                {[
+                  { value: 'aucune', label: 'Aucune' },
+                  { value: 'occasionnelles', label: 'Occasionnelles' },
+                  { value: 'frequentes', label: 'Fréquentes' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="infections_recurrentes" value={opt.value}
+                      checked={form.infections_recurrentes === opt.value}
+                      onChange={e => updateField('infections_recurrentes', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

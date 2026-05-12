@@ -74,6 +74,28 @@ export const MICROBIOME_RULES = [
       hasMarkerWithStatus(index, 'parasites_qpcr', 'prioritaire', 'surveiller'),
     reason: 'Candida prioritaire + parasites (qPCR) flaggés (pattern pathogène)',
   },
+  // V3.H Gap #1 : pression antibiotique très récente + candida flaggé.
+  // Combo classique post-antibiotique → mycose secondaire. P1 éradication
+  // est l'orientation logique. Weight 2 car combo très spécifique.
+  {
+    id: 'antibio_recent_avec_candida',
+    phase: 1,
+    weight: 2,
+    when: ({ index, antibioSignals }) =>
+      !!antibioSignals?.hasVeryRecentAntibiotics &&
+      hasMarkerWithStatus(index, 'candida_albicans', 'prioritaire', 'surveiller'),
+    reason: 'Antibiotiques < 3 mois + Candida flaggé (mycose post-antibiotique probable)',
+  },
+  // V3.H Gap #1 : antifongiques récents → suggère terrain candida déjà
+  // pris en charge OU en cours. Renforce P1 sans demander de marker positif.
+  {
+    id: 'antifongiques_recents',
+    phase: 1,
+    weight: 1,
+    when: ({ antibioSignals }) =>
+      !!antibioSignals?.hasRecentAntifungals,
+    reason: 'Antifongiques < 12 mois (terrain candida pris en charge récemment)',
+  },
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 2 — RECOLONISATION (stabiliser terrain)
@@ -111,6 +133,34 @@ export const MICROBIOME_RULES = [
         'prioritaire',
       ) === 0,
     reason: 'Diversité microbiote prioritaire isolée (aucun marker barrière/inflammation prioritaire)',
+  },
+  // V3.H Gap #1 : antibiotiques récents OU heavy history SANS candida
+  // flaggé → recolonisation logique. Weight 2 conservateur.
+  // Si candida est flaggé, antibio_recent_avec_candida prend le dessus (P1).
+  {
+    id: 'antibio_recent_sans_candida',
+    phase: 2,
+    weight: 2,
+    when: ({ index, antibioSignals }) => {
+      const sig = antibioSignals;
+      if (!sig) return false;
+      const candidaFlagged =
+        hasMarkerWithStatus(index, 'candida_albicans', 'prioritaire', 'surveiller');
+      if (candidaFlagged) return false;
+      return sig.hasRecentAntibiotics || sig.hasHeavyAntibioticHistory;
+    },
+    reason: 'Antibiotiques récents ou cures répétées sans candida flaggé (recolonisation post-antibiotique)',
+  },
+  // V3.H Gap #1 : infections récurrentes + heavy antibiotic history.
+  // Pattern terrain immunitaire fragile + dysbiose chronique.
+  {
+    id: 'infections_recurrentes_avec_antibio',
+    phase: 2,
+    weight: 1,
+    when: ({ antibioSignals }) =>
+      !!antibioSignals?.hasRecurrentInfections &&
+      !!antibioSignals?.hasHeavyAntibioticHistory,
+    reason: 'Infections récurrentes + antibiotiques répétés (terrain immunitaire fragilisé)',
   },
 
   // ═══════════════════════════════════════════════════════════════
