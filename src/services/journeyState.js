@@ -23,6 +23,63 @@
 
 import { supabase } from '../supabaseClient';
 import { trackStepTransition } from './observability';
+import { clientAppFetch } from './clientAppFetch';
+
+// V97.4 (2026-05-12) — Sync auto SaaS BC.5 → app cliente journey_status.
+// Avant ce mapping, Anissa devait avancer manuellement la timeline cliente
+// via le JourneyCockpit en plus de sa propre timeline SaaS. Risque énorme
+// d'oublis + clientes bloquées en 'welcome' (cas Camille 2026-05-12).
+//
+// Maintenant : chaque transition SaaS pousse automatiquement l'état cliente
+// correspondant via clientAppFetch (best-effort, ne bloque jamais la
+// transition SaaS si la sync échoue — l'observability tracking continue).
+//
+// Mapping métier (cf. cartographie d'audit 2026-05-12) :
+const SAAS_TO_CLIENT_APP = {
+  anamnesis:       'questionnaire',      // Anissa onboarde → cliente remplit pré-questionnaire
+  analyses:        'rdv_scheduled',      // Anissa prescrit analyses → RDV anamnèse fixé
+  waiting_results: 'analyses',           // Attente résultats labo
+  results:         'analyses',           // Anissa saisit résultats (mêmes côté cliente)
+  plan_generation: 'program_in_progress',// IA génère plan
+  plan_editing:    'program_in_progress',// Anissa édite plan
+  delivery:        'program_active',     // Plan livré → cliente voit /plan
+  followup:        'program_active',     // Suivi (état terminal côté cliente)
+};
+
+/**
+ * Pousse l'état cliente correspondant à l'étape SaaS, en best-effort.
+ * Ne throw jamais (les transitions SaaS ne doivent pas être bloquées si l'app
+ * cliente est down ou l'env CLIENT_APP_API_URL pas configuré).
+ *
+ * @param {string} clientId - id Supabase de la cliente côté SaaS
+ * @param {string} saasStep - clé JOURNEY_STEPS SaaS (ex 'results')
+ */
+async function syncClientAppStatus(clientId, saasStep) {
+  const targetStatus = SAAS_TO_CLIENT_APP[saasStep];
+  if (!targetStatus) return; // étape inconnue → no-op silencieux
+
+  try {
+    // Récupère l'email de la cliente (l'API admin client app accepte
+    // email OR client_id, on utilise email pour rester en phase avec
+    // les autres appels clientAppFetch du SaaS).
+    const { data: client } = await supabase
+      .from('clients')
+      .select('form')
+      .eq('id', clientId)
+      .maybeSingle();
+    const email = client?.form?.email;
+    if (!email) return; // cliente sans email → on ne peut pas la matcher côté app
+
+    await clientAppFetch('/api/admin/client-journey-status', {
+      method: 'POST',
+      payload: { email, status: targetStatus },
+    });
+  } catch (e) {
+    // Best-effort : log + continue (la transition SaaS reste valide même
+    // si la sync app échoue). Sera retentée à la prochaine transition.
+    console.warn('[journeyState] syncClientAppStatus failed:', e?.message || e);
+  }
+}
 
 export const JOURNEY_STEPS = [
   'anamnesis',
@@ -166,42 +223,49 @@ export const transitions = {
   validateAnamnesis: async (clientId) => {
     const r = await updateJourneyState(clientId, { anamnesis_validated: true, current_step: 'analyses' });
     trackStepTransition({ clientId, fromStep: 'anamnesis', toStep: 'analyses' });
+    syncClientAppStatus(clientId, 'analyses'); // V97.4 — sync auto
     return r;
   },
   // Etape 2 → 3
   validateAnalyses: async (clientId) => {
     const r = await updateJourneyState(clientId, { analyses_validated: true, current_step: 'waiting_results' });
     trackStepTransition({ clientId, fromStep: 'analyses', toStep: 'waiting_results' });
+    syncClientAppStatus(clientId, 'waiting_results');
     return r;
   },
   // Etape 2 skip → 5 (saute attente, resultats — direct generation plan)
   skipAnalyses: async (clientId) => {
     const r = await updateJourneyState(clientId, { analyses_skipped: true, current_step: 'plan_generation' });
     trackStepTransition({ clientId, fromStep: 'analyses', toStep: 'plan_generation', direction: 'skip' });
+    syncClientAppStatus(clientId, 'plan_generation');
     return r;
   },
   // Etape 3 → 4
   markResultsReceived: async (clientId) => {
     const r = await updateJourneyState(clientId, { results_received: true, current_step: 'results' });
     trackStepTransition({ clientId, fromStep: 'waiting_results', toStep: 'results' });
+    syncClientAppStatus(clientId, 'results');
     return r;
   },
   // Etape 4 → 5
   validateResults: async (clientId) => {
     const r = await updateJourneyState(clientId, { results_validated: true, current_step: 'plan_generation' });
     trackStepTransition({ clientId, fromStep: 'results', toStep: 'plan_generation' });
+    syncClientAppStatus(clientId, 'plan_generation');
     return r;
   },
   // Etape 5 → 6
   markPlanGenerated: async (clientId) => {
     const r = await updateJourneyState(clientId, { plan_generated: true, current_step: 'plan_editing' });
     trackStepTransition({ clientId, fromStep: 'plan_generation', toStep: 'plan_editing' });
+    syncClientAppStatus(clientId, 'plan_editing');
     return r;
   },
   // Etape 6 → 7
   validatePlan: async (clientId) => {
     const r = await updateJourneyState(clientId, { plan_validated: true, current_step: 'delivery' });
     trackStepTransition({ clientId, fromStep: 'plan_editing', toStep: 'delivery' });
+    syncClientAppStatus(clientId, 'delivery');
     return r;
   },
   // Etape 7 → 8
@@ -233,12 +297,15 @@ export const transitions = {
       console.warn('[markDelivered] Could not update pack flags:', e?.message);
     }
     trackStepTransition({ clientId, fromStep: 'delivery', toStep: 'followup' });
+    syncClientAppStatus(clientId, 'followup'); // V97.4 — sync auto → program_active
     return next;
   },
   // Etape 8 (terminal — pas de transition, juste flag)
-  startFollowup: (clientId) => updateJourneyState(clientId, {
-    followup_started: true,
-  }),
+  startFollowup: async (clientId) => {
+    const r = await updateJourneyState(clientId, { followup_started: true });
+    syncClientAppStatus(clientId, 'followup'); // V97.4 — idempotent (déjà program_active)
+    return r;
+  },
 
   // Phase K : navigation libre arriere. Permet de revenir consulter une etape
   // precedente sans perdre les booleans de validation. NE TOUCHE PAS aux
