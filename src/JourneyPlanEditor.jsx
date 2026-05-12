@@ -32,6 +32,13 @@ import { analyzeFullPlan } from './services/aiClient';
 import FicheFrigoPreview from './FicheFrigoPreview';
 import PremiumSwitch from './components/PremiumSwitch';
 
+// V97.4 V3.G — Date pivot pour le rollout progressif Composer beta.
+// Clientes créées >= cette date → V3 activé par défaut (markers détaillés,
+// microbiomeStage, clinicalContext). Anciennes clientes restent en opt-in
+// manuel pour éviter régression silencieuse sur dossiers déjà ouverts.
+// → Changer cette constante avant un ON global éventuel.
+const COMPOSER_BETA_DEFAULT_CUTOFF = '2026-05-12';
+
 export default function JourneyPlanEditor({ client, onPlanSaved }) {
   const [tab, setTab] = useState('plan'); // 'plan' | 'fridge'
   const [planText, setPlanText] = useState('');
@@ -642,10 +649,27 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   // Phase AN : composer beta profil-aware (digestif chronique, post-partum...)
   // Toggle persisté en localStorage par cliente. Détecte le profil clinique
   // depuis le form, injecte les modules MUST INCLUDE / INTERDITS spécifiques.
+  // V97.4 V3.G — Rollout progressif "Default ON pour nouvelles clientes".
+  // Décision Benoit 2026-05-12 : V3 (clinicalContext + markers + microbiomeStage)
+  // activé par défaut UNIQUEMENT pour les clientes créées à partir du cutoff.
+  // Les anciennes clientes restent OFF tant qu'Anissa ne coche pas explicitement
+  // → évite régressions silencieuses sur dossiers en cours.
+  //
+  // Hiérarchie de décision (du + prioritaire au -) :
+  //   1. Choix explicite stocké en localStorage (Anissa a déjà coché/décoché)
+  //   2. Cliente créée ≥ cutoff → ON par défaut
+  //   3. Sinon → OFF (legacy)
   const [composerBeta, setComposerBeta] = useState(() => {
     try {
       const stored = localStorage.getItem(`jpe_composer_beta_${client?.id}`);
-      return stored === 'true';
+      if (stored === 'true') return true;
+      if (stored === 'false') return false;
+      // Pas de choix explicite : on regarde l'âge de la cliente.
+      const created = client?.created_at;
+      if (created && new Date(created) >= new Date(COMPOSER_BETA_DEFAULT_CUTOFF)) {
+        return true;
+      }
+      return false;
     } catch { return false; }
   });
   useEffect(() => {
