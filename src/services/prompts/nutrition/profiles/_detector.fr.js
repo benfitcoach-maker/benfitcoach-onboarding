@@ -153,9 +153,32 @@ function detectPathologyProfiles(form) {
   const apneeNiveau = num(f.apneeSommeilNiveau || f.apneeNiveau || f.iah);
   const ageDiabete = num(f.ageDebutDiabete || f.dureeDiabete);
 
+  // V97.4 V3.H quick win — détection glycémie instable depuis les champs
+  // structurés (fringalesSucre, variationsGlycemie, reactionGlucides) qui
+  // sont collectés étape symptomes mais n'étaient pas exploités. PATTERN
+  // COMBINATOIRE (jamais un signal isolé) pour éviter faux positifs :
+  //   - fringales quotidiennes OU plusieurs fois par jour
+  //   - ET (variations glycémiques marquées OU réaction glucides hors "stable")
+  const fringales = lc(f.fringalesSucre);
+  const variationsGlyc = lc(f.variationsGlycemie);
+  const reactGluc = Array.isArray(f.reactionGlucides)
+    ? f.reactionGlucides.map(lc)
+    : [];
+  const hasStrongCravings = fringales.includes('quotidien') || fringales.includes('plusieurs');
+  const hasVariationsMarquees =
+    variationsGlyc.includes('permanence') ||
+    variationsGlyc.includes('apres les repas') ||
+    variationsGlyc.includes('milieu de journee');
+  const hasUnstableReaction = reactGluc.some((r) =>
+    r.includes('somnolence') || r.includes('faim rapide') || r.includes('ballonnement'),
+  );
+  const hasGlycemicInstability = hasStrongCravings && (hasVariationsMarquees || hasUnstableReaction);
+
   // Diabete : T1, T2, prediabete, glycemie, insulinoresistance.
+  // V3.H quick win : déclenche aussi sur pattern glycémie instable structuré.
   const hasDiabete = /diabete|diabète|t1|t2|insulinoresist|prediabete/i.test(pathologies)
-    || /glycemie|insuline/i.test(objectif);
+    || /glycemie|insuline/i.test(objectif)
+    || hasGlycemicInstability;
   if (hasDiabete) {
     tags.push('diabete');
   }
