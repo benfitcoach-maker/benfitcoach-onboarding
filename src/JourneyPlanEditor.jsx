@@ -22,6 +22,9 @@ import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
 import { trackPlanGenerated, trackPlanGenerationFailed, trackPlanModification } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
+// V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
+// Utilisé uniquement quand composerBeta === true (path composer opt-in).
+import { buildClinicalContext } from './services/clinical/buildClinicalContext';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
 import { structurePlanSections } from './services/planFormatters';
@@ -688,7 +691,22 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
       // Phase AN : choix du builder selon le toggle composer beta
       let system;
       if (composerBeta) {
-        const v2 = buildSystemPromptFrV2(form, opts, { useComposer: true });
+        // V97.4 Phase V2.B : construit clinicalContext depuis les données
+        // saisies par Anissa étape 4 (results_data) avant d'appeler le builder.
+        // Best-effort : si la construction échoue, fallback clinicalContext = null
+        // (le composer se comportera comme avant V2). Ne bloque jamais la génération.
+        let clinicalContext = null;
+        try {
+          clinicalContext = buildClinicalContext({
+            journeyState: client?.journey_state,
+            form,
+          });
+        } catch (err) {
+          console.warn('[clinicalContext] build failed', err);
+          clinicalContext = null;
+        }
+
+        const v2 = buildSystemPromptFrV2(form, opts, { useComposer: true, clinicalContext });
         if (v2.blocked) {
           const reason = v2.profile?.blockReason || 'profil non supporté';
           // Tracking échec composer-blocked avant le throw (best-effort)
