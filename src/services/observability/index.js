@@ -33,8 +33,9 @@ export const EVENT_TYPES = Object.freeze({
   // Phase A — workflow temps
   STEP_TRANSITION: 'step_transition',
 
-  // Phase B — génération IA (à venir)
+  // Phase B — génération IA (success + failure)
   PLAN_GENERATED: 'plan_generated',
+  PLAN_GENERATION_FAILED: 'plan_generation_failed',
 
   // Phase C — modifications humaines (à venir)
   PLAN_MODIFICATION: 'plan_modification',
@@ -60,10 +61,20 @@ const EVENT_SCHEMAS = {
     direction: 'string', // 'forward' | 'backward' | 'skip'
   },
   [EVENT_TYPES.PLAN_GENERATED]: {
-    duration_ms: 'number',
     model: 'string',
+    duration_ms: 'number',
+    success: 'boolean',
     composer_beta: 'optional:boolean',
     tokens_estimated: 'optional:number',
+    prompt_hash: 'optional:string',
+    sections_generated: 'optional:object', // array
+  },
+  [EVENT_TYPES.PLAN_GENERATION_FAILED]: {
+    model: 'string',
+    duration_ms: 'number',
+    error_type: 'string',
+    error_message_safe: 'optional:string',
+    composer_beta: 'optional:boolean',
   },
   [EVENT_TYPES.PLAN_MODIFICATION]: {
     section: 'string',
@@ -180,5 +191,104 @@ export function trackStepTransition({ clientId, fromStep, toStep, direction = 'f
     EVENT_TYPES.STEP_TRANSITION,
     { from_step: fromStep, to_step: toStep, direction },
     { clientId },
+  );
+}
+
+/**
+ * Hash compact d'une string (djb2 modifié, 32-bit, hex 8 chars).
+ * Utilisé pour fingerprinter les prompts système sans les stocker.
+ * Permet de tracker l'évolution des prompts dans le temps.
+ */
+function hashStringFast(input) {
+  if (!input || typeof input !== 'string') return null;
+  let h = 5381;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h * 33) ^ input.charCodeAt(i)) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+/**
+ * Estime grossièrement le nombre de tokens depuis la longueur du texte.
+ * Heuristique standard : ~4 chars / token en français/anglais.
+ * Pas exact mais suffisant pour les tendances.
+ */
+function estimateTokens(text) {
+  if (!text || typeof text !== 'string') return 0;
+  return Math.round(text.length / 4);
+}
+
+/**
+ * Enregistre une génération IA réussie.
+ * Appelé depuis JourneyPlanEditor.GenerationModal.handleGenerate après succès.
+ *
+ * @param {object} args
+ * @param {string} args.clientId
+ * @param {string} [args.consultationId]
+ * @param {string} args.model - ex: 'claude-sonnet-4-20250514'
+ * @param {number} args.durationMs - temps total IA
+ * @param {string} [args.systemPrompt] - pour calculer le hash
+ * @param {string} [args.responseText] - pour estimer les tokens
+ * @param {boolean} [args.composerBeta=false]
+ * @param {string[]} [args.sectionsGenerated=['plan']]
+ */
+export function trackPlanGenerated({
+  clientId,
+  consultationId,
+  model,
+  durationMs,
+  systemPrompt,
+  responseText,
+  composerBeta = false,
+  sectionsGenerated = ['plan'],
+}) {
+  return trackEvent(
+    EVENT_TYPES.PLAN_GENERATED,
+    {
+      model,
+      duration_ms: durationMs,
+      success: true,
+      composer_beta: composerBeta,
+      tokens_estimated: estimateTokens(responseText),
+      prompt_hash: hashStringFast(systemPrompt),
+      sections_generated: sectionsGenerated,
+    },
+    { clientId, consultationId },
+  );
+}
+
+/**
+ * Enregistre une génération IA en échec.
+ * Capture le type d'erreur sans contenu sensible (error_message_safe limité).
+ *
+ * @param {object} args
+ * @param {string} args.clientId
+ * @param {string} [args.consultationId]
+ * @param {string} args.model
+ * @param {number} args.durationMs - temps avant échec
+ * @param {string} args.errorType - ex: 'api_error', 'timeout', 'rate_limit', 'composer_blocked'
+ * @param {string} [args.errorMessageSafe] - message court, sans données sensibles
+ * @param {boolean} [args.composerBeta=false]
+ */
+export function trackPlanGenerationFailed({
+  clientId,
+  consultationId,
+  model,
+  durationMs,
+  errorType,
+  errorMessageSafe,
+  composerBeta = false,
+}) {
+  return trackEvent(
+    EVENT_TYPES.PLAN_GENERATION_FAILED,
+    {
+      model,
+      duration_ms: durationMs,
+      error_type: errorType,
+      // Tronqué à 200 chars pour éviter logs énormes et expositions accidentelles
+      error_message_safe: errorMessageSafe ? String(errorMessageSafe).slice(0, 200) : undefined,
+      composer_beta: composerBeta,
+    },
+    { clientId, consultationId },
   );
 }

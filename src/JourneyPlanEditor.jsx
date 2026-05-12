@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
+import { trackPlanGenerated, trackPlanGenerationFailed } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
@@ -659,6 +660,10 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     setError(null);
     setResult(null);
     setDetectedProfile(null);
+    // V97.3 Phase B : timer + capture system prompt pour observabilité
+    const startedAt = Date.now();
+    const MODEL = 'claude-sonnet-4-20250514';
+    let systemForTracking = null;
     try {
       const form = client.form || {};
       const planMode = form.consultationType === 'oneshot' ? 'oneshot' : 'followup';
@@ -675,6 +680,15 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
         const v2 = buildSystemPromptFrV2(form, opts, { useComposer: true });
         if (v2.blocked) {
           const reason = v2.profile?.blockReason || 'profil non supporté';
+          // Tracking échec composer-blocked avant le throw (best-effort)
+          trackPlanGenerationFailed({
+            clientId: client?.id,
+            model: MODEL,
+            durationMs: Date.now() - startedAt,
+            errorType: 'composer_blocked',
+            errorMessageSafe: `profil non supporté: ${reason}`.slice(0, 200),
+            composerBeta: true,
+          });
           throw new Error(`Composer beta : profil "${reason}" pas encore supporté par les modules cliniques. Décochez "Composer beta" pour générer via le path classique.`);
         }
         system = v2.prompt;
@@ -682,20 +696,51 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
       } else {
         system = buildSystemPromptFr(form, opts);
       }
+      systemForTracking = system;
 
       const user = buildMinimalUserMessage(client, form, draftDirectives);
       const res = await callClaude({
         system,
         user,
-        model: 'claude-sonnet-4-20250514',
+        model: MODEL,
         maxTokens: 16000,
       });
       setProgress(100);
       await new Promise((r) => setTimeout(r, 350));
-      setResult(typeof res === 'string' ? res : res?.text || JSON.stringify(res));
+      const responseText = typeof res === 'string' ? res : res?.text || JSON.stringify(res);
+      setResult(responseText);
       onDirectivesChange?.(draftDirectives);
+
+      // V97.3 Phase B : tracking succès (best-effort, non bloquant)
+      trackPlanGenerated({
+        clientId: client?.id,
+        model: MODEL,
+        durationMs: Date.now() - startedAt,
+        systemPrompt: systemForTracking,
+        responseText,
+        composerBeta,
+        sectionsGenerated: ['plan'],
+      });
     } catch (e) {
       setError(e?.message || 'Erreur génération IA');
+      // V97.3 Phase B : tracking échec (sauf composer_blocked déjà tracké au-dessus)
+      const msg = e?.message || '';
+      if (!msg.startsWith('Composer beta :')) {
+        const status = e?.status;
+        let errorType = 'api_error';
+        if (status === 429 || /rate.?limit/i.test(msg)) errorType = 'rate_limit';
+        else if (status === 0 || /reseau|network|fetch/i.test(msg)) errorType = 'network_error';
+        else if (/timeout|aborted/i.test(msg)) errorType = 'timeout';
+        else if (status && status >= 500) errorType = 'server_error';
+        trackPlanGenerationFailed({
+          clientId: client?.id,
+          model: MODEL,
+          durationMs: Date.now() - startedAt,
+          errorType,
+          errorMessageSafe: msg.slice(0, 200),
+          composerBeta,
+        });
+      }
     } finally {
       setGenerating(false);
     }
