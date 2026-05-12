@@ -20,7 +20,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
-import { trackPlanGenerated, trackPlanGenerationFailed } from './services/observability';
+import { trackPlanGenerated, trackPlanGenerationFailed, trackPlanModification } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
@@ -407,6 +407,17 @@ export default function JourneyPlanEditor({ client, onPlanSaved }) {
           onDirectivesChange={setAiDirectives}
           onCancel={() => setShowGenModal(false)}
           onAdopt={(text, updatedDirectives) => {
+            // V97.3 Phase C1 : tracking adoption plan IA (source='ai')
+            // Mesure beforeLength = planText AVANT (0 si première génération,
+            // ou ancien plan si régénération). afterLength = plan adopté.
+            trackPlanModification({
+              clientId: client?.id,
+              consultationId: consultation?.id,
+              section: 'global',
+              source: 'ai',
+              beforeLength: planText?.length || 0,
+              afterLength: text?.length || 0,
+            });
             setPlanText(text);
             setAiDirectives(updatedDirectives);
             setShowGenModal(false);

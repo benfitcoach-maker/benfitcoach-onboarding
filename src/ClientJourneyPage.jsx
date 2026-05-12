@@ -29,6 +29,7 @@ import JourneyMessagesPanel from './JourneyMessagesPanel';
 import JourneyNotesPanel from './JourneyNotesPanel';
 import PremiumSwitch from './components/PremiumSwitch';
 import { getNutritionConsultations } from './store';
+import { trackPlanValidated, trackPlanModification } from './services/observability';
 import './styles/journey.css';
 
 export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onReturnPlan, onSendPackReview, onViewHistory }) {
@@ -1743,6 +1744,27 @@ function StepPlanEditing({ client, journey, onChange }) {
     setBusy(true); setErr(null);
     try {
       await transitions.validatePlan(client.id);
+      // V97.3 Phase C1 : tracking plan_validated (best-effort, post-update)
+      const latest = versions[0];
+      const oldest = versions[versions.length - 1];
+      // ai_to_practitioner_delta_ratio : écart entre V1 (initiale IA) et la version validée.
+      // Approximation par longueur — 0 = pure IA non modifiée, ratio croissant = + de réécriture.
+      let aiToPractitionerDeltaRatio = null;
+      if (latest?.nutritionPlan && oldest?.nutritionPlan && oldest !== latest) {
+        const oldLen = oldest.nutritionPlan.length;
+        const newLen = latest.nutritionPlan.length;
+        if (oldLen > 0) {
+          aiToPractitionerDeltaRatio = Number(Math.abs((newLen - oldLen) / oldLen).toFixed(3));
+        }
+      }
+      trackPlanValidated({
+        clientId: client.id,
+        consultationId: latest?.id,
+        versionId: `V${versions.length}`,
+        totalLength: latest?.nutritionPlan?.length,
+        aiToPractitionerDeltaRatio,
+        versionsCount: versions.length,
+      });
       onChange();
     } catch (e) { setErr(e?.message || 'Erreur transition'); setBusy(false); }
   };
@@ -2394,6 +2416,17 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         consultantName: 'Anissa',
         adaptedFrom: lastConsult?.id || null,
         feedbacksCount: feedbacks.length,
+      });
+
+      // V97.3 Phase C1 : tracking modification 'hybrid' (IA + feedbacks cliente)
+      trackPlanModification({
+        clientId: client.id,
+        consultationId: lastConsult?.id,
+        section: 'global',
+        source: 'hybrid',
+        versionId: `V${versionNum}`,
+        beforeLength: currentPlan?.length || 0,
+        afterLength: adaptedPlan?.length || 0,
       });
 
       // Bascule en mode edition pour qu'Anissa relise

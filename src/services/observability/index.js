@@ -77,11 +77,22 @@ const EVENT_SCHEMAS = {
     composer_beta: 'optional:boolean',
   },
   [EVENT_TYPES.PLAN_MODIFICATION]: {
-    section: 'string',
-    source: 'string', // 'ai' | 'practitioner' | 'hybrid'
-    reason_code: 'optional:string',
-    before_len: 'optional:number',
-    after_len: 'optional:number',
+    // V97.3 Phase C1 schema enrichi
+    section: 'string', // 'repas' | 'supplements' | 'lifestyle' | 'fiche_frigo' | 'global'
+    source: 'string',  // 'ai' | 'practitioner' | 'hybrid'
+    version_id: 'optional:string',
+    before_length: 'optional:number',
+    after_length: 'optional:number',
+    delta_ratio: 'optional:number', // (after - before) / before (signed)
+    reason_code: 'optional:string', // C2 : à venir avec la modale raison
+    scope: 'optional:string',        // C2 : 'personal' | 'transferable' (à venir)
+    has_free_reason: 'optional:boolean',
+  },
+  [EVENT_TYPES.PLAN_VALIDATED]: {
+    version_id: 'optional:string',
+    total_length: 'optional:number',
+    ai_to_practitioner_delta_ratio: 'optional:number',
+    versions_count: 'optional:number',
   },
 };
 
@@ -252,6 +263,96 @@ export function trackPlanGenerated({
       tokens_estimated: estimateTokens(responseText),
       prompt_hash: hashStringFast(systemPrompt),
       sections_generated: sectionsGenerated,
+    },
+    { clientId, consultationId },
+  );
+}
+
+/**
+ * Enregistre la création d'une nouvelle version du plan (= modification).
+ * V97.3 Phase C1 : déclenché uniquement quand une vraie nouvelle row
+ * nutrition_consultations est créée — JAMAIS sur autosave. Capture
+ * les arbitrages d'Anissa, pas ses frappes clavier.
+ *
+ * Moments d'appel actuels :
+ * - Adoption d'un plan généré IA (modal Génération.onAdopt) → source: 'ai'
+ * - Adaptation depuis ressentis (handleAdaptFromFeedback) → source: 'hybrid'
+ *
+ * Réservé pour C2 : reason_code + scope (personal/transferable) via modale.
+ *
+ * @param {object} args
+ * @param {string} args.clientId
+ * @param {string} [args.consultationId] - nouvelle version qui vient d'être créée
+ * @param {string} [args.section='global'] - 'repas' | 'supplements' | ... | 'global'
+ * @param {string} args.source - 'ai' | 'practitioner' | 'hybrid'
+ * @param {string} [args.versionId] - label V1 / V2 / ...
+ * @param {number} [args.beforeLength] - longueur du texte avant modif
+ * @param {number} [args.afterLength] - longueur après modif
+ * @param {string} [args.reasonCode] - C2 : optionnel pour l'instant (null)
+ * @param {string} [args.scope] - C2 : 'personal' | 'transferable' (null pour l'instant)
+ */
+export function trackPlanModification({
+  clientId,
+  consultationId,
+  section = 'global',
+  source,
+  versionId,
+  beforeLength,
+  afterLength,
+  reasonCode = null,
+  scope = null,
+}) {
+  // Calcul delta_ratio si on a les 2 longueurs
+  let deltaRatio = null;
+  if (typeof beforeLength === 'number' && typeof afterLength === 'number' && beforeLength > 0) {
+    deltaRatio = Number(((afterLength - beforeLength) / beforeLength).toFixed(3));
+  }
+  return trackEvent(
+    EVENT_TYPES.PLAN_MODIFICATION,
+    {
+      section,
+      source,
+      version_id: versionId,
+      before_length: beforeLength,
+      after_length: afterLength,
+      delta_ratio: deltaRatio,
+      reason_code: reasonCode,
+      scope,
+      has_free_reason: false, // C2 : sera passé true si Anissa a tapé un texte libre
+    },
+    { clientId, consultationId },
+  );
+}
+
+/**
+ * Enregistre la validation finale du plan par Anissa (étape 6 → 7).
+ * V97.3 Phase C1 : moment-clé du parcours — le plan est prêt à
+ * être livré. Capture aussi un proxy de "combien Anissa a modifié vs
+ * le brouillon IA" via ai_to_practitioner_delta_ratio.
+ *
+ * @param {object} args
+ * @param {string} args.clientId
+ * @param {string} [args.consultationId] - version validée
+ * @param {string} [args.versionId]
+ * @param {number} [args.totalLength] - longueur finale du plan
+ * @param {number} [args.aiToPractitionerDeltaRatio] - écart vs version IA initiale (0 = pure IA, 1 = full rewrite)
+ * @param {number} [args.versionsCount] - nombre de versions créées avant validation
+ */
+export function trackPlanValidated({
+  clientId,
+  consultationId,
+  versionId,
+  totalLength,
+  aiToPractitionerDeltaRatio,
+  versionsCount,
+}) {
+  return trackEvent(
+    EVENT_TYPES.PLAN_VALIDATED,
+    {
+      version_id: versionId,
+      total_length: totalLength,
+      ai_to_practitioner_delta_ratio: aiToPractitionerDeltaRatio,
+      versions_count: versionsCount,
     },
     { clientId, consultationId },
   );
