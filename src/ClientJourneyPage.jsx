@@ -28,6 +28,9 @@ import ClientAppPreviewModal from './ClientAppPreviewModal';
 import JourneyMessagesPanel from './JourneyMessagesPanel';
 import JourneyNotesPanel from './JourneyNotesPanel';
 import PremiumSwitch from './components/PremiumSwitch';
+// V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
+// Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
+import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
 import { getNutritionConsultations } from './store';
 import { trackPlanValidated, trackPlanModification } from './services/observability';
 import './styles/journey.css';
@@ -1029,6 +1032,39 @@ function StepResults({ client, onChange }) {
   const updateTestField = (idx, field, value) => {
     setResultsByTest((prev) => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
   };
+
+  // V97.4 V3.C — upsert d'un champ marker sur le test idx.
+  // Structure cible : from_plan[idx].markers = [{ marker_code, label, unit, value, synthesis, status }]
+  // - Si le marker n'existait pas encore : on l'ajoute en récupérant label/unit depuis le catalogue.
+  // - Si déjà présent : on patch le champ demandé.
+  // - Ne touche jamais value/synthesis/status au niveau test (legacy preservé).
+  const updateTestMarker = (testIdx, markerCode, field, value) => {
+    setResultsByTest((prev) => prev.map((r, i) => {
+      if (i !== testIdx) return r;
+      const existing = Array.isArray(r.markers) ? r.markers : [];
+      const mIdx = existing.findIndex((m) => m && m.marker_code === markerCode);
+      let nextMarkers;
+      if (mIdx === -1) {
+        const catalogMarkers = r.test_code ? getExpectedMarkersForTest(r.test_code) : [];
+        const cat = catalogMarkers.find((cm) => cm && cm.code === markerCode);
+        nextMarkers = [
+          ...existing,
+          {
+            marker_code: markerCode,
+            label: cat?.label || markerCode,
+            unit: cat?.unit || null,
+            value: '',
+            synthesis: '',
+            status: null,
+            [field]: value,
+          },
+        ];
+      } else {
+        nextMarkers = existing.map((m, k) => k === mIdx ? { ...m, [field]: value } : m);
+      }
+      return { ...r, markers: nextMarkers };
+    }));
+  };
   const addExternal = () => {
     setExternalAnalyses((prev) => [...prev, { name: '', value: '', synthesis: '', category: null, status: null }]);
   };
@@ -1183,22 +1219,31 @@ function StepResults({ client, onChange }) {
             Pour chaque analyse : saisis les valeurs brutes, catégorise (hormonal, microbiote, etc), puis note ta lecture clinique. Le statut prioritaire/à surveiller/optimal aide à orienter le plan.
           </p>
           <div className="jrn-result-cards">
-            {resultsByTest.map((r, i) => (
-              <ResultCard
-                key={r.test_code || i}
-                title={r.test_name}
-                badge="Plan d'analyses"
-                badgeColor="accent"
-                value={r.value}
-                synthesis={r.synthesis}
-                category={r.category}
-                status={r.status}
-                onValueChange={(v) => updateTestField(i, 'value', v)}
-                onSynthesisChange={(v) => updateTestField(i, 'synthesis', v)}
-                onCategoryChange={(v) => updateTestField(i, 'category', v)}
-                onStatusChange={(v) => updateTestField(i, 'status', v)}
-              />
-            ))}
+            {resultsByTest.map((r, i) => {
+              // V97.4 V3.C — marqueurs attendus depuis catalog (peut être []).
+              // Si le test n'est pas dans le catalogue, expectedMarkers === [] et
+              // ResultCard ne rend pas la section dynamique : mode résultat libre uniquement.
+              const expectedMarkers = r.test_code ? getExpectedMarkersForTest(r.test_code) : [];
+              return (
+                <ResultCard
+                  key={r.test_code || i}
+                  title={r.test_name}
+                  badge="Plan d'analyses"
+                  badgeColor="accent"
+                  value={r.value}
+                  synthesis={r.synthesis}
+                  category={r.category}
+                  status={r.status}
+                  onValueChange={(v) => updateTestField(i, 'value', v)}
+                  onSynthesisChange={(v) => updateTestField(i, 'synthesis', v)}
+                  onCategoryChange={(v) => updateTestField(i, 'category', v)}
+                  onStatusChange={(v) => updateTestField(i, 'status', v)}
+                  expectedMarkers={expectedMarkers}
+                  markers={Array.isArray(r.markers) ? r.markers : []}
+                  onMarkerChange={(markerCode, field, value) => updateTestMarker(i, markerCode, field, value)}
+                />
+              );
+            })}
           </div>
         </div>
       )}
@@ -1364,13 +1409,18 @@ function autoDetectCategory(name) {
   return null;
 }
 
-function ResultCard({
+// V97.4 V3.C — exporté pour permettre les tests unitaires (vitest) +
+// le mount dans la route dev /preview-v3c. Pas de consommation externe en prod.
+export function ResultCard({
   title, badge, badgeColor,
   value, synthesis,
   category, status,
   onValueChange, onSynthesisChange,
   onCategoryChange, onStatusChange,
   editable, onTitleChange, onDelete,
+  // V97.4 V3.C — props optionnelles. Si expectedMarkers absent/vide,
+  // la carte se comporte exactement comme avant (résultat libre uniquement).
+  expectedMarkers, markers, onMarkerChange,
 }) {
   // BC.5D.2 : badge catégorie cliquable (toggle dropdown sur clic)
   const [editingCategory, setEditingCategory] = useState(false);
@@ -1467,6 +1517,60 @@ function ResultCard({
           placeholder="Ex&nbsp;: B12 = 1200 pg/mL (norme 200-900) · Vit D = 18 ng/mL · Ferritine = 22 ng/mL…"
         />
       </div>
+
+      {/* V97.4 V3.C — Section Marqueurs attendus (conditionnelle).
+          Apparaît uniquement si le test a des expectedMarkers dans le catalogue
+          ET qu'un handler onMarkerChange est fourni. Sinon la carte reste en
+          mode résultat libre comme avant. Aucun champ n'est obligatoire — Anissa
+          peut tout laisser vide ("non renseigné"). */}
+      {Array.isArray(expectedMarkers) && expectedMarkers.length > 0 && onMarkerChange && (
+        <div className="jrn-result-card__markers">
+          <label className="jrn-result-card__section-label">Marqueurs attendus</label>
+          <div className="jrn-marker-grid">
+            {expectedMarkers.map((em) => {
+              const saved = Array.isArray(markers)
+                ? markers.find((m) => m && m.marker_code === em.code)
+                : null;
+              const mValue = saved?.value || '';
+              const mNote = saved?.synthesis || '';
+              const mStatus = saved?.status || '';
+              return (
+                <div key={em.code} className={`jrn-marker-row${mStatus ? ` jrn-marker-row--${mStatus}` : ''}`}>
+                  <div className="jrn-marker-row__head">
+                    <span className="jrn-marker-row__label">{em.label}</span>
+                    {em.unit && <span className="jrn-marker-row__unit">{em.unit}</span>}
+                  </div>
+                  <input
+                    type="text"
+                    value={mValue}
+                    onChange={(e) => onMarkerChange(em.code, 'value', e.target.value)}
+                    placeholder="Valeur (non renseigné si vide)"
+                    className="jrn-marker-row__value"
+                  />
+                  <input
+                    type="text"
+                    value={mNote}
+                    onChange={(e) => onMarkerChange(em.code, 'synthesis', e.target.value)}
+                    placeholder="Note Anissa (optionnel)"
+                    className="jrn-marker-row__note"
+                  />
+                  <select
+                    value={mStatus}
+                    onChange={(e) => onMarkerChange(em.code, 'status', e.target.value || null)}
+                    className="jrn-marker-row__status"
+                    title="Statut clinique du marqueur"
+                  >
+                    <option value="">Statut…</option>
+                    {STATUSES.map((s) => (
+                      <option key={s.value} value={s.value}>{s.icon} {s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Section 2 : Lecture clinique Anissa (éditorial, plus lisible) */}
       <div className="jrn-result-card__interpretation">

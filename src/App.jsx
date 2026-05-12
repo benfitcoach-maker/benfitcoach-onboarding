@@ -65,6 +65,11 @@ import QuestionnaireClient from './QuestionnaireClient';
 import AnamneseClientEn from './AnamneseClientEn';
 import CycleReviewForm from './CycleReviewForm';
 import Decouverte from './Decouverte';
+// ⚠️ V97.4 V3.C — preview DEV ONLY. À SUPPRIMER après validation V3.D.
+// L'import + le handler ci-dessous sont gated `import.meta.env.DEV` :
+// en build prod, Vite tree-shake la branche et ce module n'est pas exposé.
+// Détails de suppression : src/__preview__/V3CPreview.jsx (header du fichier).
+import V3CPreview from './__preview__/V3CPreview';
 
 // Per-category short-label key map for the step navigator in the form header.
 const STEP_LABEL_KEYS = {
@@ -276,6 +281,12 @@ function App() {
   }
   if (window.location.pathname === '/decouverte') {
     return <Decouverte />;
+  }
+  // ⚠️ V97.4 V3.C — preview visuelle DEV ONLY. À SUPPRIMER après V3.D.
+  // En build prod, `import.meta.env.DEV === false` → cette branche est dead-code
+  // élidée par Vite et la route /preview-v3c n'existe pas.
+  if (import.meta.env.DEV && window.location.pathname === '/preview-v3c') {
+    return <V3CPreview />;
   }
 
   // Auth state

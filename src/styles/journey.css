@@ -1405,6 +1405,104 @@
   font-style: italic;
 }
 
+/* ─── V97.4 V3.C : Section "Marqueurs attendus" dans ResultCard ──
+   Apparaît uniquement pour les tests présents dans le catalogue
+   Ortho-Analytic. Grille compacte, aucune ligne obligatoire — Anissa
+   peut laisser tout vide (= "non renseigné"). */
+.jrn-result-card__markers {
+  padding: 16px 24px 18px;
+  background: rgba(245, 240, 232, 0.18);
+  border-bottom: 1px solid var(--jrn-border);
+}
+.jrn-marker-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.jrn-marker-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(160px, 2fr) 140px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--jrn-radius);
+  background: rgba(255, 253, 248, 0.7);
+  border: 1px solid rgba(40, 32, 20, 0.05);
+  transition: border-color 140ms var(--jrn-ease), background 140ms var(--jrn-ease);
+}
+.jrn-marker-row--optimal {
+  border-color: var(--jrn-accent-tint);
+  background: var(--jrn-accent-soft);
+}
+.jrn-marker-row--surveiller {
+  border-color: var(--jrn-gold-tint);
+  background: var(--jrn-gold-soft);
+}
+.jrn-marker-row--prioritaire {
+  border-color: rgba(180, 50, 40, 0.25);
+  background: rgba(180, 50, 40, 0.06);
+}
+.jrn-marker-row__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.jrn-marker-row__label {
+  font-family: var(--jrn-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--jrn-text);
+  line-height: 1.3;
+}
+.jrn-marker-row__unit {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--jrn-text-muted);
+}
+.jrn-marker-row__value,
+.jrn-marker-row__note,
+.jrn-marker-row__status {
+  width: 100%;
+  border: 1px solid rgba(40, 32, 20, 0.08);
+  background: #FFFFFF;
+  padding: 7px 10px;
+  font-family: var(--jrn-font-ui);
+  font-size: 12.5px;
+  color: var(--jrn-text);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 140ms var(--jrn-ease), box-shadow 140ms var(--jrn-ease);
+}
+.jrn-marker-row__value {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+}
+.jrn-marker-row__value:focus,
+.jrn-marker-row__note:focus,
+.jrn-marker-row__status:focus {
+  border-color: var(--jrn-accent-tint);
+  box-shadow: 0 0 0 3px var(--jrn-accent-soft);
+}
+.jrn-marker-row__value::placeholder,
+.jrn-marker-row__note::placeholder {
+  color: var(--jrn-text-faint);
+  font-style: italic;
+  font-family: var(--jrn-font-body);
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .jrn-marker-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .jrn-marker-row__head {
+    grid-column: 1 / -1;
+  }
+  .jrn-marker-row__note {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ─── Status pills (optimal / surveiller / prioritaire) ──────── */
 .jrn-result-pill {
   font-family: var(--jrn-font-ui);
