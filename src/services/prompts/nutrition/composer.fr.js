@@ -26,9 +26,18 @@ import {
 } from './fr';
 import { detectClientProfile } from './profiles/_detector.fr';
 import { getProfileModuleFr } from './profiles/index.fr';
+// V97.4 (Phase V1) : couche clinicalContext — tests / markers / signals /
+// microbiomeStage / modules / safety rules. Voir ./_clinicalContext.fr.js.
+import { buildClinicalContextBlockFr } from './_clinicalContext.fr';
 
 /**
  * Build the FR system prompt with profile-aware composition.
+ *
+ * V97.4 (Phase V1) : ajout d'un 3e paramètre optionnel `clinicalContext`
+ * pour injecter le bloc clinique structuré (tests / markers / résultats /
+ * signaux / microbiomeStage) entre les profileModules et le planMode.
+ * Si `clinicalContext` est null ou vide, le comportement reste identique
+ * à la version V96.11 (rétro-compatibilité garantie).
  *
  * @param {object} form - The client anamnese (clients.form in storage)
  * @param {object} opts - Plan options
@@ -36,6 +45,9 @@ import { getProfileModuleFr } from './profiles/index.fr';
  * @param {string}  [opts.clientFormule] - 'suivi' | 'intensif' | 'autonome' | 'nutrition' | 'custom'
  * @param {number}  [opts.followupWeek] - 1..4 when isFollowup
  * @param {string}  [opts.planMode]     - 'oneshot' | 'followup'
+ * @param {object | null} [clinicalContext] - V97.4 : tests / markers /
+ *   enteredResults / clinicalSignals / microbiomeStage / promptModules /
+ *   safetyRules. Voir _clinicalContext.fr.js pour le shape complet.
  * @returns {{ prompt: string, profile: object, blocked: boolean }}
  *   - prompt   : the assembled system prompt (or empty string if blocked)
  *   - profile  : the detected client profile (for logging / UI feedback)
@@ -43,7 +55,7 @@ import { getProfileModuleFr } from './profiles/index.fr';
  *                without a dedicated module). Caller must surface this to
  *                the user and skip the AI call.
  */
-export function composeSystemPromptFr(form, opts = {}) {
+export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
   const profile = detectClientProfile(form);
 
   // Safety gate — block generation when we lack a safe module.
@@ -72,6 +84,15 @@ export function composeSystemPromptFr(form, opts = {}) {
   if (profileModules.length > 0) {
     parts.push('// ═══ MODULES PROFIL CLIENT ═══');
     parts.push(...profileModules);
+  }
+
+  // V97.4 (Phase V1) : injection du contexte clinique structuré APRÈS les
+  // profileModules et AVANT le planMode. Si clinicalContext est null ou
+  // vide, buildClinicalContextBlockFr retourne '' et rien n'est injecté.
+  const clinicalBlock = buildClinicalContextBlockFr(clinicalContext);
+  if (clinicalBlock) {
+    parts.push('// ═══ CONTEXTE CLINIQUE STRUCTURÉ ═══');
+    parts.push(clinicalBlock);
   }
 
   // Plan mode (unchanged from legacy path).

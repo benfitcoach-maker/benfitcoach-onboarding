@@ -970,15 +970,25 @@ REGLES :
 // par defaut INCHANGE : sans option useComposer, on delegue au builder
 // historique buildSystemPromptFr pour preserver la generation actuelle.
 //
+// V97.4 (Phase V1) : ajout du passage `options.clinicalContext` vers le
+// composer pour injecter le bloc clinique structuré (tests / markers /
+// résultats / signaux / microbiomeStage). Compatibilité ascendante :
+// sans clinicalContext, le composer se comporte exactement comme V96.11.
+//
 // Usage cote consommateur :
 //   buildSystemPromptFrV2(form, opts);                       // legacy (= buildSystemPromptFr)
-//   buildSystemPromptFrV2(form, opts, { useComposer: true }); // active le composer
+//   buildSystemPromptFrV2(form, opts, { useComposer: true }); // composer sans clinicalContext
+//   buildSystemPromptFrV2(form, opts, { useComposer: true, clinicalContext: {...} }); // composer + contexte clinique
 
 import { composeSystemPromptFr } from './composer.fr';
 
 export function buildSystemPromptFrV2(form, opts = {}, options = {}) {
   if (options.useComposer) {
-    const { prompt, profile, blocked } = composeSystemPromptFr(form, opts);
+    const { prompt, profile, blocked } = composeSystemPromptFr(
+      form,
+      opts,
+      options.clinicalContext || null,
+    );
     if (blocked) {
       // Caller must check this before calling the AI. We return null for
       // the prompt so any naive consumer fails loudly instead of sending
