@@ -2106,35 +2106,90 @@ function StepDelivery({ client, onChange }) {
         index={7}
         title="Livraison à la cliente"
         intro={isFirstVersion
-          ? 'Votre cliente reçoit maintenant son protocole personnalisé et l\'accès à son espace de suivi. Un moment important du parcours.'
+          ? 'Le protocole est prêt. Anissa va le transmettre via les canaux activés ci-dessous. Un moment important du parcours.'
           : 'Vous adaptez son protocole. Par défaut, le nouveau plan est publié sur son app — sa lecture quotidienne reste fluide. Activez le format papier ci-dessous si ce cycle marque un changement majeur.'}
       />
 
-      {/* ─── Toggle papier (AU : switch premium au lieu de checkbox) ─ */}
-      <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-          <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
-          <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setIncludePaper(!includePaper)}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--jrn-text)', letterSpacing: '-0.005em' }}>
-              📦 Plan papier nécessaire pour ce cycle
+      {/* BC.5 : refonte étape 7 en blocs numérotés (alignement étapes 1-6) */}
+
+      {/* ─── Bloc 1 : Statut du cycle (contexte premier vs adaptation) ─ */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">1</span>
+          <h3 className="jrn-block__title">
+            {isFirstVersion ? 'Premier cycle — livret fondateur' : `Cycle ${versionsCount} — adaptation`}
+          </h3>
+          {!isFirstVersion && (
+            <div className="jrn-block__head-meta">
+              <span className="jrn-result-pill jrn-result-pill--optimal">version {versionsCount}</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, lineHeight: 1.55 }}>
-              {isFirstVersion
-                ? 'Recommandé pour le premier cycle : livret fondateur premium qui ancre l\'expérience.'
-                : 'À activer uniquement pour les changements majeurs : nouveau cycle 4 semaines, refonte protocole, nouvelle phase (postpartum, sèche, etc.).'}
+          )}
+        </div>
+        <p className="jrn-block__intro">
+          {isFirstVersion
+            ? 'Ce premier cycle ancre l\'expérience. Anissa transmet le livret papier (postal) + active l\'app cliente. La cliente reçoit son protocole personnalisé et l\'accès à son espace de suivi.'
+            : 'Adaptation à partir des retours cliente. Par défaut publié sur l\'app uniquement (fluidité). Active le format papier si ce cycle est un changement majeur.'}
+        </p>
+      </div>
+
+      {/* ─── Bloc 2 : Canaux de transmission (papier toggle) ─────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">2</span>
+          <h3 className="jrn-block__title">Canaux de transmission</h3>
+        </div>
+        <p className="jrn-block__intro">
+          Choisis quels formats Anissa transmet à la cliente pour ce cycle.
+        </p>
+
+        <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+            <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
+            <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setIncludePaper(!includePaper)}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--jrn-text)', letterSpacing: '-0.005em' }}>
+                📦 Livret papier postal pour ce cycle
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, lineHeight: 1.55 }}>
+                {isFirstVersion
+                  ? 'Recommandé pour le premier cycle : livret fondateur premium qui ancre l\'expérience.'
+                  : 'À activer uniquement pour les changements majeurs : nouveau cycle 4 semaines, refonte protocole, nouvelle phase (postpartum, sèche, etc.).'}
+              </div>
             </div>
           </div>
         </div>
+
+        {includePaper && (
+          <div className="jrn-surface jrn-surface--quiet" style={{ marginBottom: 'var(--jrn-5)' }}>
+            <div className="jrn-label" style={{ marginBottom: 'var(--jrn-3)' }}>📦 Marche à suivre — Plan papier</div>
+            <ul style={{ margin: '0 0 var(--jrn-4)', paddingLeft: 20, color: 'var(--jrn-text-soft)', fontSize: 14, lineHeight: 1.8 }}>
+              <li>Générer le document Word ci-dessous</li>
+              <li>Imprimer (recto-verso recommandé)</li>
+              <li>Préparer enveloppe + étiquette adresse cliente</li>
+              <li>Envoi postal</li>
+            </ul>
+            <div className="jrn-actions" style={{ marginTop: 0 }}>
+              <button onClick={handleExportWord} disabled={exporting} className="jrn-btn jrn-btn--soft">
+                {exporting ? 'Export…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter Word')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ─── Section app cliente (toujours présente) ─────────────── */}
-      <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
-        <div className="jrn-label">📱 App cliente</div>
-        <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, marginBottom: 12, lineHeight: 1.55 }}>
-          Le plan sera disponible sur l'app dès la publication. La cliente reçoit une notification.
+      {/* ─── Bloc 3 : App cliente (suivi quotidien) ─────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">3</span>
+          <h3 className="jrn-block__title">App cliente</h3>
+          <div className="jrn-block__head-meta">
+            <span className="jrn-result-pill jrn-result-pill--optimal">📱 toujours active</span>
+          </div>
+        </div>
+        <p className="jrn-block__intro">
+          Le plan est disponible sur l'app dès la publication. La cliente reçoit une notification.
         </p>
 
-        {/* BC.5A : configuration suivi du poids — utilise jrn-inline-card accent */}
+        {/* Toggle suivi poids */}
         <div className="jrn-inline-card jrn-inline-card--accent">
           <div className="jrn-inline-card__row">
             <div className="jrn-inline-card__body">
@@ -2147,93 +2202,89 @@ function StepDelivery({ client, onChange }) {
           </div>
         </div>
 
-        {/* BC.5A : guide enrichissement IA — palette gold (au lieu de violet hors palette) */}
+        {/* Astuce enrichissement IA */}
         <div className="jrn-inline-card jrn-inline-card--gold">
           <div className="jrn-inline-card__title">✨ Astuce — enrichir avant publication</div>
           <div className="jrn-inline-card__hint">
-            Dans <strong>📱 Aperçu app</strong>, cliquez sur le bouton <strong>✨ Enrichir</strong> pour que l'IA ajoute une intro narrative personnalisée, des points clés et une signature pour la cliente. Recommandé pour la version V1 (livret fondateur).
+            Dans <strong>📱 Aperçu app</strong>, clique sur <strong>✨ Enrichir</strong> pour que l'IA ajoute une intro narrative personnalisée, des points clés et une signature pour la cliente. Recommandé pour la version V1.
           </div>
         </div>
 
         <p className="jrn-inline-card__cta-hint">
-          → Cliquez sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser, enrichir et publier.
+          → Clique sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser, enrichir et publier.
         </p>
       </div>
 
-      {/* ─── Section papier (conditionnelle) ──────────────────────── */}
-      {includePaper && (
-        <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
-          <div className="jrn-label">📦 Plan papier</div>
-          <ul style={{ margin: '8px 0 12px', paddingLeft: 20, color: 'var(--jrn-text-soft)', fontSize: 13, lineHeight: 1.8 }}>
-            <li>Générer le document Word depuis l'éditeur de plan</li>
-            <li>Imprimer (recto-verso recommandé)</li>
-            <li>Préparer enveloppe + étiquette adresse cliente</li>
-            <li>Envoi postal</li>
-          </ul>
-          <div className="jrn-actions" style={{ marginTop: 0 }}>
-            <button onClick={handleExportWord} disabled={exporting} className="jrn-btn jrn-btn--soft">
-              {exporting ? 'Export…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter Word')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* AZ.2 : Modification de la date de livraison (migré du menu Plus) */}
+      {/* ─── Bloc 4 : Date de livraison (conditionnel — si déjà délivré) */}
       {client.packStartedAt && (
-        <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)', background: 'transparent', border: '1px dashed var(--jrn-border-strong)', padding: 'var(--jrn-5)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div>
-              <div className="jrn-label" style={{ marginBottom: 2 }}>Date de livraison enregistrée</div>
-              <div style={{ fontSize: 13, color: 'var(--jrn-text)', fontWeight: 500 }}>
+        <div className="jrn-block">
+          <div className="jrn-block__head">
+            <span className="jrn-block__num">4</span>
+            <h3 className="jrn-block__title">Date de livraison enregistrée</h3>
+          </div>
+          <div className="jrn-surface" style={{ background: 'transparent', border: '1px dashed var(--jrn-border-strong)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 'var(--jrn-text-md)', color: 'var(--jrn-text)', fontWeight: 600, fontFamily: 'var(--jrn-font-display)', fontStyle: 'italic' }}>
                 {new Date(client.packStartedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
               </div>
+              {!showEditDate && (
+                <button
+                  onClick={() => {
+                    setNewDeliveryDate(new Date(client.packStartedAt).toISOString().slice(0, 10));
+                    setShowEditDate(true);
+                  }}
+                  className="jrn-btn jrn-btn--ghost"
+                  title="Corriger la date si erreur (la timeline du suivi démarre depuis cette date)"
+                >
+                  📅 Modifier
+                </button>
+              )}
             </div>
-            {!showEditDate && (
-              <button
-                onClick={() => {
-                  setNewDeliveryDate(new Date(client.packStartedAt).toISOString().slice(0, 10));
-                  setShowEditDate(true);
-                }}
-                className="jrn-btn jrn-btn--ghost"
-                style={{ fontSize: 12, padding: '6px 12px' }}
-                title="Corriger la date si erreur (la timeline du suivi démarre depuis cette date)"
-              >
-                📅 Modifier
-              </button>
+            {showEditDate && (
+              <div style={{ marginTop: 'var(--jrn-4)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="date"
+                  value={newDeliveryDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setNewDeliveryDate(e.target.value)}
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: 14,
+                    border: '1px solid var(--jrn-border-strong)',
+                    borderRadius: 'var(--jrn-radius-sm)',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <button onClick={handleSaveDeliveryDate} disabled={savingDate} className="jrn-btn jrn-btn--primary">
+                  {savingDate ? '…' : 'Mettre à jour'}
+                </button>
+                <button onClick={() => setShowEditDate(false)} className="jrn-btn jrn-btn--ghost">
+                  Annuler
+                </button>
+              </div>
             )}
           </div>
-          {showEditDate && (
-            <div style={{ marginTop: 'var(--jrn-3)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="date"
-                value={newDeliveryDate}
-                max={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => setNewDeliveryDate(e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  border: '1px solid var(--jrn-border-strong)',
-                  borderRadius: 'var(--jrn-radius-sm)',
-                  fontFamily: 'inherit',
-                }}
-              />
-              <button onClick={handleSaveDeliveryDate} disabled={savingDate} className="jrn-btn jrn-btn--primary" style={{ padding: '8px 14px', fontSize: 12 }}>
-                {savingDate ? '…' : 'Mettre à jour'}
-              </button>
-              <button onClick={() => setShowEditDate(false)} className="jrn-btn jrn-btn--ghost" style={{ padding: '8px 14px', fontSize: 12 }}>
-                Annuler
-              </button>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Hero CTA — moment important : la livraison est une étape clé */}
-      <div style={{ marginTop: 'var(--jrn-10)', display: 'flex', justifyContent: 'center' }}>
-        <button onClick={handleDelivered} disabled={busy} className="jrn-btn--hero">
-          {busy ? 'Livraison…' : (includePaper ? '🎁 Confirmer la livraison (papier + app)' : '🎁 Confirmer la livraison')}
-        </button>
+      {/* ─── Bloc final : Validation & livraison ──────────────── */}
+      <div className="jrn-block">
+        <div className="jrn-block__head">
+          <span className="jrn-block__num">{client.packStartedAt ? '5' : '4'}</span>
+          <h3 className="jrn-block__title">Confirmation de livraison</h3>
+        </div>
+        <p className="jrn-block__intro">
+          {includePaper
+            ? 'Une fois le livret papier expédié ET le plan publié sur l\'app, confirme la livraison. Cette action démarre la timeline du suivi (étape 8).'
+            : 'Une fois le plan publié sur l\'app, confirme la livraison. Cette action démarre la timeline du suivi (étape 8).'}
+        </p>
+        <div className="jrn-actions" style={{ marginTop: 0 }}>
+          <button onClick={handleDelivered} disabled={busy} className="jrn-btn jrn-btn--hero">
+            {busy ? 'Livraison…' : (includePaper ? '🎁 Confirmer la livraison (papier + app) →' : '🎁 Confirmer la livraison →')}
+          </button>
+        </div>
       </div>
+
       <ErrorLine msg={err} />
     </section>
   );
