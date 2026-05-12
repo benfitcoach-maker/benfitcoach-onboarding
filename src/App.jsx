@@ -30,6 +30,8 @@ import { fetchClientsStatus, clearStatusCache } from './services/fetchClientsSta
 import { markClientReviewed } from './services/markClientReviewed';
 import { clientAppFetch } from './services/clientAppFetch';
 import { COACH_IDENTITY, emailSubjectQuestionnaire, emailSubjectWelcomeApp } from './services/coachIdentity';
+// V97.4 fix : URL app cliente (source unique pour éviter fallback erroné vers SaaS).
+import { getClientAppUrl } from './services/clientAppUrl';
 import StepForm from './StepForm';
 import BenoitPaymentsPanel from './BenoitPaymentsPanel';
 import MassageForm from './MassageForm';
@@ -1250,10 +1252,9 @@ function App() {
               const questionnaireUrl = `${window.location.origin}/questionnaire/${client.id}`;
               const prenom = formData.prenom || '';
 
-              // App cliente URL — vit dans une env var pour pouvoir basculer
-              // entre staging/prod sans recompiler.
-              const APP_URL = import.meta?.env?.VITE_CLIENT_APP_URL
-                || 'https://app.anissanutrition.ch';
+              // V97.4 fix : avant 2026-05-12 le fallback pointait sur le SaaS
+              // au lieu de l'app cliente. Source unique : ./services/clientAppUrl.js
+              const APP_URL = getClientAppUrl();
 
               let subject;
               let body;

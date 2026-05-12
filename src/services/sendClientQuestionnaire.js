@@ -20,6 +20,7 @@
 
 import { getClientNutritionLocale } from './nutritionLocale';
 import { emailSubjectQuestionnaire, emailSubjectWelcomeApp, COACH_IDENTITY } from './coachIdentity';
+import { getClientAppUrl } from './clientAppUrl';
 
 /** Mode 1 : lien direct vers le formulaire web /questionnaire ou /anamnese. */
 export function openClientQuestionnaireMail(client) {
@@ -56,8 +57,9 @@ export function openClientQuestionnaireMail(client) {
  *  À utiliser uniquement si client.app_enabled === true. */
 export function openClientWelcomeAppMail(client) {
   if (!client?.id) return false;
-  const APP_URL = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_CLIENT_APP_URL)
-    || 'https://app.anissanutrition.ch';
+  // V97.4 fix : avant 2026-05-12 le fallback pointait sur le SaaS au lieu
+  // de l'app cliente. Source unique : ./clientAppUrl.js
+  const APP_URL = getClientAppUrl();
   const clientEmail = client.form?.email || client.email || '';
   const clientPrenom = client.prenom || client.form?.prenom || '';
   const subject = emailSubjectWelcomeApp('fr');
