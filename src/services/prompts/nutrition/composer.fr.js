@@ -29,6 +29,8 @@ import { getProfileModuleFr } from './profiles/index.fr';
 // V97.4 (Phase V1) : couche clinicalContext — tests / markers / signals /
 // microbiomeStage / modules / safety rules. Voir ./_clinicalContext.fr.js.
 import { buildClinicalContextBlockFr } from './_clinicalContext.fr';
+// V97.4 V3.H Gap #3 : objectifs priorisés pour focaliser le plan IA.
+import { formatPrioritizedObjectivesFr } from './_objectives.fr';
 
 /**
  * Build the FR system prompt with profile-aware composition.
@@ -93,6 +95,15 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
   if (clinicalBlock) {
     parts.push('// ═══ CONTEXTE CLINIQUE STRUCTURÉ ═══');
     parts.push(clinicalBlock);
+  }
+
+  // V97.4 V3.H Gap #3 : objectifs priorisés (focus plan IA).
+  // Injecté APRÈS le contexte clinique → l'IA voit d'abord la situation
+  // bio, puis ce qu'on veut prioriser. Retourne '' si rien rempli.
+  const objectivesBlock = formatPrioritizedObjectivesFr(form);
+  if (objectivesBlock) {
+    parts.push('// ═══ OBJECTIFS PRIORISÉS ═══');
+    parts.push(objectivesBlock);
   }
 
   // Plan mode (unchanged from legacy path).

@@ -102,6 +102,13 @@ export const NUTRITION_INITIAL_FORM = {
   dureeProbleme: '',
   dejaEssaye: '',
   pretProtocole: '',
+  // V97.4 V3.H Gap #3 — Objectifs structurés priorisés (focus plan IA).
+  // L'IA reçoit ces champs en bloc dédié pour produire un plan ciblé
+  // sur la priorité 1 (au lieu de plans "larges" actuels).
+  objectif_primaire: '',          // textarea libre (ex: "Perdre 8 kg", "Récupérer énergie")
+  objectif_secondaire_1: '',      // textarea libre (en support)
+  objectif_secondaire_2: '',      // textarea libre (en support)
+  objectif_urgency: '',           // 'urgent_moins_1m' | 'moyen_3_6m' | 'long_terme'
   // Etape 13 - Notes nutritionniste
   observationsGenerales: '',
   planAction: '',

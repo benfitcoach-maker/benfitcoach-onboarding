@@ -633,6 +633,53 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
           <h3>Notes coach</h3>
           <div className="form-grid">
             <div className="field full-width"><label>Objectif principal (validation / correction)</label><SmartTextarea value={form.objectifPrincipalNutrition} onChange={e => updateField('objectifPrincipalNutrition', e.target.value)} placeholder="Objectif du client..." rows={3} /></div>
+
+            {/* V97.4 V3.H Gap #3 — Objectifs priorisés (focus plan IA) */}
+            <div className="field full-width">
+              <label>Objectif priorité 1 (focus principal du plan)</label>
+              <SmartTextarea
+                value={form.objectif_primaire || ''}
+                onChange={e => updateField('objectif_primaire', e.target.value)}
+                placeholder="Ex: Stabiliser l'énergie sur la journée"
+                rows={2}
+              />
+            </div>
+            <div className="field full-width">
+              <label>Objectif priorité 2 (en support)</label>
+              <SmartTextarea
+                value={form.objectif_secondaire_1 || ''}
+                onChange={e => updateField('objectif_secondaire_1', e.target.value)}
+                placeholder="Ex: Améliorer le sommeil"
+                rows={2}
+              />
+            </div>
+            <div className="field full-width">
+              <label>Objectif priorité 3 (en support)</label>
+              <SmartTextarea
+                value={form.objectif_secondaire_2 || ''}
+                onChange={e => updateField('objectif_secondaire_2', e.target.value)}
+                placeholder="Ex: Réduire les ballonnements"
+                rows={2}
+              />
+            </div>
+            <div className="field full-width">
+              <label>Niveau d'urgence</label>
+              <div className="radio-group">
+                {[
+                  { value: 'urgent_moins_1m', label: 'Urgent (résultats < 1 mois)' },
+                  { value: 'moyen_3_6m', label: 'Moyen terme (3–6 mois)' },
+                  { value: 'long_terme', label: 'Long terme (transformation durable)' },
+                ].map(opt => (
+                  <label key={opt.value} className="radio-label">
+                    <input type="radio" name="objectif_urgency" value={opt.value}
+                      checked={form.objectif_urgency === opt.value}
+                      onChange={e => updateField('objectif_urgency', e.target.value)} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="field full-width"><label>Depuis combien de temps</label><SmartTextarea value={form.dureeProbleme} onChange={e => updateField('dureeProbleme', e.target.value)} placeholder="Duree du probleme..." rows={2} /></div>
             <div className="field full-width"><label>Deja essaye</label><SmartTextarea value={form.dejaEssaye} onChange={e => updateField('dejaEssaye', e.target.value)} placeholder="Regimes, supplements, consultations..." rows={2} /></div>
             <div className="field full-width private-field">
