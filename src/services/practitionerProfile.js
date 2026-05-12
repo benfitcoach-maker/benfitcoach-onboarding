@@ -19,13 +19,28 @@ export const PRACTITIONER_LEGAL_PROFILE = {
   // Identité affichée publiquement
   name: 'Anissa Deroubaix',
 
-  // Titre / activité professionnelle affichée.
-  // ⚠️ NOTE juridique (2026-05-11) : 'Anissa Nutrition' est un nom commercial,
-  // pas un titre professionnel reconnu en Suisse. Si Anissa dispose d'un titre
-  // ASDD / diplôme ES / autre reconnu, le préférer pour défendabilité légale.
-  // Sinon, formulation prudente : 'Spécialiste en nutrition fonctionnelle,
-  // fondatrice Anissa Nutrition'.
-  title: 'Anissa Nutrition',
+  // Titre professionnel exact, factuel et défendable juridiquement.
+  // Source : Diplôme Nutrition (200h, 150h présence + 50h étude perso),
+  // École TCMA Genève (Thérapie Complémentaire et Médecine Alternative),
+  // décerné le 1er juillet 2024.
+  // Cadre légal : loi genevoise sur la santé K 1 03 + règlement K 3 02.03
+  // (pratiques complémentaires).
+  //
+  // ⚠️ Choix juridique validé 2026-05-12 (cf. discussion strategique) :
+  // - PAS "diététicienne" (titre fédéral protégé, non détenu)
+  // - PAS "nutrition clinique" (sous-entend qualification médicale)
+  // - PAS "thérapeute" / "diagnostic"
+  // - PAS "nutritionniste fonctionnelle" seule (sur-vente potentielle si audit)
+  //
+  // Cette formulation est :
+  //   - factuelle (correspond au diplôme)
+  //   - traçable (l'école est nommée)
+  //   - non médicale (pas de revendication réglementée)
+  //   - compatible avec positionnement "copilote clinique supervisé"
+  //
+  // Variante branding marketing (PAS pour mentions légales PDF) :
+  //   "Praticienne en nutrition · Approche fonctionnelle & bien-être"
+  title: 'Praticienne en nutrition, École TCMA Genève',
 
   // Numéro GLN (Global Location Number, registre santé Suisse).
   gLNumber: '7601009595035',
