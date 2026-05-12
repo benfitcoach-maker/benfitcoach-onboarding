@@ -19,36 +19,33 @@ export const PRACTITIONER_LEGAL_PROFILE = {
   // Identité affichée publiquement
   name: 'Anissa Deroubaix',
 
-  // Titre professionnel reconnu (Suisse).
-  // ⚠️ TODO : confirmer le titre exact d'Anissa.
-  // Options vraisemblables :
-  //   - 'Diététicienne ASDD' (titre protégé, Association Suisse des Diététiciens)
-  //   - 'Diététicienne diplômée ES' (titre fédéral)
-  //   - 'Nutritionniste fonctionnelle' (descriptif, pas un titre protégé)
-  title: 'À COMPLÉTER — titre exact reconnu Suisse',
+  // Titre / activité professionnelle affichée.
+  // ⚠️ NOTE juridique (2026-05-11) : 'Anissa Nutrition' est un nom commercial,
+  // pas un titre professionnel reconnu en Suisse. Si Anissa dispose d'un titre
+  // ASDD / diplôme ES / autre reconnu, le préférer pour défendabilité légale.
+  // Sinon, formulation prudente : 'Spécialiste en nutrition fonctionnelle,
+  // fondatrice Anissa Nutrition'.
+  title: 'Anissa Nutrition',
 
   // Numéro GLN (Global Location Number, registre santé Suisse).
-  // ⚠️ TODO : à demander à Anissa si elle est enregistrée GLN.
-  // Format : 7601000000000 (13 chiffres)
-  gLNumber: 'À COMPLÉTER',
+  gLNumber: '7601009595035',
 
   // Numéro RCC (Registre des Codes-Créanciers).
-  // ⚠️ TODO : optionnel, dépend du statut professionnel.
+  // Optionnel, dépend du statut professionnel.
   rccNumber: '',
 
   // Entité juridique facturante
   company: 'AB Coaching Sàrl',
 
-  // Coordonnées professionnelles
-  // ⚠️ TODO : adresse de pratique exacte (cabinet ou siège société)
+  // Coordonnées professionnelles (siège société / cabinet)
   address: {
-    street: 'À COMPLÉTER',
-    postalCode: 'À COMPLÉTER',
-    city: 'À COMPLÉTER',
+    street: 'Rue de Rive 28',
+    postalCode: '1260',
+    city: 'Nyon',
     country: 'Suisse',
   },
-  email: 'À COMPLÉTER',
-  phone: 'À COMPLÉTER',
+  email: 'anissa.nutri@gmail.com',
+  phone: '+41 76 621 02 05',
   website: 'https://anissanutrition.ch',
 
   // Disclaimer juridique standard (apparait sur tous les documents
@@ -98,10 +95,10 @@ export function getValidationBanner(validatedAt) {
 export function getMissingProfileFields() {
   const p = PRACTITIONER_LEGAL_PROFILE;
   const missing = [];
-  if (p.title.startsWith('À COMPLÉTER')) missing.push('title');
-  if (p.gLNumber.startsWith('À COMPLÉTER')) missing.push('gLNumber');
-  if (p.address.street.startsWith('À COMPLÉTER')) missing.push('address.street');
-  if (p.email.startsWith('À COMPLÉTER')) missing.push('email');
-  if (p.phone.startsWith('À COMPLÉTER')) missing.push('phone');
+  if (!p.title || p.title.startsWith('À COMPLÉTER')) missing.push('title');
+  if (!p.gLNumber || p.gLNumber.startsWith('À COMPLÉTER')) missing.push('gLNumber');
+  if (!p.address?.street || p.address.street.startsWith('À COMPLÉTER')) missing.push('address.street');
+  if (!p.email || p.email.startsWith('À COMPLÉTER')) missing.push('email');
+  if (!p.phone || p.phone.startsWith('À COMPLÉTER')) missing.push('phone');
   return missing;
 }
