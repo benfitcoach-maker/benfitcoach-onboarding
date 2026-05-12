@@ -1,4 +1,4 @@
-// V97.4 Phase V3.B — Constructeur clinicalContext enrichi via catalogue.
+// V97.4 Phase V3.D — Constructeur clinicalContext + propagation markers à l'IA.
 // Date : 2026-05-12
 //
 // Rôle : transformer les données déjà saisies par Anissa dans le SaaS
@@ -8,30 +8,42 @@
 // Architecture (cf. discussion 2026-05-12) :
 //   journey_state.results_data + form
 //   → buildClinicalContext()
-//   → clinicalContext (enrichi via catalog Ortho-Analytic)
+//   → clinicalContext (enrichi via catalog Ortho-Analytic + markers)
 //   → buildSystemPromptFrV2(..., { useComposer: true, clinicalContext })
 //
-// V2.A (DONE) — branchement minimal des données existantes :
+// V2.A — branchement minimal des données existantes :
 //   - selectedTests : depuis results_data.from_plan (tests prescrits)
 //   - enteredResults : depuis results_data.from_plan + results_data.external
 //     (filtrés sur ceux qui ont une valeur OU une synthèse Anissa)
 //   - clinicalSignals : propagation 1:1 des `status` saisis manuellement
 //     par Anissa (status: 'prioritaire' | 'surveiller').
 //
-// V3.B (CURRENT) — enrichissement via catalogue :
+// V3.B — enrichissement via catalogue :
 //   - selectedTests : lookup catalog/orthoAnalyticTests.js par test_code,
 //     enrichis avec lab, category, clinical_category (axe), price_chf, description.
 //     Fallback gracieux si test absent du catalogue (comportement V2.A).
 //   - expectedMarkers : agrégation des marqueurs attendus de tous les tests
 //     prescrits, dédupliqués par code, enrichis depuis catalog/markers.js.
 //
-// V3.B NE FAIT PAS encore :
+// V3.D (CURRENT) — propagation des markers détaillés saisis par Anissa :
+//   - enteredResults : chaque enteredResult est tagué `source_level: "test"`
+//     (V2.A legacy) OU `source_level: "marker"` (nouveau). L'IA peut ainsi
+//     distinguer une lecture clinique globale d'une valeur marker spécifique.
+//     Label marker formaté : "{test_name} → {marker_label}" pour traçabilité.
+//   - clinicalSignals : si un marker a status === 'prioritaire'|'surveiller',
+//     un signal est créé avec `confidence: "note Anissa marker"` (vs
+//     "note Anissa" au niveau test). Permet à l'IA de différencier la source.
+//   - PAS de déduplication agressive : un même marqueur dans 2 tests peut
+//     donner 2 entrées (utile longitudinal T0/T1 → V3.E).
+//
+// V3.D NE FAIT PAS encore :
 //   - Auto-détection avancée de signaux depuis valeurs brutes
 //   - Moteur microbiomeStage (phases 1-5)
 //   - Scoring composé
+//   - Déduplication T0/T1 (V3.E)
 //   - promptModules / safetyRules dynamiques
 //
-// Tout cela viendra plus tard (V3.C+ / V4) sans casser l'API actuelle.
+// Tout cela viendra plus tard (V3.E+ / V4) sans casser l'API actuelle.
 
 import { getTest, getExpectedMarkersForTest } from './catalog/orthoAnalyticTests';
 
@@ -127,9 +139,16 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
   const expectedMarkers = Array.from(markersByCode.values());
 
   // ─── enteredResults : tous les résultats avec valeur ou synthèse ─
-  // Inclut from_plan ET external. Filtre ceux qui sont vides.
+  // V3.D : 2 niveaux distincts pour que l'IA ne mélange pas lecture
+  // globale niveau test vs valeur marker spécifique.
+  //   - source_level: "test"   → champ value/synthesis saisi au niveau carte test
+  //   - source_level: "marker" → valeur/note saisie sur une ligne marker spécifique
+  // Aucune déduplication entre les deux (un test peut avoir une lecture
+  // globale + plusieurs valeurs markers, l'IA reçoit les deux contextes).
   const allResults = [...fromPlan, ...external];
-  const enteredResults = allResults
+
+  // a) Niveau test (V2.A legacy, juste tagué source_level)
+  const testLevelEntries = allResults
     .map((r) => {
       const label = r.test_name || r.test_code || r.name;
       if (!label) return null;
@@ -138,18 +157,50 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
         label,
         value: r.value || '',
         synthesis: r.synthesis || '',
+        source_level: 'test',
       };
     })
     .filter(Boolean);
+
+  // b) Niveau marker (V3.D nouveau) — uniquement depuis from_plan,
+  // les analyses externes n'ont pas de markers[] (input freeform).
+  const markerLevelEntries = [];
+  for (const r of fromPlan) {
+    if (!Array.isArray(r.markers)) continue;
+    const testLabel = r.test_name || r.test_code || 'Test sans nom';
+    for (const m of r.markers) {
+      if (!m) continue;
+      if (!m.value && !m.synthesis) continue;
+      const markerLabel = m.label || m.marker_code || 'Marqueur';
+      markerLevelEntries.push({
+        label: `${testLabel} → ${markerLabel}`,
+        value: m.value || '',
+        synthesis: m.synthesis || '',
+        source_level: 'marker',
+        unit: m.unit || null,
+      });
+    }
+  }
+
+  const enteredResults = [...testLevelEntries, ...markerLevelEntries];
 
   // ─── clinicalSignals : propagation 1:1 des status Anissa ─────────
   // Pas d'auto-détection IA. Anissa a manuellement marqué étape 4 chaque
   // résultat comme 'optimal' | 'surveiller' | 'prioritaire'. On propage
   // les 2 derniers comme signaux pour informer l'IA de générer un plan
   // qui adresse explicitement ces priorités cliniques.
-  // Source : note saisie par la praticienne. Confidence = "note Anissa".
+  //
+  // V3.D : 2 sources distinctes pour permettre à l'IA de pondérer.
+  //   - confidence: "note Anissa"        → status saisi au niveau test
+  //   - confidence: "note Anissa marker" → status saisi sur un marker spécifique
+  //
+  // Pas de déduplication : si un test est "prioritaire" ET un de ses markers
+  // l'est aussi, l'IA reçoit les 2 signaux. C'est volontaire — la précision
+  // marker enrichit l'information sans masquer le signal global.
   const PRIORITY_MAP = { prioritaire: 1, surveiller: 2 };
-  const clinicalSignals = allResults
+
+  // a) Niveau test (V2.A legacy, juste précisée confidence)
+  const testLevelSignals = allResults
     .map((r) => {
       const status = r.status;
       if (status !== 'prioritaire' && status !== 'surveiller') return null;
@@ -167,7 +218,32 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
     })
     .filter(Boolean);
 
-  // ─── V3.B : champs non encore branchés (réservés V3.C+ / V4) ─────
+  // b) Niveau marker (V3.D nouveau)
+  const markerLevelSignals = [];
+  for (const r of fromPlan) {
+    if (!Array.isArray(r.markers)) continue;
+    const testLabel = r.test_name || r.test_code || 'Test';
+    for (const m of r.markers) {
+      if (!m) continue;
+      const status = m.status;
+      if (status !== 'prioritaire' && status !== 'surveiller') continue;
+      const markerLabel = m.label || m.marker_code || 'Marqueur';
+      const composed = `${testLabel} → ${markerLabel}`;
+      markerLevelSignals.push({
+        id: `${status}_${slugify(`${testLabel}_${markerLabel}`)}`,
+        label: status === 'prioritaire'
+          ? `${composed} — priorité haute (Anissa)`
+          : `${composed} — à surveiller (Anissa)`,
+        priority: PRIORITY_MAP[status],
+        confidence: 'note Anissa marker',
+        source_markers: [markerLabel],
+      });
+    }
+  }
+
+  const clinicalSignals = [...testLevelSignals, ...markerLevelSignals];
+
+  // ─── V3.D : champs non encore branchés (réservés V3.E+ / V4) ─────
   // Retournés vides pour respecter le shape attendu par _clinicalContext.fr.js
   // sans rien inventer.
   const microbiomeStage = null;
