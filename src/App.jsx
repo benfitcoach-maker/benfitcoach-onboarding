@@ -810,7 +810,9 @@ function App() {
       langue: 'FR',
       createdBy: 'anissa',
       packType: formData.packType || 'oneshot_180',
-      packStartedAt: new Date().toISOString(),
+      // V97.8.1 : packStartedAt null \u00e0 la cr\u00e9ation (le pack d\u00e9marre seulement
+      // \u00e0 markDelivered). Voir explication identique l. 1192.
+      packStartedAt: null,
       packStartedAtConfirmed: false,
       packSchedule: [],
     });
@@ -1189,7 +1191,13 @@ function App() {
                 createdBy: 'anissa',
                 status: 'questionnaire_envoye',
                 packType: packType || 'oneshot_180',
-                packStartedAt: new Date().toISOString(),
+                // V97.8.1 (2026-05-12) : packStartedAt = null à la création.
+                // Avant ce fix, on posait Date.now() ici → la timeline du
+                // pack 6 mois démarrait dès la création (Anissa voyait
+                // 'Jour 1 du pack' avant même le RDV anamnèse / publication
+                // du plan). Le pack démarre maintenant uniquement à
+                // markDelivered (transitions.markDelivered).
+                packStartedAt: null,
                 packStartedAtConfirmed: false,
                 packSchedule: [],
               });

@@ -150,8 +150,10 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const initials = (
     (prenom?.[0] || '') + (nom?.[0] || '')
   ).toUpperCase() || '?';
-  // Jour J du pack (depuis packStartedAt si dispo)
-  const daysSincePack = client.packStartedAt
+  // Jour J du pack — V97.8.1 : ne s'affiche QUE si le pack est confirm\u00e9 d\u00e9marr\u00e9
+  // (= markDelivered effectu\u00e9). Avant ce fix, on calculait depuis packStartedAt
+  // pos\u00e9 \u00e0 la cr\u00e9ation \u2192 Anissa voyait 'Jour 1 du pack' avant le RDV.
+  const daysSincePack = client.packStartedAt && client.packStartedAtConfirmed === true
     ? Math.max(1, Math.floor((Date.now() - new Date(client.packStartedAt).getTime()) / 86400000) + 1)
     : null;
   // Dernière consultation effectuée (pour "dernier check-in")
