@@ -46,6 +46,7 @@
 // Tout cela viendra plus tard (V3.E+ / V4) sans casser l'API actuelle.
 
 import { getTest, getExpectedMarkersForTest } from './catalog/orthoAnalyticTests';
+import { detectMicrobiomeStage } from './microbiome/detectMicrobiomeStage';
 
 /**
  * Construit l'objet clinicalContext propre à partir des données saisies
@@ -243,10 +244,30 @@ export function buildClinicalContext({ journeyState, form: _form, catalog: _cata
 
   const clinicalSignals = [...testLevelSignals, ...markerLevelSignals];
 
-  // ─── V3.D : champs non encore branchés (réservés V3.E+ / V4) ─────
-  // Retournés vides pour respecter le shape attendu par _clinicalContext.fr.js
-  // sans rien inventer.
-  const microbiomeStage = null;
+  // ─── V3.F : phase microbiome (rule-based + override Anissa) ─────
+  // Moteur conservateur : ne renvoie une phase QUE si plusieurs règles
+  // convergent (≥ 2 votes, écart > 1 avec runner-up). Sinon final_phase
+  // reste null (le SaaS ne fait pas semblant de savoir).
+  //
+  // Override Anissa : si journey_state.microbiome_override.phase est défini,
+  // il écrase final_phase. inferred_phase + reasons restent pour audit.
+  //
+  // Sortie compatible avec le renderer _clinicalContext.fr.js (alias id,
+  // label, goal, allowed_interventions, blocked_interventions).
+  let microbiomeStage = null;
+  try {
+    const stage = detectMicrobiomeStage({ journeyState });
+    // On n'expose le bloc à l'IA QUE si on a quelque chose d'utile :
+    // soit une phase finale, soit des raisons audit non-vides.
+    if (stage && (stage.final_phase || (Array.isArray(stage.reasons) && stage.reasons.length > 0))) {
+      microbiomeStage = stage;
+    }
+  } catch {
+    // best-effort : moteur défectueux ne doit jamais bloquer la génération
+    microbiomeStage = null;
+  }
+
+  // ─── V3.F : champs non encore branchés (réservés V3.G+ / V4) ─────
   const promptModules = [];
   const safetyRules = [];
 

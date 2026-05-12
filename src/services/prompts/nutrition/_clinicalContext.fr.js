@@ -130,18 +130,53 @@ export function formatSignal(signal) {
 
 /**
  * Formate la phase microbiome active en bloc multi-ligne.
- * Renvoie '' si stage absent ou sans id/label.
+ * Renvoie '' si stage absent ou sans label/id.
+ *
+ * V3.F — wording prudent : "Phase probable" plutôt que "Phase".
+ * Affiche confidence + reasons + override quand fournis (champs V3.F),
+ * rétro-compat avec callers qui passent seulement label/goal (V1).
  */
 export function formatMicrobiomeStage(stage) {
   if (!stage || typeof stage !== 'object') return '';
   const label = pick(stage, 'label', 'name');
   const id = pick(stage, 'id');
-  if (!label && !id) return '';
 
+  // V3.F : si pas de phase tranchée mais des raisons audit présentes,
+  // on émet quand même un bloc "Pas de phase tranchée — pistes" pour
+  // que l'IA voit l'analyse partielle (transparent).
+  const reasons = Array.isArray(stage.reasons) ? stage.reasons.filter(Boolean) : [];
+  if (!label && !id) {
+    if (reasons.length === 0) return '';
+    const lines = ['- Phase microbiome : non tranchée (vigilance, pistes partielles)'];
+    lines.push(`- Indices observés : ${reasons.join(' ; ')}`);
+    return lines.join('\n');
+  }
+
+  const overridden = stage.overridden_by_practitioner === true;
+  const confidence = pick(stage, 'confidence');
   const lines = [];
-  lines.push(`- Phase : ${label || id}`);
+
+  // V3.F : wording suggestif, jamais prescriptif.
+  if (overridden) {
+    lines.push(`- Phase retenue par la praticienne : ${label || id}`);
+    const overrideReason = pick(stage, 'override_reason');
+    if (overrideReason) lines.push(`- Motif praticienne : ${overrideReason}`);
+  } else {
+    const cf = confidence ? ` (confiance ${confidence})` : '';
+    lines.push(`- Phase probable : ${label || id}${cf}`);
+  }
+
   const goal = pick(stage, 'goal', 'objective');
   if (goal) lines.push(`- Objectif : ${goal}`);
+
+  if (reasons.length > 0) {
+    lines.push(`- Raisons : ${reasons.join(' ; ')}`);
+  }
+
+  const targetMarkers = Array.isArray(stage.target_markers) ? stage.target_markers.filter(Boolean) : [];
+  if (targetMarkers.length > 0) {
+    lines.push(`- Marqueurs à surveiller : ${targetMarkers.join(', ')}`);
+  }
 
   const allowed = Array.isArray(stage.allowed_interventions) ? stage.allowed_interventions.filter(Boolean) : [];
   if (allowed.length > 0) lines.push(`- Autorisé : ${allowed.join(', ')}`);
