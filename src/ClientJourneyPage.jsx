@@ -1126,7 +1126,7 @@ function StepResults({ client, onChange }) {
       {hasStatusedResults && (
         <div className={`jrn-clinical-overview jrn-clinical-overview--${overallTone}`}>
           <div className="jrn-clinical-overview__head">
-            <p className="jrn-clinical-overview__eyebrow">Vue clinique détectée</p>
+            <p className="jrn-clinical-overview__eyebrow">Lecture clinique</p>
             <h3 className="jrn-clinical-overview__title">{overallLabel}</h3>
           </div>
           <div className="jrn-clinical-overview__stats">
@@ -1151,7 +1151,7 @@ function StepResults({ client, onChange }) {
           </div>
           {topCategories.length > 0 && (
             <div className="jrn-clinical-overview__axes">
-              <span className="jrn-clinical-overview__axes-label">Axes détectés</span>
+              <span className="jrn-clinical-overview__axes-label">Axes signalés</span>
               {topCategories.map((cat) => (
                 <span key={cat.value} className={`jrn-cat-pill jrn-cat-pill--${cat.value}`}>
                   <span className="jrn-cat-pill__icon">{cat.icon}</span>
@@ -1271,7 +1271,7 @@ function StepResults({ client, onChange }) {
           <h3 className="jrn-block__title">Synthèse clinique globale</h3>
         </div>
         <p className="jrn-block__intro">
-          Vue d'ensemble éditoriale : priorités détectées, axes nutritionnels, alertes croisées. Sera injectée dans le prompt IA de génération du plan.
+          Vue d'ensemble éditoriale : priorités identifiées, axes nutritionnels, signaux croisés. Sera injectée dans le prompt IA de génération du plan.
         </p>
         <div className="jrn-synthesis">
           <textarea
@@ -1282,10 +1282,10 @@ function StepResults({ client, onChange }) {
             className="jrn-synthesis__textarea"
           />
           <div className="jrn-synthesis__hints">
-            <span className="jrn-synthesis__hint-pill">Priorités détectées</span>
+            <span className="jrn-synthesis__hint-pill">Priorités identifiées</span>
             <span className="jrn-synthesis__hint-pill">Axes nutritionnels</span>
             <span className="jrn-synthesis__hint-pill">Points inflammatoires</span>
-            <span className="jrn-synthesis__hint-pill">Alertes croisées</span>
+            <span className="jrn-synthesis__hint-pill">Signaux croisés</span>
           </div>
         </div>
       </div>
@@ -1553,7 +1553,7 @@ function StepPlanGeneration({ client, journey, onChange }) {
         <div className="jrn-block">
           <div className="jrn-block__head">
             <span className="jrn-block__num">1</span>
-            <h3 className="jrn-block__title">Synthèse clinique détectée</h3>
+            <h3 className="jrn-block__title">Synthèse clinique</h3>
           </div>
           <p className="jrn-block__intro">
             Voici ce que l'analyse a fait émerger. Ces signaux orienteront la composition du protocole.
@@ -1585,7 +1585,7 @@ function StepPlanGeneration({ client, journey, onChange }) {
 
             {topCategories.length > 0 && (
               <div className="jrn-prep__axes">
-                <span className="jrn-prep__axes-label">Axes prioritaires détectés</span>
+                <span className="jrn-prep__axes-label">Axes prioritaires identifiés</span>
                 <div className="jrn-prep__axes-list">
                   {topCategories.map((cat) => (
                     <span key={cat.value} className={`jrn-cat-pill jrn-cat-pill--${cat.value}`}>
@@ -1641,7 +1641,7 @@ function StepPlanGeneration({ client, journey, onChange }) {
         </p>
         <ul className="jrn-output-list">
           <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Structure alimentaire</strong> · répartition journée, équivalences, exemples</li>
-          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Axes prioritaires personnalisés</strong> · adaptés aux signaux cliniques détectés</li>
+          <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Axes prioritaires personnalisés</strong> · adaptés aux signaux cliniques identifiés</li>
           <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Recommandations ciblées</strong> · par catégorie (hormonal, microbiote, carences…)</li>
           <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Supplémentation potentielle</strong> · suggestions à valider</li>
           <li className="jrn-output-item"><span className="jrn-output-item__dot">✦</span><strong>Conseils lifestyle</strong> · sommeil, stress, mouvement, ancrages quotidiens</li>

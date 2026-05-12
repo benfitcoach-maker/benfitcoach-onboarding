@@ -388,7 +388,7 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
             <div className="field full-width"><label>Troubles de peau</label>
               <div className="radio-group">{['Non', 'Oui occasionnel', 'Oui chronique'].map(opt => (<label key={opt} className="radio-label"><input type="radio" name="troublesPeau" value={opt} checked={form.troublesPeau === opt} onChange={e => updateField('troublesPeau', e.target.value)} /><span>{opt}</span></label>))}</div>
             </div>
-            <div className="field full-width"><label>Maladies frequentes</label>
+            <div className="field full-width"><label>Infections fréquentes (rhume, grippe, gastro…)</label>
               <div className="radio-group">{['Rarement', '1-2 fois par an', 'Plusieurs fois par an'].map(opt => (<label key={opt} className="radio-label"><input type="radio" name="frequenceMaladies" value={opt} checked={form.frequenceMaladies === opt} onChange={e => updateField('frequenceMaladies', e.target.value)} /><span>{opt}</span></label>))}</div>
             </div>
           </div>

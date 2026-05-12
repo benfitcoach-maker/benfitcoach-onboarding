@@ -1148,7 +1148,7 @@ export async function exportPlanToWord(client, consultation, finalText) {
     })
   );
   coverChildren.push(
-    pCover("Nutritionniste spécialisée en longévité et génétique", {
+    pCover(PRACTITIONER_LEGAL_PROFILE.title, {
       size: 18,
       italic: true,
       color: COLORS.textSoft,
@@ -1373,8 +1373,8 @@ export async function exportPlanToWord(client, consultation, finalText) {
     }),
     pSpacer(300),
     pCover("Ce plan a été élaboré spécifiquement pour vous", { size: 22, italic: true, color: COLORS.text }),
-    pCover("par Anissa Deroubaix, nutritionniste spécialisée", { size: 22, italic: true, color: COLORS.text }),
-    pCover("en longévité et génétique.", { size: 22, italic: true, color: COLORS.text }),
+    pCover(`par ${PRACTITIONER_LEGAL_PROFILE.name}`, { size: 22, italic: true, color: COLORS.text }),
+    pCover(PRACTITIONER_LEGAL_PROFILE.title + '.', { size: 18, italic: true, color: COLORS.textSoft }),
     pSpacer(280),
     pCover("Il est recommandé de suivre ce plan pendant 4 semaines", { size: 18, color: COLORS.textMute }),
     pCover("avant d'envisager des ajustements.", { size: 18, color: COLORS.textMute }),

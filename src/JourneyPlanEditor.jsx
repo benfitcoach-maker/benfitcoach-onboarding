@@ -752,11 +752,11 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                     </span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--jrn-text-muted)', marginTop: 6, lineHeight: 1.55 }}>
-                    Détecte automatiquement le profil clinique (digestif chronique, post-partum, sèche, hormones féminines…) et injecte les modules MUST INCLUDE / INTERDITS spécifiques. Plus précis pour les profils complexes, plus long à générer.
+                    Identifie automatiquement le profil clinique (digestif chronique, post-partum, sèche, hormones féminines…) et injecte les modules MUST INCLUDE / INTERDITS spécifiques. Plus précis pour les profils complexes, plus long à générer.
                   </div>
                   {detectedProfile && (
                     <div style={{ marginTop: 6, fontSize: 11, color: '#7e5ec7' }}>
-                      Profil détecté : <strong>{detectedProfile.name || detectedProfile.id || 'profil clinique'}</strong>
+                      Profil identifié : <strong>{detectedProfile.name || detectedProfile.id || 'profil clinique'}</strong>
                     </div>
                   )}
                 </div>
