@@ -5,13 +5,17 @@
 // - 6 anciens packs marques `archived: true` : conserves pour les clientes en cours,
 //   mais filtres dans le dropdown de creation nouvelle cliente.
 //
-// V3 modele tarifaire (2026-05-13) :
+// V3.1 modele tarifaire (2026-05-13) :
 // - Les 3 packs sont d'ACCOMPAGNEMENT PUR (RDV, app, suivi)
-// - Les analyses biologiques sont TOUJOURS optionnelles, en supplement,
-//   facturees directement par le laboratoire Ortho-Analytic a la cliente
-// - Pas de notion de "budget analyses inclus" ni de "marge sur pack"
+// - Credit analyse inclus par pack :
+//     consultation_initiale_220 = 0 CHF
+//     suivi_3m_990              = 250 CHF (1 analyse ciblee)
+//     suivi_6m_1990             = 400 CHF (1 analyse approfondie)
+// - Facturation : Anissa avance les frais labo (Ortho-Analytic) puis
+//   refacture la cliente apres reception des resultats. La cliente paye
+//   tout a Anissa Nutrition, jamais directement au labo.
 // - Anissa propose les analyses uniquement sur pertinence clinique
-// - La cliente decide si elle prend ou non les analyses suggerees
+// - Pas de notion de "marge sur pack" — les packs sont du temps humain
 
 export const PACK_DEFINITIONS = {
 

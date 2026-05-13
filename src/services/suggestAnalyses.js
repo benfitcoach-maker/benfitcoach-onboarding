@@ -148,8 +148,9 @@ REGLE TARIFAIRE :
   les justifications cliniques.
 - Le SaaS attribue automatiquement le credit pack a l'analyse la plus pertinente
   qui rentre dans le plafond. Anissa peut deplacer ce credit manuellement.
-- Les analyses au-dela du credit sont a la charge de la cliente (paiement direct
-  au laboratoire Ortho-Analytic).
+- Les analyses au-dela du credit sont facturees par Anissa Nutrition apres
+  reception des resultats (Anissa avance les frais labo et refacture la
+  cliente). Ne mentionne PAS "paiement direct au laboratoire" — c'est faux.
 - Aucune action de ta part sur le credit : tu proposes, le SaaS et Anissa
   gerent l'attribution.
 
