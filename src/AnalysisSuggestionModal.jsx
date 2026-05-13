@@ -104,7 +104,7 @@ export default function AnalysisSuggestionModal({
   // deduction monetaire FLAT sur le total. Pour l'affichage des badges
   // "Incluse dans l'accompagnement", on identifie greedy par pertinence
   // desc les analyses ENTIEREMENT couvertes par le credit (cumul ≤ credit).
-  const { totalCost, selectedTests, creditApplied, costForClient, coveredCodes } = useMemo(() => {
+  const { totalCost, selectedTests, creditApplied, costForClient, coveredCodes, totalMargin } = useMemo(() => {
     const allSelected = [
       ...enrichedSuggestions.filter(s => selected[s.code]),
       ...extraTests.filter(s => selected[s.code]),
