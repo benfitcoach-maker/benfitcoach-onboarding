@@ -1243,7 +1243,7 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             </div>
           )}
 
-          {/* Shared clients section \u2014 maintenant APRES own et clairement separee */}
+          {/* Shared clients section — maintenant APRES own et clairement separee */}
           {filteredShared.length > 0 && (
             <div className="anissa-section" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,.06)' }}>
               <h3 className="anissa-section-title">

@@ -150,9 +150,9 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const initials = (
     (prenom?.[0] || '') + (nom?.[0] || '')
   ).toUpperCase() || '?';
-  // Jour J du pack — V97.8.1 : ne s'affiche QUE si le pack est confirm\u00e9 d\u00e9marr\u00e9
-  // (= markDelivered effectu\u00e9). Avant ce fix, on calculait depuis packStartedAt
-  // pos\u00e9 \u00e0 la cr\u00e9ation \u2192 Anissa voyait 'Jour 1 du pack' avant le RDV.
+  // Jour J du pack — V97.8.1 : ne s'affiche QUE si le pack est confirmé démarré
+  // (= markDelivered effectué). Avant ce fix, on calculait depuis packStartedAt
+  // posé à la création → Anissa voyait 'Jour 1 du pack' avant le RDV.
   const daysSincePack = client.packStartedAt && client.packStartedAtConfirmed === true
     ? Math.max(1, Math.floor((Date.now() - new Date(client.packStartedAt).getTime()) / 86400000) + 1)
     : null;
@@ -311,10 +311,10 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
               if (active) cls.push('jrn-step--active');
               else if (status === 'validated') cls.push('jrn-step--validated');
               else if (status === 'skipped') cls.push('jrn-step--skipped');
-              // V97.8.1 (2026-05-12) : pastille notification sur l'\u00e9tape
-              // Onboarding si la cliente a soumis son pr\u00e9-questionnaire mais
-              // que l'anamn\u00e8se n'est pas encore valid\u00e9e. Anissa voit ainsi
-              // imm\u00e9diatement qu'il y a quelque chose \u00e0 lire/g\u00e9rer.
+              // V97.8.1 (2026-05-12) : pastille notification sur l'étape
+              // Onboarding si la cliente a soumis son pré-questionnaire mais
+              // que l'anamnèse n'est pas encore validée. Anissa voit ainsi
+              // immédiatement qu'il y a quelque chose à lire/gérer.
               const f = client.form || {};
               const preQReceived = !!(f.objectif_primaire || f.dureeProbleme || f.ressentiDigestion);
               const showPreQDot = step === 'anamnesis'
@@ -329,7 +329,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
                     {meta.label}
                     {showPreQDot && (
                       <span
-                        title="Pr\u00e9-questionnaire re\u00e7u \u2014 \u00e0 lire avant le RDV"
+                        title="Pré-questionnaire reçu — à lire avant le RDV"
                         style={{
                           display: 'inline-block',
                           width: 8, height: 8, borderRadius: '50%',
@@ -981,29 +981,29 @@ function StepAnalyses({ client, journey, onChange }) {
         )}
 
         {hasPlan === false && (() => {
-          // V97.8.1 (2026-05-13) : 3 sous-\u00e9tats selon l'avancement de
+          // V97.8.1 (2026-05-13) : 3 sous-états selon l'avancement de
           // l'onboarding. Avant ce fix, on proposait 'Lancer la suggestion IA'
-          // d\u00e8s l'\u00e9tape 2, m\u00eame si la cliente n'avait pas rempli son
-          // pr\u00e9-questionnaire \u2014 l'IA aurait alors rien \u00e0 exploiter.
+          // dès l'étape 2, même si la cliente n'avait pas rempli son
+          // pré-questionnaire — l'IA aurait alors rien à exploiter.
           const f = client.form || {};
           const preQReceived = !!(f.objectif_primaire || f.dureeProbleme || f.ressentiDigestion);
           const anamnesisValidated = journey?.anamnesis_validated === true;
 
-          // \u00c9tat A : pr\u00e9-q pas encore rempli par la cliente
+          // État A : pré-q pas encore rempli par la cliente
           if (!preQReceived) {
             return (
               <div className="jrn-surface jrn-surface--quiet">
                 <div className="jrn-empty">
-                  <div className="jrn-empty__icon">\u23f3</div>
-                  <p className="jrn-empty__title">En attente du pr\u00e9-questionnaire</p>
+                  <div className="jrn-empty__icon">⏳</div>
+                  <p className="jrn-empty__title">En attente du pré-questionnaire</p>
                   <p className="jrn-empty__hint">
-                    La cliente n'a pas encore rempli son pr\u00e9-questionnaire dans l'app.
-                    Une fois re\u00e7u, tu pourras valider l'anamn\u00e8se \u00e0 l'\u00e9tape 1, puis
-                    lancer la suggestion IA d'analyses.
+                    La cliente n&apos;a pas encore rempli son pré-questionnaire dans l&apos;app.
+                    Une fois reçu, tu pourras valider l&apos;anamnèse à l&apos;étape 1, puis
+                    lancer la suggestion IA d&apos;analyses.
                   </p>
                   <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
                     <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
-                      Passer cette \u00e9tape (cliente sans analyses)
+                      Passer cette étape (cliente sans analyses)
                     </button>
                   </div>
                 </div>
@@ -1011,21 +1011,21 @@ function StepAnalyses({ client, journey, onChange }) {
             );
           }
 
-          // \u00c9tat B : pr\u00e9-q re\u00e7u mais anamn\u00e8se pas encore valid\u00e9e par Anissa
+          // État B : pré-q reçu mais anamnèse pas encore validée par Anissa
           if (!anamnesisValidated) {
             return (
               <div className="jrn-surface jrn-surface--quiet">
                 <div className="jrn-empty">
-                  <div className="jrn-empty__icon">\ud83d\udccb</div>
-                  <p className="jrn-empty__title">Pr\u00e9-questionnaire re\u00e7u</p>
+                  <div className="jrn-empty__icon">📋</div>
+                  <p className="jrn-empty__title">Pré-questionnaire reçu</p>
                   <p className="jrn-empty__hint">
-                    Avant de proposer les analyses, retourne sur l'\u00e9tape <strong>Onboarding</strong> pour
-                    relire les r\u00e9ponses, faire le RDV anamn\u00e8se et valider. L'IA s'appuiera ensuite sur
-                    l'anamn\u00e8se compl\u00e8te pour proposer les bons tests.
+                    Avant de proposer les analyses, retourne sur l&apos;étape <strong>Onboarding</strong> pour
+                    relire les réponses, faire le RDV anamnèse et valider. L&apos;IA s&apos;appuiera ensuite sur
+                    l&apos;anamnèse complète pour proposer les bons tests.
                   </p>
                   <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
                     <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
-                      Passer cette \u00e9tape
+                      Passer cette étape
                     </button>
                   </div>
                 </div>
@@ -1033,21 +1033,21 @@ function StepAnalyses({ client, journey, onChange }) {
             );
           }
 
-          // \u00c9tat C : anamn\u00e8se valid\u00e9e \u2014 on peut proposer les analyses (comportement original)
+          // État C : anamnèse validée — on peut proposer les analyses (comportement original)
           return (
             <div className="jrn-surface jrn-surface--quiet">
               <div className="jrn-empty">
-                <div className="jrn-empty__icon">\ud83e\uddea</div>
-                <p className="jrn-empty__title">Aucun plan d'analyses</p>
+                <div className="jrn-empty__icon">🧪</div>
+                <p className="jrn-empty__title">Aucun plan d&apos;analyses</p>
                 <p className="jrn-empty__hint">
-                  L'IA va proposer des tests en croisant l'anamn\u00e8se, le pack achet\u00e9 et les axes prioritaires. Tu garderas la main pour valider, \u00e9carter ou ajouter.
+                  L&apos;IA va proposer des tests en croisant l&apos;anamnèse, le pack acheté et les axes prioritaires. Tu garderas la main pour valider, écarter ou ajouter.
                 </p>
                 <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
                   <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
-                    \u2728 Lancer la suggestion IA
+                    ✨ Lancer la suggestion IA
                   </button>
                   <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
-                    Passer cette \u00e9tape
+                    Passer cette étape
                   </button>
                 </div>
               </div>

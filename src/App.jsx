@@ -445,14 +445,14 @@ function App() {
 
   const refreshClients = useCallback(() => setClients(getClients()), []);
 
-  // V97.8.1 (2026-05-13) — Garde-fou parcours fant\u00f4me.
+  // V97.8.1 (2026-05-13) — Garde-fou parcours fantôme.
   // Si l'URL au mount est /parcours/<UUID> mais que la cliente n'existe
-  // plus (supprim\u00e9e), on retombe sur le dashboard + on clear l'URL.
-  // Sinon le user voit un \u00e9cran de parcours cass\u00e9 ou des donn\u00e9es
+  // plus (supprimée), on retombe sur le dashboard + on clear l'URL.
+  // Sinon le user voit un écran de parcours cassé ou des données
   // fantomes.
   useEffect(() => {
     if (page !== 'clientJourney' || !clientId) return;
-    if (clients.length === 0) return; // pas encore charg\u00e9
+    if (clients.length === 0) return; // pas encore chargé
     const exists = clients.some((c) => c.id === clientId);
     if (!exists) {
       setPage('dashboard');
@@ -674,9 +674,9 @@ function App() {
     setConvertMode(null);
     setMobileMenu(false);
     setClientId(null);
-    // V97.8.1 (2026-05-13) : clear l'URL si on \u00e9tait sur /parcours/:id.
-    // Sans \u00e7a, un F5 relit l'URL et tente de recharger un parcours
-    // potentiellement obsol\u00e8te (cliente supprim\u00e9e par ex).
+    // V97.8.1 (2026-05-13) : clear l'URL si on était sur /parcours/:id.
+    // Sans ça, un F5 relit l'URL et tente de recharger un parcours
+    // potentiellement obsolète (cliente supprimée par ex).
     try {
       if (window.location.pathname.startsWith('/parcours/')) {
         window.history.pushState({}, '', '/');
@@ -839,8 +839,8 @@ function App() {
       langue: 'FR',
       createdBy: 'anissa',
       packType: formData.packType || 'oneshot_180',
-      // V97.8.1 : packStartedAt null \u00e0 la cr\u00e9ation (le pack d\u00e9marre seulement
-      // \u00e0 markDelivered). Voir explication identique l. 1192.
+      // V97.8.1 : packStartedAt null à la création (le pack démarre seulement
+      // à markDelivered). Voir explication identique l. 1192.
       packStartedAt: null,
       packStartedAtConfirmed: false,
       packSchedule: [],
