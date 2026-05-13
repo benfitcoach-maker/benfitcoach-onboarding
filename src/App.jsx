@@ -28,10 +28,9 @@ function ensureCustomRate(form, categorie) {
 // 'reviewed' au clic sur une notif ressenti.
 import { fetchClientsStatus, clearStatusCache } from './services/fetchClientsStatus';
 import { markClientReviewed } from './services/markClientReviewed';
-import { clientAppFetch } from './services/clientAppFetch';
-import { COACH_IDENTITY, emailSubjectQuestionnaire, emailSubjectWelcomeApp } from './services/coachIdentity';
-// V97.4 fix : URL app cliente (source unique pour éviter fallback erroné vers SaaS).
-import { getClientAppUrl } from './services/clientAppUrl';
+// V97.9 : creation cliente decouplee de l'activation app + envoi pre-q.
+// Les imports clientAppFetch / coachIdentity / clientAppUrl sont passes
+// dans StepAnamnesis (ClientJourneyPage.jsx) qui gere ces actions.
 import StepForm from './StepForm';
 import BenoitPaymentsPanel from './BenoitPaymentsPanel';
 import MassageForm from './MassageForm';
@@ -1209,8 +1208,16 @@ function App() {
         {page === 'anissaNewClient' && (
           <AnissaClientForm
             onSave={handleAnissaSaveClient}
-            onSaveQuick={async (formData, packType, options = {}) => {
-              const { activateApp = true } = options;
+            onSaveQuick={async (formData, packType) => {
+              // V97.9 (2026-05-13) — Création découplée.
+              // Avant : creation + invite-client + ouverture Gmail (3 actions
+              // automatiques dans la foulee). Maintenant : on cree juste la
+              // fiche et on emmene Anissa sur le parcours. Elle decide
+              // ensuite, depuis l'etape Onboarding, quand activer l'app
+              // (BLOC 1) et quand envoyer le pre-questionnaire (BLOC 2).
+              // Pourquoi : philosophie produit "Anissa garde la main",
+              // possibilite de verifier la fiche avant d'envoyer, evite
+              // les mails partis trop tot.
               const client = saveClient({
                 categorie: 'nutrition',
                 form: formData,
@@ -1232,111 +1239,12 @@ function App() {
               });
               refreshClients();
 
-              // V97.5 — Activation app cliente : cree la cliente sur l'app
-              // staging + envoie le magic link. Permet a la cliente de voir
-              // sa "ligne du temps" (timeline 7 etapes) des le J0, sans
-              // attendre que le programme soit pret.
-              //
-              // V97.5.1 — Optionnel : Anissa peut decocher l'activation app
-              // dans le formulaire si la cliente ne veut pas de l'app
-              // (generations agees, refus tech, etc.). L'app pourra etre
-              // activee plus tard via le bouton "Activer l'app" du cockpit.
-              //
-              // Best-effort : si l'invitation echoue (cliente deja existante,
-              // API down, etc.), on log mais on continue le flow normal.
-              if (activateApp) {
-                const appMode = (packType || '').startsWith('suivi_') ? 'followup' : 'oneshot';
-                // V97.6 — passe l'URL du questionnaire web au moment de
-                // l'invitation pour que la timeline app puisse afficher un
-                // CTA "Remplir le questionnaire" qui ouvre directement le
-                // bon formulaire externe.
-                const saasOrigin = window.location.origin;
-                try {
-                  const inviteRes = await clientAppFetch('/api/admin/invite-client', {
-                    method: 'POST',
-                    payload: {
-                      email: formData.email,
-                      first_name: formData.prenom || 'Cliente',
-                      mode: appMode,
-                      questionnaire_url: `${saasOrigin}/questionnaire/${client.id}`,
-                    },
-                  });
-                  if (inviteRes?.ok && inviteRes?.client_id) {
-                    // V94.66 : stocke le mapping pour les futures lookups
-                    saveClient({
-                      ...client,
-                      id: client.id,
-                      stagingClientId: inviteRes.client_id,
-                      app_enabled: true,
-                    });
-                    refreshClients();
-                  }
-                } catch (err) {
-                  // eslint-disable-next-line no-console
-                  console.warn('[invite-client] failed (non-blocking):', err?.message || err);
-                }
-              }
-
-              // V97.5.2 — Email d'accueil unifie : si activateApp, l'app
-              // devient le point d'entree unique (la cliente y trouve son
-              // pre-questionnaire via le CTA de la timeline V97.6). Sinon
-              // on garde l'ancien mail questionnaire-only.
-              //
-              // Important : pas de magic link auto (Gmail pre-fetch
-              // consommerait le token avant clic cliente). On donne juste
-              // l'URL /login, la cliente entre son email et recoit un OTP
-              // code Supabase 8 chiffres.
-              const questionnaireUrl = `${window.location.origin}/questionnaire/${client.id}`;
-              const prenom = formData.prenom || '';
-
-              // V97.4 fix : avant 2026-05-12 le fallback pointait sur le SaaS
-              // au lieu de l'app cliente. Source unique : ./services/clientAppUrl.js
-              const APP_URL = getClientAppUrl();
-
-              let subject;
-              let body;
-              if (activateApp) {
-                // Mail "Bienvenue sur l'app" — point d'entree unique.
-                // Le questionnaire sera accessible depuis la timeline app
-                // (V97.6 CTA "Remplir le questionnaire").
-                subject = emailSubjectWelcomeApp('fr');
-                body =
-                  `Bonjour ${prenom},\n\n` +
-                  `Bienvenue chez ${COACH_IDENTITY.brand}. Votre espace personnel est prêt :\n\n` +
-                  `➜ ${APP_URL}/login\n\n` +
-                  `Comment vous connecter :\n` +
-                  `1. Ouvrez le lien ci-dessus\n` +
-                  `2. Entrez votre email (${formData.email || 'celui-ci'})\n` +
-                  `3. Vous recevrez un code a 8 chiffres par email\n` +
-                  `4. Une fois connectee, vous verrez votre parcours en 7 etapes,\n` +
-                  `   en commencant par le pre-questionnaire a remplir avant notre RDV.\n\n` +
-                  `Astuce : installez l'app sur votre ecran d'accueil pour un acces rapide :\n` +
-                  `• iPhone (Safari) : Partager → "Sur l'ecran d'accueil"\n` +
-                  `• Android (Chrome) : un bouton "Installer" apparaitra\n\n` +
-                  `À très bientôt,\n${COACH_IDENTITY.shortName}`;
-              } else {
-                // Mail questionnaire classique — comportement avant V97.5.
-                subject = emailSubjectQuestionnaire('fr');
-                body =
-                  `Bonjour ${prenom},\n\n` +
-                  `Avant notre consultation, merci de remplir ce court questionnaire (5 minutes) :\n\n` +
-                  `➜ ${questionnaireUrl}\n\n` +
-                  `Ce questionnaire est strictement confidentiel.\n\n` +
-                  `À très bientôt,\n${COACH_IDENTITY.shortName}`;
-              }
-
-              const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(formData.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-              window.open(gmailUrl, '_blank');
-              showToast(
-                activateApp
-                  ? 'Cliente creee — espace app active + email Bienvenue pret'
-                  : 'Cliente creee — questionnaire pret a envoyer'
-              );
-              // V97.8.1 (2026-05-12) UX : ouvre directement le parcours de la
-              // cliente au lieu de retourner sur le dashboard. Anissa voit
-              // immediatement la timeline 8 etapes (Onboarding actif) et sait
-              // ou aller ensuite. Avant ce fix, retour dashboard sans guidance
-              // = Anissa ne savait pas ou cliquer pour suivre sa cliente.
+              // V97.9 — Plus d'auto-activation app, plus d'ouverture Gmail.
+              // Anissa pilote ces 2 actions depuis l'etape Onboarding du
+              // parcours (BLOC 1 "Activer l'espace cliente" + BLOC 2
+              // "Envoyer le pre-questionnaire"). Garde l'historique des
+              // anciens flows V97.5/V97.6 dans le git log pour reference.
+              showToast('Fiche créée — direction sa fiche');
               setTimeout(() => {
                 setClientId(client.id);
                 setPage('clientJourney');
@@ -1344,7 +1252,7 @@ function App() {
                 try {
                   window.history.pushState({}, '', `/parcours/${client.id}`);
                 } catch { /* navigation history non bloquante */ }
-              }, 1800);
+              }, 600);
             }}
             onCancel={goToDashboard}
           />
