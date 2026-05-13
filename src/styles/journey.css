@@ -1438,6 +1438,23 @@
   border-color: var(--jrn-gold-tint);
   background: var(--jrn-gold-soft);
 }
+/* V97.13.5 : nouveaux statuts cliniques (sous_optimal / eleve / non_interpretable)
+   en remplacement de "prioritaire". Sous-optimal = orange doux (carence
+   probable), eleve = rouge (depassement), non_interpretable = neutre. */
+.jrn-marker-row--sous_optimal {
+  border-color: rgba(204, 119, 34, 0.30);
+  background: rgba(204, 119, 34, 0.07);
+}
+.jrn-marker-row--eleve {
+  border-color: rgba(180, 50, 40, 0.25);
+  background: rgba(180, 50, 40, 0.06);
+}
+.jrn-marker-row--non_interpretable {
+  border-color: rgba(40, 32, 20, 0.10);
+  background: rgba(40, 32, 20, 0.02);
+}
+/* Compat ascendante : si d'anciens plans contiennent encore "prioritaire",
+   on garde le style rouge legacy */
 .jrn-marker-row--prioritaire {
   border-color: rgba(180, 50, 40, 0.25);
   background: rgba(180, 50, 40, 0.06);

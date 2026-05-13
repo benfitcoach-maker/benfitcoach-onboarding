@@ -2131,10 +2131,17 @@ const CATEGORIES = [
   { value: 'metabolique', label: 'Métabolique',  icon: '◈' },
   { value: 'autre',       label: 'Autre',        icon: '○' },
 ];
+// V97.13.5 : statuts cliniques au lieu de medical brut (normal/eleve/bas).
+// Wording valide user 2026-05-13 : ton clinique, non-diagnostique, defendable
+// juridiquement pour une nutritionniste fonctionnelle. "Sous-optimal" cible
+// les carences sans poser de diagnostic. "Non interpretable" pour les valeurs
+// hors contexte (manque de range, unite ambigue, etc.).
 const STATUSES = [
-  { value: 'optimal',     label: 'Optimal',      icon: '🟢' },
-  { value: 'surveiller',  label: 'À surveiller', icon: '🟡' },
-  { value: 'prioritaire', label: 'Prioritaire',  icon: '🔴' },
+  { value: 'optimal',          label: 'Optimal',          icon: '🟢' },
+  { value: 'surveiller',       label: 'À surveiller',     icon: '🟡' },
+  { value: 'sous_optimal',     label: 'Sous-optimal',     icon: '🟠' },
+  { value: 'eleve',            label: 'Élevé',            icon: '🔴' },
+  { value: 'non_interpretable',label: 'Non interprétable',icon: '⚪' },
 ];
 
 // BC.5D.2 : auto-détection catégorie depuis le nom de l'analyse.
