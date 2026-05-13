@@ -380,8 +380,13 @@ const errorStyle = {
   borderRadius: 6, marginBottom: 12,
 };
 const summaryStyle = {
-  background: 'rgba(45,90,61,0.05)', padding: 12, borderRadius: 6,
+  // V97.11.10 : couleur texte explicite pour lisibilite sur fond ivoire
+  // (theme Anissa). Avant ce fix le texte heritait du gris faible du theme.
+  background: 'rgba(45,90,61,0.08)',
+  border: '1px solid rgba(45,90,61,0.18)',
+  padding: 12, borderRadius: 6,
   fontSize: 13, marginBottom: 12,
+  color: '#1a2e1f', lineHeight: 1.55,
 };
 const alertsStyle = {
   background: 'rgba(255,193,7,0.1)', padding: 12, borderRadius: 6,
