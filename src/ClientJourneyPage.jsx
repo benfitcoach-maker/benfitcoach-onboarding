@@ -1903,19 +1903,27 @@ function StepResults({ client, onChange }) {
       const meta = CATEGORIES.find((c) => c.value === key);
       return { value: key, label: meta?.label || key, icon: meta?.icon, count };
     });
-  // Tonalité globale : prioritaire > surveiller > optimal
-  const overallTone = statusCounts.prioritaire > 0
+  // Tonalité globale (V97.13.6 : nouveaux statuts cliniques V97.13.5 inclus).
+  // Hierarchie de gravite : eleve > sous_optimal > prioritaire (legacy) >
+  // surveiller > optimal > non_interpretable.
+  const overallTone = statusCounts.eleve > 0
+    ? 'eleve'
+    : statusCounts.sous_optimal > 0
+    ? 'sous_optimal'
+    : statusCounts.prioritaire > 0
     ? 'prioritaire'
     : statusCounts.surveiller > 0
     ? 'surveiller'
     : statusCounts.optimal > 0
     ? 'optimal'
     : null;
-  const overallLabel = overallTone === 'prioritaire'
-    ? 'Profil avec marqueurs prioritaires'
-    : overallTone === 'surveiller'
-    ? 'Profil à surveiller'
-    : 'Profil stable';
+  const overallLabel =
+    overallTone === 'eleve' ? 'Profil avec marqueurs élevés' :
+    overallTone === 'sous_optimal' ? 'Profil avec marqueurs sous-optimaux' :
+    overallTone === 'prioritaire' ? 'Profil avec marqueurs prioritaires' :
+    overallTone === 'surveiller' ? 'Profil à surveiller' :
+    overallTone === 'optimal' ? 'Profil stable' :
+    'Profil en cours d\'analyse';
 
   return (
     <section>

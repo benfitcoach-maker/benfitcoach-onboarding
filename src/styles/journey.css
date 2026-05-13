@@ -1582,6 +1582,9 @@
 .jrn-clinical-overview--optimal::before     { background: linear-gradient(180deg, #4A7D5A 0%, var(--jrn-accent) 100%); }
 .jrn-clinical-overview--surveiller::before  { background: linear-gradient(180deg, var(--jrn-gold) 0%, #C49538 100%); }
 .jrn-clinical-overview--prioritaire::before { background: linear-gradient(180deg, #C74848 0%, #A03434 100%); }
+/* V97.13.6 : nouveaux tons V97.13.5 (sous_optimal orange doux, eleve rouge) */
+.jrn-clinical-overview--sous_optimal::before { background: linear-gradient(180deg, #CC7722 0%, #A65A1A 100%); }
+.jrn-clinical-overview--eleve::before        { background: linear-gradient(180deg, #C74848 0%, #A03434 100%); }
 
 .jrn-clinical-overview__head {
   margin-bottom: 14px;
