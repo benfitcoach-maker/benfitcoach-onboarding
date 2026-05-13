@@ -482,6 +482,10 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = fa
       alignItems: 'flex-start',
       gap: 12,
       padding: 10,
+      paddingTop: isTopPriority ? 16 : 10,
+      // V97.12.6 : margin-top supplementaire sur card top-priority pour
+      // que le ribbon (top: -8) ne chevauche pas le titre "Analyses suggerees".
+      marginTop: isTopPriority ? 18 : 0,
       marginBottom: 6,
       // V97.12.3-4 : highlight credit, border-left accent si top priority
       background: isCovered
@@ -499,17 +503,18 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = fa
       {isTopPriority && (
         <span style={{
           position: 'absolute',
-          top: -8,
+          top: -10,
           left: 12,
           background: '#2d5a3d',
           color: '#fff',
-          padding: '2px 8px',
+          padding: '3px 10px',
           borderRadius: 4,
           fontSize: 9,
           fontWeight: 700,
           letterSpacing: '.12em',
           textTransform: 'uppercase',
           lineHeight: 1.4,
+          boxShadow: '0 2px 6px rgba(45,90,61,0.25)',
         }}>
           ● Analyse prioritaire
         </span>
