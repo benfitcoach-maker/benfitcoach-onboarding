@@ -393,9 +393,18 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
               <p className="jrn-cockpit__label">Espace cliente</p>
               <div className="jrn-cockpit__row">
                 <span className="jrn-cockpit__row-key">📱 App cliente</span>
-                <span className={`jrn-cockpit__pill ${client.app_enabled ? 'jrn-cockpit__pill--on' : 'jrn-cockpit__pill--off'}`}>
-                  {client.app_enabled ? 'Activée' : 'Non activée'}
-                </span>
+                {(() => {
+                  // V97.11.2 — Auto-detection : si la cliente a soumis le pre-q,
+                  // elle EST sur l'app, peu importe la valeur du flag app_enabled.
+                  const f = client.form || {};
+                  const preQReceived = !!(f.objectif_primaire || f.dureeProbleme || f.ressentiDigestion);
+                  const effActive = client.app_enabled || preQReceived;
+                  return (
+                    <span className={`jrn-cockpit__pill ${effActive ? 'jrn-cockpit__pill--on' : 'jrn-cockpit__pill--off'}`}>
+                      {effActive ? 'Activée' : 'Non activée'}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 
@@ -769,6 +778,13 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
 
   const hasEmail = !!(client.form?.email || client.email);
 
+  // V97.11.2 — Auto-detection app cliente active.
+  // Le flag client.app_enabled (SaaS) peut etre stale depuis V97.9 (creation
+  // decouplee). Si la cliente a soumis le pre-questionnaire, elle EST sur
+  // l'app (l'OTP login + submission etablit une session). Donc on considere
+  // l'app active dans ce cas, peu importe la valeur du flag.
+  const appEffectivelyActive = client.app_enabled || questionnaireReceived;
+
   return (
     <section>
       <StepHead
@@ -777,7 +793,44 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
         intro="Configurez l'expérience cliente, envoyez le pré-questionnaire, recueillez les réponses, puis validez pour lancer le parcours."
       />
 
-      {/* ═══ BLOC 1 — Mode d'accompagnement ════════════════════════ */}
+      {/* ═══ BLOC 1 — Mode d'accompagnement ════════════════════════
+          V97.11.2 : mode compact quand pre-q recu. Les 3 cards lourdes
+          ne servent qu'au tout debut (cliente fraichement creee). Une
+          fois la cliente engagee, on resume sur une ligne. */}
+      {questionnaireReceived ? (
+        // ─── Mode compact (cliente deja active) ──────────────────
+        <div style={{ marginBottom: 'var(--jrn-6)' }}>
+          <p className="jrn-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--jrn-accent)', fontWeight: 700 }}>✓</span>
+            1 · Mode d'accompagnement
+          </p>
+          <div className="jrn-surface" style={{
+            padding: 'var(--jrn-4) var(--jrn-5)',
+            opacity: 0.92,
+          }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--jrn-3)', fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span>📱</span>
+                <strong style={{ color: 'var(--jrn-text)' }}>App cliente</strong>
+                <span style={{ color: 'var(--jrn-accent)', fontWeight: 600 }}>· Active</span>
+              </span>
+              <span style={{ color: 'var(--jrn-text-muted)' }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span>⚖️</span>
+                <strong style={{ color: 'var(--jrn-text)' }}>Suivi poids</strong>
+                <span style={{ color: 'var(--jrn-text-muted)' }}>· à configurer étape 7</span>
+              </span>
+              <span style={{ color: 'var(--jrn-text-muted)' }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span>📦</span>
+                <strong style={{ color: 'var(--jrn-text)' }}>Plan papier</strong>
+                <span style={{ color: 'var(--jrn-text-muted)' }}>· à confirmer étape 7</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+      // ─── Mode complet (cliente fraichement creee, rien de fait) ──
       <div style={{ marginBottom: 'var(--jrn-6)' }}>
         <p className="jrn-label">1 · Mode d'accompagnement</p>
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
@@ -789,12 +842,12 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
               icon="📱"
               title="App cliente"
               description="Compte permanent avec timeline, notifications, suivi continu. Recommandé pour les suivis longs."
-              status={client.app_enabled ? 'active' : 'inactive'}
-              hint={client.app_enabled
+              status={appEffectivelyActive ? 'active' : 'inactive'}
+              hint={appEffectivelyActive
                 ? 'Activée — la cliente peut se connecter via son lien reçu par email.'
                 : 'Inactive — clique sur "Activer" pour créer son espace et lui envoyer le magic link.'}
-              ctaLabel={client.app_enabled ? null : 'Activer l\'espace cliente'}
-              onCtaClick={client.app_enabled ? null : handleActivateApp}
+              ctaLabel={appEffectivelyActive ? null : 'Activer l\'espace cliente'}
+              onCtaClick={appEffectivelyActive ? null : handleActivateApp}
               ctaBusy={activatingApp}
               ctaError={activationError}
             />
@@ -815,6 +868,7 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* ═══ BLOC 2 — Pré-questionnaire ════════════════════════════
           V97.10 : on masque ce bloc une fois les réponses reçues
