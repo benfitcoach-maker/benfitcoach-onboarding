@@ -29,6 +29,8 @@ const MAX_TOKENS = 2000;
  */
 export function pseudonymizeAnamnesis(client) {
   const form = client?.form || {};
+
+  // Age range (privacy-preserving, 5-year bucket)
   const naissance = form.dateNaissance || form.date_naissance || null;
   const ageRange = (() => {
     if (!naissance) return null;
@@ -39,31 +41,33 @@ export function pseudonymizeAnamnesis(client) {
     return `${lo}-${lo + 4}`;
   })();
 
+  // V97.11.8 : avant ce fix, on avait un mapping hardcode de 14 champs avec
+  // des noms qui ne matchaient pas la vraie forme (sexe vs genre, digestion vs
+  // ressentiDigestion, niveau_stress vs niveauStressActuel, etc.) — la plupart
+  // des champs sortaient null. En plus, "form.grossesseActuelle = 'Non'" etait
+  // truthy donc on construisait "trimestre undefined", d'ou l'alerte algo
+  // "renseignes comme 'undefined'".
+  //
+  // Nouvelle approche : on envoie TOUT le form (filtre PII strict + filtre
+  // valeurs vides) a l'IA. Aucun mapping a maintenir, robuste a tout nouveau
+  // champ ajoute au formulaire SaaS.
+  const PII_FIELDS = new Set([
+    'prenom', 'nom', 'email', 'telephone', 'adresse',
+    'dateNaissance', 'date_naissance', 'medecinTraitant',
+  ]);
+
+  const pseudoForm = {};
+  for (const [key, value] of Object.entries(form)) {
+    if (PII_FIELDS.has(key)) continue;
+    if (value === '' || value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    pseudoForm[key] = value;
+  }
+
   return {
     client_pseudo_id: client?.id ? String(client.id).slice(0, 8) : 'C-anon',
     age_range: ageRange,
-    gender: form.sexe || form.gender || null,
-    // Symptomes / pathologies / objectifs
-    objectifs: form.objectifs || form.objectif || null,
-    symptomes: form.symptomes || form.symptoms || null,
-    pathologies: form.pathologies || form.antecedents_medicaux || null,
-    medicaments: form.medicaments || form.traitements || null,
-    allergies: form.allergies || null,
-    // Mode de vie
-    activite: form.activite || form.activite_physique || null,
-    sport: form.sport || null,
-    sommeil: form.sommeil || null,
-    stress: form.stress || form.niveau_stress || null,
-    // Sante femme (si applicable)
-    cycle: form.cycle || form.cycles || null,
-    grossesse: form.grossesseActuelle ? `trimestre ${form.grossesseActuelleTrimestre}` : null,
-    allaitement: form.allaitement ? `${form.allaitementMois} mois` : null,
-    postPartum: form.postPartum ? `${form.postPartumMois} mois` : null,
-    // Digestion
-    digestion: form.digestion || form.troubles_digestifs || null,
-    transit: form.transit || null,
-    // Notes coach
-    notes_coach: form.commentaires || form.notes || null,
+    anamnese: pseudoForm,
   };
 }
 
