@@ -296,6 +296,30 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
           <ClientStatusBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
           <ClientEngagementBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
           <ClientNewFeedbacksBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
+          {/* V97.8.1 (2026-05-12) : badge "Pré-q reçu" pour signaler à Anissa
+              qu'une cliente a soumis son pré-questionnaire. Disparaît une
+              fois l'anamnèse validée par Anissa au RDV. Inline pour rester
+              simple — pas besoin d'un fetch async (les champs sont dans
+              client.form déjà chargé). */}
+          {(() => {
+            const f = client.form || {};
+            const preQReceived = !!(f.objectif_primaire || f.dureeProbleme || f.ressentiDigestion);
+            const anamnesisValidated = client.journey_state?.anamnesis_validated === true;
+            if (!preQReceived || anamnesisValidated) return null;
+            return (
+              <span
+                title="La cliente a rempli son pré-questionnaire — à lire avant le RDV"
+                style={{
+                  fontSize: '.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: 20,
+                  background: 'rgba(106,191,138,.18)', color: '#8abf9a',
+                  border: '1px solid rgba(106,191,138,.35)',
+                  display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+                }}
+              >
+                📋 Pré-q reçu
+              </span>
+            );
+          })()}
         </div>
         <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
           {consultations.length > 0

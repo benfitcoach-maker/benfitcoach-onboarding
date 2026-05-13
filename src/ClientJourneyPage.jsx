@@ -311,12 +311,34 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
               if (active) cls.push('jrn-step--active');
               else if (status === 'validated') cls.push('jrn-step--validated');
               else if (status === 'skipped') cls.push('jrn-step--skipped');
+              // V97.8.1 (2026-05-12) : pastille notification sur l'\u00e9tape
+              // Onboarding si la cliente a soumis son pr\u00e9-questionnaire mais
+              // que l'anamn\u00e8se n'est pas encore valid\u00e9e. Anissa voit ainsi
+              // imm\u00e9diatement qu'il y a quelque chose \u00e0 lire/g\u00e9rer.
+              const f = client.form || {};
+              const preQReceived = !!(f.objectif_primaire || f.dureeProbleme || f.ressentiDigestion);
+              const showPreQDot = step === 'anamnesis'
+                && preQReceived
+                && !journey.anamnesis_validated;
               return (
                 <div key={step} className={cls.join(' ')}>
                   <span className="jrn-step__num">
                     {status === 'validated' ? '✓' : status === 'skipped' ? '↷' : meta.index}
                   </span>
-                  <span>{meta.label}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {meta.label}
+                    {showPreQDot && (
+                      <span
+                        title="Pr\u00e9-questionnaire re\u00e7u \u2014 \u00e0 lire avant le RDV"
+                        style={{
+                          display: 'inline-block',
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: 'var(--jrn-accent)',
+                          boxShadow: '0 0 0 3px rgba(46, 78, 56, 0.15)',
+                        }}
+                      />
+                    )}
+                  </span>
                 </div>
               );
             })}
