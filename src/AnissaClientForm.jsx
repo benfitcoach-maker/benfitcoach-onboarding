@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NUTRITION_INITIAL_FORM } from './formSteps';
 import { SmartTextarea } from './KeywordHints';
 import { getActivePacks } from './services/packSystem';
@@ -221,6 +221,13 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
           </button>
         ))}
       </div>
+
+      {/* V97.11.4 — Encart pré-questionnaire en lecture seule.
+          Visible sur toutes les étapes pour qu'Anissa puisse référencer
+          les réponses cliente pendant qu'elle complète l'anamnèse pendant
+          le RDV. Pas d'auto-fill des champs : risque de mismatch valeurs +
+          écrasement des observations Anissa. */}
+      <PreQuestionnaireSummary form={form} />
 
       {/* ─── ETAPE 1 : Validation & Mesures ─── */}
       {step === 1 && (
@@ -661,22 +668,12 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
         ) : (
           <>
             <button className="btn btn-primary" onClick={handleSubmit} disabled={!form.prenom.trim()}>
-              {clientId ? 'Sauvegarder' : 'Creer le client'}
+              {clientId ? 'Sauvegarder l\'anamnèse' : 'Créer le client'}
             </button>
-            {/* Phase B.1.b — Bouton suggestion analyses, visible uniquement
-                en mode edition (clientId existe) et pour packs incluant des
-                analyses (pas Consultation Initiale). */}
-            {clientId && packType !== 'consultation_initiale_220' && (
-              <button
-                className="btn btn-primary"
-                onClick={() => setShowSuggestModal(true)}
-                disabled={!form.prenom.trim()}
-                style={{ marginLeft: 8, background: '#2d5a3d' }}
-                title="L'IA propose des analyses adaptees a l'anamnese, Anissa valide."
-              >
-                💡 Terminer &amp; suggerer les analyses
-              </button>
-            )}
+            {/* V97.11.4 : bouton "Terminer & suggérer les analyses" retiré.
+                La suggestion analyses appartient désormais à l'étape Analyses
+                du parcours (cf. StepAnalyses). Cette anamnèse sert
+                uniquement à la saisie clinique. */}
           </>
         )}
       </div>
@@ -695,6 +692,80 @@ export default function AnissaClientForm({ onSave, onSaveQuick, onCancel, initia
         packType={packType}
         onValidate={handleSavePlan}
       />
+    </div>
+  );
+}
+
+// V97.11.4 — Encart résumé pré-questionnaire (lecture seule) en haut du form.
+// Affiche les réponses de la cliente reçues via l'app cliente, sans auto-fill
+// des champs : Anissa lit + complète ses propres observations dessous.
+function PreQuestionnaireSummary({ form }) {
+  const hasPreQ = !!(form.objectif_primaire || form.dureeProbleme || form.ressentiDigestion || form.energieJournee);
+  if (!hasPreQ) return null;
+
+  const urgencyLabel = form.objectif_urgency === 'urgent_moins_1m' ? 'Urgent (< 1 mois)'
+    : form.objectif_urgency === 'moyen_3_6m' ? 'Moyen terme (3–6 mois)'
+    : form.objectif_urgency === 'long_terme' ? 'Long terme'
+    : null;
+
+  const digestionLabel = form.ressentiDigestion === 'Confortable' ? 'Confortable'
+    : form.ressentiDigestion === 'Inconfort_occasionnel' ? 'Inconfort occasionnel'
+    : form.ressentiDigestion === 'Inconfort_frequent' ? 'Inconfort fréquent'
+    : form.ressentiDigestion === 'Inconfort_quotidien' ? 'Inconfort quotidien'
+    : form.ressentiDigestion;
+
+  const cycleParts = [];
+  if (form.grossesseActuelle && form.grossesseActuelle !== 'Non') cycleParts.push(form.grossesseActuelle);
+  if (form.contraception) cycleParts.push(`Contraception : ${form.contraception}`);
+  const cycleStr = cycleParts.join(' · ');
+
+  const rows = [
+    { k: 'Objectif principal', v: form.objectif_primaire },
+    { k: 'Depuis combien de temps', v: form.dureeProbleme },
+    { k: 'Urgence', v: urgencyLabel },
+    { k: 'Digestion ressentie', v: digestionLabel },
+    { k: 'Énergie au quotidien', v: form.energieJournee },
+    { k: 'Pathologies', v: form.pathologies },
+    { k: 'Traitements', v: form.traitements },
+    { k: 'Allergies', v: form.allergies },
+    { k: 'Cycle hormonal', v: cycleStr || null },
+  ].filter((r) => r.v && String(r.v).trim() !== '');
+
+  return (
+    <div style={{
+      marginTop: 16,
+      padding: '14px 18px',
+      background: 'rgba(74, 222, 128, 0.05)',
+      border: '1px solid rgba(74, 222, 128, 0.18)',
+      borderRadius: 10,
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 10,
+        fontSize: '.82rem',
+        fontWeight: 600,
+        color: '#4ade80',
+        textTransform: 'uppercase',
+        letterSpacing: '.05em',
+      }}>
+        <span>📋</span>
+        Réponses du pré-questionnaire
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', rowGap: 6, columnGap: 14, fontSize: '.82rem' }}>
+        {rows.map((r) => (
+          <React.Fragment key={r.k}>
+            <div style={{ color: '#8a8a7a', textTransform: 'uppercase', fontSize: '.7rem', letterSpacing: '.04em', paddingTop: 2 }}>
+              {r.k}
+            </div>
+            <div style={{ color: '#c8d8c8', lineHeight: 1.45 }}>{r.v}</div>
+          </React.Fragment>
+        ))}
+      </div>
+      <p style={{ marginTop: 10, fontSize: '.72rem', color: '#7a7a6a', fontStyle: 'italic' }}>
+        Ces réponses proviennent du pré-questionnaire de la cliente. Ajoute tes observations cliniques dans les champs ci-dessous.
+      </p>
     </div>
   );
 }
