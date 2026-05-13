@@ -1615,6 +1615,33 @@ function StepAnalyses({ client, journey, onChange }) {
 function StepWaitingResults({ client, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  // V97.13.3 : timeline reactive — fetch le plan pour connaitre l'etat reel
+  // des prelevements (client_status par test). On reflete la realite
+  // bidirectionnelle V97.13 dans le mini-stepper.
+  const [planTests, setPlanTests] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('analysis_plans')
+        .select('selected_tests')
+        .eq('client_id', client.id)
+        .in('status', ['sent', 'in_progress', 'completed'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && data?.selected_tests) {
+        setPlanTests(Array.isArray(data.selected_tests) ? data.selected_tests : []);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client.id]);
+
+  // Etat agrege : tous les tests ont-ils ete marques par la cliente ?
+  const allTestsCollected = planTests.length > 0 && planTests.every(
+    (t) => t.client_status === 'sent_by_client' || t.client_status === 'sample_taken'
+  );
 
   const handleReceived = async () => {
     setBusy(true); setErr(null);
@@ -1630,19 +1657,17 @@ function StepWaitingResults({ client, onChange }) {
       <StepHead
         index={3}
         title="En attente des résultats"
-        intro="Les analyses sont chez la cliente ou au laboratoire. Le plan nutritionnel reste verrouillé jusqu'à réception des résultats."
+        intro="Les prélèvements sont au laboratoire. Le plan nutritionnel reste verrouillé jusqu'à réception des résultats."
       />
 
-      {/* BC.5C : narration timeline visuelle + bloc actions */}
-
-      {/* ─── Bloc 1 : Timeline d'envoi ────────────────────────────── */}
+      {/* ─── Bloc 1 : Timeline d'envoi (V97.13.3 reactive) ────────── */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">1</span>
           <h3 className="jrn-block__title">Statut d'envoi</h3>
         </div>
         <p className="jrn-block__intro">
-          La cliente a reçu sa prescription. Voici le parcours type des analyses.
+          Avancement réel des prélèvements et du circuit laboratoire.
         </p>
 
         <div className="jrn-surface">
@@ -1654,18 +1679,24 @@ function StepWaitingResults({ client, onChange }) {
                 <p className="jrn-timeline__hint">Liste des analyses transmise à la cliente.</p>
               </div>
             </li>
-            <li className="jrn-timeline__item jrn-timeline__item--active">
-              <span className="jrn-timeline__dot">⏳</span>
+            <li className={`jrn-timeline__item ${allTestsCollected ? 'jrn-timeline__item--done' : 'jrn-timeline__item--active'}`}>
+              <span className="jrn-timeline__dot">{allTestsCollected ? '✓' : '⏳'}</span>
               <div>
                 <div className="jrn-timeline__title">Prélèvement & laboratoire</div>
-                <p className="jrn-timeline__hint">La cliente effectue les prélèvements. Le labo renvoie les résultats sous 5–10 jours.</p>
+                <p className="jrn-timeline__hint">
+                  {allTestsCollected
+                    ? 'Tous les prélèvements ont été effectués par la cliente. Le labo traite et te transmettra les résultats sous 5–10 jours.'
+                    : 'La cliente effectue les prélèvements (kit postal ou prise de sang). Les statuts remontent ci-dessous en temps réel.'}
+                </p>
               </div>
             </li>
-            <li className="jrn-timeline__item">
-              <span className="jrn-timeline__dot">•</span>
+            <li className={`jrn-timeline__item ${allTestsCollected ? 'jrn-timeline__item--active' : ''}`}>
+              <span className="jrn-timeline__dot">{allTestsCollected ? '⏳' : '•'}</span>
               <div>
-                <div className="jrn-timeline__title">Réception résultats</div>
-                <p className="jrn-timeline__hint">Une fois les résultats reçus, tu pourras les saisir et débloquer le plan nutritionnel.</p>
+                <div className="jrn-timeline__title">Réception des résultats</div>
+                <p className="jrn-timeline__hint">
+                  Le laboratoire t'envoie directement les résultats par email. Une fois reçus, marque-les comme reçus pour débloquer la saisie.
+                </p>
               </div>
             </li>
           </ol>
@@ -1684,14 +1715,14 @@ function StepWaitingResults({ client, onChange }) {
         <AnalysisPlanCard clientId={client.id} />
       </div>
 
-      {/* ─── Bloc 3 : Action — Marquer reçus ──────────────────────── */}
+      {/* ─── Bloc 3 : Action — Marquer reçus (V97.13.3 wording corrige) ─ */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">3</span>
           <h3 className="jrn-block__title">Réception</h3>
         </div>
         <p className="jrn-block__intro">
-          Dès que la cliente t'a transmis ses résultats (PDF, papier, ou par mail), marque comme reçu pour ouvrir l'étape de saisie.
+          Le laboratoire t'envoie les résultats directement par email (PDF). Dès réception, marque comme reçu pour ouvrir l'étape de saisie.
         </p>
         <div className="jrn-actions" style={{ marginTop: 0 }}>
           <button onClick={handleReceived} disabled={busy} className="jrn-btn jrn-btn--hero">
