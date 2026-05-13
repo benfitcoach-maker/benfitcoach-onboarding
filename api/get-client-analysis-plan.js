@@ -134,6 +134,9 @@ export default async function handler(req, res) {
       // PII-safe : on ne renvoie PAS la justification (notes internes Anissa)
       collection_method: inferCollectionMethod(t.category),
       status: t.status || 'recommended',
+      // V97.13 Phase C : statut cliente (envoyé / prélevé) pour piloter l'UI
+      client_status: t.client_status || null,
+      client_status_at: t.client_status_at || null,
     }));
 
     return res.status(200).json({

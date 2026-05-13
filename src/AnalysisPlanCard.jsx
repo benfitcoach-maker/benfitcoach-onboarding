@@ -156,26 +156,63 @@ export default function AnalysisPlanCard({ clientId }) {
 
       {tests.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          {tests.map((t, i) => (
-            <div key={t.code || i} style={testRowStyle}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>
-                  {t.name || t.code}
-                </div>
-                {t.reason && (
-                  <div style={{ fontSize: 11, color: '#666', marginTop: 2, fontStyle: 'italic' }}>
-                    {t.reason}
+          {tests.map((t, i) => {
+            // V97.13 Phase C — affichage du statut cliente (kit envoyé / prise de sang faite)
+            const clientDone = t.client_status === 'sent_by_client' || t.client_status === 'sample_taken';
+            const clientLabel = t.client_status === 'sent_by_client' ? 'Kit envoyé'
+              : t.client_status === 'sample_taken' ? 'Prise de sang effectuée'
+              : null;
+            const clientAt = t.client_status_at
+              ? new Date(t.client_status_at).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long' })
+              : null;
+            return (
+              <div key={t.code || i} style={testRowStyle}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>
+                    {t.name || t.code}
                   </div>
-                )}
-                {t.category && (
-                  <span style={categoryTagStyle}>{t.category}</span>
-                )}
+                  {t.reason && (
+                    <div style={{ fontSize: 11, color: '#666', marginTop: 2, fontStyle: 'italic' }}>
+                      {t.reason}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    {t.category && (
+                      <span style={categoryTagStyle}>{t.category}</span>
+                    )}
+                    {clientDone ? (
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: '#2d5a3d',
+                        background: 'rgba(45,90,61,0.12)',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        letterSpacing: '.03em',
+                      }}>
+                        ✓ {clientLabel}{clientAt && ` · ${clientAt}`}
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: '#856404',
+                        background: 'rgba(184,134,38,0.10)',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        letterSpacing: '.03em',
+                      }}>
+                        ⏳ En attente cliente
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', marginLeft: 12 }}>
+                  {t.cost_anissa_chf} CHF
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', marginLeft: 12 }}>
-                {t.cost_anissa_chf} CHF
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
