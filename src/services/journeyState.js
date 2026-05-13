@@ -34,16 +34,27 @@ import { clientAppFetch } from './clientAppFetch';
 // correspondant via clientAppFetch (best-effort, ne bloque jamais la
 // transition SaaS si la sync échoue — l'observability tracking continue).
 //
-// Mapping métier (cf. cartographie d'audit 2026-05-12) :
+// Mapping métier (cf. cartographie d'audit 2026-05-12, mis à jour V97.13) :
+//
+// Note V97.13 : depuis V97.10 le RDV anamnèse est une feature distincte du
+// SaaS (BLOC 3 Onboarding avec journey_state.rdv_anamnesis_at + sync push
+// vers clients.rdv_scheduled_at côté app cliente). Le mapping ci-dessous
+// ne gère plus rdv_scheduled/rdv_done qui sont pilotés directement par
+// les actions RDV du SaaS (pas par la transition d'étape SaaS).
+//
+// Quand Anissa valide l'anamnèse (passage SaaS anamnesis → analyses),
+// la cliente passe directement à "analyses" (Vos analyses sanguines) car
+// l'étape rdv_scheduled/rdv_done est déjà gérée par les sync RDV
+// précédentes (V97.10 Phase B).
 const SAAS_TO_CLIENT_APP = {
-  anamnesis:       'questionnaire',      // Anissa onboarde → cliente remplit pré-questionnaire
-  analyses:        'rdv_scheduled',      // Anissa prescrit analyses → RDV anamnèse fixé
-  waiting_results: 'analyses',           // Attente résultats labo
-  results:         'analyses',           // Anissa saisit résultats (mêmes côté cliente)
-  plan_generation: 'program_in_progress',// IA génère plan
-  plan_editing:    'program_in_progress',// Anissa édite plan
-  delivery:        'program_active',     // Plan livré → cliente voit /plan
-  followup:        'program_active',     // Suivi (état terminal côté cliente)
+  anamnesis:       'questionnaire',       // Anissa onboarde → cliente remplit pré-questionnaire
+  analyses:        'analyses',            // V97.13 fix : était 'rdv_scheduled' (obsolète depuis V97.10). Anissa valide l'anamnèse + prescrit analyses → cliente bascule sur "Vos analyses sanguines"
+  waiting_results: 'analyses',            // Attente résultats labo (cliente reste sur Vos analyses)
+  results:         'analyses',            // Anissa saisit résultats (mêmes côté cliente)
+  plan_generation: 'program_in_progress', // IA génère plan
+  plan_editing:    'program_in_progress', // Anissa édite plan
+  delivery:        'program_active',      // Plan livré → cliente voit /plan
+  followup:        'program_active',      // Suivi (état terminal côté cliente)
 };
 
 /**
