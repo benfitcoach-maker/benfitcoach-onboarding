@@ -30,6 +30,9 @@ export default function AnalysisSuggestionModal({
   const [selected, setSelected] = useState({});       // { code: true/false }
   const [extraTests, setExtraTests] = useState([]);   // tests ajoutés hors suggestions IA
   const [saving, setSaving] = useState(false);
+  // V97.12.4 : expand/collapse des notes internes (default collapse au-dela
+  // de 3 alertes pour eviter le mur de texte).
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
 
   const pack = PACK_DEFINITIONS[packType];
   const packPrice = pack?.price || 0;
@@ -253,15 +256,26 @@ export default function AnalysisSuggestionModal({
 
               <h3 style={{ marginTop: 16, fontSize: 14 }}>Analyses suggérées</h3>
               <div>
-                {enrichedSuggestions.map(s => (
-                  <SuggestionRow
-                    key={s.code}
-                    suggestion={s}
-                    selected={!!selected[s.code]}
-                    onToggle={() => toggleSelected(s.code)}
-                    isCovered={coveredCodes.has(s.code)}
-                  />
-                ))}
+                {/* V97.12.4 : la 1re suggestion avec score >= 9 (Prioritaire)
+                    obtient un ribbon "ANALYSE PRIORITAIRE" + border-left
+                    accentue pour que l'oeil aille directement dessus. */}
+                {(() => {
+                  let topPriorityFlagged = false;
+                  return enrichedSuggestions.map((s) => {
+                    const isTopPriority = !topPriorityFlagged && (s.pertinence_score || 0) >= 9;
+                    if (isTopPriority) topPriorityFlagged = true;
+                    return (
+                      <SuggestionRow
+                        key={s.code}
+                        suggestion={s}
+                        selected={!!selected[s.code]}
+                        onToggle={() => toggleSelected(s.code)}
+                        isCovered={coveredCodes.has(s.code)}
+                        isTopPriority={isTopPriority}
+                      />
+                    );
+                  });
+                })()}
                 {extraTests.map(s => (
                   <SuggestionRow
                     key={s.code}
@@ -291,14 +305,60 @@ export default function AnalysisSuggestionModal({
                 </div>
               )}
 
-              {iaResult.alerts_anissa?.length > 0 && (
-                <div style={alertsStyle}>
-                  <strong>⚠️ Alertes Anissa :</strong>
-                  <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
-                    {iaResult.alerts_anissa.map((a, i) => <li key={i}>{a}</li>)}
-                  </ul>
-                </div>
-              )}
+              {iaResult.alerts_anissa?.length > 0 && (() => {
+                // V97.12.4 : section renommee "Notes internes Anissa".
+                // Important compliance : ces notes ne doivent PAS apparaitre
+                // dans les exports cliente (PDF programme, app cliente, etc.).
+                // Default collapse au-dela de 3 pour eviter le mur de texte
+                // sur cas complexes.
+                const alerts = iaResult.alerts_anissa;
+                const MAX_VISIBLE = 3;
+                const hidden = Math.max(0, alerts.length - MAX_VISIBLE);
+                const visible = showAllAlerts ? alerts : alerts.slice(0, MAX_VISIBLE);
+                return (
+                  <div style={alertsStyle}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '.1em',
+                      textTransform: 'uppercase',
+                      color: '#6b5018',
+                      marginBottom: 4,
+                    }}>
+                      <span>🔒</span>
+                      Notes internes Anissa
+                      <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#9b7d3a', fontSize: 11 }}>
+                        — non transmises à la cliente
+                      </span>
+                    </div>
+                    <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+                      {visible.map((a, i) => <li key={i}>{a}</li>)}
+                    </ul>
+                    {hidden > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllAlerts(v => !v)}
+                        style={{
+                          marginTop: 8,
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#6b5018',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          padding: 0,
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        {showAllAlerts ? '— Replier' : `+ ${hidden} observation${hidden > 1 ? 's' : ''} complémentaire${hidden > 1 ? 's' : ''}`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
@@ -355,7 +415,7 @@ export default function AnalysisSuggestionModal({
 }
 
 // ─── Sous-composant : ligne de suggestion ───────────────────────
-function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = false }) {
+function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = false, isTopPriority = false }) {
   const s = suggestion;
   return (
     <div style={{
@@ -364,7 +424,7 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = fa
       gap: 12,
       padding: 10,
       marginBottom: 6,
-      // V97.12.3 : highlight subtil sage si analyse couverte par credit
+      // V97.12.3-4 : highlight credit, border-left accent si top priority
       background: isCovered
         ? 'rgba(45,90,61,0.12)'
         : selected ? 'rgba(45,90,61,0.08)' : 'rgba(0,0,0,0.02)',
@@ -372,9 +432,29 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = fa
         isCovered ? 'rgba(45,90,61,0.4)' :
         selected ? 'rgba(45,90,61,0.3)' : 'rgba(0,0,0,0.08)'
       }`,
+      borderLeft: isTopPriority ? '3px solid #2d5a3d' : undefined,
       borderRadius: 6,
       cursor: 'pointer',
+      position: 'relative',
     }} onClick={onToggle}>
+      {isTopPriority && (
+        <span style={{
+          position: 'absolute',
+          top: -8,
+          left: 12,
+          background: '#2d5a3d',
+          color: '#fff',
+          padding: '2px 8px',
+          borderRadius: 4,
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '.12em',
+          textTransform: 'uppercase',
+          lineHeight: 1.4,
+        }}>
+          ● Analyse prioritaire
+        </span>
+      )}
       <input
         type="checkbox"
         checked={selected}

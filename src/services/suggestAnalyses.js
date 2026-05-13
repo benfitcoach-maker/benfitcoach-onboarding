@@ -108,10 +108,11 @@ Pour chaque analyse proposee :
 - recommended_default : true pour les 2 plus prioritaires, false sinon
 
 VOCABULAIRE OBLIGATOIRE (ton prudent juridiquement) :
-- "compatible avec un terrain..."
+- "compatible avec un terrain... fonctionnel"
 - "tendance evoquant..."
 - "contexte coherent avec..."
 - "axe a explorer..."
+- "signaux fonctionnels justifiant une exploration X medicale"
 - "hypothese fonctionnelle a investiguer..."
 - "piste a creuser..."
 
@@ -121,6 +122,11 @@ VOCABULAIRE INTERDIT (impression diagnostique) :
 - "la cliente a [maladie]"
 - "souffre de"
 - nom de pathologie suivi de "diagnostique" ou "probable"
+- "terrain thyroidien" / "terrain hormonal" / "terrain inflammatoire"
+  utilises seuls sans qualifier "fonctionnel" ou "exploration medicale" :
+  ces formulations s'approchent d'un langage quasi-diagnostique. Toujours
+  qualifier : "signaux fonctionnels evoquant un axe thyroidien a explorer
+  medicalement" plutot que "terrain thyroidien suspecte".
 
 INTERDITS GENERAUX :
 - Ne JAMAIS poser de diagnostic
