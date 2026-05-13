@@ -980,25 +980,80 @@ function StepAnalyses({ client, journey, onChange }) {
           </div>
         )}
 
-        {hasPlan === false && (
-          <div className="jrn-surface jrn-surface--quiet">
-            <div className="jrn-empty">
-              <div className="jrn-empty__icon">🧪</div>
-              <p className="jrn-empty__title">Aucun plan d'analyses</p>
-              <p className="jrn-empty__hint">
-                L'IA va proposer des tests en croisant l'anamnèse, le pack acheté et les axes prioritaires. Tu garderas la main pour valider, écarter ou ajouter.
-              </p>
-              <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
-                <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
-                  ✨ Lancer la suggestion IA
-                </button>
-                <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
-                  Passer cette étape
-                </button>
+        {hasPlan === false && (() => {
+          // V97.8.1 (2026-05-13) : 3 sous-\u00e9tats selon l'avancement de
+          // l'onboarding. Avant ce fix, on proposait 'Lancer la suggestion IA'
+          // d\u00e8s l'\u00e9tape 2, m\u00eame si la cliente n'avait pas rempli son
+          // pr\u00e9-questionnaire \u2014 l'IA aurait alors rien \u00e0 exploiter.
+          const f = client.form || {};
+          const preQReceived = !!(f.objectif_primaire || f.dureeProbleme || f.ressentiDigestion);
+          const anamnesisValidated = journey?.anamnesis_validated === true;
+
+          // \u00c9tat A : pr\u00e9-q pas encore rempli par la cliente
+          if (!preQReceived) {
+            return (
+              <div className="jrn-surface jrn-surface--quiet">
+                <div className="jrn-empty">
+                  <div className="jrn-empty__icon">\u23f3</div>
+                  <p className="jrn-empty__title">En attente du pr\u00e9-questionnaire</p>
+                  <p className="jrn-empty__hint">
+                    La cliente n'a pas encore rempli son pr\u00e9-questionnaire dans l'app.
+                    Une fois re\u00e7u, tu pourras valider l'anamn\u00e8se \u00e0 l'\u00e9tape 1, puis
+                    lancer la suggestion IA d'analyses.
+                  </p>
+                  <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
+                    <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
+                      Passer cette \u00e9tape (cliente sans analyses)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // \u00c9tat B : pr\u00e9-q re\u00e7u mais anamn\u00e8se pas encore valid\u00e9e par Anissa
+          if (!anamnesisValidated) {
+            return (
+              <div className="jrn-surface jrn-surface--quiet">
+                <div className="jrn-empty">
+                  <div className="jrn-empty__icon">\ud83d\udccb</div>
+                  <p className="jrn-empty__title">Pr\u00e9-questionnaire re\u00e7u</p>
+                  <p className="jrn-empty__hint">
+                    Avant de proposer les analyses, retourne sur l'\u00e9tape <strong>Onboarding</strong> pour
+                    relire les r\u00e9ponses, faire le RDV anamn\u00e8se et valider. L'IA s'appuiera ensuite sur
+                    l'anamn\u00e8se compl\u00e8te pour proposer les bons tests.
+                  </p>
+                  <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
+                    <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
+                      Passer cette \u00e9tape
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // \u00c9tat C : anamn\u00e8se valid\u00e9e \u2014 on peut proposer les analyses (comportement original)
+          return (
+            <div className="jrn-surface jrn-surface--quiet">
+              <div className="jrn-empty">
+                <div className="jrn-empty__icon">\ud83e\uddea</div>
+                <p className="jrn-empty__title">Aucun plan d'analyses</p>
+                <p className="jrn-empty__hint">
+                  L'IA va proposer des tests en croisant l'anamn\u00e8se, le pack achet\u00e9 et les axes prioritaires. Tu garderas la main pour valider, \u00e9carter ou ajouter.
+                </p>
+                <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
+                  <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
+                    \u2728 Lancer la suggestion IA
+                  </button>
+                  <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
+                    Passer cette \u00e9tape
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {hasPlan === true && <AnalysisPlanCard clientId={client.id} />}
       </div>
