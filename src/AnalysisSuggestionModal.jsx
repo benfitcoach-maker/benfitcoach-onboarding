@@ -30,9 +30,14 @@ export default function AnalysisSuggestionModal({
   const [selected, setSelected] = useState({});       // { code: true/false }
   const [extraTests, setExtraTests] = useState([]);   // tests ajoutés hors suggestions IA
   const [saving, setSaving] = useState(false);
+  // V97.12.1 — Override manuel du credit pack par Anissa.
+  // null = auto-attribution (analyse la plus pertinente qui rentre).
+  // string = code d'analyse force par Anissa.
+  const [creditOverrideCode, setCreditOverrideCode] = useState(null);
 
   const pack = PACK_DEFINITIONS[packType];
   const packPrice = pack?.price || 0;
+  const creditChf = pack?.includedAnalysisCreditChf || 0;
 
   // ─── Chargement initial : catalog + IA ─────────────────────────
   useEffect(() => {
@@ -95,22 +100,58 @@ export default function AnalysisSuggestionModal({
     return () => { cancelled = true; };
   }, [isOpen, client?.id, packType]);
 
-  // ─── Marge calculee live ───────────────────────────────────────
-  const { totalCost, totalMargin, marginPct, selectedTests } = useMemo(() => {
+  // ─── Calcul cout + attribution credit ──────────────────────────
+  // V97.12.1 : le pack inclut un credit analyse (0 / 250 / 400 CHF).
+  // Auto-attribution : credit pose sur l'analyse selectionnee la plus
+  // pertinente qui rentre dans le plafond. Override possible via
+  // creditOverrideCode. Le cout pour la cliente = total - cout couvert.
+  const { totalCost, selectedTests, coveredCode, coveredTest, costForClient } = useMemo(() => {
     const allSelected = [
       ...enrichedSuggestions.filter(s => selected[s.code]),
       ...extraTests.filter(s => selected[s.code]),
     ];
-    const cost = allSelected.reduce((sum, t) => sum + (t.cost_anissa_chf || 0), 0);
-    const margin = packPrice - cost;
-    const pct = packPrice > 0 ? Math.round((margin / packPrice) * 100) : 0;
+    const total = allSelected.reduce((sum, t) => sum + (t.cost_anissa_chf || 0), 0);
+
+    // Determine quelle analyse beneficie du credit
+    let covered = null;
+    if (creditChf > 0 && allSelected.length > 0) {
+      if (creditOverrideCode) {
+        // Override Anissa : utiliser l'analyse forcee si elle est selectionnee
+        // et rentre dans le credit
+        const forced = allSelected.find(t => t.code === creditOverrideCode);
+        if (forced && (forced.cost_anissa_chf || 0) <= creditChf) {
+          covered = forced;
+        }
+      }
+      if (!covered) {
+        // Auto : analyse la plus pertinente qui rentre dans le credit
+        const eligibles = allSelected
+          .filter(t => (t.cost_anissa_chf || 0) <= creditChf)
+          .sort((a, b) => {
+            // pertinence desc, puis cout desc (donner le meilleur deal cliente)
+            const pa = a.pertinence_score || 0;
+            const pb = b.pertinence_score || 0;
+            if (pb !== pa) return pb - pa;
+            return (b.cost_anissa_chf || 0) - (a.cost_anissa_chf || 0);
+          });
+        covered = eligibles[0] || null;
+      }
+    }
+
+    const coveredCost = covered ? (covered.cost_anissa_chf || 0) : 0;
     return {
-      totalCost: cost,
-      totalMargin: margin,
-      marginPct: pct,
+      totalCost: total,
       selectedTests: allSelected,
+      coveredCode: covered?.code || null,
+      coveredTest: covered,
+      costForClient: Math.max(0, total - coveredCost),
+      // V97.12.1 : champ deprecate mais conserve pour compat schema BDD
+      // (analysis_plans.total_margin_chf). Le modele V3.1 n'a plus de notion
+      // de "marge sur pack". A migrer dans le schema BDD dans une prochaine
+      // session pour remplacer par cost_for_client_chf.
+      totalMargin: packPrice - total,
     };
-  }, [selected, enrichedSuggestions, extraTests, packPrice]);
+  }, [selected, enrichedSuggestions, extraTests, creditChf, creditOverrideCode, packPrice]);
 
   // ─── Tests disponibles hors suggestions (pour ajout manuel) ────
   const availableExtraTests = useMemo(() => {
@@ -221,6 +262,9 @@ export default function AnalysisSuggestionModal({
                     suggestion={s}
                     selected={!!selected[s.code]}
                     onToggle={() => toggleSelected(s.code)}
+                    isCovered={coveredCode === s.code}
+                    canCoverWithCredit={creditChf > 0 && !!selected[s.code] && (s.cost_anissa_chf || 0) <= creditChf && coveredCode !== s.code}
+                    onUseCreditHere={() => setCreditOverrideCode(s.code)}
                   />
                 ))}
                 {extraTests.map(s => (
@@ -230,6 +274,9 @@ export default function AnalysisSuggestionModal({
                     selected={!!selected[s.code]}
                     onToggle={() => toggleSelected(s.code)}
                     isExtra
+                    isCovered={coveredCode === s.code}
+                    canCoverWithCredit={creditChf > 0 && !!selected[s.code] && (s.cost_anissa_chf || 0) <= creditChf && coveredCode !== s.code}
+                    onUseCreditHere={() => setCreditOverrideCode(s.code)}
                   />
                 ))}
               </div>
@@ -266,14 +313,27 @@ export default function AnalysisSuggestionModal({
         {!loading && iaResult && (
           <div style={footerStyle}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: '#888' }}>
-                {/* V97.12 — Modele tarifaire V3 : les analyses sont toujours
-                    optionnelles et a la charge de la cliente. Plus de notion
-                    de "marge sur pack" — le pack est de l'accompagnement pur. */}
-                Pack accompagnement : <strong>{packPrice} CHF</strong> · Analyses optionnelles
+              {/* V97.12.1 — Pack accompagnement + credit analyse inclus.
+                  Anissa peut deplacer le credit (override) via le bouton
+                  "Utiliser le credit sur cette analyse" sur les cards. */}
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                Pack accompagnement : <strong>{packPrice} CHF</strong>
+                {creditChf > 0 && (
+                  <> · Crédit analyse inclus : <strong>{creditChf} CHF</strong></>
+                )}
               </div>
+              {coveredTest && (
+                <div style={{ fontSize: 12, color: '#2d5a3d', marginBottom: 2 }}>
+                  ✓ Incluse dans l'accompagnement : <strong>{coveredTest.display_name}</strong> ({coveredTest.cost_anissa_chf} CHF)
+                </div>
+              )}
               <div style={{ fontSize: 18, fontWeight: 600, color: '#2d5a3d', marginTop: 4 }}>
-                💳 Coût analyses pour la cliente : {totalCost} CHF
+                💳 Coût analyses pour la cliente : {costForClient} CHF
+                {coveredTest && totalCost > coveredTest.cost_anissa_chf && (
+                  <span style={{ fontSize: 12, color: '#888', fontWeight: 400 }}>
+                    {' '}(total {totalCost} CHF − crédit {coveredTest.cost_anissa_chf} CHF)
+                  </span>
+                )}
               </div>
             </div>
             <button onClick={onClose} style={btnSecondaryStyle} disabled={saving}>
@@ -294,7 +354,10 @@ export default function AnalysisSuggestionModal({
 }
 
 // ─── Sous-composant : ligne de suggestion ───────────────────────
-function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
+function SuggestionRow({
+  suggestion, selected, onToggle, isExtra,
+  isCovered = false, canCoverWithCredit = false, onUseCreditHere,
+}) {
   const s = suggestion;
   return (
     <div style={{
@@ -303,8 +366,14 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
       gap: 12,
       padding: 10,
       marginBottom: 6,
-      background: selected ? 'rgba(45,90,61,0.08)' : 'rgba(0,0,0,0.02)',
-      border: `1px solid ${selected ? 'rgba(45,90,61,0.3)' : 'rgba(0,0,0,0.08)'}`,
+      // V97.12.1 : highlight subtil sage si analyse couverte par credit pack
+      background: isCovered
+        ? 'rgba(45,90,61,0.14)'
+        : selected ? 'rgba(45,90,61,0.08)' : 'rgba(0,0,0,0.02)',
+      border: `1px solid ${
+        isCovered ? 'rgba(45,90,61,0.5)' :
+        selected ? 'rgba(45,90,61,0.3)' : 'rgba(0,0,0,0.08)'
+      }`,
       borderRadius: 6,
       cursor: 'pointer',
     }} onClick={onToggle}>
@@ -324,6 +393,37 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
             <span style={{ fontSize: 10, color: '#888', background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: 4 }}>
               Ajouté
             </span>
+          )}
+          {isCovered && (
+            <span style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#fff',
+              background: '#2d5a3d',
+              padding: '3px 8px',
+              borderRadius: 4,
+              letterSpacing: '.02em',
+            }}>
+              ✓ Incluse dans l'accompagnement
+            </span>
+          )}
+          {canCoverWithCredit && onUseCreditHere && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onUseCreditHere(); }}
+              style={{
+                fontSize: 11,
+                color: '#2d5a3d',
+                background: 'transparent',
+                border: '1px dashed rgba(45,90,61,0.4)',
+                padding: '2px 8px',
+                borderRadius: 4,
+                cursor: 'pointer',
+              }}
+              title="Déplacer le crédit pack sur cette analyse"
+            >
+              Utiliser le crédit ici
+            </button>
           )}
           {!isExtra && s.pertinence_score && (
             (() => {

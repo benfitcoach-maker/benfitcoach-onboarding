@@ -26,6 +26,9 @@ export const PACK_DEFINITIONS = {
     requiresBloodwork: false,
     requiresDna: false,
     archived: false,
+    // V97.12.1 — Credit analyse inclus dans l'accompagnement (CHF).
+    // 0 = aucune analyse incluse, 250 = ciblee, 400 = approfondie.
+    includedAnalysisCreditChf: 0,
   },
   suivi_3m_990: {
     label: 'Suivi 3 mois',
@@ -35,6 +38,7 @@ export const PACK_DEFINITIONS = {
     requiresBloodwork: false,
     requiresDna: false,
     archived: false,
+    includedAnalysisCreditChf: 250,
     steps: [
       { weekOffset: 4,  type: 'review',       label: 'Bilan S4 — Adhérence',         template: 'adherence' },
       { weekOffset: 8,  type: 'consultation',  label: 'Consultation mi-parcours',      template: null },
@@ -49,6 +53,7 @@ export const PACK_DEFINITIONS = {
     requiresBloodwork: false,
     requiresDna: false,
     archived: false,
+    includedAnalysisCreditChf: 400,
     steps: [
       { weekOffset: 4,  type: 'review',       label: 'Bilan S4 — Adhérence',         template: 'adherence' },
       { weekOffset: 8,  type: 'review',       label: 'Bilan S8 — Résultats',         template: 'results' },
