@@ -890,9 +890,14 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
 
       {/* ═══ BLOC 3 — Réponses reçues ══════════════════════════════
           V97.10 : renumérotation dynamique — quand BLOC 2 est masqué
-          (réponses reçues), ce bloc devient logiquement le n°2. */}
-      <div style={{ marginBottom: 'var(--jrn-6)' }}>
-        <p className="jrn-label">{questionnaireReceived ? '2' : '3'} · Réponses reçues</p>
+          (réponses reçues), ce bloc devient logiquement le n°2.
+          V97.11.1 : opacity légère + check inline quand reçues pour
+          signaler "déjà fait" sans le rendre criard. */}
+      <div style={{ marginBottom: 'var(--jrn-6)', opacity: questionnaireReceived ? 0.92 : 1 }}>
+        <p className="jrn-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {questionnaireReceived && <span style={{ color: 'var(--jrn-accent)', fontWeight: 700 }}>✓</span>}
+          {questionnaireReceived ? '2' : '3'} · Réponses reçues
+        </p>
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
           Les réponses arrivent quand la cliente soumet le formulaire (ou pendant le RDV si tu remplis manuellement).
         </p>
@@ -994,14 +999,22 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
       {/* ═══ BLOC RDV anamnèse (V97.10) ════════════════════════════
           Visible une fois les réponses du pré-q reçues. Anissa fixe la
           date du RDV, la cliente la verra sur son app + recevra une
-          notif J-1 (extension cron V97.11.2, à wirer Phase B). */}
+          notif J-1 (extension cron V97.11.2, à wirer Phase B).
+          V97.11.1 : surface visuellement accent quand RDV fixe — devient
+          le "point chaud" de l'etape Onboarding. */}
       {questionnaireReceived && (
         <div style={{ marginBottom: 'var(--jrn-6)' }}>
           <p className="jrn-label">3 · RDV anamnèse</p>
           <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
             Fixez la date du rendez-vous. La cliente le verra sur son app.
           </p>
-          <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+          <div className="jrn-surface" style={{
+            padding: 'var(--jrn-6)',
+            ...(journey.rdv_anamnesis_at && !rdvEditMode ? {
+              borderLeft: '3px solid var(--jrn-accent)',
+              background: 'linear-gradient(90deg, rgba(46, 78, 56, 0.04) 0%, transparent 60%)',
+            } : {}),
+          }}>
             {(!journey.rdv_anamnesis_at || rdvEditMode) ? (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--jrn-3)', marginBottom: 'var(--jrn-3)' }}>
@@ -1135,23 +1148,31 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
           <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
             Pendant ou après le RDV, complète l'anamnèse approfondie : sommeil, sport, antibiotiques, transit, glycémie, mode de vie…
           </p>
-          <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+          <div className="jrn-surface" style={{
+            padding: 'var(--jrn-6)',
+            ...(journey.anamnesis_completed_at ? {
+              borderLeft: '3px solid var(--jrn-accent)',
+              background: 'linear-gradient(90deg, rgba(46, 78, 56, 0.04) 0%, transparent 60%)',
+            } : {}),
+          }}>
             {journey.anamnesis_completed_at ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
                   <span style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    padding: '4px 10px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    padding: '6px 14px',
                     borderRadius: 999,
-                    background: 'var(--jrn-accent-soft)',
-                    color: 'var(--jrn-accent)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.04em',
+                    background: 'var(--jrn-accent)',
+                    color: 'var(--jrn-ivory, #f5f0e8)',
+                    letterSpacing: '.02em',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}>
-                    ✓ Complétée
+                    ✓ Anamnèse complétée
                   </span>
-                  <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                  <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', fontWeight: 500 }}>
                     le {new Date(journey.anamnesis_completed_at).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
                   </span>
                 </div>
@@ -1221,18 +1242,20 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
           Une fois le RDV anamnèse fait et les informations clés vérifiées, validez pour passer à l'étape Analyses.
         </p>
-        {/* V97.11 : warning doux si anamnese pas marquee complete (non-bloquant). */}
+        {/* V97.11.1 : warning doux ton clinique premium (non-bloquant). */}
         {questionnaireReceived && !journey.anamnesis_completed_at && (
           <p style={{
             marginBottom: 'var(--jrn-3)',
             fontSize: 'var(--jrn-text-sm)',
-            color: '#8a6722',
-            background: 'rgba(184, 134, 38, 0.08)',
-            padding: '8px 12px',
-            borderRadius: 6,
-            lineHeight: 1.5,
+            color: '#6b5018',
+            background: 'rgba(184, 134, 38, 0.06)',
+            border: '1px solid rgba(184, 134, 38, 0.18)',
+            padding: '10px 14px',
+            borderRadius: 8,
+            lineHeight: 1.55,
+            fontStyle: 'italic',
           }}>
-            ⚠ Anamnèse non marquée comme complétée — tu peux continuer si nécessaire.
+            L'anamnèse approfondie n'a pas encore été finalisée. Tu peux continuer si l'entretien clinique est terminé.
           </p>
         )}
         <div className="jrn-actions" style={{ marginTop: 0 }}>
