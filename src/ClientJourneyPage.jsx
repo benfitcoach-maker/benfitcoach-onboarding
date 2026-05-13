@@ -435,7 +435,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
         )}
 
         <main className="jrn-main">
-          {currentStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} />}
+          {currentStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} onEditProfile={onEditProfile} />}
           {currentStep === 'analyses' && <StepAnalyses client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'waiting_results' && <StepWaitingResults client={client} onChange={refresh} />}
           {currentStep === 'results' && <StepResults client={client} onChange={refresh} />}
@@ -478,7 +478,7 @@ function ErrorLine({ msg }) {
 //   2. Envoyer le pré-questionnaire
 //   3. Recevoir les réponses
 //   4. Valider l'onboarding (= passer aux analyses)
-function StepAnamnesis({ client, onChange }) {
+function StepAnamnesis({ client, onChange, onEditProfile }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [sendingQuestionnaire, setSendingQuestionnaire] = useState(null); // 'app' | 'link' | null
@@ -493,6 +493,9 @@ function StepAnamnesis({ client, onChange }) {
   const [rdvNoteDraft, setRdvNoteDraft] = useState('');
   const [rdvEditMode, setRdvEditMode] = useState(false);
   const [rdvSyncWarning, setRdvSyncWarning] = useState(null);
+  // V97.11 — Anamnèse approfondie : Anissa marque la fin du remplissage
+  // explicitement (apres ou pendant le RDV). Timestamp dans journey_state.
+  const [anamneseBusy, setAnamneseBusy] = useState(false);
   const form = client.form || {};
   const journey = client.journey_state || {};
 
@@ -686,6 +689,38 @@ function StepAnamnesis({ client, onChange }) {
     setRdvDraft(isoToDatetimeLocal(journey.rdv_anamnesis_at));
     setRdvNoteDraft(journey.rdv_anamnesis_note || '');
     setRdvEditMode(true);
+  };
+
+  // V97.11 — Handlers anamnèse approfondie
+  const handleMarkAnamneseComplete = async () => {
+    setAnamneseBusy(true); setErr(null);
+    try {
+      const { updateJourneyState } = await import('./services/journeyState');
+      await updateJourneyState(client.id, {
+        anamnesis_completed_at: new Date().toISOString(),
+      });
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur marquage anamnèse');
+    } finally {
+      setAnamneseBusy(false);
+    }
+  };
+
+  const handleUnmarkAnamneseComplete = async () => {
+    if (!window.confirm('Repasser l\'anamnèse en "à compléter" ?')) return;
+    setAnamneseBusy(true); setErr(null);
+    try {
+      const { updateJourneyState } = await import('./services/journeyState');
+      await updateJourneyState(client.id, {
+        anamnesis_completed_at: null,
+      });
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur démarquage anamnèse');
+    } finally {
+      setAnamneseBusy(false);
+    }
   };
 
   const handleClearRdv = async () => {
@@ -1090,12 +1125,116 @@ function StepAnamnesis({ client, onChange }) {
         </div>
       )}
 
+      {/* ═══ BLOC Anamnèse approfondie (V97.11) ═══════════════════
+          Visible une fois les réponses du pré-q reçues (typiquement
+          remplie pendant ou après le RDV anamnèse). Timestamp explicite
+          journey_state.anamnesis_completed_at marque la fin par Anissa. */}
+      {questionnaireReceived && (
+        <div style={{ marginBottom: 'var(--jrn-6)' }}>
+          <p className="jrn-label">4 · Anamnèse approfondie</p>
+          <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+            Pendant ou après le RDV, complète l'anamnèse approfondie : sommeil, sport, antibiotiques, transit, glycémie, mode de vie…
+          </p>
+          <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+            {journey.anamnesis_completed_at ? (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    background: 'var(--jrn-accent-soft)',
+                    color: 'var(--jrn-accent)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.04em',
+                  }}>
+                    ✓ Complétée
+                  </span>
+                  <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                    le {new Date(journey.anamnesis_completed_at).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="jrn-actions" style={{ marginTop: 'var(--jrn-3)' }}>
+                  {onEditProfile && (
+                    <button
+                      onClick={onEditProfile}
+                      disabled={anamneseBusy}
+                      className="jrn-btn jrn-btn--ghost"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                    >
+                      Modifier
+                    </button>
+                  )}
+                  <button
+                    onClick={handleUnmarkAnamneseComplete}
+                    disabled={anamneseBusy}
+                    className="jrn-btn jrn-btn--ghost"
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                  >
+                    Repasser en cours
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', marginBottom: 'var(--jrn-3)' }}>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    background: 'rgba(184, 134, 38, 0.10)',
+                    color: '#8a6722',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.04em',
+                  }}>
+                    🟡 À compléter
+                  </span>
+                  <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                    Marque comme complétée une fois que tu as fini de remplir les champs.
+                  </span>
+                </div>
+                <div className="jrn-actions" style={{ marginTop: 0 }}>
+                  {onEditProfile && (
+                    <button onClick={onEditProfile} className="jrn-btn jrn-btn--primary">
+                      Compléter l'anamnèse
+                    </button>
+                  )}
+                  <button
+                    onClick={handleMarkAnamneseComplete}
+                    disabled={anamneseBusy}
+                    className="jrn-btn jrn-btn--soft"
+                  >
+                    {anamneseBusy ? '…' : 'Marquer comme complétée'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ═══ BLOC Validation onboarding (CTA final) ═══════════ */}
       <div style={{ marginBottom: 'var(--jrn-6)' }}>
-        <p className="jrn-label">{questionnaireReceived ? '4' : '4'} · Validation</p>
+        <p className="jrn-label">{questionnaireReceived ? '5' : '4'} · Validation</p>
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
           Une fois le RDV anamnèse fait et les informations clés vérifiées, validez pour passer à l'étape Analyses.
         </p>
+        {/* V97.11 : warning doux si anamnese pas marquee complete (non-bloquant). */}
+        {questionnaireReceived && !journey.anamnesis_completed_at && (
+          <p style={{
+            marginBottom: 'var(--jrn-3)',
+            fontSize: 'var(--jrn-text-sm)',
+            color: '#8a6722',
+            background: 'rgba(184, 134, 38, 0.08)',
+            padding: '8px 12px',
+            borderRadius: 6,
+            lineHeight: 1.5,
+          }}>
+            ⚠ Anamnèse non marquée comme complétée — tu peux continuer si nécessaire.
+          </p>
+        )}
         <div className="jrn-actions" style={{ marginTop: 0 }}>
           <button onClick={handleValidate} disabled={busy} className="jrn-btn jrn-btn--primary">
             {busy ? '…' : (questionnaireReceived ? 'Valider l\'onboarding et passer aux analyses' : 'Continuer le parcours →')}
