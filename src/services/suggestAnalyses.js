@@ -153,9 +153,21 @@ REGLE TARIFAIRE :
 - Aucune action de ta part sur le credit : tu proposes, le SaaS et Anissa
   gerent l'attribution.
 
+REGLE ANTI-SURCHARGE (critique) :
+- MAX 3 axes principaux
+- MAX 3 analyses proposees
+- MAX 3 notes internes (alerts_anissa)
+Si plus, FUSIONNER. La force du systeme est sa synthese. Un cockpit
+illisible n'est plus un cockpit.
+
 OUTPUT (JSON strict, AUCUN texte autour) :
 {
-  "client_summary": "Resume clinique en 1 phrase, vocabulaire prudent (ex: 'profil compatible avec terrain digestif fragilise, contexte coherent avec dysbiose post-antibiotique')",
+  "axes_principaux": [
+    "Terrain digestif fragilise",
+    "Axe micronutritionnel a explorer",
+    "Vigilance thyroidienne fonctionnelle"
+  ],
+  "client_summary": "Contexte synthetique (2-3 phrases) qui prolonge les axes ci-dessus. Vocabulaire prudent. Ex: 'Constipation chronique Bristol 1-2 + ballonnements post-antibiotiques sur 12 mois. Antecedent maternel Hashimoto + signaux fonctionnels evoquant un axe thyroidien a explorer medicalement. 6 ans de pilule progestative pouvant moduler le statut micronutritionnel.'",
   "suggestions": [
     {
       "lab_test_code": "ortho_mikroernaehrung",
@@ -165,9 +177,16 @@ OUTPUT (JSON strict, AUCUN texte autour) :
     }
   ],
   "alerts_anissa": [
-    "Champs grossesse/allaitement renseignes 'undefined' -> a clarifier en consultation"
+    "Cycles longs 32-35j adolescence : SOPK leger non investigue, a clarifier en consultation",
+    "Antecedent maternel Hashimoto + signaux fonctionnels (chute cheveux, frilosite) : a orienter vers exploration thyroidienne medicale via Dr [medecin traitant]"
   ]
-}`;
+}
+
+REGLES axes_principaux :
+- Tableau de 1 a 3 items maximum
+- Chaque axe : 3-6 mots, ton clinique (ex: "Axe digestif fragilise",
+  "Carences micronutritionnelles probables", "Stress chronique / axe HPA")
+- Ordonner par priorite clinique (le plus urgent en premier)`;
 }
 
 /**

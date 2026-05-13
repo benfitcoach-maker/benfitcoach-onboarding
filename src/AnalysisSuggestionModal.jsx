@@ -245,13 +245,72 @@ export default function AnalysisSuggestionModal({
                   letterSpacing: '.12em',
                   textTransform: 'uppercase',
                   color: '#2d5a3d',
-                  marginBottom: 6,
+                  marginBottom: 8,
                 }}>
                   Lecture clinique synthétique
                 </div>
-                <p style={{ margin: 0, color: '#1a2e1f', lineHeight: 1.65, fontSize: 14 }}>
-                  {iaResult.client_summary}
-                </p>
+
+                {/* V97.12.5 : axes principaux en bullets compacts (max 3),
+                    puis contexte en paragraphe. Si l'IA ne sort pas d'axes
+                    (anciens plans / fallback), on rebascule sur paragraphe seul. */}
+                {Array.isArray(iaResult.axes_principaux) && iaResult.axes_principaux.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '.14em',
+                      textTransform: 'uppercase',
+                      color: '#6b7d6b',
+                      marginBottom: 4,
+                    }}>
+                      Axes principaux
+                    </div>
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                      {iaResult.axes_principaux.slice(0, 3).map((axe, i) => (
+                        <li key={i} style={{
+                          fontSize: 14,
+                          color: '#1a2e1f',
+                          padding: '3px 0',
+                          paddingLeft: 16,
+                          position: 'relative',
+                          lineHeight: 1.45,
+                          fontWeight: 500,
+                        }}>
+                          <span style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 3,
+                            color: '#2d5a3d',
+                            fontWeight: 700,
+                          }}>
+                            {i + 1}.
+                          </span>
+                          {axe}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {iaResult.client_summary && (
+                  <>
+                    {Array.isArray(iaResult.axes_principaux) && iaResult.axes_principaux.length > 0 && (
+                      <div style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '.14em',
+                        textTransform: 'uppercase',
+                        color: '#6b7d6b',
+                        marginBottom: 4,
+                      }}>
+                        Contexte
+                      </div>
+                    )}
+                    <p style={{ margin: 0, color: '#1a2e1f', lineHeight: 1.65, fontSize: 14 }}>
+                      {iaResult.client_summary}
+                    </p>
+                  </>
+                )}
               </div>
 
               <h3 style={{ marginTop: 16, fontSize: 14 }}>Analyses suggérées</h3>
