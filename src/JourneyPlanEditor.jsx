@@ -39,10 +39,19 @@ import PremiumSwitch from './components/PremiumSwitch';
 // → Changer cette constante avant un ON global éventuel.
 const COMPOSER_BETA_DEFAULT_CUTOFF = '2026-05-12';
 
-export default function JourneyPlanEditor({ client, onPlanSaved }) {
+export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDirectives }) {
   const [tab, setTab] = useState('plan'); // 'plan' | 'fridge'
   const [planText, setPlanText] = useState('');
   const [aiDirectives, setAiDirectives] = useState('');
+
+  // V97.13.x : sync depuis la sidebar parent (ClientJourneyPage) quand prop fournie.
+  // Évite la race condition où l'éditeur a une copie stale du textarea sidebar.
+  useEffect(() => {
+    if (controlledAiDirectives !== undefined && controlledAiDirectives !== aiDirectives) {
+      setAiDirectives(controlledAiDirectives);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlledAiDirectives]);
   const [consultation, setConsultation] = useState(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -630,9 +639,14 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
-  // Re-sync depuis la BDD au mount (catch les updates récents de la sidebar)
+  // V97.13.x : la prop `aiDirectives` vient désormais de la sidebar parent
+  // (ClientJourneyPage → JourneyPlanEditor via controlledAiDirectives).
+  // On re-fetch DB UNIQUEMENT si la prop est vide (fallback pour cas où le parent
+  // n'a pas encore chargé). Sinon, la prop fait foi pour éviter d'écraser une
+  // directive fraîchement tapée et pas encore persistée (race autosave 250ms).
   useEffect(() => {
     if (!client?.id) return;
+    if (aiDirectives && aiDirectives.trim()) return; // prop a priorité
     let cancelled = false;
     (async () => {
       try {
@@ -645,7 +659,16 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
       } catch { /* silencieux */ }
     })();
     return () => { cancelled = true; };
-  }, [client?.id]);
+  }, [client?.id, aiDirectives]);
+
+  // V97.13.x : si la prop change pendant que le modal est ouvert (peu probable
+  // mais possible si l'utilisateur tape encore via un autre tab), on re-sync.
+  useEffect(() => {
+    if (aiDirectives && aiDirectives !== draftDirectives) {
+      setDraftDirectives(aiDirectives);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiDirectives]);
   // Phase AN : composer beta profil-aware (digestif chronique, post-partum...)
   // Toggle persisté en localStorage par cliente. Détecte le profil clinique
   // depuis le form, injecte les modules MUST INCLUDE / INTERDITS spécifiques.

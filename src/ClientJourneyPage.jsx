@@ -2676,7 +2676,9 @@ function StepPlanEditing({ client, journey, onChange }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client?.id, journey]);
 
-  // Autosave debounced 1.5s — persiste la directive sur la dernière consultation
+  // Autosave debounced 250ms — persiste la directive sur la dernière consultation.
+  // V97.13.x : debounce réduit (1500→250) pour éviter race condition avec ouverture
+  // du modal Génération qui re-fetch DB. Anissa colle + clique Générer dans la foulée.
   useEffect(() => {
     if (!aiDirectivesLoaded || !client?.id) return;
     const handle = setTimeout(async () => {
@@ -2697,7 +2699,7 @@ function StepPlanEditing({ client, journey, onChange }) {
       } catch {
         setSavingDirectives('idle');
       }
-    }, 1500);
+    }, 250);
     return () => clearTimeout(handle);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiDirectives]);
@@ -2836,7 +2838,11 @@ function StepPlanEditing({ client, journey, onChange }) {
             <p className="jrn-block__intro">
               Génère un brouillon IA, ré-écris à la main, audite la cohérence clinique. Chaque sauvegarde crée une version.
             </p>
-            <JourneyPlanEditor client={client} onPlanSaved={handlePlanSaved} />
+            <JourneyPlanEditor
+              client={client}
+              onPlanSaved={handlePlanSaved}
+              controlledAiDirectives={aiDirectives}
+            />
           </div>
 
           {/* Validation conditionnelle */}
