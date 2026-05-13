@@ -618,11 +618,36 @@ function StepAnamnesis({ client, onChange }) {
     if (!rdvDraft) return;
     setRdvBusy(true); setErr(null);
     try {
+      const isoAt = new Date(rdvDraft).toISOString();
+      const noteOrNull = rdvNoteDraft.trim() || null;
+
+      // 1. Sauvegarde dans le SaaS (journey_state JSONB)
       const { updateJourneyState } = await import('./services/journeyState');
       await updateJourneyState(client.id, {
-        rdv_anamnesis_at: new Date(rdvDraft).toISOString(),
-        rdv_anamnesis_note: rdvNoteDraft.trim() || null,
+        rdv_anamnesis_at: isoAt,
+        rdv_anamnesis_note: noteOrNull,
       });
+
+      // 2. V97.10 Phase B : push vers app cliente pour que la cliente voie
+      //    la date sur sa timeline (/parcours rdv_scheduled). Best-effort :
+      //    si l'app cliente est down, le SaaS reste source de verite.
+      try {
+        const email = client.form?.email || client.email;
+        if (email) {
+          const { clientAppFetch } = await import('./services/clientAppFetch');
+          await clientAppFetch('/api/admin/client-journey-status', {
+            method: 'POST',
+            payload: {
+              email,
+              rdv_scheduled_at: isoAt,
+            },
+          });
+        }
+      } catch (syncErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[rdv-sync] best-effort failed:', syncErr?.message || syncErr);
+      }
+
       setRdvEditMode(false);
       onChange();
     } catch (e) {
@@ -642,11 +667,31 @@ function StepAnamnesis({ client, onChange }) {
     if (!window.confirm('Annuler ce RDV ? La cliente ne le verra plus sur son app.')) return;
     setRdvBusy(true); setErr(null);
     try {
+      // 1. Clear dans le SaaS
       const { updateJourneyState } = await import('./services/journeyState');
       await updateJourneyState(client.id, {
         rdv_anamnesis_at: null,
         rdv_anamnesis_note: null,
       });
+
+      // 2. Clear cote app cliente (best-effort)
+      try {
+        const email = client.form?.email || client.email;
+        if (email) {
+          const { clientAppFetch } = await import('./services/clientAppFetch');
+          await clientAppFetch('/api/admin/client-journey-status', {
+            method: 'POST',
+            payload: {
+              email,
+              rdv_scheduled_at: null,
+            },
+          });
+        }
+      } catch (syncErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[rdv-sync clear] best-effort failed:', syncErr?.message || syncErr);
+      }
+
       setRdvEditMode(false);
       setRdvDraft('');
       setRdvNoteDraft('');
