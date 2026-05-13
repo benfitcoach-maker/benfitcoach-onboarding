@@ -444,6 +444,26 @@ function App() {
   const isBenoit = currentUser === 'Benoit';
 
   const refreshClients = useCallback(() => setClients(getClients()), []);
+
+  // V97.8.1 (2026-05-13) — Garde-fou parcours fant\u00f4me.
+  // Si l'URL au mount est /parcours/<UUID> mais que la cliente n'existe
+  // plus (supprim\u00e9e), on retombe sur le dashboard + on clear l'URL.
+  // Sinon le user voit un \u00e9cran de parcours cass\u00e9 ou des donn\u00e9es
+  // fantomes.
+  useEffect(() => {
+    if (page !== 'clientJourney' || !clientId) return;
+    if (clients.length === 0) return; // pas encore charg\u00e9
+    const exists = clients.some((c) => c.id === clientId);
+    if (!exists) {
+      setPage('dashboard');
+      setClientId(null);
+      try {
+        if (window.location.pathname.startsWith('/parcours/')) {
+          window.history.pushState({}, '', '/');
+        }
+      } catch { /* history non bloquante */ }
+    }
+  }, [page, clientId, clients]);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
 
   // V94.14 : showToast accepte (message, type) - rétrocompat positionnel
@@ -653,6 +673,15 @@ function App() {
     setPage('dashboard');
     setConvertMode(null);
     setMobileMenu(false);
+    setClientId(null);
+    // V97.8.1 (2026-05-13) : clear l'URL si on \u00e9tait sur /parcours/:id.
+    // Sans \u00e7a, un F5 relit l'URL et tente de recharger un parcours
+    // potentiellement obsol\u00e8te (cliente supprim\u00e9e par ex).
+    try {
+      if (window.location.pathname.startsWith('/parcours/')) {
+        window.history.pushState({}, '', '/');
+      }
+    } catch { /* history non bloquante */ }
   };
 
   const handleExport = () => {
