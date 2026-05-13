@@ -30,13 +30,23 @@ const MAX_TOKENS = 2000;
 export function pseudonymizeAnamnesis(client) {
   const form = client?.form || {};
 
-  // Age range (privacy-preserving, 5-year bucket)
-  const naissance = form.dateNaissance || form.date_naissance || null;
+  // Age range (privacy-preserving, 5-year bucket).
+  // V97.11.9 : fallback sur form.age si dateNaissance manquante (le pre-q
+  // V97.8.1 ne demande que l'age, pas la date de naissance complete).
+  // Sinon l'algo voit age_range=null + anamnese.age="38" et signale une
+  // incoherence injustifiee.
   const ageRange = (() => {
-    if (!naissance) return null;
-    const birth = new Date(naissance);
-    if (isNaN(birth)) return null;
-    const ageNow = new Date().getFullYear() - birth.getFullYear();
+    const naissance = form.dateNaissance || form.date_naissance || null;
+    let ageNow = null;
+    if (naissance) {
+      const birth = new Date(naissance);
+      if (!isNaN(birth)) ageNow = new Date().getFullYear() - birth.getFullYear();
+    }
+    if (ageNow === null && form.age) {
+      const n = parseInt(form.age, 10);
+      if (!isNaN(n) && n > 0 && n < 130) ageNow = n;
+    }
+    if (ageNow === null) return null;
     const lo = Math.floor(ageNow / 5) * 5;
     return `${lo}-${lo + 4}`;
   })();
