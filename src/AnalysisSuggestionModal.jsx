@@ -195,7 +195,7 @@ export default function AnalysisSuggestionModal({
         <div style={bodyStyle}>
           {loading && (
             <div style={loadingStyle}>
-              <p>🤖 Anissa AI analyse l'anamnèse et propose des analyses...</p>
+              <p>⚙ Analyse algorithmique de l'anamnèse en cours…</p>
               <p style={{ fontSize: 12, color: '#888' }}>~5-10 secondes</p>
             </div>
           )}
@@ -209,7 +209,7 @@ export default function AnalysisSuggestionModal({
           {!loading && iaResult && (
             <>
               <div style={summaryStyle}>
-                <strong>Résumé clinique IA :</strong>
+                <strong>Résumé clinique :</strong>
                 <p style={{ margin: '4px 0 0' }}>{iaResult.client_summary}</p>
               </div>
 
@@ -323,7 +323,25 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
             </span>
           )}
           {!isExtra && s.pertinence_score && (
-            <span style={{ fontSize: 11, color: '#666' }}>· Score {s.pertinence_score}/10</span>
+            (() => {
+              // V97.11.6 : remplacer le score chiffre "X/10" par un label
+              // qualitatif. Un score chiffre est lu comme une certitude
+              // medicale ("10/10 = sûr"), ce qui depasse le perimetre
+              // d'une nutritionniste fonctionnelle. Labels qualitatifs =
+              // priorite algorithmique, moins ambigus juridiquement.
+              const score = s.pertinence_score;
+              const label = score >= 10 ? 'Pertinence élevée'
+                : score >= 7 ? 'Pertinence modérée'
+                : 'Pertinence exploratoire';
+              const color = score >= 10 ? '#2d5a3d'
+                : score >= 7 ? '#666'
+                : '#999';
+              return (
+                <span style={{ fontSize: 11, color, fontWeight: 500 }}>
+                  · {label}
+                </span>
+              );
+            })()
           )}
         </div>
         <div style={{ fontSize: 13, color: '#555', marginTop: 4 }}>

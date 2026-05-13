@@ -1467,7 +1467,7 @@ function StepAnalyses({ client, journey, onChange }) {
       <StepHead
         index={2}
         title="Analyses biologiques"
-        intro="Suggestion IA d'analyses pertinentes selon l'anamnèse et le pack acheté. À vous de valider ou d'écarter chaque proposition."
+        intro="Suggestion algorithmique d'analyses pertinentes selon l'anamnèse et le pack acheté. À vous de valider ou d'écarter chaque proposition."
       />
 
       {/* BC.5B : structure en blocs numérotés style étape 1 (Onboarding) */}
@@ -1480,7 +1480,7 @@ function StepAnalyses({ client, journey, onChange }) {
         </div>
         <p className="jrn-block__intro">
           {hasPlan === false
-            ? 'Lance la suggestion IA pour proposer un plan d\'analyses adapté à l\'anamnèse. Tu valideras ensuite chaque test individuellement avant prescription.'
+            ? 'Lance l\'analyse algorithmique pour proposer un plan d\'analyses adapté à l\'anamnèse. Tu valideras ensuite chaque test individuellement avant prescription.'
             : hasPlan === true
             ? 'Le plan d\'analyses est en place. Vérifie les tests sélectionnés ci-dessous avant validation.'
             : 'Chargement du statut…'}
@@ -1515,7 +1515,7 @@ function StepAnalyses({ client, journey, onChange }) {
                   <p className="jrn-empty__hint">
                     La cliente n&apos;a pas encore rempli son pré-questionnaire dans l&apos;app.
                     Une fois reçu, tu pourras valider l&apos;anamnèse à l&apos;étape 1, puis
-                    lancer la suggestion IA d&apos;analyses.
+                    lancer l&apos;analyse algorithmique d&apos;analyses.
                   </p>
                   <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
                     <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
@@ -1536,8 +1536,8 @@ function StepAnalyses({ client, journey, onChange }) {
                   <p className="jrn-empty__title">Pré-questionnaire reçu</p>
                   <p className="jrn-empty__hint">
                     Avant de proposer les analyses, retourne sur l&apos;étape <strong>Onboarding</strong> pour
-                    relire les réponses, faire le RDV anamnèse et valider. L&apos;IA s&apos;appuiera ensuite sur
-                    l&apos;anamnèse complète pour proposer les bons tests.
+                    relire les réponses, faire le RDV anamnèse et valider. L&apos;analyse algorithmique
+                    s&apos;appuiera ensuite sur l&apos;anamnèse complète pour proposer les bons tests.
                   </p>
                   <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
                     <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
@@ -1556,11 +1556,11 @@ function StepAnalyses({ client, journey, onChange }) {
                 <div className="jrn-empty__icon">🧪</div>
                 <p className="jrn-empty__title">Aucun plan d&apos;analyses</p>
                 <p className="jrn-empty__hint">
-                  L&apos;IA va proposer des tests en croisant l&apos;anamnèse, le pack acheté et les axes prioritaires. Tu garderas la main pour valider, écarter ou ajouter.
+                  L&apos;algorithme va proposer des tests en croisant l&apos;anamnèse, le pack acheté et les axes prioritaires. Tu garderas la main pour valider, écarter ou ajouter.
                 </p>
                 <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
                   <button onClick={() => setShowSuggest(true)} className="jrn-btn jrn-btn--primary">
-                    ✨ Lancer la suggestion IA
+                    ✨ Lancer l'analyse algorithmique
                   </button>
                   <button onClick={handleSkip} disabled={savingTransition} className="jrn-btn jrn-btn--ghost">
                     Passer cette étape
