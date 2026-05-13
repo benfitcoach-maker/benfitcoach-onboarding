@@ -87,7 +87,26 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
       setLoading(false);
       return;
     }
-    setClient(data);
+    // V97.11.5 (2026-05-13) — Normalize Supabase snake_case → camelCase.
+    // Avant ce fix, client.packType etait undefined (Supabase renvoie
+    // pack_type), donc PACK_DEFINITIONS[undefined] retournait null,
+    // donc la modal Suggestion analyses affichait "0 CHF" et l'IA
+    // ne se declenchait jamais. Le store.js central faisait deja ce
+    // mapping mais ClientJourneyPage l'ignorait en allant en direct.
+    const normalized = data ? {
+      ...data,
+      packType: data.pack_type || null,
+      packStartedAt: data.pack_started_at || null,
+      packStartedAtConfirmed: data.pack_started_at_confirmed ?? false,
+      packSchedule: data.pack_schedule || null,
+      stagingClientId: data.staging_client_id || null,
+      createdBy: data.created_by || 'benoit',
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      latestSections: data.latest_sections || null,
+      interviewNotes: data.interview_notes || null,
+    } : null;
+    setClient(normalized);
     setLoading(false);
   }, [clientId]);
 
