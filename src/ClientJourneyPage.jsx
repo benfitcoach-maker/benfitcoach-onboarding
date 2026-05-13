@@ -486,6 +486,12 @@ function StepAnamnesis({ client, onChange }) {
   // directement dans la carte App cliente (anciennement renvoyait vers Profil).
   const [activatingApp, setActivatingApp] = useState(false);
   const [activationError, setActivationError] = useState(null);
+  // V97.10 — RDV anamnèse : Anissa pose la date du RDV après réception du
+  // pré-q. La cliente la verra sur son app + recevra une notif J-1.
+  const [rdvBusy, setRdvBusy] = useState(false);
+  const [rdvDraft, setRdvDraft] = useState('');
+  const [rdvNoteDraft, setRdvNoteDraft] = useState('');
+  const [rdvEditMode, setRdvEditMode] = useState(false);
   const form = client.form || {};
   const journey = client.journey_state || {};
 
@@ -592,6 +598,66 @@ function StepAnamnesis({ client, onChange }) {
     finally { setBusy(false); }
   };
 
+  // V97.10 — Handlers RDV anamnèse
+  const formatRdv = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const datePart = d.toLocaleDateString('fr-CH', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    const timePart = d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} à ${timePart}`;
+  };
+
+  const isoToDatetimeLocal = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const handleSaveRdv = async () => {
+    if (!rdvDraft) return;
+    setRdvBusy(true); setErr(null);
+    try {
+      const { updateJourneyState } = await import('./services/journeyState');
+      await updateJourneyState(client.id, {
+        rdv_anamnesis_at: new Date(rdvDraft).toISOString(),
+        rdv_anamnesis_note: rdvNoteDraft.trim() || null,
+      });
+      setRdvEditMode(false);
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur sauvegarde RDV');
+    } finally {
+      setRdvBusy(false);
+    }
+  };
+
+  const handleEditRdv = () => {
+    setRdvDraft(isoToDatetimeLocal(journey.rdv_anamnesis_at));
+    setRdvNoteDraft(journey.rdv_anamnesis_note || '');
+    setRdvEditMode(true);
+  };
+
+  const handleClearRdv = async () => {
+    if (!window.confirm('Annuler ce RDV ? La cliente ne le verra plus sur son app.')) return;
+    setRdvBusy(true); setErr(null);
+    try {
+      const { updateJourneyState } = await import('./services/journeyState');
+      await updateJourneyState(client.id, {
+        rdv_anamnesis_at: null,
+        rdv_anamnesis_note: null,
+      });
+      setRdvEditMode(false);
+      setRdvDraft('');
+      setRdvNoteDraft('');
+      onChange();
+    } catch (e) {
+      setErr(e?.message || 'Erreur annulation RDV');
+    } finally {
+      setRdvBusy(false);
+    }
+  };
+
   const hasEmail = !!(client.form?.email || client.email);
 
   return (
@@ -641,7 +707,11 @@ function StepAnamnesis({ client, onChange }) {
         </div>
       </div>
 
-      {/* ═══ BLOC 2 — Pré-questionnaire ════════════════════════════ */}
+      {/* ═══ BLOC 2 — Pré-questionnaire ════════════════════════════
+          V97.10 : on masque ce bloc une fois les réponses reçues
+          (les boutons d'envoi n'ont plus de sens). Le bloc Réponses
+          reçues (BLOC 3) prend le relais. */}
+      {!questionnaireReceived && (
       <div style={{ marginBottom: 'var(--jrn-6)' }}>
         <p className="jrn-label">2 · Pré-questionnaire</p>
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
@@ -707,10 +777,13 @@ function StepAnamnesis({ client, onChange }) {
           )}
         </div>
       </div>
+      )}
 
-      {/* ═══ BLOC 3 — Réponses reçues ══════════════════════════════ */}
+      {/* ═══ BLOC 3 — Réponses reçues ══════════════════════════════
+          V97.10 : renumérotation dynamique — quand BLOC 2 est masqué
+          (réponses reçues), ce bloc devient logiquement le n°2. */}
       <div style={{ marginBottom: 'var(--jrn-6)' }}>
-        <p className="jrn-label">3 · Réponses reçues</p>
+        <p className="jrn-label">{questionnaireReceived ? '2' : '3'} · Réponses reçues</p>
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
           Les réponses arrivent quand la cliente soumet le formulaire (ou pendant le RDV si tu remplis manuellement).
         </p>
@@ -809,9 +882,130 @@ function StepAnamnesis({ client, onChange }) {
         </div>
       </div>
 
-      {/* ═══ BLOC 4 — Validation onboarding (CTA final) ═══════════ */}
+      {/* ═══ BLOC RDV anamnèse (V97.10) ════════════════════════════
+          Visible une fois les réponses du pré-q reçues. Anissa fixe la
+          date du RDV, la cliente la verra sur son app + recevra une
+          notif J-1 (extension cron V97.11.2, à wirer Phase B). */}
+      {questionnaireReceived && (
+        <div style={{ marginBottom: 'var(--jrn-6)' }}>
+          <p className="jrn-label">3 · RDV anamnèse</p>
+          <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+            Fixez la date du rendez-vous. La cliente le verra sur son app.
+          </p>
+          <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+            {(!journey.rdv_anamnesis_at || rdvEditMode) ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--jrn-3)', marginBottom: 'var(--jrn-3)' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginBottom: 4 }}>
+                      Date et heure
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={rdvDraft}
+                      onChange={(e) => setRdvDraft(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        border: '1px solid var(--jrn-border)',
+                        borderRadius: 6,
+                        background: 'var(--jrn-surface-2, transparent)',
+                        color: 'inherit',
+                        fontSize: 'var(--jrn-text-sm)',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginBottom: 4 }}>
+                      Note (optionnel)
+                    </label>
+                    <input
+                      type="text"
+                      value={rdvNoteDraft}
+                      onChange={(e) => setRdvNoteDraft(e.target.value)}
+                      placeholder="Cabinet, visio Zoom, téléphone…"
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        border: '1px solid var(--jrn-border)',
+                        borderRadius: 6,
+                        background: 'var(--jrn-surface-2, transparent)',
+                        color: 'inherit',
+                        fontSize: 'var(--jrn-text-sm)',
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="jrn-actions" style={{ marginTop: 0 }}>
+                  <button
+                    onClick={handleSaveRdv}
+                    disabled={rdvBusy || !rdvDraft}
+                    className="jrn-btn jrn-btn--primary"
+                  >
+                    {rdvBusy ? '…' : 'Confirmer le RDV'}
+                  </button>
+                  {rdvEditMode && (
+                    <button
+                      onClick={() => setRdvEditMode(false)}
+                      disabled={rdvBusy}
+                      className="jrn-btn jrn-btn--ghost"
+                    >
+                      Annuler
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    background: 'var(--jrn-accent-soft)',
+                    color: 'var(--jrn-accent)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.04em',
+                  }}>
+                    📅 RDV prévu
+                  </span>
+                  <span style={{ fontSize: 'var(--jrn-text-md)', fontWeight: 600 }}>
+                    {formatRdv(journey.rdv_anamnesis_at)}
+                  </span>
+                  {journey.rdv_anamnesis_note && (
+                    <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                      · {journey.rdv_anamnesis_note}
+                    </span>
+                  )}
+                </div>
+                <div className="jrn-actions" style={{ marginTop: 'var(--jrn-3)' }}>
+                  <button
+                    onClick={handleEditRdv}
+                    disabled={rdvBusy}
+                    className="jrn-btn jrn-btn--ghost"
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    onClick={handleClearRdv}
+                    disabled={rdvBusy}
+                    className="jrn-btn jrn-btn--ghost"
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                  >
+                    Annuler le RDV
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BLOC Validation onboarding (CTA final) ═══════════ */}
       <div style={{ marginBottom: 'var(--jrn-6)' }}>
-        <p className="jrn-label">4 · Validation</p>
+        <p className="jrn-label">{questionnaireReceived ? '4' : '4'} · Validation</p>
         <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
           Une fois le RDV anamnèse fait et les informations clés vérifiées, validez pour passer à l'étape Analyses.
         </p>
