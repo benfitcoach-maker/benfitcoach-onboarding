@@ -90,10 +90,13 @@ export default async function handler(req, res) {
   });
 
   try {
+    // V97.8.2 : on ignore les rows soft-deleted pour ne jamais
+    // pré-remplir avec un ancien profil archivé.
     const { data: client, error: lookupErr } = await supabase
       .from('clients')
       .select('id, form, prenom')
       .filter('form->>email', 'eq', email)
+      .is('deleted_at', null)
       .limit(1)
       .maybeSingle();
 

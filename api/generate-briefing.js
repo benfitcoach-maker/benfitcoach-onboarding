@@ -191,12 +191,14 @@ export default async function handler(req, res) {
   });
 
   // ── Load client form
+  // V97.8.2 : on refuse de générer un briefing sur un profil soft-deleted.
   let client;
   try {
     const { data, error } = await supabase
       .from('clients')
       .select('id, form')
       .eq('id', clientId)
+      .is('deleted_at', null)
       .maybeSingle();
     if (error) return res.status(500).json({ error: 'Lookup failed', details: error.message });
     if (!data) return res.status(404).json({ error: 'Client introuvable' });

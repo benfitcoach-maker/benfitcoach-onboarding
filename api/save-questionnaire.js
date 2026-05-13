@@ -89,10 +89,14 @@ export default async function handler(req, res) {
 
   try {
     // ── Find client by email (stocké dans form.email JSONB)
+    // V97.8.2 : on ignore les rows soft-deleted (deleted_at IS NULL).
+    // Sinon save-questionnaire pourrait viser un ancien profil archivé
+    // au lieu du profil actif courant.
     const { data: existing, error: lookupErr } = await supabase
       .from('clients')
       .select('id, form, prenom')
       .filter('form->>email', 'eq', email)
+      .is('deleted_at', null)
       .limit(1)
       .maybeSingle();
 
