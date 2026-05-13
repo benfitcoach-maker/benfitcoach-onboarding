@@ -1695,7 +1695,7 @@ function StepWaitingResults({ client, onChange }) {
               <div>
                 <div className="jrn-timeline__title">Réception des résultats</div>
                 <p className="jrn-timeline__hint">
-                  Le laboratoire t'envoie directement les résultats par email. Une fois reçus, marque-les comme reçus pour débloquer la saisie.
+                  Le laboratoire envoie les résultats par email à toi et à la cliente en parallèle. Tu peux les saisir dès réception, sans attendre.
                 </p>
               </div>
             </li>
@@ -1722,7 +1722,7 @@ function StepWaitingResults({ client, onChange }) {
           <h3 className="jrn-block__title">Réception</h3>
         </div>
         <p className="jrn-block__intro">
-          Le laboratoire t'envoie les résultats directement par email (PDF). Dès réception, marque comme reçu pour ouvrir l'étape de saisie.
+          Le laboratoire envoie les résultats à toi et à la cliente en parallèle (PDF par email). Tu peux saisir dès réception, sans attendre la cliente.
         </p>
         <div className="jrn-actions" style={{ marginTop: 0 }}>
           <button onClick={handleReceived} disabled={busy} className="jrn-btn jrn-btn--hero">
