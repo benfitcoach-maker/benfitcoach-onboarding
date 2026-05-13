@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { PACK_DEFINITIONS } from './services/packSystem';
 
 const STATUS_LABELS = {
   draft: { label: 'Brouillon', color: '#888' },
@@ -178,23 +179,34 @@ export default function AnalysisPlanCard({ clientId }) {
         </div>
       )}
 
+      {/* V97.12.8 : on retire l'affichage de la "marge" (devenu inutile dans
+          le modele V97.12 : pack = accompagnement pur, analyses = supplement).
+          On affiche juste le supplement cliente : pack price - credit pack.
+          Le credit est lu depuis PACK_DEFINITIONS via plan.pack_type. */}
       <div style={summaryRowStyle}>
         <div style={{ fontSize: 11, color: '#888' }}>
-          Pack {plan.pack_price_chf} CHF · Coût analyses {plan.total_cost_anissa_chf} CHF
+          Pack {plan.pack_price_chf} CHF · {plan.selected_tests?.length || 0} analyse{(plan.selected_tests?.length || 0) > 1 ? 's' : ''} ({plan.total_cost_anissa_chf} CHF)
         </div>
-        <div style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: plan.total_margin_chf >= 0 ? '#2d5a3d' : '#c44',
-        }}>
-          💰 Marge {plan.total_margin_chf} CHF
-        </div>
+        {(() => {
+          const credit = PACK_DEFINITIONS[plan.pack_type]?.includedAnalysisCreditChf || 0;
+          const supplement = Math.max(0, (plan.total_cost_anissa_chf || 0) - credit);
+          return (
+            <div style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#2d5a3d',
+            }}>
+              💳 Supplément cliente : {supplement} CHF
+            </div>
+          );
+        })()}
       </div>
 
       {plan.notes_anissa && (
         <div style={notesStyle}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: '#856404', textTransform: 'uppercase', marginBottom: 4 }}>
-            ⚠️ Alertes IA
+          {/* V97.12.4 : label compliance "non transmises a la cliente" */}
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#6b5018', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '.1em' }}>
+            🔒 Notes internes Anissa — non transmises à la cliente
           </div>
           <div style={{ fontSize: 12, color: '#555' }}>{plan.notes_anissa}</div>
         </div>
