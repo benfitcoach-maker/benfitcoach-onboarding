@@ -492,6 +492,7 @@ function StepAnamnesis({ client, onChange }) {
   const [rdvDraft, setRdvDraft] = useState('');
   const [rdvNoteDraft, setRdvNoteDraft] = useState('');
   const [rdvEditMode, setRdvEditMode] = useState(false);
+  const [rdvSyncWarning, setRdvSyncWarning] = useState(null);
   const form = client.form || {};
   const journey = client.journey_state || {};
 
@@ -631,21 +632,27 @@ function StepAnamnesis({ client, onChange }) {
       // 2. V97.10 Phase B : push vers app cliente pour que la cliente voie
       //    la date sur sa timeline (/parcours rdv_scheduled). Best-effort :
       //    si l'app cliente est down, le SaaS reste source de verite.
+      //    V97.10.1 : on surface l'erreur dans l'UI au lieu du silent
+      //    console.warn — sinon Anissa croit que la sync a marche.
+      setRdvSyncWarning(null);
       try {
         const email = client.form?.email || client.email;
-        if (email) {
-          const { clientAppFetch } = await import('./services/clientAppFetch');
-          await clientAppFetch('/api/admin/client-journey-status', {
-            method: 'POST',
-            payload: {
-              email,
-              rdv_scheduled_at: isoAt,
-            },
-          });
+        if (!email) {
+          throw new Error('Cliente sans email — sync impossible');
         }
+        const { clientAppFetch } = await import('./services/clientAppFetch');
+        await clientAppFetch('/api/admin/client-journey-status', {
+          method: 'POST',
+          payload: {
+            email,
+            rdv_scheduled_at: isoAt,
+          },
+        });
       } catch (syncErr) {
+        const msg = syncErr?.message || String(syncErr);
         // eslint-disable-next-line no-console
-        console.warn('[rdv-sync] best-effort failed:', syncErr?.message || syncErr);
+        console.warn('[rdv-sync] failed:', msg, syncErr);
+        setRdvSyncWarning(`RDV sauvegardé côté SaaS, mais sync app cliente échouée : ${msg}`);
       }
 
       setRdvEditMode(false);
@@ -674,22 +681,26 @@ function StepAnamnesis({ client, onChange }) {
         rdv_anamnesis_note: null,
       });
 
-      // 2. Clear cote app cliente (best-effort)
+      // 2. Clear cote app cliente
+      setRdvSyncWarning(null);
       try {
         const email = client.form?.email || client.email;
-        if (email) {
-          const { clientAppFetch } = await import('./services/clientAppFetch');
-          await clientAppFetch('/api/admin/client-journey-status', {
-            method: 'POST',
-            payload: {
-              email,
-              rdv_scheduled_at: null,
-            },
-          });
+        if (!email) {
+          throw new Error('Cliente sans email — sync impossible');
         }
+        const { clientAppFetch } = await import('./services/clientAppFetch');
+        await clientAppFetch('/api/admin/client-journey-status', {
+          method: 'POST',
+          payload: {
+            email,
+            rdv_scheduled_at: null,
+          },
+        });
       } catch (syncErr) {
+        const msg = syncErr?.message || String(syncErr);
         // eslint-disable-next-line no-console
-        console.warn('[rdv-sync clear] best-effort failed:', syncErr?.message || syncErr);
+        console.warn('[rdv-sync clear] failed:', msg, syncErr);
+        setRdvSyncWarning(`RDV effacé côté SaaS, mais sync app cliente échouée : ${msg}`);
       }
 
       setRdvEditMode(false);
@@ -1043,6 +1054,19 @@ function StepAnamnesis({ client, onChange }) {
                   </button>
                 </div>
               </div>
+            )}
+            {rdvSyncWarning && (
+              <p style={{
+                marginTop: 'var(--jrn-3)',
+                fontSize: 'var(--jrn-text-sm)',
+                color: 'var(--jrn-warn, #b8861f)',
+                background: 'rgba(184, 134, 38, 0.08)',
+                padding: '8px 12px',
+                borderRadius: 6,
+                lineHeight: 1.5,
+              }}>
+                ⚠ {rdvSyncWarning}
+              </p>
             )}
           </div>
         </div>
