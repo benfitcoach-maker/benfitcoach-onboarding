@@ -2152,6 +2152,42 @@ const STATUSES = [
   { value: 'non_interpretable',label: 'Non interprétable',icon: '⚪' },
 ];
 
+// V97.13.7 : templates par categorie pour aide cognitive a la saisie.
+// Pas un formulaire rigide — juste une structure prefillable que Anissa
+// peut completer librement. Objectif : construire un "langage clinique
+// interne" coherent entre dossiers, sans perdre la flexibilite du textarea.
+const VALUES_TEMPLATES = {
+  microbiote: `Diversité (Shannon) :
+Dysbiose (1-10) :
+Perméabilité (zonuline) :
+Inflammation (calprotectine, histamine) :
+Flore protectrice (butyrate, Akkermansia) :
+Levures / opportunistes :
+sIgA :`,
+  hormonal: `Cortisol / DHEA :
+Thyroïde (TSH, T3l, T4l, anti-TPO) :
+Hormones sexuelles :
+Métabolites :`,
+  sang: `Vitamines (D, B12, B9, folates) :
+Minéraux (Mg, Zn, Fer, Ferritine, Sat. transferrine) :
+Oligo-éléments (Sélénium, Cuivre) :
+Acides gras (Index oméga-3) :`,
+  inflammation: `CRP us :
+Calprotectine :
+Marqueurs Th1/Th2 :
+Histamine :`,
+  // Catégorie générique pour analyses non typées
+  default: `Valeurs principales :
+Marqueurs hors normes :
+Observations labo :`,
+};
+
+const SYNTHESIS_TEMPLATE = `Axes principaux :
+
+Priorité nutritionnelle :
+
+Points de vigilance :`;
+
 // BC.5D.2 : auto-détection catégorie depuis le nom de l'analyse.
 // Mapping mots-clés → catégorie. Anissa peut toujours surcharger via le badge.
 // Couvre les analyses les plus fréquentes (cortisol, vit D, microbiote, CRP, etc).
@@ -2293,7 +2329,32 @@ export function ResultCard({
 
       {/* Section 1 : Valeurs laboratoire (compact, monospace, fond teinté) */}
       <div className="jrn-result-card__values">
-        <label className="jrn-result-card__section-label">Valeurs laboratoire</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+          <label className="jrn-result-card__section-label" style={{ marginBottom: 0 }}>Valeurs laboratoire</label>
+          {/* V97.13.7 : bouton "Insérer modèle" — pre-remplit le textarea
+              avec une mini-structure guidee selon la categorie du test.
+              Visible uniquement si le textarea est vide pour ne pas ecraser
+              une saisie en cours. */}
+          {!value && (
+            <button
+              type="button"
+              onClick={() => onValueChange(VALUES_TEMPLATES[category] || VALUES_TEMPLATES.default)}
+              style={{
+                fontSize: 11,
+                color: 'var(--jrn-accent, #2d5a3d)',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                fontWeight: 500,
+              }}
+              title="Insérer une structure guidée pour la saisie"
+            >
+              + Insérer modèle
+            </button>
+          )}
+        </div>
         <textarea
           value={value || ''}
           onChange={(e) => onValueChange(e.target.value)}
@@ -2359,7 +2420,29 @@ export function ResultCard({
 
       {/* Section 2 : Lecture clinique Anissa (éditorial, plus lisible) */}
       <div className="jrn-result-card__interpretation">
-        <label className="jrn-result-card__section-label jrn-result-card__section-label--accent">Lecture clinique</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+          <label className="jrn-result-card__section-label jrn-result-card__section-label--accent" style={{ marginBottom: 0 }}>Lecture clinique</label>
+          {/* V97.13.7 : bouton "Insérer modèle synthese" */}
+          {!synthesis && (
+            <button
+              type="button"
+              onClick={() => onSynthesisChange(SYNTHESIS_TEMPLATE)}
+              style={{
+                fontSize: 11,
+                color: 'var(--jrn-accent, #2d5a3d)',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                fontWeight: 500,
+              }}
+              title="Insérer une structure axes / priorité / vigilance"
+            >
+              + Insérer modèle
+            </button>
+          )}
+        </div>
         <textarea
           value={synthesis || ''}
           onChange={(e) => onSynthesisChange(e.target.value)}
