@@ -226,8 +226,11 @@ function VersionBadge() {
         zIndex: 9999,
         fontSize: 10,
         fontFamily: 'ui-monospace, monospace',
-        color: 'rgba(196,160,80,.35)',
-        background: 'rgba(0,0,0,.25)',
+        // V97.11.3 : couleur noire pour etre lisible sur fond ivoire
+        // (theme Anissa) ET sur fond sombre. Background blanc semi-opaque
+        // donne le contraste sur les deux themes.
+        color: 'rgba(0, 0, 0, 0.75)',
+        background: 'rgba(255, 255, 255, 0.85)',
         padding: '2px 6px',
         borderRadius: 4,
         letterSpacing: '.5px',
