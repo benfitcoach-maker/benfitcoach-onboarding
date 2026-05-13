@@ -630,10 +630,10 @@ function StepAnamnesis({ client, onChange }) {
       });
 
       // 2. V97.10 Phase B : push vers app cliente pour que la cliente voie
-      //    la date sur sa timeline (/parcours rdv_scheduled). Best-effort :
-      //    si l'app cliente est down, le SaaS reste source de verite.
-      //    V97.10.1 : on surface l'erreur dans l'UI au lieu du silent
-      //    console.warn — sinon Anissa croit que la sync a marche.
+      //    la date sur sa timeline (/parcours rdv_scheduled).
+      //    V97.10.2 : on enchaine avec une notif push immediate ("RDV fixe").
+      //    Best-effort sur les 2 etapes — le SaaS reste source de verite si
+      //    l'app cliente est down.
       setRdvSyncWarning(null);
       try {
         const email = client.form?.email || client.email;
@@ -641,6 +641,7 @@ function StepAnamnesis({ client, onChange }) {
           throw new Error('Cliente sans email — sync impossible');
         }
         const { clientAppFetch } = await import('./services/clientAppFetch');
+        // 2a. Pousse la date dans clients.rdv_scheduled_at
         await clientAppFetch('/api/admin/client-journey-status', {
           method: 'POST',
           payload: {
@@ -648,6 +649,23 @@ function StepAnamnesis({ client, onChange }) {
             rdv_scheduled_at: isoAt,
           },
         });
+        // 2b. Envoie une notif push immediate (best-effort separe — si la
+        //     cliente n'a pas active les push, on ignore silencieusement).
+        try {
+          await clientAppFetch('/api/admin/push/send', {
+            method: 'POST',
+            payload: {
+              email,
+              title: 'Votre RDV avec Anissa est fixé',
+              body: `Rendez-vous d'anamnèse : ${formatRdv(isoAt)}.`,
+              url: '/parcours',
+              tag: 'rdv-anamnese',
+            },
+          });
+        } catch (pushErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[rdv-push] failed (non-bloquant):', pushErr?.message || pushErr);
+        }
       } catch (syncErr) {
         const msg = syncErr?.message || String(syncErr);
         // eslint-disable-next-line no-console
