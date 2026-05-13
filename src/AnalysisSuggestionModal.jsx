@@ -96,26 +96,45 @@ export default function AnalysisSuggestionModal({
     return () => { cancelled = true; };
   }, [isOpen, client?.id, packType]);
 
-  // ─── Calcul cout + credit flat ─────────────────────────────────
-  // V97.12.2 : le credit pack (0 / 250 / 400 CHF) est applique en
-  // deduction monetaire FLAT sur le total des analyses selectionnees.
-  // Peut couvrir 1 ou 2 analyses selon les couts.
-  // Exemple pack 6m (credit 400) : 2 analyses 246+248 = 494,
-  //   credit applique 400, cliente paye 94.
-  const { totalCost, selectedTests, creditApplied, costForClient } = useMemo(() => {
+  // ─── Calcul cout + credit flat + couverture par card ───────────
+  // V97.12.3 : le credit pack (0 / 250 / 400 CHF) est applique en
+  // deduction monetaire FLAT sur le total. Pour l'affichage des badges
+  // "Incluse dans l'accompagnement", on identifie greedy par pertinence
+  // desc les analyses ENTIEREMENT couvertes par le credit (cumul ≤ credit).
+  const { totalCost, selectedTests, creditApplied, costForClient, coveredCodes } = useMemo(() => {
     const allSelected = [
       ...enrichedSuggestions.filter(s => selected[s.code]),
       ...extraTests.filter(s => selected[s.code]),
     ];
     const total = allSelected.reduce((sum, t) => sum + (t.cost_anissa_chf || 0), 0);
     const applied = Math.min(total, creditChf);
+
+    // Greedy : trier par pertinence desc, marquer "couvertes" tant que
+    // le cumul reste sous le plafond du credit.
+    const covered = new Set();
+    if (creditChf > 0 && allSelected.length > 0) {
+      const sorted = [...allSelected].sort((a, b) => {
+        const pa = a.pertinence_score || 0;
+        const pb = b.pertinence_score || 0;
+        return pb - pa;
+      });
+      let remaining = creditChf;
+      for (const t of sorted) {
+        const cost = t.cost_anissa_chf || 0;
+        if (cost <= remaining) {
+          covered.add(t.code);
+          remaining -= cost;
+        }
+      }
+    }
+
     return {
       totalCost: total,
       selectedTests: allSelected,
       creditApplied: applied,
       costForClient: Math.max(0, total - creditChf),
-      // V97.12.1 : champ deprecate mais conserve pour compat schema BDD
-      // (analysis_plans.total_margin_chf).
+      coveredCodes: covered,
+      // V97.12.1 : champ deprecate mais conserve pour compat schema BDD.
       totalMargin: packPrice - total,
     };
   }, [selected, enrichedSuggestions, extraTests, creditChf, packPrice]);
@@ -217,8 +236,19 @@ export default function AnalysisSuggestionModal({
           {!loading && iaResult && (
             <>
               <div style={summaryStyle}>
-                <strong>Résumé clinique :</strong>
-                <p style={{ margin: '4px 0 0' }}>{iaResult.client_summary}</p>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: '.12em',
+                  textTransform: 'uppercase',
+                  color: '#2d5a3d',
+                  marginBottom: 6,
+                }}>
+                  Lecture clinique synthétique
+                </div>
+                <p style={{ margin: 0, color: '#1a2e1f', lineHeight: 1.65, fontSize: 14 }}>
+                  {iaResult.client_summary}
+                </p>
               </div>
 
               <h3 style={{ marginTop: 16, fontSize: 14 }}>Analyses suggérées</h3>
@@ -229,6 +259,7 @@ export default function AnalysisSuggestionModal({
                     suggestion={s}
                     selected={!!selected[s.code]}
                     onToggle={() => toggleSelected(s.code)}
+                    isCovered={coveredCodes.has(s.code)}
                   />
                 ))}
                 {extraTests.map(s => (
@@ -238,6 +269,7 @@ export default function AnalysisSuggestionModal({
                     selected={!!selected[s.code]}
                     onToggle={() => toggleSelected(s.code)}
                     isExtra
+                    isCovered={coveredCodes.has(s.code)}
                   />
                 ))}
               </div>
@@ -284,7 +316,7 @@ export default function AnalysisSuggestionModal({
                 )}
               </div>
               {selectedTests.length > 0 && (
-                <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
                   Total analyses sélectionnées : <strong>{totalCost} CHF</strong>
                   {creditApplied > 0 && (
                     <span style={{ color: '#2d5a3d', fontWeight: 500 }}>
@@ -293,7 +325,15 @@ export default function AnalysisSuggestionModal({
                   )}
                 </div>
               )}
-              <div style={{ fontSize: 18, fontWeight: 600, color: '#2d5a3d', marginTop: 4 }}>
+              {/* V97.12.3 : conclusion economique aeree, vraie chute du cockpit */}
+              <div style={{
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: '1px dashed rgba(45,90,61,0.25)',
+                fontSize: 19,
+                fontWeight: 600,
+                color: '#2d5a3d',
+              }}>
                 💳 Coût analyses pour la cliente : {costForClient} CHF
               </div>
             </div>
@@ -315,7 +355,7 @@ export default function AnalysisSuggestionModal({
 }
 
 // ─── Sous-composant : ligne de suggestion ───────────────────────
-function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
+function SuggestionRow({ suggestion, selected, onToggle, isExtra, isCovered = false }) {
   const s = suggestion;
   return (
     <div style={{
@@ -324,8 +364,14 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
       gap: 12,
       padding: 10,
       marginBottom: 6,
-      background: selected ? 'rgba(45,90,61,0.08)' : 'rgba(0,0,0,0.02)',
-      border: `1px solid ${selected ? 'rgba(45,90,61,0.3)' : 'rgba(0,0,0,0.08)'}`,
+      // V97.12.3 : highlight subtil sage si analyse couverte par credit
+      background: isCovered
+        ? 'rgba(45,90,61,0.12)'
+        : selected ? 'rgba(45,90,61,0.08)' : 'rgba(0,0,0,0.02)',
+      border: `1px solid ${
+        isCovered ? 'rgba(45,90,61,0.4)' :
+        selected ? 'rgba(45,90,61,0.3)' : 'rgba(0,0,0,0.08)'
+      }`,
       borderRadius: 6,
       cursor: 'pointer',
     }} onClick={onToggle}>
@@ -346,22 +392,36 @@ function SuggestionRow({ suggestion, selected, onToggle, isExtra }) {
               Ajouté
             </span>
           )}
+          {isCovered && (
+            <span style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#fff',
+              background: '#2d5a3d',
+              padding: '3px 9px',
+              borderRadius: 4,
+              letterSpacing: '.02em',
+            }}>
+              ✓ Incluse dans l'accompagnement
+            </span>
+          )}
           {!isExtra && s.pertinence_score && (
             (() => {
-              // V97.11.6 : remplacer le score chiffre "X/10" par un label
-              // qualitatif. Un score chiffre est lu comme une certitude
-              // medicale ("10/10 = sûr"), ce qui depasse le perimetre
-              // d'une nutritionniste fonctionnelle. Labels qualitatifs =
-              // priorite algorithmique, moins ambigus juridiquement.
+              // V97.12.3 : labels cliniques au lieu de "Pertinence X".
+              // Avant : tout ressortait "Pertinence modérée" → effet "tout
+              // se vaut". Maintenant : Prioritaire / Complémentaire /
+              // Exploration secondaire — vocabulaire clinique, hierarchie
+              // immediate.
               const score = s.pertinence_score;
-              const label = score >= 10 ? 'Pertinence élevée'
-                : score >= 7 ? 'Pertinence modérée'
-                : 'Pertinence exploratoire';
-              const color = score >= 10 ? '#2d5a3d'
-                : score >= 7 ? '#666'
+              const label = score >= 9 ? 'Prioritaire'
+                : score >= 7 ? 'Complémentaire'
+                : 'Exploration secondaire';
+              const color = score >= 9 ? '#2d5a3d'
+                : score >= 7 ? '#5a7a4d'
                 : '#999';
+              const weight = score >= 9 ? 600 : 500;
               return (
-                <span style={{ fontSize: 11, color, fontWeight: 500 }}>
+                <span style={{ fontSize: 11, color, fontWeight: weight }}>
                   · {label}
                 </span>
               );
@@ -404,13 +464,14 @@ const errorStyle = {
   borderRadius: 6, marginBottom: 12,
 };
 const summaryStyle = {
-  // V97.11.10 : couleur texte explicite pour lisibilite sur fond ivoire
-  // (theme Anissa). Avant ce fix le texte heritait du gris faible du theme.
+  // V97.12.3 : encart plus aere + titre eyebrow "Lecture clinique synthetique".
+  // Avant : visuellement disabled (gris). Maintenant : presence claire avec
+  // titre, fond sage subtil, contraste deep #1a2e1f.
   background: 'rgba(45,90,61,0.08)',
   border: '1px solid rgba(45,90,61,0.18)',
-  padding: 12, borderRadius: 6,
-  fontSize: 13, marginBottom: 12,
-  color: '#1a2e1f', lineHeight: 1.55,
+  padding: '14px 16px',
+  borderRadius: 8,
+  marginBottom: 16,
 };
 const alertsStyle = {
   background: 'rgba(255,193,7,0.1)', padding: 12, borderRadius: 6,
