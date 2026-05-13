@@ -267,10 +267,13 @@ export default function AnalysisSuggestionModal({
           <div style={footerStyle}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, color: '#888' }}>
-                Pack {packPrice} CHF — Coût analyses {totalCost} CHF
+                {/* V97.12 — Modele tarifaire V3 : les analyses sont toujours
+                    optionnelles et a la charge de la cliente. Plus de notion
+                    de "marge sur pack" — le pack est de l'accompagnement pur. */}
+                Pack accompagnement : <strong>{packPrice} CHF</strong> · Analyses optionnelles
               </div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: totalMargin >= 0 ? '#2d5a3d' : '#c44' }}>
-                💰 Marge : {totalMargin} CHF ({marginPct}%)
+              <div style={{ fontSize: 18, fontWeight: 600, color: '#2d5a3d', marginTop: 4 }}>
+                💳 Coût analyses pour la cliente : {totalCost} CHF
               </div>
             </div>
             <button onClick={onClose} style={btnSecondaryStyle} disabled={saving}>

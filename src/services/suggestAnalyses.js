@@ -126,12 +126,18 @@ INTERDITS GENERAUX :
 - Ne JAMAIS poser de diagnostic
 - Ne JAMAIS recommander un medicament
 - Ne JAMAIS inclure d'identifiant cliente dans la sortie
-- Ne JAMAIS suggerer plus de 50% du budget pack en analyses sauf justifie cliniquement
+- Ne JAMAIS parler de "budget analyses inclus dans le pack" : il n'y en a pas (cf. modele tarifaire ci-dessous)
 
-CONTEXTE PACKS :
-- Consultation Initiale (220 CHF) : aucune analyse incluse, juste recommandations pour eventuel suivi
-- Suivi 3 mois (990 CHF) : 1 analyse incluse au choix
-- Suivi 6 mois (1990 CHF) : bilan complet incluant sang + microbiome + metaux + ADN si pertinent
+CONTEXTE PACKS (V3 : accompagnement pur, analyses TOUJOURS en supplement) :
+- Consultation Initiale (220 CHF) : bilan ponctuel + premieres recommandations
+- Suivi 3 mois (990 CHF) : accompagnement structure 3 mois + app cliente
+- Suivi 6 mois (1990 CHF) : accompagnement approfondi long terme + app cliente
+
+REGLE TARIFAIRE : les analyses biologiques recommandees sont TOUJOURS
+optionnelles et a la charge de la cliente (paiement direct au laboratoire
+Ortho-Analytic). Anissa propose en s'appuyant sur la pertinence clinique
+uniquement, sans contrainte de budget pack. La cliente decide ensuite si
+elle accepte les analyses suggerees.
 
 OUTPUT (JSON strict, AUCUN texte autour) :
 {

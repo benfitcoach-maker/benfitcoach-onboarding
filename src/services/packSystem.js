@@ -4,7 +4,14 @@
 // - 3 nouveaux packs actifs : consultation_initiale_220, suivi_3m_990, suivi_6m_1990
 // - 6 anciens packs marques `archived: true` : conserves pour les clientes en cours,
 //   mais filtres dans le dropdown de creation nouvelle cliente.
-// - Les analyses Ortho/MGD ne sont PAS dans cette structure (Phase B MVP analyses).
+//
+// V3 modele tarifaire (2026-05-13) :
+// - Les 3 packs sont d'ACCOMPAGNEMENT PUR (RDV, app, suivi)
+// - Les analyses biologiques sont TOUJOURS optionnelles, en supplement,
+//   facturees directement par le laboratoire Ortho-Analytic a la cliente
+// - Pas de notion de "budget analyses inclus" ni de "marge sur pack"
+// - Anissa propose les analyses uniquement sur pertinence clinique
+// - La cliente decide si elle prend ou non les analyses suggerees
 
 export const PACK_DEFINITIONS = {
 
