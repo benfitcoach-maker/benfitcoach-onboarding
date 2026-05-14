@@ -3749,24 +3749,86 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     ? Number((lastWeight.weight_kg - oldestWeight.weight_kg).toFixed(1))
     : null;
 
-  let nextAction = { label: 'Suivi en cours — rien d\'urgent', tone: 'ok' };
+  // V97.13.21 — moteur d'attention clinique multi-priorités.
+  // Ordre = priorité décroissante. Premier match gagne.
+  // tone: 'go' = action data-prête / 'warn' = signal manquant / 'ok' = RAS.
+  let nextAction = { label: `Suivi en cours — rien d'urgent`, tone: 'ok' };
   if (started) {
-    if (feedbacks.length === 0) {
-      nextAction = { label: `Pas de ressenti reçu — relancer ${prenom}`, tone: 'warn' };
-    } else if (daysSinceLastFeedback !== null && daysSinceLastFeedback >= 5) {
+    // P1 — adaptation IA en attente de validation (data déjà prête)
+    if (lastVersion && lastVersion.status === 'a_valider') {
+      nextAction = { label: `Adaptation V${versions.length} prête à valider`, tone: 'go' };
+    }
+    // P2 — poids décroche (delta absolu > 3kg sur ≥ 3 pesées)
+    else if (weightDelta !== null && Math.abs(weightDelta) >= 3 && weightEntries.length >= 3) {
+      const dir = weightDelta > 0 ? '+' : '';
+      nextAction = { label: `Poids ${dir}${weightDelta}kg sur ${weightEntries.length} pesées — analyser`, tone: 'warn' };
+    }
+    // P3 — première consultation pas planifiée après J+7 pack
+    else if (consultationsTotal > 0 && consultationsUsed === 0 && daysSincePack !== null && daysSincePack >= 7) {
+      nextAction = { label: `Première consultation à planifier (jour ${daysSincePack})`, tone: 'warn' };
+    }
+    // P4 — silence ressentis ≥ 7j (cliente active qui décroche)
+    else if (daysSinceLastFeedback !== null && daysSinceLastFeedback >= 7) {
       nextAction = { label: `Silence ressentis depuis ${daysSinceLastFeedback}j — relancer`, tone: 'warn' };
-    } else if (feedbacks.length >= 5 && versions.length <= 1) {
+    }
+    // P5 — aucun ressenti reçu après J+3 d'activation
+    else if (feedbacks.length === 0 && daysSincePack !== null && daysSincePack >= 3) {
+      nextAction = { label: `Pas de ressenti reçu — relancer ${prenom}`, tone: 'warn' };
+    }
+    // P6 — première adaptation IA possible (data accumulée)
+    else if (feedbacks.length >= 5 && versions.length <= 1) {
       nextAction = { label: 'Première adaptation IA possible', tone: 'go' };
-    } else if (versions.length >= 2 && daysSinceLastVersion !== null && daysSinceLastVersion >= 14) {
+    }
+    // P7 — nouvelle adaptation à envisager (cycle long depuis dernière)
+    else if (versions.length >= 2 && daysSinceLastVersion !== null && daysSinceLastVersion >= 14) {
       nextAction = { label: `Nouvelle adaptation à envisager (${daysSinceLastVersion}j depuis V${versions.length})`, tone: 'go' };
-    } else if (consultationsTotal > 0 && consultationsUsed === 0 && daysSincePack >= 7) {
-      nextAction = { label: 'Première consultation à planifier', tone: 'warn' };
+    }
+  }
+
+  // V97.13.21 — signaux temporels pour le hero (Axe 4 démarrage)
+  const heroSignals = [];
+  if (started) {
+    // Dernier ressenti
+    if (feedbacks.length === 0) {
+      heroSignals.push({ key: 'feedback', label: 'Ressenti', value: 'jamais reçu', tone: 'warn' });
+    } else if (daysSinceLastFeedback === 0) {
+      heroSignals.push({ key: 'feedback', label: 'Ressenti', value: 'aujourd\'hui', tone: 'ok' });
+    } else if (daysSinceLastFeedback !== null && daysSinceLastFeedback < 24 * 60) {
+      heroSignals.push({
+        key: 'feedback', label: 'Ressenti',
+        value: daysSinceLastFeedback === 1 ? 'hier' : `il y a ${daysSinceLastFeedback}j`,
+        tone: daysSinceLastFeedback >= 5 ? 'warn' : 'ok'
+      });
+    }
+    // Dernière activité = consultation la plus récente sinon livraison
+    if (lastConsultDays !== null && lastConsultDays !== undefined) {
+      heroSignals.push({
+        key: 'activity', label: 'Activité',
+        value: lastConsultDays === 0 ? 'consult. aujourd\'hui' : `consult. il y a ${lastConsultDays}j`,
+        tone: 'ok'
+      });
+    } else if (daysSincePack !== null) {
+      heroSignals.push({
+        key: 'activity', label: 'Activité',
+        value: daysSincePack === 0 ? 'livraison aujourd\'hui' : `livraison il y a ${daysSincePack}j`,
+        tone: daysSincePack >= 14 ? 'warn' : 'ok'
+      });
+    }
+    // Prochaine consultation
+    if (consultationsTotal > 0 && consultationsUsed === 0) {
+      heroSignals.push({ key: 'next', label: 'Prochaine consult.', value: 'non planifiée', tone: 'warn' });
+    } else if (consultationsTotal > 0 && consultationsUsed < consultationsTotal) {
+      heroSignals.push({
+        key: 'next', label: 'Consultations',
+        value: `${consultationsUsed} / ${consultationsTotal}`,
+        tone: 'ok'
+      });
     }
   }
 
   return (
     <section className="jrn-followup-step jrn-cockpit">
-      {/* ════════ HERO COCKPIT — V97.13.18 (cockpit clinique, pas cérémonial) ════════ */}
+      {/* ════════ HERO COCKPIT — V97.13.21 (signaux temporels axe 4) ════════ */}
       <header className="jrn-cockpit-hero">
         <div className="jrn-cockpit-hero__id">
           <h2 className="jrn-cockpit-hero__title">
@@ -3778,6 +3840,19 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             {started ? ` · cycle actif` : ' · à démarrer'}
             {started && lastVersion ? ` · plan V${versions.length}` : ''}
           </p>
+          {started && heroSignals.length > 0 && (
+            <ul className="jrn-cockpit-hero__signals">
+              {heroSignals.map(s => (
+                <li
+                  key={s.key}
+                  className={`jrn-cockpit-hero__signal jrn-cockpit-hero__signal--${s.tone}`}
+                >
+                  <span className="jrn-cockpit-hero__signal-label">{s.label}</span>
+                  <span className="jrn-cockpit-hero__signal-value">{s.value}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {started && (
           <div className="jrn-cockpit-hero__actions">
@@ -4274,12 +4349,27 @@ function WeightTrackingSection({ client, entries, loading }) {
 
   return (
     <div style={{ marginBottom: 'var(--jrn-6)' }}>
+      {/* V97.13.21 : toggles config sortis du flux clinique principal.
+          Bouton '⚙ Configurer' discret en haut à droite, drawer inline si cliqué. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)', flexWrap: 'wrap', gap: 8 }}>
         <p className="jrn-label" style={{ margin: 0 }}>
           Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
         </p>
-        <WeightTogglesInline client={client} />
+        <button
+          type="button"
+          onClick={() => setShowConfig(!showConfig)}
+          className="jrn-cockpit-config-btn"
+          title="Configurer le suivi du poids"
+        >
+          ⚙ Configurer
+        </button>
       </div>
+
+      {showConfig && (
+        <div className="jrn-cockpit-config-drawer">
+          <WeightTogglesInline client={client} />
+        </div>
+      )}
 
       {(loading || loadingCfg) && (
         <p className="jrn-cockpit-empty-row">Chargement…</p>

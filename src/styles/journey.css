@@ -4495,6 +4495,54 @@
   flex-wrap: wrap;
 }
 
+/* V97.13.21 — Signaux temporels dans le hero (axe 4 démarrage).
+   3 micro-chips inline qui montrent l'état temporel du suivi :
+   dernier ressenti, dernière activité, prochaine consultation.
+   Lecture périphérique : tone-ok / tone-warn calculés. */
+.jrn-cockpit-hero__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.jrn-cockpit-hero__signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.005em;
+}
+.jrn-cockpit-hero__signal-label {
+  font-family: var(--jrn-font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--jrn-text-muted);
+}
+.jrn-cockpit-hero__signal-value {
+  font-weight: 500;
+}
+.jrn-cockpit-hero__signal--ok .jrn-cockpit-hero__signal-value {
+  color: var(--jrn-text);
+}
+.jrn-cockpit-hero__signal--warn .jrn-cockpit-hero__signal-value {
+  color: #8a6722;
+  font-weight: 600;
+}
+.jrn-cockpit-hero__signal--warn .jrn-cockpit-hero__signal-label {
+  color: #b88626;
+}
+/* Séparateur visuel discret entre signaux (sauf 1er) */
+.jrn-cockpit-hero__signal + .jrn-cockpit-hero__signal::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--jrn-text-muted);
+  opacity: 0.6;
+}
+
 /* ─── EMPTY STATE COMPACT ────────────────────────────────────── */
 
 .jrn-cockpit-empty {
@@ -4606,6 +4654,34 @@
 }
 .jrn-cockpit-empty-row__link:hover {
   text-decoration-thickness: 2px;
+}
+
+/* V97.13.21 — bouton config discret + drawer inline (axe 1 sortie config).
+   Les toggles techniques quittent le flux clinique principal. */
+.jrn-cockpit-config-btn {
+  background: none;
+  border: 1px solid rgba(26, 46, 31, 0.12);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: var(--jrn-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--jrn-text-muted);
+  cursor: pointer;
+  transition: all 160ms var(--jrn-ease);
+}
+.jrn-cockpit-config-btn:hover {
+  background: rgba(26, 46, 31, 0.04);
+  color: var(--jrn-accent);
+  border-color: rgba(26, 46, 31, 0.25);
+}
+.jrn-cockpit-config-drawer {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: rgba(26, 46, 31, 0.03);
+  border: 1px dashed rgba(26, 46, 31, 0.16);
+  border-radius: 10px;
 }
 
 /* ─── GRID 2 COLONNES ─────────────────────────────────────────── */
