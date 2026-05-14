@@ -3145,7 +3145,7 @@
    sauvage à 1840) et on centre. Intros & hero title élargis aussi. */
 .jrn-activation-step {
   width: 100%;
-  max-width: 1120px;
+  max-width: 1240px;          /* V97.13.15 : 1120 → 1240 (+120px présence desktop) */
   margin-inline: auto;
 }
 .jrn-activation-step .jrn-block {
@@ -3285,32 +3285,31 @@
   gap: 0;
   position: relative;
 }
-/* V97.13.14 : ligne verticale renforcée — vraie progression médicale.
-   3px (vs 2), contraste accent renforcé, marges top/bottom ajustées
-   pour bien arriver dans les markers 36px. */
+/* V97.13.15 : timeline signature — ligne continue 4px, double layer
+   (rail clair en fond + fill accent en couche), markers pulsants pending. */
 .jrn-deploy-list::before {
   content: '';
   position: absolute;
-  left: 22px;                   /* centre marker 36px (4 padding + 18) */
-  top: 32px;
-  bottom: 32px;
-  width: 3px;
+  left: 22px;
+  top: 30px;
+  bottom: 30px;
+  width: 4px;                   /* V97.13.15 : 3 → 4px (plus de présence) */
   background: linear-gradient(
     180deg,
     var(--jrn-accent) 0%,
     var(--jrn-accent) calc(var(--jrn-deploy-done-fraction, 0%) - 1px),
-    var(--jrn-border-strong) var(--jrn-deploy-done-fraction, 0%),
-    var(--jrn-border-strong) 100%
+    rgba(26, 46, 31, 0.18) var(--jrn-deploy-done-fraction, 0%),
+    rgba(26, 46, 31, 0.18) 100%
   );
-  border-radius: 2px;
+  border-radius: 3px;
   z-index: 0;
 }
 .jrn-deploy-item {
   display: grid;
   grid-template-columns: 48px 1fr auto;
   gap: 18px;
-  align-items: center;          /* V97.13.14 : flex-start → center pour aligner avec marker */
-  padding: 22px 8px 22px 0;     /* V97.13.14 : 18 → 22px respiration */
+  align-items: center;
+  padding: 26px 8px 26px 0;     /* V97.13.15 : 22 → 26px respiration */
   border-bottom: 1px solid var(--jrn-border);
   position: relative;
 }
@@ -3319,12 +3318,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;                  /* V97.13.14 : 30 → 36px (plus de présence) */
+  width: 36px;
   height: 36px;
   border-radius: 50%;
   border: 1.5px solid var(--jrn-border-strong);
-  background: var(--jrn-bg);    /* fond ivoire pour masquer la ligne derriere */
-  font-size: 14px;              /* V97.13.14 : 13 → 14 */
+  background: var(--jrn-bg);
+  font-size: 14px;
   font-weight: 700;
   color: var(--jrn-text-muted);
   flex-shrink: 0;
@@ -3332,29 +3331,59 @@
   z-index: 1;
   transition: all 200ms var(--jrn-ease);
 }
+/* DONE — vert plein, check fort, ombre profonde, label bold */
 .jrn-deploy-item--done .jrn-deploy-marker {
   background: var(--jrn-accent);
   border-color: var(--jrn-accent);
   color: #fff;
-  box-shadow: 0 0 0 4px rgba(26, 46, 31, 0.12),
-              0 2px 8px -2px rgba(26, 46, 31, 0.25);
+  font-size: 16px;
+  box-shadow: 0 0 0 4px rgba(26, 46, 31, 0.14),
+              0 4px 12px -2px rgba(26, 46, 31, 0.32);
 }
 .jrn-deploy-item--done .jrn-deploy-label {
   font-weight: 700;
   color: var(--jrn-text);
 }
+.jrn-deploy-item--done .jrn-deploy-hint {
+  color: var(--jrn-text);
+}
+/* SKIPPED — dashed, muté */
 .jrn-deploy-item--skipped .jrn-deploy-marker {
   border-style: dashed;
   background: var(--jrn-bg);
   color: var(--jrn-text-muted);
 }
-/* V97.13.14 : pending plus marqué — anneau d'attente lumineux */
+.jrn-deploy-item--skipped .jrn-deploy-label,
+.jrn-deploy-item--skipped .jrn-deploy-hint {
+  color: var(--jrn-text-muted);
+}
+/* PENDING — anneau accent, pulse subtil 3s loop (vrai sentiment "à venir") */
 .jrn-deploy-item--pending .jrn-deploy-marker {
   border: 2px solid var(--jrn-accent);
   color: var(--jrn-accent);
   background: #fff;
   box-shadow: 0 0 0 5px rgba(26, 46, 31, 0.08),
               inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+  animation: jrn-deploy-pulse 3.2s ease-in-out infinite;
+}
+.jrn-deploy-item--pending .jrn-deploy-label {
+  font-weight: 600;
+  color: var(--jrn-text);
+}
+@keyframes jrn-deploy-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 5px rgba(26, 46, 31, 0.08),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgba(26, 46, 31, 0.04),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jrn-deploy-item--pending .jrn-deploy-marker {
+    animation: none;
+  }
 }
 .jrn-deploy-body {
   min-width: 0;
@@ -3756,73 +3785,195 @@
   cursor: not-allowed;
 }
 
-/* ─── MOCKUP TÉLÉPHONE (V97.13.14) ────────────────────────────────
-   Incarnation visuelle de l'app cliente : iPhone-like frame en CSS pur,
-   notch dynamique, écran avec preview programme du jour. Aucune image,
-   tout en variables charte Anissa (vert/ivoire). */
+/* ─── MOCKUP TÉLÉPHONE PREMIUM (V97.13.15) ────────────────────────
+   Incarnation premium de l'app cliente : iPhone-like frame, notch,
+   status bar iOS, header avatar Anissa, courbe SVG ressentis 7j,
+   card repas, message d'Anissa en bulle chat, tab bar. Aucune image
+   externe : tout en CSS + SVG, charte Anissa (vert/ivoire). */
 
 .jrn-phone-mockup {
   width: 100%;
   max-width: 240px;
   aspect-ratio: 9 / 19;
-  border-radius: 34px;
-  background: linear-gradient(180deg, #1f1f1f 0%, #0d0d0d 100%);
-  padding: 10px;
+  border-radius: 36px;
+  background: linear-gradient(180deg, #1f1f1f 0%, #0a0a0a 100%);
+  padding: 9px;
   position: relative;
   box-shadow:
-    0 22px 50px -22px rgba(26, 46, 31, 0.55),
-    0 4px 12px rgba(0, 0, 0, 0.18),
-    0 0 0 2px rgba(0, 0, 0, 0.08);
+    0 30px 60px -24px rgba(26, 46, 31, 0.55),
+    0 8px 18px -4px rgba(0, 0, 0, 0.22),
+    0 0 0 2px rgba(0, 0, 0, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   isolation: isolate;
 }
 .jrn-phone-mockup::before {
-  /* Notch dynamique iPhone — petit overlay flottant */
+  /* Notch dynamique iPhone */
   content: '';
   position: absolute;
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  width: 64px;
-  height: 17px;
+  width: 70px;
+  height: 18px;
   background: #000;
   border-radius: 999px;
-  z-index: 2;
+  z-index: 3;
 }
 .jrn-phone-mockup__screen {
   width: 100%;
   height: 100%;
-  border-radius: 26px;
-  background: linear-gradient(180deg, #F5F0E8 0%, #FAF5E8 100%);
-  padding: 40px 14px 14px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #FBF8F1 0%, #F5EFE2 100%);
+  padding: 36px 11px 8px;
   display: flex;
   flex-direction: column;
   gap: 7px;
   overflow: hidden;
   position: relative;
 }
-.jrn-phone-mockup__greeting {
+
+/* Status bar iOS-like */
+.jrn-phone-mockup__statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 6px;
+  margin-bottom: 2px;
+  font-family: var(--jrn-font-ui);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--jrn-text);
+  letter-spacing: -0.01em;
+}
+.jrn-phone-mockup__statusbar-right {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+}
+.jrn-phone-mockup__bar {
+  width: 2px;
+  background: var(--jrn-text);
+  border-radius: 0.5px;
+}
+.jrn-phone-mockup__bar--s { height: 3px; }
+.jrn-phone-mockup__bar--m { height: 5px; }
+.jrn-phone-mockup__bar--l { height: 7px; }
+.jrn-phone-mockup__battery {
+  width: 14px;
+  height: 7px;
+  border-radius: 2px;
+  border: 0.5px solid var(--jrn-text);
+  margin-left: 4px;
+  position: relative;
+  background: linear-gradient(90deg, var(--jrn-text) 65%, transparent 65%);
+}
+.jrn-phone-mockup__battery::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: 2px;
+  width: 1.5px;
+  height: 3px;
+  background: var(--jrn-text);
+  border-radius: 0 1px 1px 0;
+}
+
+/* Header — avatar Anissa + greeting */
+.jrn-phone-mockup__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+.jrn-phone-mockup__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--jrn-accent) 0%, #2B4A33 100%);
+  color: #fff;
   font-family: var(--jrn-font-display);
   font-style: italic;
-  font-size: 13px;
-  color: var(--jrn-accent);
+  font-weight: 500;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px -2px rgba(26, 46, 31, 0.4);
+}
+.jrn-phone-mockup__header-text {
+  min-width: 0;
+}
+.jrn-phone-mockup__hi {
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: 13.5px;
+  color: var(--jrn-text);
   letter-spacing: -0.01em;
   line-height: 1.1;
 }
-.jrn-phone-mockup__title {
-  font-family: var(--jrn-font-ui);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.jrn-phone-mockup__sub {
+  font-size: 8.5px;
   color: var(--jrn-text-muted);
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+}
+
+/* Chart card — ressentis 7 jours */
+.jrn-phone-mockup__chart {
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 10px 6px;
+  box-shadow:
+    0 1px 2px rgba(26, 46, 31, 0.04),
+    0 0 0 1px rgba(26, 46, 31, 0.05);
+}
+.jrn-phone-mockup__chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   margin-bottom: 4px;
 }
+.jrn-phone-mockup__chart-label {
+  font-size: 7.5px;
+  font-weight: 700;
+  color: var(--jrn-accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.jrn-phone-mockup__chart-trend {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--jrn-accent);
+  letter-spacing: -0.01em;
+}
+.jrn-phone-mockup__chart-svg {
+  width: 100%;
+  height: 36px;
+  display: block;
+}
+
+/* Card repas */
 .jrn-phone-mockup__card {
+  display: flex;
+  gap: 8px;
+  align-items: center;
   background: #fff;
-  border-radius: 10px;
-  padding: 8px 10px;
-  box-shadow: 0 1px 2px rgba(26, 46, 31, 0.05),
-              0 0 0 1px rgba(26, 46, 31, 0.05);
+  border-radius: 12px;
+  padding: 7px 9px;
+  box-shadow:
+    0 1px 2px rgba(26, 46, 31, 0.04),
+    0 0 0 1px rgba(26, 46, 31, 0.05);
+}
+.jrn-phone-mockup__card-icon {
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.jrn-phone-mockup__card-body {
+  flex: 1;
+  min-width: 0;
 }
 .jrn-phone-mockup__card-label {
   font-size: 7.5px;
@@ -3830,28 +3981,86 @@
   color: var(--jrn-accent);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 3px;
+  margin-bottom: 1px;
   line-height: 1;
 }
 .jrn-phone-mockup__card-text {
   font-size: 9px;
   color: var(--jrn-text);
-  line-height: 1.35;
+  line-height: 1.3;
   letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.jrn-phone-mockup__dot-row {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
-}
-.jrn-phone-mockup__dot {
-  width: 6px;
-  height: 6px;
+.jrn-phone-mockup__check {
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: rgba(26, 46, 31, 0.18);
-}
-.jrn-phone-mockup__dot--on {
   background: var(--jrn-accent);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Message d'Anissa — bulle chat */
+.jrn-phone-mockup__msg {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+.jrn-phone-mockup__msg-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--jrn-accent) 0%, #2B4A33 100%);
+  color: #fff;
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+.jrn-phone-mockup__msg-bubble {
+  background: var(--jrn-accent);
+  color: #fff;
+  border-radius: 12px 12px 12px 4px;
+  padding: 5px 9px;
+  font-size: 9px;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  box-shadow: 0 1px 3px rgba(26, 46, 31, 0.18);
+}
+
+/* Tab bar bas */
+.jrn-phone-mockup__tabbar {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 8px 4px 6px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px rgba(26, 46, 31, 0.06);
+}
+.jrn-phone-mockup__tab {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(26, 46, 31, 0.18);
+  align-self: center;
+}
+.jrn-phone-mockup__tab--active {
+  background: var(--jrn-accent);
+  box-shadow: 0 0 0 3px rgba(26, 46, 31, 0.10);
 }
 
 /* ─── RESPONSIVE ──────────────────────────────────────────────── */

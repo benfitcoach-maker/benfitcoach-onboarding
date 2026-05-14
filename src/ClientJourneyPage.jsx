@@ -3264,27 +3264,74 @@ function StepDelivery({ client, onChange }) {
           <div className="jrn-mirror-featured__phone" aria-hidden="true">
             <div className="jrn-phone-mockup">
               <div className="jrn-phone-mockup__screen">
-                <div className="jrn-phone-mockup__greeting">Bonjour {prenom}</div>
-                <div className="jrn-phone-mockup__title">
-                  Programme V{versionsCount || 1} · jour 1
+                {/* iOS-like status bar */}
+                <div className="jrn-phone-mockup__statusbar">
+                  <span>9:24</span>
+                  <span className="jrn-phone-mockup__statusbar-right">
+                    <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--s" />
+                    <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--m" />
+                    <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--l" />
+                    <span className="jrn-phone-mockup__battery" />
+                  </span>
                 </div>
-                <div className="jrn-phone-mockup__card">
-                  <div className="jrn-phone-mockup__card-label">Petit-déjeuner</div>
-                  <div className="jrn-phone-mockup__card-text">Œufs · avocat · pain complet</div>
-                </div>
-                <div className="jrn-phone-mockup__card">
-                  <div className="jrn-phone-mockup__card-label">Compléments matin</div>
-                  <div className="jrn-phone-mockup__card-text">3 capsules à jeun</div>
-                </div>
-                <div className="jrn-phone-mockup__card">
-                  <div className="jrn-phone-mockup__card-label">Ressenti du jour</div>
-                  <div className="jrn-phone-mockup__dot-row">
-                    <span className="jrn-phone-mockup__dot jrn-phone-mockup__dot--on" />
-                    <span className="jrn-phone-mockup__dot jrn-phone-mockup__dot--on" />
-                    <span className="jrn-phone-mockup__dot jrn-phone-mockup__dot--on" />
-                    <span className="jrn-phone-mockup__dot" />
-                    <span className="jrn-phone-mockup__dot" />
+
+                {/* Header — avatar Anissa + greeting */}
+                <div className="jrn-phone-mockup__header">
+                  <div className="jrn-phone-mockup__avatar">A</div>
+                  <div className="jrn-phone-mockup__header-text">
+                    <div className="jrn-phone-mockup__hi">Bonjour {prenom}</div>
+                    <div className="jrn-phone-mockup__sub">Jour 1 · semaine 1</div>
                   </div>
+                </div>
+
+                {/* Mini courbe ressentis 7j */}
+                <div className="jrn-phone-mockup__chart">
+                  <div className="jrn-phone-mockup__chart-head">
+                    <span className="jrn-phone-mockup__chart-label">Énergie · 7 jours</span>
+                    <span className="jrn-phone-mockup__chart-trend">+18%</span>
+                  </div>
+                  <svg className="jrn-phone-mockup__chart-svg" viewBox="0 0 200 44" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="jrnPhoneArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#1A2E1F" stopOpacity="0.22" />
+                        <stop offset="100%" stopColor="#1A2E1F" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M5,36 Q35,32 60,26 T120,16 T195,7 L195,44 L5,44 Z" fill="url(#jrnPhoneArea)" />
+                    <path d="M5,36 Q35,32 60,26 T120,16 T195,7" stroke="#1A2E1F" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="5" cy="36" r="2.2" fill="#1A2E1F" />
+                    <circle cx="42" cy="30" r="2.2" fill="#1A2E1F" />
+                    <circle cx="80" cy="22" r="2.2" fill="#1A2E1F" />
+                    <circle cx="118" cy="16" r="2.2" fill="#1A2E1F" />
+                    <circle cx="156" cy="11" r="2.2" fill="#1A2E1F" />
+                    <circle cx="195" cy="7" r="3" fill="#fff" stroke="#1A2E1F" strokeWidth="2" />
+                  </svg>
+                </div>
+
+                {/* Card repas */}
+                <div className="jrn-phone-mockup__card">
+                  <span className="jrn-phone-mockup__card-icon">🥑</span>
+                  <div className="jrn-phone-mockup__card-body">
+                    <div className="jrn-phone-mockup__card-label">Petit-déjeuner</div>
+                    <div className="jrn-phone-mockup__card-text">Œufs · avocat · pain complet</div>
+                  </div>
+                  <span className="jrn-phone-mockup__check">✓</span>
+                </div>
+
+                {/* Message Anissa */}
+                <div className="jrn-phone-mockup__msg">
+                  <div className="jrn-phone-mockup__msg-avatar">A</div>
+                  <div className="jrn-phone-mockup__msg-bubble">
+                    Comment se passe ta semaine ?
+                  </div>
+                </div>
+
+                {/* Tab bar */}
+                <div className="jrn-phone-mockup__tabbar">
+                  <span className="jrn-phone-mockup__tab jrn-phone-mockup__tab--active" />
+                  <span className="jrn-phone-mockup__tab" />
+                  <span className="jrn-phone-mockup__tab" />
+                  <span className="jrn-phone-mockup__tab" />
                 </div>
               </div>
             </div>
@@ -3445,19 +3492,18 @@ function StepDelivery({ client, onChange }) {
         </div>
       )}
 
-      {/* ════════ CTA cérémonial ════════ */}
+      {/* ════════ CTA cérémonial — V97.13.15 simplifié (1 phrase forte + 1 sub) ════════ */}
       <div className="jrn-activation-cta">
         <div className="jrn-activation-cta__copy">
           <div className="jrn-activation-cta__eyebrow">Dernière étape</div>
           <p className="jrn-activation-cta__poetic">
-            À partir de maintenant, <em>{prenom}</em> reçoit son protocole,
-            accède à son espace privé et débute son suivi actif.
+            Le protocole est maintenant prêt à être remis à <em>{prenom}</em>.
           </p>
-          {includePaper && (
-            <p className="jrn-activation-cta__sub">
-              Une fois le livret papier prêt à expédier, déclenche l'activation.
-            </p>
-          )}
+          <p className="jrn-activation-cta__sub">
+            {includePaper
+              ? `L'espace client, le livret papier et le suivi sont activés en un clic.`
+              : `L'espace client, les supports et le suivi sont activés en un clic.`}
+          </p>
         </div>
         <button
           onClick={handleDelivered}
