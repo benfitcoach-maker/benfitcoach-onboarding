@@ -3533,11 +3533,22 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   const [previewVersion, setPreviewVersion] = useState(null);
   const started = !!journey?.followup_started;
 
+  // V97.13.16 — variables d'identité partagées avec étape 7
+  const prenom = (client?.form?.prenom || client?.prenom || 'la cliente').trim();
+
   // Phase AJ : log des consultations effectuees
   const pack = PACK_DEFINITIONS[client.packType] || null;
+  const packLabel = pack?.label || 'Accompagnement';
   const consultationsTotal = pack?.consultations || 0;
   const consultationsLog = Array.isArray(journey?.consultations_log) ? journey.consultations_log : [];
   const consultationsUsed = consultationsLog.length;
+  const daysSincePack = client.packStartedAt && client.packStartedAtConfirmed === true
+    ? Math.max(1, Math.floor((Date.now() - new Date(client.packStartedAt).getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
+  const activeVersion = versions[0] || null;
+  const lastConsultDate = consultationsLog.length > 0
+    ? consultationsLog[consultationsLog.length - 1]?.date
+    : null;
 
   // Phase AK : extraction des pesees depuis les feedbacks deja charges
   // Une pesee = un feedback avec weight_kg non null (cf. migration weight_tracking).
@@ -3720,40 +3731,254 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   };
 
   return (
-    <section>
-      <StepHead
-        index={8}
-        title="Suivi continu"
-        intro="Le plan est livré. Vous suivez l'évolution de la cliente, adaptez son plan à partir de ses ressentis, et republiez à chaque cycle."
-      />
+    <section className="jrn-followup-step">
+      {/* ════════ HERO cérémonial — état conditionnel ════════ */}
+      <div className={`jrn-followup-hero jrn-followup-hero--${started ? 'active' : 'pending'}`}>
+        <div className="jrn-followup-hero__top">
+          <span className="jrn-followup-hero__badge">
+            <span className="jrn-followup-hero__badge-dot" aria-hidden>
+              {started ? '●' : '○'}
+            </span>
+            {started ? 'Cycle de suivi actif' : 'Suivi à démarrer'}
+          </span>
+        </div>
+        <h2 className="jrn-followup-hero__title">
+          {started
+            ? <>Le suivi de <em>{prenom}</em> est en cours.</>
+            : <>Le suivi de <em>{prenom}</em> peut maintenant commencer.</>}
+        </h2>
+        <p className="jrn-followup-hero__lede">
+          {started
+            ? `Vous accompagnez son évolution semaine après semaine — consultations, ressentis, adaptations.`
+            : `Le parcours initial est complet. Une fois activé, le cockpit ouvre la phase d'accompagnement continue.`}
+        </p>
+        {started && (
+          <dl className="jrn-followup-hero__meta">
+            <div className="jrn-followup-hero__meta-cell">
+              <dt>Pack</dt>
+              <dd>{packLabel}</dd>
+            </div>
+            <div className="jrn-followup-hero__meta-cell">
+              <dt>Consultations</dt>
+              <dd>
+                {consultationsUsed}
+                {consultationsTotal > 0 ? ` / ${consultationsTotal}` : ''}
+              </dd>
+            </div>
+            {daysSincePack && (
+              <div className="jrn-followup-hero__meta-cell">
+                <dt>Jour du pack</dt>
+                <dd>{daysSincePack}</dd>
+              </div>
+            )}
+            <div className="jrn-followup-hero__meta-cell">
+              <dt>Ressentis 14j</dt>
+              <dd>{feedbacks.length}</dd>
+            </div>
+            {versions.length > 0 && (
+              <div className="jrn-followup-hero__meta-cell">
+                <dt>Version active</dt>
+                <dd>V{versions.length}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+      </div>
 
       {!started && (
-        <div className="jrn-block">
-          <div className="jrn-surface jrn-surface--quiet">
-            <div className="jrn-empty">
-              <div className="jrn-empty__icon">🔄</div>
-              <p className="jrn-empty__title">Suivi non démarré</p>
-              <p className="jrn-empty__hint">
-                Le parcours initial est complet (livraison validée à l'étape 7). Active le cockpit de suivi pour commencer à logger les consultations, ressentis et adaptations.
-              </p>
-              <div className="jrn-actions" style={{ marginTop: 'var(--jrn-2)' }}>
-                <button onClick={handleStart} disabled={busy} className="jrn-btn jrn-btn--hero">
-                  {busy ? '…' : '🔄 Activer le suivi continu'}
-                </button>
-              </div>
-            </div>
-          </div>
+        <div className="jrn-followup-empty">
+          <div className="jrn-followup-empty__icon" aria-hidden>🌱</div>
+          <h3 className="jrn-followup-empty__title">
+            Prête à ouvrir la phase d'accompagnement long terme.
+          </h3>
+          <p className="jrn-followup-empty__lede">
+            Le cockpit de suivi enregistre les consultations, lit les ressentis quotidiens
+            envoyés depuis l'app de {prenom}, et permet à l'IA d'adapter le plan à chaque cycle.
+            Tout reste centralisé ici.
+          </p>
+          <ul className="jrn-followup-empty__bullets">
+            <li><span aria-hidden>✓</span> Journal des consultations cabinet & visio</li>
+            <li><span aria-hidden>✓</span> Lecture continue des ressentis cliente</li>
+            <li><span aria-hidden>✓</span> Adaptation IA du plan à partir des retours</li>
+            <li><span aria-hidden>✓</span> Bilan de cycle + historique des versions</li>
+          </ul>
+          <button
+            onClick={handleStart}
+            disabled={busy}
+            className="jrn-btn jrn-btn--hero jrn-followup-empty__btn"
+          >
+            {busy ? 'Activation…' : `✨ Démarrer l'accompagnement de ${prenom} →`}
+          </button>
         </div>
       )}
 
       {started && (
         <>
-          {/* BC.5 Étape 8 : refonte en blocs numérotés (alignement étapes 1-7) */}
+          {/* BC.5 Étape 8 : refonte en blocs numérotés (alignement étapes 1-7)
+              V97.13.16 : ajout bloc miroir cliente avec mockup phone (continuité étape 7) */}
 
-          {/* ─── Bloc 1 : Consultations ─────────────────────────── */}
+          {/* ─── Bloc 1 : Miroir cliente — ce que vit {prenom} maintenant ─── */}
           <div className="jrn-block">
             <div className="jrn-block__head">
               <span className="jrn-block__num">1</span>
+              <h3 className="jrn-block__title">Ce que vit {prenom} en ce moment</h3>
+            </div>
+            <p className="jrn-block__intro">
+              Vue temps réel de l'app cliente — version active du plan, ressentis envoyés,
+              dernier échange. L'accompagnement vit dans cet espace, jour après jour.
+            </p>
+            <article className="jrn-mirror-featured jrn-mirror-featured--with-phone">
+              <div className="jrn-mirror-featured__phone" aria-hidden="true">
+                <div className="jrn-phone-mockup">
+                  <div className="jrn-phone-mockup__screen">
+                    <div className="jrn-phone-mockup__statusbar">
+                      <span>9:24</span>
+                      <span className="jrn-phone-mockup__statusbar-right">
+                        <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--s" />
+                        <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--m" />
+                        <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--l" />
+                        <span className="jrn-phone-mockup__battery" />
+                      </span>
+                    </div>
+                    <div className="jrn-phone-mockup__header">
+                      <div className="jrn-phone-mockup__avatar">A</div>
+                      <div className="jrn-phone-mockup__header-text">
+                        <div className="jrn-phone-mockup__hi">Bonjour {prenom}</div>
+                        <div className="jrn-phone-mockup__sub">
+                          {daysSincePack ? `Jour ${daysSincePack}` : 'Jour 1'}
+                          {versions.length > 0 ? ` · plan V${versions.length}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="jrn-phone-mockup__chart">
+                      <div className="jrn-phone-mockup__chart-head">
+                        <span className="jrn-phone-mockup__chart-label">Ressentis · 14 jours</span>
+                        <span className="jrn-phone-mockup__chart-trend">
+                          {feedbacks.length > 0 ? `${feedbacks.length} reçus` : '—'}
+                        </span>
+                      </div>
+                      <svg className="jrn-phone-mockup__chart-svg" viewBox="0 0 200 44" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="jrnFollowupArea" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#1A2E1F" stopOpacity="0.22" />
+                            <stop offset="100%" stopColor="#1A2E1F" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <path d="M5,34 Q35,28 60,22 T120,14 T195,9 L195,44 L5,44 Z" fill="url(#jrnFollowupArea)" />
+                        <path d="M5,34 Q35,28 60,22 T120,14 T195,9" stroke="#1A2E1F" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="5" cy="34" r="2.2" fill="#1A2E1F" />
+                        <circle cx="42" cy="28" r="2.2" fill="#1A2E1F" />
+                        <circle cx="80" cy="20" r="2.2" fill="#1A2E1F" />
+                        <circle cx="118" cy="14" r="2.2" fill="#1A2E1F" />
+                        <circle cx="156" cy="11" r="2.2" fill="#1A2E1F" />
+                        <circle cx="195" cy="9" r="3" fill="#fff" stroke="#1A2E1F" strokeWidth="2" />
+                      </svg>
+                    </div>
+                    <div className="jrn-phone-mockup__card">
+                      <span className="jrn-phone-mockup__card-icon">💚</span>
+                      <div className="jrn-phone-mockup__card-body">
+                        <div className="jrn-phone-mockup__card-label">Ressenti du jour</div>
+                        <div className="jrn-phone-mockup__card-text">Énergie · digestion · sommeil</div>
+                      </div>
+                      <span className="jrn-phone-mockup__check">✓</span>
+                    </div>
+                    <div className="jrn-phone-mockup__msg">
+                      <div className="jrn-phone-mockup__msg-avatar">A</div>
+                      <div className="jrn-phone-mockup__msg-bubble">
+                        On adapte ton plan ce mois-ci ?
+                      </div>
+                    </div>
+                    <div className="jrn-phone-mockup__tabbar">
+                      <span className="jrn-phone-mockup__tab" />
+                      <span className="jrn-phone-mockup__tab" />
+                      <span className="jrn-phone-mockup__tab jrn-phone-mockup__tab--active" />
+                      <span className="jrn-phone-mockup__tab" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="jrn-mirror-featured__body">
+                <header className="jrn-mirror-featured__head jrn-mirror-featured__head--no-icon">
+                  <div className="jrn-mirror-featured__head-text">
+                    <div className="jrn-mirror-featured__eyebrow">Vue temps réel — Espace cliente</div>
+                    <h4 className="jrn-mirror-featured__title">Application Anissa Nutrition</h4>
+                    <p className="jrn-mirror-featured__subtitle">
+                      {prenom} ouvre cet espace chaque jour. Vous voyez ici ce qu'elle voit,
+                      et ce qui nourrit les adaptations de son plan.
+                    </p>
+                  </div>
+                </header>
+                <ul className="jrn-mirror-featured__contents">
+                  <li className="jrn-mirror-featured__content">
+                    <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                    <div>
+                      <div className="jrn-mirror-featured__content-label">Plan actif</div>
+                      <div className="jrn-mirror-featured__content-desc">
+                        Version V{versions.length || 1}{activeVersion?.label ? ` · ${activeVersion.label.split('—')[0].trim()}` : ''}
+                      </div>
+                    </div>
+                  </li>
+                  <li className="jrn-mirror-featured__content">
+                    <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                    <div>
+                      <div className="jrn-mirror-featured__content-label">Ressentis envoyés</div>
+                      <div className="jrn-mirror-featured__content-desc">
+                        {feedbacks.length > 0
+                          ? `${feedbacks.length} sur les 14 derniers jours`
+                          : 'Aucun ressenti reçu encore sur 14j'}
+                      </div>
+                    </div>
+                  </li>
+                  <li className="jrn-mirror-featured__content">
+                    <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                    <div>
+                      <div className="jrn-mirror-featured__content-label">Consultations effectuées</div>
+                      <div className="jrn-mirror-featured__content-desc">
+                        {consultationsUsed}{consultationsTotal > 0 ? ` / ${consultationsTotal} incluses` : ''}
+                        {lastConsultDate ? ` · dernier ${new Date(lastConsultDate).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' })}` : ''}
+                      </div>
+                    </div>
+                  </li>
+                  <li className="jrn-mirror-featured__content">
+                    <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                    <div>
+                      <div className="jrn-mirror-featured__content-label">Suivi du poids</div>
+                      <div className="jrn-mirror-featured__content-desc">
+                        {weightEntries.length > 0
+                          ? `${weightEntries.length} pesée${weightEntries.length > 1 ? 's' : ''} sur 90j`
+                          : 'Pas de pesée enregistrée'}
+                      </div>
+                    </div>
+                  </li>
+                  <li className="jrn-mirror-featured__content">
+                    <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                    <div>
+                      <div className="jrn-mirror-featured__content-label">Adaptations IA</div>
+                      <div className="jrn-mirror-featured__content-desc">
+                        {versions.length > 1
+                          ? `${versions.length - 1} adaptation${versions.length > 2 ? 's' : ''} publiée${versions.length > 2 ? 's' : ''}`
+                          : 'Plan initial — aucune adaptation encore'}
+                      </div>
+                    </div>
+                  </li>
+                  <li className="jrn-mirror-featured__content">
+                    <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                    <div>
+                      <div className="jrn-mirror-featured__content-label">Messagerie</div>
+                      <div className="jrn-mirror-featured__content-desc">
+                        Échange direct {prenom} ↔ Anissa, hors RDV
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </article>
+          </div>
+
+          {/* ─── Bloc 2 : Consultations ─────────────────────────── */}
+          <div className="jrn-block">
+            <div className="jrn-block__head">
+              <span className="jrn-block__num">2</span>
               <h3 className="jrn-block__title">
                 Consultations {consultationsTotal > 0 ? `· ${consultationsUsed}/${consultationsTotal}` : `· ${consultationsUsed}`}
               </h3>
@@ -3841,10 +4066,10 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             )}
           </div>
 
-          {/* ─── Bloc 2 : Suivi du poids ─────────────────────────── */}
+          {/* ─── Bloc 3 : Suivi du poids ─────────────────────────── */}
           <div className="jrn-block">
             <div className="jrn-block__head">
-              <span className="jrn-block__num">2</span>
+              <span className="jrn-block__num">3</span>
               <h3 className="jrn-block__title">Suivi du poids{weightEntries.length > 0 ? ` · ${weightEntries.length} pesée${weightEntries.length > 1 ? 's' : ''}` : ''}</h3>
             </div>
             <WeightTrackingSection
@@ -3854,10 +4079,10 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             />
           </div>
 
-          {/* ─── Bloc 3 : Derniers ressentis ─────────────────────── */}
+          {/* ─── Bloc 4 : Derniers ressentis ─────────────────────── */}
           <div className="jrn-block">
             <div className="jrn-block__head">
-              <span className="jrn-block__num">3</span>
+              <span className="jrn-block__num">4</span>
               <h3 className="jrn-block__title">Derniers ressentis · {feedbacks.length}</h3>
               <div className="jrn-block__head-meta">
                 <span className="jrn-meta-chip jrn-meta-chip--neutral">14 derniers jours</span>
@@ -3895,10 +4120,10 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             )}
           </div>
 
-          {/* ─── Bloc 4 : Cycle de suivi — actions ─────────────── */}
+          {/* ─── Bloc 5 : Cycle de suivi — actions ─────────────── */}
           <div className="jrn-block">
             <div className="jrn-block__head">
-              <span className="jrn-block__num">4</span>
+              <span className="jrn-block__num">5</span>
               <h3 className="jrn-block__title">Cycle de suivi — actions</h3>
             </div>
             <p className="jrn-block__intro">
@@ -3938,20 +4163,20 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             </div>
           </div>
 
-          {/* ─── Bloc 5 : Bilan pack 4 semaines ─────────────────── */}
+          {/* ─── Bloc 6 : Bilan pack 4 semaines ─────────────────── */}
           <div className="jrn-block">
             <div className="jrn-block__head">
-              <span className="jrn-block__num">5</span>
+              <span className="jrn-block__num">6</span>
               <h3 className="jrn-block__title">Bilan de cycle</h3>
             </div>
             <PackReviewSection client={client} onSendPackReview={onSendPackReview} />
           </div>
 
-          {/* ─── Bloc 6 : Historique des versions ─────────────── */}
+          {/* ─── Bloc 7 : Historique des versions ─────────────── */}
           {versions.length > 0 && (
             <div className="jrn-block">
               <div className="jrn-block__head">
-                <span className="jrn-block__num">6</span>
+                <span className="jrn-block__num">7</span>
                 <h3 className="jrn-block__title">Historique des versions · {versions.length}</h3>
               </div>
               <p className="jrn-block__intro">
