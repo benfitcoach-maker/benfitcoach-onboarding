@@ -3479,23 +3479,17 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
           </>
         )}
 
-        {/* V97.13.27 — actions inline : enrichir le plan IA + aperçu app. */}
+        {/* V97.13.30 — Bouton unique 'Vérifier l'espace cliente' qui ouvre la
+            modal complète. L'enrichissement IA est dispo depuis l'intérieur de
+            la modal (bouton en haut). Plus de redondance. */}
         <div className="jrn-mirror-actions">
           <button
             type="button"
-            onClick={() => onOpenAppPreview?.({ autoEnrich: true })}
-            className="jrn-btn jrn-btn--soft"
-            title="L'IA ajoute une intro narrative et enrichit les sections du plan. Tu pourras Accepter ou Rejeter le résultat avant publication."
-          >
-            ✨ Enrichir le plan avec IA
-          </button>
-          <button
-            type="button"
             onClick={() => onOpenAppPreview?.()}
-            className="jrn-btn jrn-btn--ghost"
-            title="Visualiser exactement l'écran d'accueil de la cliente avant publication"
+            className="jrn-btn jrn-btn--soft"
+            title="Voir exactement ce que Camille va recevoir dans son app + enrichir avec IA si besoin avant publication"
           >
-            📱 Aperçu app
+            👁 Vérifier l'espace cliente
           </button>
         </div>
       </div>
