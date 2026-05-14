@@ -3137,10 +3137,10 @@ function StepDelivery({ client, onChange }) {
   // V97.13.22 — étape 3 : Anissa active l'espace cliente (= ancien markDelivered).
   // Le journey passe à 'followup', l'app cliente débloque le protocole complet,
   // la timeline du pack démarre.
-  // V97.13.22/25 — étape 3 : Anissa active l'espace cliente.
+  // V97.13.22/25/26 — étape 3 : Anissa active l'espace cliente.
   // V97.13.25 : 1 clic = publication du plan + activation espace.
-  // Plus besoin d'aller dans 'Aperçu app' séparément. Le workflow Anissa
-  // est unifié : "Activer l'espace" publie le protocole ET débloque l'app.
+  // V97.13.26 : fix casing — getNutritionConsultations retourne nutritionPlan
+  // (camelCase) mais publishConsultationToClientApp lit nutrition_plan (snake_case).
   const handleDelivered = async () => {
     setBusy(true); setErr(null);
     try {
@@ -3150,8 +3150,6 @@ function StepDelivery({ client, onChange }) {
       const lastConsult = consultations[0];
 
       // 2. Publie le plan vers l'app cliente AVANT de basculer journey à followup.
-      // Si le publish échoue (config manquante, plan vide, cliente sans email),
-      // on bloque l'activation pour éviter un espace cliente vide.
       if (lastConsult) {
         const {
           publishConsultationToClientApp,
@@ -3159,12 +3157,21 @@ function StepDelivery({ client, onChange }) {
           checkClientReadyForPublish,
         } = await import('./services/publishToClientApp');
 
-        const ready = checkClientReadyForPublish(client, lastConsult);
+        // V97.13.26 — normalise les 2 conventions de nommage pour que
+        // publishConsultationToClientApp accepte les consultations issues
+        // du store (nutritionPlan camelCase) comme celles fetched depuis
+        // Supabase directement (nutrition_plan snake_case).
+        const consultForPublish = {
+          ...lastConsult,
+          nutrition_plan: lastConsult.nutrition_plan || lastConsult.nutritionPlan || '',
+        };
+
+        const ready = checkClientReadyForPublish(client, consultForPublish);
         if (!ready.ok) {
           throw new Error(`Impossible de publier : ${ready.issues.join(' · ')}`);
         }
 
-        await publishConsultationToClientApp(client, lastConsult);
+        await publishConsultationToClientApp(client, consultForPublish);
         markPublishedLocally(client.id);
       }
 
