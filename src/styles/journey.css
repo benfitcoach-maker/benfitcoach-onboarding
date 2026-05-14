@@ -3138,7 +3138,16 @@
 
 /* V97.13.13 : respiration globale entre blocs de cette etape.
    +24px vs spacing standard pour laisser le rythme cérémonial respirer.
-   Scope strict pour ne pas affecter les autres etapes du parcours. */
+   Scope strict pour ne pas affecter les autres etapes du parcours.
+
+   V97.13.14 (2026-05-14) : élargissement scope — la colonne paraissait
+   trop comprimée vs viewport disponible. On cap à 1120px (vs étalement
+   sauvage à 1840) et on centre. Intros & hero title élargis aussi. */
+.jrn-activation-step {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+}
 .jrn-activation-step .jrn-block {
   margin-bottom: 44px;
 }
@@ -3153,7 +3162,7 @@
 }
 .jrn-activation-step .jrn-block__intro {
   margin-bottom: 18px;
-  max-width: 70ch;
+  max-width: 86ch;            /* V97.13.14 : 70ch → 86ch (plus d'ampleur) */
   line-height: 1.65;
 }
 
@@ -3213,12 +3222,12 @@
 .jrn-activation-hero__title {
   margin: 0 0 14px;
   font-family: var(--jrn-font-display);
-  font-size: 34px;            /* +4px */
+  font-size: 38px;            /* V97.13.14 : 34 → 38 (plus d'ampleur hero) */
   font-weight: 500;
-  line-height: 1.16;
+  line-height: 1.14;
   color: var(--jrn-text);
-  letter-spacing: -0.01em;
-  max-width: 24ch;
+  letter-spacing: -0.015em;
+  max-width: 30ch;            /* V97.13.14 : 24ch → 30ch */
 }
 .jrn-activation-hero__title em {
   font-style: italic;
@@ -3276,14 +3285,16 @@
   gap: 0;
   position: relative;
 }
-/* V97.13.13 : ligne verticale continue qui relie les markers — parcours médical premium */
+/* V97.13.14 : ligne verticale renforcée — vraie progression médicale.
+   3px (vs 2), contraste accent renforcé, marges top/bottom ajustées
+   pour bien arriver dans les markers 36px. */
 .jrn-deploy-list::before {
   content: '';
   position: absolute;
-  left: 19px;                   /* centre du marker 30px (4 padding + 15 = milieu) */
-  top: 26px;
-  bottom: 26px;
-  width: 2px;
+  left: 22px;                   /* centre marker 36px (4 padding + 18) */
+  top: 32px;
+  bottom: 32px;
+  width: 3px;
   background: linear-gradient(
     180deg,
     var(--jrn-accent) 0%,
@@ -3291,14 +3302,15 @@
     var(--jrn-border-strong) var(--jrn-deploy-done-fraction, 0%),
     var(--jrn-border-strong) 100%
   );
+  border-radius: 2px;
   z-index: 0;
 }
 .jrn-deploy-item {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 18px 8px 18px 0;
+  grid-template-columns: 48px 1fr auto;
+  gap: 18px;
+  align-items: center;          /* V97.13.14 : flex-start → center pour aligner avec marker */
+  padding: 22px 8px 22px 0;     /* V97.13.14 : 18 → 22px respiration */
   border-bottom: 1px solid var(--jrn-border);
   position: relative;
 }
@@ -3307,25 +3319,25 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;                  /* V97.13.14 : 30 → 36px (plus de présence) */
+  height: 36px;
   border-radius: 50%;
   border: 1.5px solid var(--jrn-border-strong);
   background: var(--jrn-bg);    /* fond ivoire pour masquer la ligne derriere */
-  font-size: 13px;
+  font-size: 14px;              /* V97.13.14 : 13 → 14 */
   font-weight: 700;
   color: var(--jrn-text-muted);
-  margin-top: 2px;
   flex-shrink: 0;
   position: relative;
   z-index: 1;
-  transition: all 140ms var(--jrn-ease);
+  transition: all 200ms var(--jrn-ease);
 }
 .jrn-deploy-item--done .jrn-deploy-marker {
   background: var(--jrn-accent);
   border-color: var(--jrn-accent);
   color: #fff;
-  box-shadow: 0 0 0 3px rgba(26, 46, 31, 0.10);
+  box-shadow: 0 0 0 4px rgba(26, 46, 31, 0.12),
+              0 2px 8px -2px rgba(26, 46, 31, 0.25);
 }
 .jrn-deploy-item--done .jrn-deploy-label {
   font-weight: 700;
@@ -3336,11 +3348,13 @@
   background: var(--jrn-bg);
   color: var(--jrn-text-muted);
 }
+/* V97.13.14 : pending plus marqué — anneau d'attente lumineux */
 .jrn-deploy-item--pending .jrn-deploy-marker {
   border: 2px solid var(--jrn-accent);
   color: var(--jrn-accent);
-  background: var(--jrn-surface);
-  box-shadow: 0 0 0 4px rgba(26, 46, 31, 0.06);
+  background: #fff;
+  box-shadow: 0 0 0 5px rgba(26, 46, 31, 0.08),
+              inset 0 0 0 2px rgba(255, 255, 255, 0.6);
 }
 .jrn-deploy-body {
   min-width: 0;
@@ -3391,12 +3405,45 @@
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset,
               0 6px 22px -16px rgba(26, 46, 31, 0.22);
 }
+/* V97.13.14 : variante 2-colonnes avec mockup téléphone à gauche.
+   L'app cliente s'incarne visuellement — fin du "carte texte" abstraite. */
+.jrn-mirror-featured--with-phone {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) 1fr;
+  gap: 36px;
+  align-items: stretch;
+  padding: 32px 36px;
+}
+.jrn-mirror-featured__phone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.jrn-mirror-featured__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .jrn-mirror-featured__head {
   display: flex;
   gap: 18px;
   align-items: flex-start;
   padding-bottom: 20px;
   border-bottom: 1px solid rgba(26, 46, 31, 0.10);
+}
+.jrn-mirror-featured__head--no-icon {
+  padding-top: 4px;
+}
+@media (max-width: 720px) {
+  .jrn-mirror-featured--with-phone {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px 22px;
+  }
+  .jrn-mirror-featured__phone {
+    max-width: 220px;
+    margin-inline: auto;
+  }
 }
 .jrn-mirror-featured__icon {
   font-size: 36px;
@@ -3709,6 +3756,104 @@
   cursor: not-allowed;
 }
 
+/* ─── MOCKUP TÉLÉPHONE (V97.13.14) ────────────────────────────────
+   Incarnation visuelle de l'app cliente : iPhone-like frame en CSS pur,
+   notch dynamique, écran avec preview programme du jour. Aucune image,
+   tout en variables charte Anissa (vert/ivoire). */
+
+.jrn-phone-mockup {
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 9 / 19;
+  border-radius: 34px;
+  background: linear-gradient(180deg, #1f1f1f 0%, #0d0d0d 100%);
+  padding: 10px;
+  position: relative;
+  box-shadow:
+    0 22px 50px -22px rgba(26, 46, 31, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.18),
+    0 0 0 2px rgba(0, 0, 0, 0.08);
+  isolation: isolate;
+}
+.jrn-phone-mockup::before {
+  /* Notch dynamique iPhone — petit overlay flottant */
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 17px;
+  background: #000;
+  border-radius: 999px;
+  z-index: 2;
+}
+.jrn-phone-mockup__screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 26px;
+  background: linear-gradient(180deg, #F5F0E8 0%, #FAF5E8 100%);
+  padding: 40px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: hidden;
+  position: relative;
+}
+.jrn-phone-mockup__greeting {
+  font-family: var(--jrn-font-display);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--jrn-accent);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.jrn-phone-mockup__title {
+  font-family: var(--jrn-font-ui);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--jrn-text-muted);
+  margin-bottom: 4px;
+}
+.jrn-phone-mockup__card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  box-shadow: 0 1px 2px rgba(26, 46, 31, 0.05),
+              0 0 0 1px rgba(26, 46, 31, 0.05);
+}
+.jrn-phone-mockup__card-label {
+  font-size: 7.5px;
+  font-weight: 700;
+  color: var(--jrn-accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  line-height: 1;
+}
+.jrn-phone-mockup__card-text {
+  font-size: 9px;
+  color: var(--jrn-text);
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+.jrn-phone-mockup__dot-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.jrn-phone-mockup__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(26, 46, 31, 0.18);
+}
+.jrn-phone-mockup__dot--on {
+  background: var(--jrn-accent);
+}
+
 /* ─── RESPONSIVE ──────────────────────────────────────────────── */
 
 @media (max-width: 720px) {
@@ -3716,7 +3861,8 @@
     padding: 22px 20px 20px;
   }
   .jrn-activation-hero__title {
-    font-size: 24px;
+    font-size: 26px;
+    max-width: 22ch;
   }
   .jrn-activation-cta {
     grid-template-columns: 1fr;
@@ -3727,7 +3873,7 @@
     justify-content: center;
   }
   .jrn-deploy-item {
-    grid-template-columns: 32px 1fr;
+    grid-template-columns: 40px 1fr;
   }
   .jrn-deploy-status {
     grid-column: 2;

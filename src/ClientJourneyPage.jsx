@@ -3148,6 +3148,7 @@ function StepDelivery({ client, onChange }) {
       { label: 'Suppléments structurés', desc: 'Routine répartie sur 5 moments de la journée' },
       { label: 'Ressentis quotidiens', desc: weightTrackingEnabled ? 'Énergie, digestion, sommeil + poids' : 'Énergie, digestion, sommeil' },
       { label: 'Messagerie directe', desc: 'Réponses Anissa sous 24h en jours ouvrables' },
+      { label: 'Adaptations évolutives', desc: `Les versions suivantes du protocole arrivent dans l'app sans rupture` },
     ],
   };
 
@@ -3256,27 +3257,58 @@ function StepDelivery({ client, onChange }) {
           L'application est le cœur du suivi long terme. Le reste vient s'y greffer comme extensions premium.
         </p>
 
-        {/* Carte FEATURED — App cliente, centre de l'expérience */}
-        <article className="jrn-mirror-featured">
-          <header className="jrn-mirror-featured__head">
-            <span className="jrn-mirror-featured__icon" aria-hidden>{featuredAppCard.icon}</span>
-            <div className="jrn-mirror-featured__head-text">
-              <div className="jrn-mirror-featured__eyebrow">Espace cliente — centre du suivi</div>
-              <h4 className="jrn-mirror-featured__title">{featuredAppCard.title}</h4>
-              <p className="jrn-mirror-featured__subtitle">{featuredAppCard.subtitle}</p>
-            </div>
-          </header>
-          <ul className="jrn-mirror-featured__contents">
-            {featuredAppCard.contents.map((c, i) => (
-              <li key={i} className="jrn-mirror-featured__content">
-                <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
-                <div>
-                  <div className="jrn-mirror-featured__content-label">{c.label}</div>
-                  <div className="jrn-mirror-featured__content-desc">{c.desc}</div>
+        {/* Carte FEATURED — App cliente, centre de l'expérience.
+            V97.13.14 : mockup téléphone à gauche pour incarner visuellement
+            l'app comme cœur émotionnel du parcours (vs simple carte texte). */}
+        <article className="jrn-mirror-featured jrn-mirror-featured--with-phone">
+          <div className="jrn-mirror-featured__phone" aria-hidden="true">
+            <div className="jrn-phone-mockup">
+              <div className="jrn-phone-mockup__screen">
+                <div className="jrn-phone-mockup__greeting">Bonjour {prenom}</div>
+                <div className="jrn-phone-mockup__title">
+                  Programme V{versionsCount || 1} · jour 1
                 </div>
-              </li>
-            ))}
-          </ul>
+                <div className="jrn-phone-mockup__card">
+                  <div className="jrn-phone-mockup__card-label">Petit-déjeuner</div>
+                  <div className="jrn-phone-mockup__card-text">Œufs · avocat · pain complet</div>
+                </div>
+                <div className="jrn-phone-mockup__card">
+                  <div className="jrn-phone-mockup__card-label">Compléments matin</div>
+                  <div className="jrn-phone-mockup__card-text">3 capsules à jeun</div>
+                </div>
+                <div className="jrn-phone-mockup__card">
+                  <div className="jrn-phone-mockup__card-label">Ressenti du jour</div>
+                  <div className="jrn-phone-mockup__dot-row">
+                    <span className="jrn-phone-mockup__dot jrn-phone-mockup__dot--on" />
+                    <span className="jrn-phone-mockup__dot jrn-phone-mockup__dot--on" />
+                    <span className="jrn-phone-mockup__dot jrn-phone-mockup__dot--on" />
+                    <span className="jrn-phone-mockup__dot" />
+                    <span className="jrn-phone-mockup__dot" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="jrn-mirror-featured__body">
+            <header className="jrn-mirror-featured__head jrn-mirror-featured__head--no-icon">
+              <div className="jrn-mirror-featured__head-text">
+                <div className="jrn-mirror-featured__eyebrow">Espace cliente — cœur du suivi</div>
+                <h4 className="jrn-mirror-featured__title">{featuredAppCard.title}</h4>
+                <p className="jrn-mirror-featured__subtitle">{featuredAppCard.subtitle}</p>
+              </div>
+            </header>
+            <ul className="jrn-mirror-featured__contents">
+              {featuredAppCard.contents.map((c, i) => (
+                <li key={i} className="jrn-mirror-featured__content">
+                  <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                  <div>
+                    <div className="jrn-mirror-featured__content-label">{c.label}</div>
+                    <div className="jrn-mirror-featured__content-desc">{c.desc}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </article>
 
         {/* Cartes secondaires : extensions premium */}
