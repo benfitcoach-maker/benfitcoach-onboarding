@@ -62,32 +62,43 @@ const SAAS_TO_CLIENT_APP = {
  * Ne throw jamais (les transitions SaaS ne doivent pas être bloquées si l'app
  * cliente est down ou l'env CLIENT_APP_API_URL pas configuré).
  *
+ * V97.13.22 — accepte aussi des "events" pour pousser les timestamps du
+ * workflow hybride (protocol_shipped, protocol_received) qui ne mappent pas
+ * vers un nouveau journey_status (l'enum cliente reste 'program_in_progress'
+ * pendant ces sous-états — c'est l'UI qui lit les timestamps directement).
+ *
  * @param {string} clientId - id Supabase de la cliente côté SaaS
- * @param {string} saasStep - clé JOURNEY_STEPS SaaS (ex 'results')
+ * @param {string} saasStepOrEvent - clé JOURNEY_STEPS SaaS OU event spécial
+ *   ('protocol_shipped' | 'protocol_received')
  */
-async function syncClientAppStatus(clientId, saasStep) {
-  const targetStatus = SAAS_TO_CLIENT_APP[saasStep];
-  if (!targetStatus) return; // étape inconnue → no-op silencieux
+async function syncClientAppStatus(clientId, saasStepOrEvent) {
+  // V97.13.22 — events spéciaux qui ne changent pas le journey_status
+  // mais pushent les timestamps dédiés vers la DB cliente.
+  const isShippedEvent = saasStepOrEvent === 'protocol_shipped';
+  const isReceivedEvent = saasStepOrEvent === 'protocol_received';
+  const targetStatus = SAAS_TO_CLIENT_APP[saasStepOrEvent];
+
+  if (!targetStatus && !isShippedEvent && !isReceivedEvent) return;
 
   try {
-    // Récupère l'email de la cliente (l'API admin client app accepte
-    // email OR client_id, on utilise email pour rester en phase avec
-    // les autres appels clientAppFetch du SaaS).
     const { data: client } = await supabase
       .from('clients')
       .select('form')
       .eq('id', clientId)
       .maybeSingle();
     const email = client?.form?.email;
-    if (!email) return; // cliente sans email → on ne peut pas la matcher côté app
+    if (!email) return;
+
+    const payload = { email };
+    if (targetStatus) payload.status = targetStatus;
+    if (isShippedEvent) payload.protocol_shipped_at = new Date().toISOString();
+    if (isReceivedEvent) payload.protocol_received_at = new Date().toISOString();
 
     await clientAppFetch('/api/admin/client-journey-status', {
       method: 'POST',
-      payload: { email, status: targetStatus },
+      payload,
     });
   } catch (e) {
-    // Best-effort : log + continue (la transition SaaS reste valide même
-    // si la sync app échoue). Sera retentée à la prochaine transition.
     console.warn('[journeyState] syncClientAppStatus failed:', e?.message || e);
   }
 }
