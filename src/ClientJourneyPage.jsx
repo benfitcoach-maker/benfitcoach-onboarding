@@ -3013,6 +3013,10 @@ function StepDelivery({ client, onChange }) {
         if (cancelled) return;
         setVersionsCount(list.length);
         if (list[0]?.createdAt) setLastConsultDate(list[0].createdAt);
+        // V97.13.23 — restaure paperExported depuis la persistance pour
+        // que le jalon 'Livret papier exporté' reste 'done' après un refresh.
+        // paperGenerated est set true par handleMarkShipped.
+        if (list[0]?.paperGenerated) setPaperExported(true);
         // Par défaut : papier ON pour V1, OFF pour adaptations
         if (list.length > 1) setIncludePaper(false);
       } catch { /* silencieux */ }
@@ -3156,11 +3160,14 @@ function StepDelivery({ client, onChange }) {
       key: 'paper-export',
       label: includePaper ? 'Livret papier exporté' : 'Livret papier — désactivé pour ce cycle',
       hint: includePaper
-        ? (paperExported
+        ? ((paperExported || isShipped)
             ? 'Word téléchargé. Reste à imprimer + préparer le pli.'
             : 'À télécharger en Word ci-dessous, puis imprimer.')
         : `${prenom} recevra son protocole uniquement via l'app pour ce cycle.`,
-      status: includePaper ? (paperExported ? 'done' : 'pending') : 'skipped',
+      // V97.13.23 — paperExported lu depuis persistance au mount,
+      // ET si le protocole est déjà expédié, on considère forcément le
+      // papier comme fait (markShipped a setté paperGenerated=true).
+      status: includePaper ? ((paperExported || isShipped) ? 'done' : 'pending') : 'skipped',
     },
     {
       key: 'shipped',
