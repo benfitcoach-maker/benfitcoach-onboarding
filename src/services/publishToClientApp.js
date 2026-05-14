@@ -50,7 +50,12 @@ export function checkClientReadyForPublish(client, consultation) {
   const email = resolveClientEmail(client);
   if (!email) issues.push("Cliente sans email — ajoute son email dans la fiche.");
   if (!client?.prenom?.trim()) issues.push("Cliente sans prénom.");
-  if (!consultation?.nutrition_plan?.trim()) {
+  // V97.13.28 — fix casing : accepte nutrition_plan (snake) OU nutritionPlan (camel)
+  const planText = consultation?.nutrition_plan
+    || consultation?.nutritionPlan
+    || consultation?.plan_text
+    || '';
+  if (!planText.trim()) {
     issues.push("Consultation sans plan nutrition (rien à publier).");
   }
   return { ok: issues.length === 0, issues, email };
@@ -102,7 +107,8 @@ export async function publishConsultationToClientApp(client, consultation, enric
     title: plan.title,
     objective: plan.objective,
     source_consultation_id: consultation.id,
-    nutrition_plan: consultation.nutrition_plan,
+    // V97.13.28 — fix casing : accepte les 2 conventions du store local et Supabase
+    nutrition_plan: consultation.nutrition_plan || consultation.nutritionPlan || '',
     sections: plan.sections,
     // V96.0
     followup_week: followupWeek,
