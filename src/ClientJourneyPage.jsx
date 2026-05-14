@@ -11,7 +11,7 @@
 // retoucher le design sans toucher la logique.
 // ─────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { PACK_DEFINITIONS } from './services/packSystem';
 import {
