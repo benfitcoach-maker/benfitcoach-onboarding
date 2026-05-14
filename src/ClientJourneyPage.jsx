@@ -2990,12 +2990,52 @@ function StepDelivery({ client, onChange }) {
   const [err, setErr] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [versionsCount, setVersionsCount] = useState(0);
-  const [includePaper, setIncludePaper] = useState(true); // par défaut on demande
+  const [includePaper, setIncludePaper] = useState(true);
   const [paperExported, setPaperExported] = useState(false);
-  // AZ.2 : modification de la date de remise (migré du menu Plus dashboard)
+  const [lastConsultDate, setLastConsultDate] = useState(null);
+  // V97.13.12 : modification de la date de remise (migré du menu Plus dashboard)
   const [showEditDate, setShowEditDate] = useState(false);
   const [newDeliveryDate, setNewDeliveryDate] = useState('');
   const [savingDate, setSavingDate] = useState(false);
+
+  const prenom = (client?.form?.prenom || client?.prenom || 'la cliente').trim();
+  const pack = PACK_DEFINITIONS[client.packType] || null;
+  const packLabel = pack?.label || 'Accompagnement';
+
+  // Charge le nombre de versions + date dernière consultation
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getNutritionConsultations } = await import('./store');
+        const list = getNutritionConsultations(client.id) || [];
+        if (cancelled) return;
+        setVersionsCount(list.length);
+        if (list[0]?.createdAt) setLastConsultDate(list[0].createdAt);
+        // Par défaut : papier ON pour V1, OFF pour adaptations
+        if (list.length > 1) setIncludePaper(false);
+      } catch { /* silencieux */ }
+    })();
+    return () => { cancelled = true; };
+  }, [client?.id]);
+
+  const isFirstVersion = versionsCount <= 1;
+
+  // Détection automatique du nombre d'analyses retenues (best-effort)
+  const analysesCount = useMemo(() => {
+    const plan = client?.analysisPlan || client?.analysis_plan;
+    const tests = plan?.selectedTests || plan?.selected_tests;
+    if (Array.isArray(tests) && tests.length > 0) return tests.length;
+    return null;
+  }, [client?.analysisPlan, client?.analysis_plan]);
+
+  const validationDateLabel = lastConsultDate
+    ? new Date(lastConsultDate).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null;
+
+  // Pesée — toggle local (lecture seule pour le miroir)
+  const weightTrackingEnabled = !!(client?.weightTrackingEnabled ?? client?.weight_tracking_enabled);
 
   const handleSaveDeliveryDate = async () => {
     if (!newDeliveryDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDeliveryDate)) {
@@ -3020,26 +3060,6 @@ function StepDelivery({ client, onChange }) {
     }
   };
 
-  // Charge le nombre de versions pour décider le défaut du toggle
-  useEffect(() => {
-    if (!client?.id) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { getNutritionConsultations } = await import('./store');
-        const list = getNutritionConsultations(client.id) || [];
-        if (cancelled) return;
-        setVersionsCount(list.length);
-        // Par défaut : papier ON pour version 1 (premier cycle = livret fondateur),
-        // OFF pour les versions suivantes (ajustements = app uniquement).
-        if (list.length > 1) setIncludePaper(false);
-      } catch { /* silencieux */ }
-    })();
-    return () => { cancelled = true; };
-  }, [client?.id]);
-
-  const isFirstVersion = versionsCount <= 1;
-
   const handleExportWord = async () => {
     setExporting(true);
     setErr(null);
@@ -3063,7 +3083,6 @@ function StepDelivery({ client, onChange }) {
   const handleDelivered = async () => {
     setBusy(true); setErr(null);
     try {
-      // Tag la consultation avec paperGenerated pour l'historique étape 8
       if (includePaper) {
         const { getNutritionConsultations, saveNutritionConsultation } = await import('./store');
         const list = getNutritionConsultations(client.id) || [];
@@ -3078,160 +3097,291 @@ function StepDelivery({ client, onChange }) {
     finally { setBusy(false); }
   };
 
+  // Timeline de déploiement — 5 jalons orchestrés par l'activation
+  const deploymentSteps = [
+    {
+      key: 'plan-validated',
+      label: 'Protocole validé',
+      hint: `Version V${versionsCount || 1} sauvegardée dans l'atelier`,
+      status: 'done',
+    },
+    {
+      key: 'paper',
+      label: includePaper ? 'Livret papier exporté & expédié' : 'Livret papier — désactivé pour ce cycle',
+      hint: includePaper
+        ? (paperExported
+            ? 'Word téléchargé. Reste à imprimer + expédier postalement.'
+            : 'À télécharger en Word ci-dessous, puis imprimer + expédier.')
+        : `${prenom} reçoit son protocole uniquement via l'app pour ce cycle.`,
+      status: includePaper ? (paperExported ? 'done' : 'pending') : 'skipped',
+    },
+    {
+      key: 'app-publish',
+      label: `Publication dans l'app de ${prenom}`,
+      hint: 'Plan, fiche frigo et suppléments synchronisés automatiquement à l\'activation.',
+      status: 'pending',
+    },
+    {
+      key: 'notification',
+      label: 'Notification envoyée à la cliente',
+      hint: 'Push + email — bascule depuis l\'écran d\'attente vers le programme actif.',
+      status: 'pending',
+    },
+    {
+      key: 'followup',
+      label: 'Démarrage du suivi',
+      hint: 'Première semaine active, ressentis quotidiens disponibles, timeline étape 8 lancée.',
+      status: 'pending',
+    },
+  ];
+
+  // Ce que reçoit la cliente — miroir d'expérience
+  const mirrorItems = [
+    {
+      icon: '📋',
+      label: `Protocole nutritionnel personnalisé (${packLabel})`,
+      sub: `Version V${versionsCount || 1} validée le ${validationDateLabel || 'aujourd\'hui'}.`,
+    },
+    {
+      icon: '🧊',
+      label: 'Fiche frigo plastifiable',
+      sub: 'Matrice repas + suppléments structurés par moment de prise.',
+    },
+    {
+      icon: '📱',
+      label: 'Accès à l\'application Anissa Nutrition',
+      sub: 'Plan consultable en mobile, ressentis quotidiens, messagerie.',
+    },
+    {
+      icon: '💊',
+      label: 'Routine de suppléments',
+      sub: 'Compléments répartis sur 5 moments de la journée.',
+    },
+    {
+      icon: weightTrackingEnabled ? '⚖️' : '◌',
+      label: weightTrackingEnabled ? 'Suivi du poids quotidien' : 'Suivi du poids (désactivé)',
+      sub: weightTrackingEnabled
+        ? `${prenom} saisira son poids dans son ressenti.`
+        : 'Activable ci-dessous si pertinent pour ce protocole.',
+    },
+    {
+      icon: '✉️',
+      label: 'Messagerie directe avec Anissa',
+      sub: 'Réponses sous 24h en jours ouvrables.',
+    },
+  ];
+
+  if (includePaper) {
+    mirrorItems.unshift({
+      icon: '📦',
+      label: 'Livret papier premium par envoi postal',
+      sub: `Reçu à l'adresse de ${prenom} sous quelques jours.`,
+    });
+  }
+
   return (
     <section>
       <StepHead
         index={7}
-        title="Livraison à la cliente"
-        intro={isFirstVersion
-          ? 'Le protocole est prêt. Anissa va le transmettre via les canaux activés ci-dessous. Un moment important du parcours.'
-          : 'Vous adaptez son protocole. Par défaut, le nouveau plan est publié sur son app — sa lecture quotidienne reste fluide. Activez le format papier ci-dessous si ce cycle marque un changement majeur.'}
+        title="Activation cliente"
+        intro={`Le protocole de ${prenom} est prêt. Cette étape orchestre sa remise — un moment important du parcours.`}
       />
 
-      {/* BC.5 : refonte étape 7 en blocs numérotés (alignement étapes 1-6) */}
+      {/* ════════ HERO — Protocole prêt pour activation ════════ */}
+      <div className="jrn-activation-hero">
+        <div className="jrn-activation-hero__top">
+          <span className="jrn-activation-hero__badge">
+            <span className="jrn-activation-hero__badge-dot" aria-hidden>✓</span>
+            Protocole prêt pour activation
+          </span>
+        </div>
+        <h2 className="jrn-activation-hero__title">
+          <em>{prenom}</em> peut maintenant entrer dans son accompagnement.
+        </h2>
+        <p className="jrn-activation-hero__lede">
+          Tu déclenches la remise du protocole, l'ouverture de son espace personnel, et le démarrage du suivi.
+        </p>
+        <dl className="jrn-activation-hero__meta">
+          <div className="jrn-activation-hero__meta-cell">
+            <dt>Praticienne</dt>
+            <dd>Anissa Deroubaix</dd>
+          </div>
+          <div className="jrn-activation-hero__meta-cell">
+            <dt>Pack</dt>
+            <dd>{packLabel}</dd>
+          </div>
+          <div className="jrn-activation-hero__meta-cell">
+            <dt>Version protocole</dt>
+            <dd>V{versionsCount || 1}</dd>
+          </div>
+          {analysesCount !== null && (
+            <div className="jrn-activation-hero__meta-cell">
+              <dt>Analyses retenues</dt>
+              <dd>{analysesCount}</dd>
+            </div>
+          )}
+          {validationDateLabel && (
+            <div className="jrn-activation-hero__meta-cell">
+              <dt>Validé le</dt>
+              <dd>{validationDateLabel}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
 
-      {/* ─── Bloc 1 : Statut du cycle (contexte premier vs adaptation) ─ */}
+      {/* ════════ Bloc 1 — Déploiement de l'accompagnement ════════ */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">1</span>
-          <h3 className="jrn-block__title">
-            {isFirstVersion ? 'Premier cycle — livret fondateur' : `Cycle ${versionsCount} — adaptation`}
-          </h3>
-          {!isFirstVersion && (
-            <div className="jrn-block__head-meta">
-              <span className="jrn-result-pill jrn-result-pill--optimal">version {versionsCount}</span>
-            </div>
-          )}
+          <h3 className="jrn-block__title">Déploiement de l'accompagnement</h3>
         </div>
         <p className="jrn-block__intro">
-          {isFirstVersion
-            ? 'Ce premier cycle ancre l\'expérience. Anissa transmet le livret papier (postal) + active l\'app cliente. La cliente reçoit son protocole personnalisé et l\'accès à son espace de suivi.'
-            : 'Adaptation à partir des retours cliente. Par défaut publié sur l\'app uniquement (fluidité). Active le format papier si ce cycle est un changement majeur.'}
+          Cinq jalons s'enchaînent. Le premier est validé. La confirmation finale ci-dessous déclenche les suivants.
         </p>
+        <ol className="jrn-deploy-list">
+          {deploymentSteps.map((step, i) => (
+            <li key={step.key} className={`jrn-deploy-item jrn-deploy-item--${step.status}`}>
+              <span className="jrn-deploy-marker" aria-hidden>
+                {step.status === 'done' ? '✓' : step.status === 'skipped' ? '—' : i + 1}
+              </span>
+              <div className="jrn-deploy-body">
+                <div className="jrn-deploy-label">{step.label}</div>
+                <div className="jrn-deploy-hint">{step.hint}</div>
+              </div>
+              {step.status === 'pending' && (
+                <span className="jrn-deploy-status">À l'activation</span>
+              )}
+              {step.status === 'done' && (
+                <span className="jrn-deploy-status jrn-deploy-status--done">Terminé</span>
+              )}
+            </li>
+          ))}
+        </ol>
       </div>
 
-      {/* ─── Bloc 2 : Canaux de transmission (papier toggle) ─────── */}
+      {/* ════════ Bloc 2 — Miroir cliente ════════ */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">2</span>
-          <h3 className="jrn-block__title">Canaux de transmission</h3>
+          <h3 className="jrn-block__title">Ce que reçoit {prenom}</h3>
         </div>
         <p className="jrn-block__intro">
-          Choisis quels formats Anissa transmet à la cliente pour ce cycle.
+          La vue côté cliente. Utile pour vérifier qu'aucune brique de l'accompagnement ne lui échappe.
         </p>
-
-        <div className="jrn-surface" style={{ marginBottom: 'var(--jrn-5)' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-            <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
-            <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setIncludePaper(!includePaper)}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--jrn-text)', letterSpacing: '-0.005em' }}>
-                📦 Livret papier postal pour ce cycle
+        <ul className="jrn-mirror-list">
+          {mirrorItems.map((item, i) => (
+            <li key={i} className="jrn-mirror-item">
+              <span className="jrn-mirror-icon" aria-hidden>{item.icon}</span>
+              <div className="jrn-mirror-text">
+                <div className="jrn-mirror-label">{item.label}</div>
+                <div className="jrn-mirror-sub">{item.sub}</div>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 6, lineHeight: 1.55 }}>
-                {isFirstVersion
-                  ? 'Recommandé pour le premier cycle : livret fondateur premium qui ancre l\'expérience.'
-                  : 'À activer uniquement pour les changements majeurs : nouveau cycle 4 semaines, refonte protocole, nouvelle phase (postpartum, sèche, etc.).'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {includePaper && (
-          <div className="jrn-surface jrn-surface--quiet" style={{ marginBottom: 'var(--jrn-5)' }}>
-            <div className="jrn-label" style={{ marginBottom: 'var(--jrn-3)' }}>📦 Marche à suivre — Plan papier</div>
-            <ul style={{ margin: '0 0 var(--jrn-4)', paddingLeft: 20, color: 'var(--jrn-text-soft)', fontSize: 14, lineHeight: 1.8 }}>
-              <li>Générer le document Word ci-dessous</li>
-              <li>Imprimer (recto-verso recommandé)</li>
-              <li>Préparer enveloppe + étiquette adresse cliente</li>
-              <li>Envoi postal</li>
-            </ul>
-            <div className="jrn-actions" style={{ marginTop: 0 }}>
-              <button onClick={handleExportWord} disabled={exporting} className="jrn-btn jrn-btn--soft">
-                {exporting ? 'Export…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter Word')}
-              </button>
-            </div>
-          </div>
-        )}
+            </li>
+          ))}
+        </ul>
+        <p className="jrn-mirror-cta-hint">
+          → Pour visualiser exactement l'écran d'accueil de {prenom}, ouvre <strong>📱 Aperçu app</strong> en haut à droite. Tu peux y enrichir le plan avec une intro narrative IA (<strong>✨ Enrichir</strong>).
+        </p>
       </div>
 
-      {/* ─── Bloc 3 : App cliente (suivi quotidien) ─────────────── */}
+      {/* ════════ Bloc 3 — Options de remise ════════ */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">3</span>
-          <h3 className="jrn-block__title">App cliente</h3>
-          <div className="jrn-block__head-meta">
-            <span className="jrn-result-pill jrn-result-pill--optimal">📱 toujours active</span>
-          </div>
+          <h3 className="jrn-block__title">Options de remise</h3>
         </div>
         <p className="jrn-block__intro">
-          Le plan est disponible sur l'app dès la publication. La cliente reçoit une notification.
+          Deux réglages avant l'activation. Tu peux les ajuster sans toucher au protocole lui-même.
         </p>
 
-        {/* Toggle suivi poids */}
+        {/* Toggle livret papier */}
+        <div className="jrn-paper-card">
+          <div className="jrn-paper-card__head">
+            <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
+            <button
+              type="button"
+              className="jrn-paper-card__head-text"
+              onClick={() => setIncludePaper(!includePaper)}
+            >
+              <div className="jrn-paper-card__title">
+                <span aria-hidden>📦</span> Livret papier postal
+              </div>
+              <div className="jrn-paper-card__hint">
+                {isFirstVersion
+                  ? `Recommandé pour ce premier cycle — ancre l'expérience chez ${prenom}.`
+                  : `À activer uniquement pour les changements majeurs (nouvelle phase, refonte protocole).`}
+              </div>
+            </button>
+          </div>
+          {includePaper && (
+            <div className="jrn-paper-card__steps">
+              <div className="jrn-paper-card__steps-label">Marche à suivre</div>
+              <ol className="jrn-paper-card__steps-list">
+                <li>Exporter le document Word ci-dessous</li>
+                <li>Imprimer (recto-verso conseillé)</li>
+                <li>Préparer enveloppe + étiquette à l'adresse de {prenom}</li>
+                <li>Expédier postalement</li>
+              </ol>
+              <button
+                onClick={handleExportWord}
+                disabled={exporting}
+                className="jrn-btn jrn-btn--soft jrn-paper-card__btn"
+              >
+                {exporting ? 'Export en cours…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter le Word')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Toggle suivi poids — option fine */}
         <div className="jrn-inline-card jrn-inline-card--accent">
           <div className="jrn-inline-card__row">
             <div className="jrn-inline-card__body">
-              <div className="jrn-inline-card__title">⚖️ Suivi du poids</div>
+              <div className="jrn-inline-card__title">
+                <span aria-hidden>⚖️</span> Suivi du poids
+              </div>
               <div className="jrn-inline-card__hint">
-                Si activé + visible : la cliente saisit son poids dans son ressenti quotidien.
+                Activer si le poids est un axe du protocole. {prenom} saisira sa pesée dans le ressenti quotidien.
               </div>
             </div>
             <WeightTogglesInline client={client} compact />
           </div>
         </div>
-
-        {/* Astuce enrichissement IA */}
-        <div className="jrn-inline-card jrn-inline-card--gold">
-          <div className="jrn-inline-card__title">✨ Astuce — enrichir avant publication</div>
-          <div className="jrn-inline-card__hint">
-            Dans <strong>📱 Aperçu app</strong>, clique sur <strong>✨ Enrichir</strong> pour que l'IA ajoute une intro narrative personnalisée, des points clés et une signature pour la cliente. Recommandé pour la version V1.
-          </div>
-        </div>
-
-        <p className="jrn-inline-card__cta-hint">
-          → Clique sur <strong>📱 Aperçu app</strong> en haut à droite pour visualiser, enrichir et publier.
-        </p>
       </div>
 
-      {/* ─── Bloc 4 : Date de livraison (conditionnel — si déjà délivré) */}
+      {/* ════════ Bloc 4 — Date d'activation (si déjà activé) ════════ */}
       {client.packStartedAt && (
         <div className="jrn-block">
           <div className="jrn-block__head">
             <span className="jrn-block__num">4</span>
-            <h3 className="jrn-block__title">Date de livraison enregistrée</h3>
+            <h3 className="jrn-block__title">Date d'activation</h3>
           </div>
-          <div className="jrn-surface" style={{ background: 'transparent', border: '1px dashed var(--jrn-border-strong)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 'var(--jrn-text-md)', color: 'var(--jrn-text)', fontWeight: 600, fontFamily: 'var(--jrn-font-display)', fontStyle: 'italic' }}>
-                {new Date(client.packStartedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
-              </div>
-              {!showEditDate && (
-                <button
-                  onClick={() => {
-                    setNewDeliveryDate(new Date(client.packStartedAt).toISOString().slice(0, 10));
-                    setShowEditDate(true);
-                  }}
-                  className="jrn-btn jrn-btn--ghost"
-                  title="Corriger la date si erreur (la timeline du suivi démarre depuis cette date)"
-                >
-                  📅 Modifier
-                </button>
-              )}
+          <p className="jrn-block__intro">
+            Référence pour la timeline du suivi (étape 8). Modifiable si erreur de saisie.
+          </p>
+          <div className="jrn-activation-date">
+            <div className="jrn-activation-date__value">
+              {new Date(client.packStartedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
             </div>
+            {!showEditDate && (
+              <button
+                onClick={() => {
+                  setNewDeliveryDate(new Date(client.packStartedAt).toISOString().slice(0, 10));
+                  setShowEditDate(true);
+                }}
+                className="jrn-btn jrn-btn--ghost"
+                title="Corriger la date si erreur — la timeline du suivi démarre depuis cette date"
+              >
+                📅 Modifier
+              </button>
+            )}
             {showEditDate && (
-              <div style={{ marginTop: 'var(--jrn-4)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="jrn-activation-date__edit">
                 <input
                   type="date"
                   value={newDeliveryDate}
                   max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setNewDeliveryDate(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    fontSize: 14,
-                    border: '1px solid var(--jrn-border-strong)',
-                    borderRadius: 'var(--jrn-radius-sm)',
-                    fontFamily: 'inherit',
-                  }}
                 />
                 <button onClick={handleSaveDeliveryDate} disabled={savingDate} className="jrn-btn jrn-btn--primary">
                   {savingDate ? '…' : 'Mettre à jour'}
@@ -3245,22 +3395,23 @@ function StepDelivery({ client, onChange }) {
         </div>
       )}
 
-      {/* ─── Bloc final : Validation & livraison ──────────────── */}
-      <div className="jrn-block">
-        <div className="jrn-block__head">
-          <span className="jrn-block__num">{client.packStartedAt ? '5' : '4'}</span>
-          <h3 className="jrn-block__title">Confirmation de livraison</h3>
+      {/* ════════ CTA cérémonial ════════ */}
+      <div className="jrn-activation-cta">
+        <div className="jrn-activation-cta__copy">
+          <div className="jrn-activation-cta__eyebrow">Dernière étape</div>
+          <p className="jrn-activation-cta__hint">
+            {includePaper
+              ? <>Une fois le livret prêt à expédier, active l'accompagnement. <em>{prenom}</em> reçoit sa notification, son espace s'ouvre, et le suivi démarre.</>
+              : <>Active l'accompagnement. <em>{prenom}</em> reçoit sa notification, son espace s'ouvre, et le suivi démarre immédiatement.</>}
+          </p>
         </div>
-        <p className="jrn-block__intro">
-          {includePaper
-            ? 'Une fois le livret papier expédié ET le plan publié sur l\'app, confirme la livraison. Cette action démarre la timeline du suivi (étape 8).'
-            : 'Une fois le plan publié sur l\'app, confirme la livraison. Cette action démarre la timeline du suivi (étape 8).'}
-        </p>
-        <div className="jrn-actions" style={{ marginTop: 0 }}>
-          <button onClick={handleDelivered} disabled={busy} className="jrn-btn jrn-btn--hero">
-            {busy ? 'Livraison…' : (includePaper ? '🎁 Confirmer la livraison (papier + app) →' : '🎁 Confirmer la livraison →')}
-          </button>
-        </div>
+        <button
+          onClick={handleDelivered}
+          disabled={busy}
+          className="jrn-btn jrn-btn--hero jrn-activation-cta__btn"
+        >
+          {busy ? 'Activation…' : `✨ Activer l'accompagnement de ${prenom} →`}
+        </button>
       </div>
 
       <ErrorLine msg={err} />
