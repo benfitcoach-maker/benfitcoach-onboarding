@@ -4482,10 +4482,12 @@
   letter-spacing: -0.01em;
 }
 .jrn-cockpit-hero__sub {
+  /* V97.13.19 : lisibilité — muted→soft, 12→13px, weight 500 */
   margin: 0;
-  font-size: 12px;
-  color: var(--jrn-text-muted);
-  letter-spacing: 0.01em;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--jrn-text-soft);
+  letter-spacing: 0.005em;
 }
 .jrn-cockpit-hero__actions {
   display: flex;
@@ -4496,8 +4498,10 @@
 /* ─── EMPTY STATE COMPACT ────────────────────────────────────── */
 
 .jrn-cockpit-empty {
-  margin: 0 0 28px;
-  padding: 28px 24px;
+  /* V97.13.19 : capped 720px + centré pour ne plus s'étaler horizontalement */
+  max-width: 720px;
+  margin: 0 auto 28px;
+  padding: 32px 28px;
   background: var(--jrn-surface);
   border: 1px dashed rgba(26, 46, 31, 0.18);
   border-radius: 12px;
