@@ -905,7 +905,9 @@ function buildFridgeFromText(client, consultation, sections, locale) {
 
 function buildFridgeData(client, consultation, sections) {
   const locale = resolveLocale(client);
-  const fromJson = buildFridgeFromJson(consultation?.fiche_frigo_json, locale);
+  // V97.13.28 — accepte snake_case (Supabase) ET camelCase (store local)
+  const ficheFrigoJsonAny = consultation?.fiche_frigo_json || consultation?.ficheFrigoJson;
+  const fromJson = buildFridgeFromJson(ficheFrigoJsonAny, locale);
   if (fromJson && (fromJson.essentials.length || fromJson.favorite.length || fromJson.limit.length)) {
     return fromJson;
   }
@@ -1064,7 +1066,16 @@ export function buildClientAppPlanFromConsultation(client, consultation) {
   if (!client) throw new Error("clientAppMapper: client is required");
   if (!consultation) throw new Error("clientAppMapper: consultation is required");
 
-  const sections = splitPlanSections(consultation.nutrition_plan);
+  // V97.13.28 — dette technique : le store local retourne nutritionPlan
+  // (camelCase) alors que Supabase utilise nutrition_plan (snake_case). Le
+  // mapper était silencieusement cassé pour les consultations venant du store
+  // local — sections splittées sur une chaîne vide → 0 piliers, 0 repas, etc.
+  // Fix : accepter les deux conventions.
+  const planText = consultation.nutrition_plan
+    || consultation.nutritionPlan
+    || consultation.plan_text
+    || '';
+  const sections = splitPlanSections(planText);
 
   const intro_data    = buildIntroData(client, consultation, sections);
   const strategy_data = buildStrategyData(client, consultation, sections);
