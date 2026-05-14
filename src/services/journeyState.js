@@ -127,10 +127,19 @@ export const DEFAULT_JOURNEY_STATE = {
   analyses_validated: false,
   results_received: false,
   results_validated: false,
-  plan_generated: false,   // existe deja en BDD, devient "plan IA produit une fois"
-  plan_validated: false,   // NEW : Anissa a relu/edite le plan dans le composer
-  delivered: false,        // NEW : plan envoye a la cliente (PDF, app)
-  followup_started: false, // NEW : cycle review / suivi enclenche
+  plan_generated: false,
+  plan_validated: false,
+  // V97.13.22 — workflow hybride physique + digital :
+  //   1. protocol_shipped=true  → Anissa a expédié le courrier
+  //   2. client_received_confirmed=true → cliente a cliqué "J'ai reçu" dans l'app
+  //   3. delivered=true → Anissa a activé l'espace cliente (étape 8 démarre)
+  // Avant V97.13.22 : delivered=true tout de suite, sans étape physique.
+  protocol_shipped: false,
+  protocol_shipped_at: null,         // timestamp ISO
+  client_received_confirmed: false,
+  protocol_received_at: null,        // timestamp ISO
+  delivered: false,                  // = espace cliente activé (workflow final)
+  followup_started: false,
 };
 
 /**
@@ -285,6 +294,37 @@ export const transitions = {
   // timeline pack du dashboard (S4 → S24) se déclenche automatiquement.
   // Avant : il fallait cliquer 'Marquer comme remis' séparément. Maintenant :
   // valider la livraison étape 7 → timeline + cockpit suivi automatiques.
+  // V97.13.22 — étape 1 du workflow hybride : Anissa marque le protocole
+  // comme expédié physiquement. L'app cliente bascule en "attente réception"
+  // (état partiel). Le journey reste sur 'delivery' — pas encore étape 8.
+  markProtocolShipped: async (clientId) => {
+    const now = new Date().toISOString();
+    const next = await updateJourneyState(clientId, {
+      protocol_shipped: true,
+      protocol_shipped_at: now,
+    });
+    trackStepTransition({ clientId, fromStep: 'delivery', toStep: 'delivery', direction: 'shipped' });
+    syncClientAppStatus(clientId, 'protocol_shipped'); // l'app cliente passe en attente
+    return next;
+  },
+
+  // V97.13.22 — étape 2 : cliente confirme dans son app qu'elle a reçu le
+  // courrier (OU Anissa confirme manuellement si cliente ne clique pas).
+  // Ne déclenche PAS l'activation finale — Anissa garde le contrôle.
+  confirmProtocolReceived: async (clientId) => {
+    const now = new Date().toISOString();
+    const next = await updateJourneyState(clientId, {
+      client_received_confirmed: true,
+      protocol_received_at: now,
+    });
+    trackStepTransition({ clientId, fromStep: 'delivery', toStep: 'delivery', direction: 'received' });
+    syncClientAppStatus(clientId, 'protocol_received');
+    return next;
+  },
+
+  // V97.13.22 — étape 3 : Anissa active l'espace cliente (= ancien markDelivered).
+  // L'app cliente débloque le protocole complet. Le journey passe à 'followup'.
+  // Le pack timeline (S4 → S24) se déclenche à partir de cette date.
   markDelivered: async (clientId) => {
     const now = new Date().toISOString();
     const next = await updateJourneyState(clientId, {
@@ -302,13 +342,11 @@ export const transitions = {
         })
         .eq('id', clientId);
     } catch (e) {
-      // Pas bloquant : le journey_state est déjà mis à jour. La timeline
-      // peut être activée manuellement via 'Modifier la date de remise' du menu Plus.
       // eslint-disable-next-line no-console
       console.warn('[markDelivered] Could not update pack flags:', e?.message);
     }
     trackStepTransition({ clientId, fromStep: 'delivery', toStep: 'followup' });
-    syncClientAppStatus(clientId, 'followup'); // V97.4 — sync auto → program_active
+    syncClientAppStatus(clientId, 'followup');
     return next;
   },
   // Etape 8 (terminal — pas de transition, juste flag)

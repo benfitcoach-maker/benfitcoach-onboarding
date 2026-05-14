@@ -3037,6 +3037,22 @@ function StepDelivery({ client, onChange }) {
   // Pesée — toggle local (lecture seule pour le miroir)
   const weightTrackingEnabled = !!(client?.weightTrackingEnabled ?? client?.weight_tracking_enabled);
 
+  // V97.13.22 — workflow hybride physique + digital (3 états)
+  const journey = client?.journey_state || {};
+  const isShipped = !!journey.protocol_shipped;
+  const isReceived = !!journey.client_received_confirmed;
+  const shippedAt = journey.protocol_shipped_at;
+  const receivedAt = journey.protocol_received_at;
+  const shippedDateLabel = shippedAt
+    ? new Date(shippedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long' })
+    : null;
+  const receivedDateLabel = receivedAt
+    ? new Date(receivedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long' })
+    : null;
+  const daysSinceShipped = shippedAt
+    ? Math.floor((Date.now() - new Date(shippedAt).getTime()) / 86400000)
+    : null;
+
   const handleSaveDeliveryDate = async () => {
     if (!newDeliveryDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDeliveryDate)) {
       setErr('Date invalide');
@@ -3080,7 +3096,8 @@ function StepDelivery({ client, onChange }) {
     }
   };
 
-  const handleDelivered = async () => {
+  // V97.13.22 — étape 1 : Anissa marque le protocole comme expédié
+  const handleMarkShipped = async () => {
     setBusy(true); setErr(null);
     try {
       if (includePaper) {
@@ -3091,13 +3108,43 @@ function StepDelivery({ client, onChange }) {
           await saveNutritionConsultation({ ...last, paperGenerated: true });
         }
       }
+      await transitions.markProtocolShipped(client.id);
+      onChange();
+    } catch (e) { setErr(e?.message || 'Erreur'); }
+    finally { setBusy(false); }
+  };
+
+  // V97.13.22 — étape 2 : confirmation manuelle exceptionnelle (normalement
+  // c'est la cliente qui clique 'J'ai reçu' dans l'app cliente).
+  const handleConfirmReceivedManually = async () => {
+    if (!window.confirm(
+      `Confirmer manuellement la réception du protocole par ${prenom} ?\n\n` +
+      `Normalement, ${prenom} clique sur "J'ai reçu mon protocole" depuis son app cliente. ` +
+      `N'utilise cette action que si elle ne peut pas le faire (oubli, problème app, etc.).`
+    )) return;
+    setBusy(true); setErr(null);
+    try {
+      await transitions.confirmProtocolReceived(client.id);
+      onChange();
+    } catch (e) { setErr(e?.message || 'Erreur'); }
+    finally { setBusy(false); }
+  };
+
+  // V97.13.22 — étape 3 : Anissa active l'espace cliente (= ancien markDelivered).
+  // Le journey passe à 'followup', l'app cliente débloque le protocole complet,
+  // la timeline du pack démarre.
+  const handleDelivered = async () => {
+    setBusy(true); setErr(null);
+    try {
       await transitions.markDelivered(client.id);
       onChange();
     } catch (e) { setErr(e?.message || 'Erreur'); }
     finally { setBusy(false); }
   };
 
-  // Timeline de déploiement — 5 jalons orchestrés par l'activation
+  // V97.13.22 — Timeline de déploiement alignée sur workflow hybride (3 états).
+  // Les jalons reflètent maintenant : validation → expédition physique →
+  // attente cliente → confirmation réception → activation espace cliente.
   const deploymentSteps = [
     {
       key: 'plan-validated',
@@ -3106,31 +3153,37 @@ function StepDelivery({ client, onChange }) {
       status: 'done',
     },
     {
-      key: 'paper',
-      label: includePaper ? 'Livret papier exporté & expédié' : 'Livret papier — désactivé pour ce cycle',
+      key: 'paper-export',
+      label: includePaper ? 'Livret papier exporté' : 'Livret papier — désactivé pour ce cycle',
       hint: includePaper
         ? (paperExported
-            ? 'Word téléchargé. Reste à imprimer + expédier postalement.'
-            : 'À télécharger en Word ci-dessous, puis imprimer + expédier.')
-        : `${prenom} reçoit son protocole uniquement via l'app pour ce cycle.`,
+            ? 'Word téléchargé. Reste à imprimer + préparer le pli.'
+            : 'À télécharger en Word ci-dessous, puis imprimer.')
+        : `${prenom} recevra son protocole uniquement via l'app pour ce cycle.`,
       status: includePaper ? (paperExported ? 'done' : 'pending') : 'skipped',
     },
     {
-      key: 'app-publish',
-      label: `Publication dans l'app de ${prenom}`,
-      hint: 'Plan, fiche frigo et suppléments synchronisés automatiquement à l\'activation.',
-      status: 'pending',
+      key: 'shipped',
+      label: 'Protocole expédié à la cliente',
+      hint: isShipped
+        ? `Marqué expédié${shippedDateLabel ? ` le ${shippedDateLabel}` : ''}.`
+        : `Quand le courrier est prêt à partir, marque-le comme expédié ci-dessous.`,
+      status: isShipped ? 'done' : 'pending',
     },
     {
-      key: 'notification',
-      label: 'Notification envoyée à la cliente',
-      hint: 'Push + email — bascule depuis l\'écran d\'attente vers le programme actif.',
-      status: 'pending',
+      key: 'received',
+      label: `Réception confirmée par ${prenom}`,
+      hint: isReceived
+        ? `Cliente a confirmé la réception${receivedDateLabel ? ` le ${receivedDateLabel}` : ''}.`
+        : isShipped
+          ? `En attente — ${prenom} confirmera depuis son app cliente.`
+          : `Étape automatique une fois le protocole expédié.`,
+      status: isReceived ? 'done' : (isShipped ? 'pending' : 'pending'),
     },
     {
-      key: 'followup',
-      label: 'Démarrage du suivi',
-      hint: 'Première semaine active, ressentis quotidiens disponibles, timeline étape 8 lancée.',
+      key: 'space-active',
+      label: 'Espace cliente activé',
+      hint: 'Plan complet, fiche frigo, suppléments, ressentis, messagerie — débloqués après ta validation.',
       status: 'pending',
     },
   ];
@@ -3492,27 +3545,89 @@ function StepDelivery({ client, onChange }) {
         </div>
       )}
 
-      {/* ════════ CTA cérémonial — V97.13.15 simplifié (1 phrase forte + 1 sub) ════════ */}
-      <div className="jrn-activation-cta">
-        <div className="jrn-activation-cta__copy">
-          <div className="jrn-activation-cta__eyebrow">Dernière étape</div>
-          <p className="jrn-activation-cta__poetic">
-            Le protocole est maintenant prêt à être remis à <em>{prenom}</em>.
-          </p>
-          <p className="jrn-activation-cta__sub">
-            {includePaper
-              ? `L'espace client, le livret papier et le suivi sont activés en un clic.`
-              : `L'espace client, les supports et le suivi sont activés en un clic.`}
-          </p>
+      {/* ════════ CTA — V97.13.22 machine à 3 états (workflow hybride) ════════
+          État 1 : protocole prêt → bouton "Marquer comme expédié"
+          État 2 : expédié, attente cliente → statut + bouton secondaire manuel
+          État 3 : reçu (cliente confirmée) → bouton "Activer l'espace cliente"
+          Workflow premium physique + digital. */}
+
+      {/* État 1 — Protocole prêt à expédier */}
+      {!isShipped && (
+        <div className="jrn-activation-cta jrn-activation-cta--ship">
+          <div className="jrn-activation-cta__copy">
+            <div className="jrn-activation-cta__eyebrow">Étape physique</div>
+            <p className="jrn-activation-cta__poetic">
+              Le protocole de <em>{prenom}</em> est prêt à être expédié.
+            </p>
+            <p className="jrn-activation-cta__sub">
+              {includePaper
+                ? `Imprime le Word ci-dessus, prépare le courrier et clique ici quand le pli est posté.`
+                : `Marque ici quand le protocole est prêt à être remis à ${prenom}.`}
+            </p>
+          </div>
+          <button
+            onClick={handleMarkShipped}
+            disabled={busy}
+            className="jrn-btn jrn-btn--hero jrn-activation-cta__btn"
+          >
+            {busy ? 'Enregistrement…' : `📦 Marquer le protocole comme expédié`}
+          </button>
         </div>
-        <button
-          onClick={handleDelivered}
-          disabled={busy}
-          className="jrn-btn jrn-btn--hero jrn-activation-cta__btn"
-        >
-          {busy ? 'Activation…' : `✨ Activer l'accompagnement de ${prenom} →`}
-        </button>
-      </div>
+      )}
+
+      {/* État 2 — Expédié, en attente de confirmation cliente */}
+      {isShipped && !isReceived && (
+        <div className="jrn-activation-cta jrn-activation-cta--waiting">
+          <div className="jrn-activation-cta__copy">
+            <div className="jrn-activation-cta__eyebrow">
+              <span className="jrn-activation-cta__status-dot" aria-hidden /> En cours d'acheminement
+            </div>
+            <p className="jrn-activation-cta__poetic">
+              Protocole expédié{shippedDateLabel ? ` le ${shippedDateLabel}` : ''}.
+            </p>
+            <p className="jrn-activation-cta__sub">
+              {prenom} confirmera la réception depuis son app cliente
+              {daysSinceShipped !== null && daysSinceShipped > 0
+                ? ` (envoyé il y a ${daysSinceShipped}j).`
+                : '.'}
+              {' '}L'espace d'accompagnement complet sera ensuite déblocable.
+            </p>
+          </div>
+          <button
+            onClick={handleConfirmReceivedManually}
+            disabled={busy}
+            className="jrn-btn jrn-btn--soft jrn-activation-cta__btn"
+            title="À utiliser uniquement si la cliente ne peut pas confirmer depuis l'app"
+          >
+            {busy ? '…' : `Confirmer réception manuellement`}
+          </button>
+        </div>
+      )}
+
+      {/* État 3 — Reçu, espace cliente à activer */}
+      {isShipped && isReceived && (
+        <div className="jrn-activation-cta jrn-activation-cta--ready">
+          <div className="jrn-activation-cta__copy">
+            <div className="jrn-activation-cta__eyebrow">
+              <span className="jrn-activation-cta__status-check" aria-hidden>✓</span> Réception confirmée
+            </div>
+            <p className="jrn-activation-cta__poetic">
+              <em>{prenom}</em> a reçu son protocole
+              {receivedDateLabel ? ` le ${receivedDateLabel}` : ''}.
+            </p>
+            <p className="jrn-activation-cta__sub">
+              L'accompagnement complet peut maintenant démarrer : plan, ressentis, messagerie, suivi.
+            </p>
+          </div>
+          <button
+            onClick={handleDelivered}
+            disabled={busy}
+            className="jrn-btn jrn-btn--hero jrn-activation-cta__btn"
+          >
+            {busy ? 'Activation…' : `✨ Activer l'espace de ${prenom} →`}
+          </button>
+        </div>
+      )}
 
       <ErrorLine msg={err} />
     </section>
