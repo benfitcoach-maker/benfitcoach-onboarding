@@ -3135,52 +3135,38 @@ function StepDelivery({ client, onChange }) {
     },
   ];
 
-  // Ce que reçoit la cliente — miroir d'expérience
-  const mirrorItems = [
-    {
-      icon: '📋',
-      label: `Protocole nutritionnel personnalisé (${packLabel})`,
-      sub: `Version V${versionsCount || 1} validée le ${validationDateLabel || 'aujourd\'hui'}.`,
-    },
-    {
-      icon: '🧊',
-      label: 'Fiche frigo plastifiable',
-      sub: 'Matrice repas + suppléments structurés par moment de prise.',
-    },
-    {
-      icon: '📱',
-      label: 'Accès à l\'application Anissa Nutrition',
-      sub: 'Plan consultable en mobile, ressentis quotidiens, messagerie.',
-    },
-    {
-      icon: '💊',
-      label: 'Routine de suppléments',
-      sub: 'Compléments répartis sur 5 moments de la journée.',
-    },
-    {
-      icon: weightTrackingEnabled ? '⚖️' : '◌',
-      label: weightTrackingEnabled ? 'Suivi du poids quotidien' : 'Suivi du poids (désactivé)',
-      sub: weightTrackingEnabled
-        ? `${prenom} saisira son poids dans son ressenti.`
-        : 'Activable ci-dessous si pertinent pour ce protocole.',
-    },
-    {
-      icon: '✉️',
-      label: 'Messagerie directe avec Anissa',
-      sub: 'Réponses sous 24h en jours ouvrables.',
-    },
-  ];
+  // V97.13.13 — Miroir cliente repense : 1 carte FEATURED (app cliente,
+  // coeur du suivi long terme) + 2-3 cartes secondaires plus discretes.
+  // App centrale, livret en extension premium (pas l'inverse).
+  const featuredAppCard = {
+    icon: '📱',
+    title: 'Application Anissa Nutrition',
+    subtitle: `${prenom} accède à son espace privé sécurisé, disponible mobile & desktop.`,
+    contents: [
+      { label: 'Protocole personnalisé', desc: `Version V${versionsCount || 1} consultable et lisible chaque jour` },
+      { label: 'Fiche frigo plastifiable', desc: 'Matrice repas + suppléments toujours sous la main' },
+      { label: 'Suppléments structurés', desc: 'Routine répartie sur 5 moments de la journée' },
+      { label: 'Ressentis quotidiens', desc: weightTrackingEnabled ? 'Énergie, digestion, sommeil + poids' : 'Énergie, digestion, sommeil' },
+      { label: 'Messagerie directe', desc: 'Réponses Anissa sous 24h en jours ouvrables' },
+    ],
+  };
 
+  const secondaryMirrorItems = [];
   if (includePaper) {
-    mirrorItems.unshift({
+    secondaryMirrorItems.push({
       icon: '📦',
-      label: 'Livret papier premium par envoi postal',
-      sub: `Reçu à l'adresse de ${prenom} sous quelques jours.`,
+      label: 'Livret papier premium',
+      sub: `Envoi postal — ancre l'expérience à la maison de ${prenom}.`,
     });
   }
+  secondaryMirrorItems.push({
+    icon: '📋',
+    label: 'Protocole complet (PDF natif)',
+    sub: `Version archivable, partageable avec médecin si besoin.`,
+  });
 
   return (
-    <section>
+    <section className="jrn-activation-step">
       <StepHead
         index={7}
         title="Activation cliente"
@@ -3196,10 +3182,11 @@ function StepDelivery({ client, onChange }) {
           </span>
         </div>
         <h2 className="jrn-activation-hero__title">
-          <em>{prenom}</em> peut maintenant entrer dans son accompagnement.
+          Le protocole personnalisé de <em>{prenom}</em> est prêt.
         </h2>
         <p className="jrn-activation-hero__lede">
-          Tu déclenches la remise du protocole, l'ouverture de son espace personnel, et le démarrage du suivi.
+          Toutes les validations cliniques ont été réalisées.
+          <span className="jrn-activation-hero__lede-break" /> Le suivi peut maintenant commencer.
         </p>
         <dl className="jrn-activation-hero__meta">
           <div className="jrn-activation-hero__meta-cell">
@@ -3259,28 +3246,59 @@ function StepDelivery({ client, onChange }) {
         </ol>
       </div>
 
-      {/* ════════ Bloc 2 — Miroir cliente ════════ */}
+      {/* ════════ Bloc 2 — Miroir cliente (app cliente centrale) ════════ */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">2</span>
           <h3 className="jrn-block__title">Ce que reçoit {prenom}</h3>
         </div>
         <p className="jrn-block__intro">
-          La vue côté cliente. Utile pour vérifier qu'aucune brique de l'accompagnement ne lui échappe.
+          L'application est le cœur du suivi long terme. Le reste vient s'y greffer comme extensions premium.
         </p>
-        <ul className="jrn-mirror-list">
-          {mirrorItems.map((item, i) => (
-            <li key={i} className="jrn-mirror-item">
-              <span className="jrn-mirror-icon" aria-hidden>{item.icon}</span>
-              <div className="jrn-mirror-text">
-                <div className="jrn-mirror-label">{item.label}</div>
-                <div className="jrn-mirror-sub">{item.sub}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
+
+        {/* Carte FEATURED — App cliente, centre de l'expérience */}
+        <article className="jrn-mirror-featured">
+          <header className="jrn-mirror-featured__head">
+            <span className="jrn-mirror-featured__icon" aria-hidden>{featuredAppCard.icon}</span>
+            <div className="jrn-mirror-featured__head-text">
+              <div className="jrn-mirror-featured__eyebrow">Espace cliente — centre du suivi</div>
+              <h4 className="jrn-mirror-featured__title">{featuredAppCard.title}</h4>
+              <p className="jrn-mirror-featured__subtitle">{featuredAppCard.subtitle}</p>
+            </div>
+          </header>
+          <ul className="jrn-mirror-featured__contents">
+            {featuredAppCard.contents.map((c, i) => (
+              <li key={i} className="jrn-mirror-featured__content">
+                <span className="jrn-mirror-featured__content-check" aria-hidden>✓</span>
+                <div>
+                  <div className="jrn-mirror-featured__content-label">{c.label}</div>
+                  <div className="jrn-mirror-featured__content-desc">{c.desc}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        {/* Cartes secondaires : extensions premium */}
+        {secondaryMirrorItems.length > 0 && (
+          <>
+            <div className="jrn-mirror-secondary-label">Extensions premium</div>
+            <ul className="jrn-mirror-secondary">
+              {secondaryMirrorItems.map((item, i) => (
+                <li key={i} className="jrn-mirror-item">
+                  <span className="jrn-mirror-icon" aria-hidden>{item.icon}</span>
+                  <div className="jrn-mirror-text">
+                    <div className="jrn-mirror-label">{item.label}</div>
+                    <div className="jrn-mirror-sub">{item.sub}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
         <p className="jrn-mirror-cta-hint">
-          → Pour visualiser exactement l'écran d'accueil de {prenom}, ouvre <strong>📱 Aperçu app</strong> en haut à droite. Tu peux y enrichir le plan avec une intro narrative IA (<strong>✨ Enrichir</strong>).
+          → Pour visualiser exactement l'écran d'accueil de {prenom}, ouvre <strong>📱 Aperçu app</strong> en haut à droite. Tu peux y enrichir le plan avec une intro narrative IA via le bouton <strong>✨ Enrichir</strong>.
         </p>
       </div>
 
@@ -3399,11 +3417,15 @@ function StepDelivery({ client, onChange }) {
       <div className="jrn-activation-cta">
         <div className="jrn-activation-cta__copy">
           <div className="jrn-activation-cta__eyebrow">Dernière étape</div>
-          <p className="jrn-activation-cta__hint">
-            {includePaper
-              ? <>Une fois le livret prêt à expédier, active l'accompagnement. <em>{prenom}</em> reçoit sa notification, son espace s'ouvre, et le suivi démarre.</>
-              : <>Active l'accompagnement. <em>{prenom}</em> reçoit sa notification, son espace s'ouvre, et le suivi démarre immédiatement.</>}
+          <p className="jrn-activation-cta__poetic">
+            À partir de maintenant, <em>{prenom}</em> reçoit son protocole,
+            accède à son espace privé et débute son suivi actif.
           </p>
+          {includePaper && (
+            <p className="jrn-activation-cta__sub">
+              Une fois le livret papier prêt à expédier, déclenche l'activation.
+            </p>
+          )}
         </div>
         <button
           onClick={handleDelivered}

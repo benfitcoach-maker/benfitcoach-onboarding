@@ -3130,17 +3130,38 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   ÉTAPE 7 — ACTIVATION CLIENTE (V97.13.12)
+   ÉTAPE 7 — ACTIVATION CLIENTE (V97.13.12 + iteration V97.13.13)
    Refonte cérémonial de l'ancienne page "Livraison à la cliente".
    Hero + Timeline déploiement + Miroir cliente + Options + CTA cérémonial.
    Ton premium, anti-ERP, charte Anissa vert/ivoire.
    ════════════════════════════════════════════════════════════════ */
 
+/* V97.13.13 : respiration globale entre blocs de cette etape.
+   +24px vs spacing standard pour laisser le rythme cérémonial respirer.
+   Scope strict pour ne pas affecter les autres etapes du parcours. */
+.jrn-activation-step .jrn-block {
+  margin-bottom: 44px;
+}
+.jrn-activation-step .jrn-block:last-of-type {
+  margin-bottom: 0;
+}
+.jrn-activation-step .jrn-block__head {
+  margin-bottom: 14px;
+}
+.jrn-activation-step .jrn-block__title {
+  font-size: 14px;
+}
+.jrn-activation-step .jrn-block__intro {
+  margin-bottom: 18px;
+  max-width: 70ch;
+  line-height: 1.65;
+}
+
 /* ─── HERO ─────────────────────────────────────────────────────── */
 
 .jrn-activation-hero {
-  margin: var(--jrn-5) 0 var(--jrn-8);
-  padding: 28px 32px 26px;
+  margin: var(--jrn-5) 0 56px;   /* +24px de respiration vs V1 */
+  padding: 40px 40px 36px;        /* +12px partout */
   background: linear-gradient(180deg, #FBF8F1 0%, #F7F0E0 100%);
   border: 1px solid rgba(26, 46, 31, 0.12);
   border-radius: var(--jrn-radius-lg);
@@ -3190,13 +3211,14 @@
   font-weight: 700;
 }
 .jrn-activation-hero__title {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   font-family: var(--jrn-font-display);
-  font-size: 30px;
+  font-size: 34px;            /* +4px */
   font-weight: 500;
-  line-height: 1.18;
+  line-height: 1.16;
   color: var(--jrn-text);
   letter-spacing: -0.01em;
+  max-width: 24ch;
 }
 .jrn-activation-hero__title em {
   font-style: italic;
@@ -3204,11 +3226,15 @@
   font-weight: 500;
 }
 .jrn-activation-hero__lede {
-  margin: 0 0 22px;
-  max-width: 64ch;
-  font-size: 15px;
-  line-height: 1.6;
+  margin: 0 0 28px;            /* +6px */
+  max-width: 60ch;
+  font-size: 16px;             /* +1px */
+  line-height: 1.7;            /* +0.1 */
   color: var(--jrn-text-soft);
+}
+.jrn-activation-hero__lede-break {
+  display: block;
+  height: 6px;
 }
 .jrn-activation-hero__meta {
   display: grid;
@@ -3244,18 +3270,35 @@
 .jrn-deploy-list {
   list-style: none;
   margin: var(--jrn-5) 0 0;
-  padding: 0;
+  padding: 0 0 0 4px;
   display: flex;
   flex-direction: column;
   gap: 0;
   position: relative;
 }
+/* V97.13.13 : ligne verticale continue qui relie les markers — parcours médical premium */
+.jrn-deploy-list::before {
+  content: '';
+  position: absolute;
+  left: 19px;                   /* centre du marker 30px (4 padding + 15 = milieu) */
+  top: 26px;
+  bottom: 26px;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    var(--jrn-accent) 0%,
+    var(--jrn-accent) calc(var(--jrn-deploy-done-fraction, 0%) - 1px),
+    var(--jrn-border-strong) var(--jrn-deploy-done-fraction, 0%),
+    var(--jrn-border-strong) 100%
+  );
+  z-index: 0;
+}
 .jrn-deploy-item {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
-  gap: 14px;
+  grid-template-columns: 40px 1fr auto;
+  gap: 16px;
   align-items: flex-start;
-  padding: 14px 6px 14px 0;
+  padding: 18px 8px 18px 0;
   border-bottom: 1px solid var(--jrn-border);
   position: relative;
 }
@@ -3264,32 +3307,40 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1.5px solid var(--jrn-border-strong);
-  background: var(--jrn-surface);
-  font-size: 12.5px;
+  background: var(--jrn-bg);    /* fond ivoire pour masquer la ligne derriere */
+  font-size: 13px;
   font-weight: 700;
   color: var(--jrn-text-muted);
   margin-top: 2px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
   transition: all 140ms var(--jrn-ease);
 }
 .jrn-deploy-item--done .jrn-deploy-marker {
   background: var(--jrn-accent);
   border-color: var(--jrn-accent);
   color: #fff;
+  box-shadow: 0 0 0 3px rgba(26, 46, 31, 0.10);
+}
+.jrn-deploy-item--done .jrn-deploy-label {
+  font-weight: 700;
+  color: var(--jrn-text);
 }
 .jrn-deploy-item--skipped .jrn-deploy-marker {
   border-style: dashed;
-  background: transparent;
+  background: var(--jrn-bg);
   color: var(--jrn-text-muted);
 }
 .jrn-deploy-item--pending .jrn-deploy-marker {
-  border-color: var(--jrn-accent);
+  border: 2px solid var(--jrn-accent);
   color: var(--jrn-accent);
-  background: rgba(26, 46, 31, 0.04);
+  background: var(--jrn-surface);
+  box-shadow: 0 0 0 4px rgba(26, 46, 31, 0.06);
 }
 .jrn-deploy-body {
   min-width: 0;
@@ -3328,21 +3379,123 @@
   background: rgba(26, 46, 31, 0.10);
 }
 
-/* ─── MIROIR CLIENTE ──────────────────────────────────────────── */
+/* ─── MIROIR CLIENTE — V97.13.13 : featured (app cliente) + secondary ─ */
 
-.jrn-mirror-list {
+/* Carte FEATURED — l'app cliente comme coeur du suivi, pleine largeur */
+.jrn-mirror-featured {
+  margin: 24px 0 28px;
+  padding: 28px 32px;
+  background: linear-gradient(180deg, var(--jrn-surface) 0%, #FAF5E8 100%);
+  border: 1px solid rgba(26, 46, 31, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset,
+              0 6px 22px -16px rgba(26, 46, 31, 0.22);
+}
+.jrn-mirror-featured__head {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(26, 46, 31, 0.10);
+}
+.jrn-mirror-featured__icon {
+  font-size: 36px;
+  line-height: 1;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.jrn-mirror-featured__head-text {
+  flex: 1;
+  min-width: 0;
+}
+.jrn-mirror-featured__eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--jrn-accent);
+  margin-bottom: 6px;
+}
+.jrn-mirror-featured__title {
+  margin: 0 0 6px;
+  font-family: var(--jrn-font-display);
+  font-size: 22px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--jrn-text);
+  letter-spacing: -0.005em;
+  line-height: 1.25;
+}
+.jrn-mirror-featured__subtitle {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--jrn-text-soft);
+}
+.jrn-mirror-featured__contents {
   list-style: none;
-  margin: var(--jrn-5) 0 var(--jrn-4);
+  margin: 20px 0 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 28px;
+}
+.jrn-mirror-featured__content {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.jrn-mirror-featured__content-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--jrn-accent);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.jrn-mirror-featured__content-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--jrn-text);
+  letter-spacing: -0.002em;
+}
+.jrn-mirror-featured__content-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--jrn-text-soft);
+}
+
+/* Label des cartes secondaires (extensions) */
+.jrn-mirror-secondary-label {
+  margin: 4px 0 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--jrn-text-muted);
+}
+
+/* Cartes secondaires : grosses, max 2 par ligne */
+.jrn-mirror-secondary {
+  list-style: none;
+  margin: 0 0 var(--jrn-4);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
 }
 .jrn-mirror-item {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: flex-start;
-  padding: 14px 16px;
+  padding: 18px 20px;
   background: var(--jrn-surface);
   border: 1px solid var(--jrn-border);
   border-radius: 14px;
@@ -3352,7 +3505,7 @@
   border-color: var(--jrn-border-strong);
 }
 .jrn-mirror-icon {
-  font-size: 22px;
+  font-size: 26px;
   line-height: 1;
   flex-shrink: 0;
   margin-top: 1px;
@@ -3361,26 +3514,26 @@
   min-width: 0;
 }
 .jrn-mirror-label {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--jrn-text);
   letter-spacing: -0.003em;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 .jrn-mirror-sub {
-  margin-top: 3px;
-  font-size: 12.5px;
+  margin-top: 4px;
+  font-size: 13px;
   color: var(--jrn-text-soft);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .jrn-mirror-cta-hint {
-  margin: var(--jrn-4) 0 0;
-  padding: 12px 16px;
+  margin: 20px 0 0;
+  padding: 14px 18px;
   background: rgba(26, 46, 31, 0.045);
   border-left: 3px solid var(--jrn-accent);
   border-radius: 0 8px 8px 0;
   font-size: 13.5px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--jrn-text-soft);
 }
 .jrn-mirror-cta-hint strong {
@@ -3487,18 +3640,18 @@
   background: var(--jrn-surface);
 }
 
-/* ─── CTA CÉRÉMONIAL ──────────────────────────────────────────── */
+/* ─── CTA CÉRÉMONIAL — V97.13.13 phrase poétique + respiration ─ */
 
 .jrn-activation-cta {
-  margin-top: var(--jrn-8);
-  padding: 28px 32px;
+  margin-top: 56px;             /* +24px de respiration */
+  padding: 36px 40px;           /* +8px de bourrage */
   background: linear-gradient(180deg, var(--jrn-accent) 0%, #0F1F12 100%);
   border-radius: var(--jrn-radius-lg);
   color: #fff;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
   box-shadow: 0 16px 40px -20px rgba(26, 46, 31, 0.5);
 }
 .jrn-activation-cta__copy {
@@ -3510,20 +3663,29 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
-.jrn-activation-cta__hint {
+.jrn-activation-cta__poetic {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.92);
-  max-width: 62ch;
-}
-.jrn-activation-cta__hint em {
-  font-style: italic;
   font-family: var(--jrn-font-display);
+  font-size: 20px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: -0.003em;
+  max-width: 56ch;
+}
+.jrn-activation-cta__poetic em {
+  font-style: italic;
   color: #fff;
   font-weight: 500;
+}
+.jrn-activation-cta__sub {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 56ch;
 }
 .jrn-activation-cta__btn {
   background: #fff;
