@@ -4141,14 +4141,20 @@
   height: 100%;
   background: linear-gradient(180deg, var(--jrn-accent) 0%, #2B4A33 100%);
 }
-/* Variant ACTIVE — cycle de suivi en cours, ton plein */
+/* Variant ACTIVE — cycle de suivi en cours, ton plein.
+   V97.13.17 : halo radial subtle bottom-right pour faire vivre le hero. */
 .jrn-followup-hero--active {
-  background: linear-gradient(180deg, #FBF8F1 0%, #F7F0E0 100%);
+  background:
+    radial-gradient(110% 70% at 100% 100%, rgba(26, 46, 31, 0.07) 0%, transparent 55%),
+    linear-gradient(180deg, #FBF8F1 0%, #F7F0E0 100%);
   border: 1px solid rgba(26, 46, 31, 0.12);
 }
-/* Variant PENDING — à démarrer, plus discret mais cohérent */
+/* Variant PENDING — à démarrer, plus discret mais cohérent.
+   V97.13.17 : halo radial subtle aussi (mais plus pâle) pour cohésion. */
 .jrn-followup-hero--pending {
-  background: linear-gradient(180deg, #FCFAF4 0%, #F9F4E6 100%);
+  background:
+    radial-gradient(110% 70% at 100% 100%, rgba(26, 46, 31, 0.04) 0%, transparent 55%),
+    linear-gradient(180deg, #FCFAF4 0%, #F9F4E6 100%);
   border: 1px dashed rgba(26, 46, 31, 0.18);
 }
 .jrn-followup-hero__top {
@@ -4191,13 +4197,20 @@
 .jrn-followup-hero--pending .jrn-followup-hero__badge-dot {
   background: transparent;
   border: 1.5px solid var(--jrn-accent);
+  /* V97.13.17 : pulse douce sur pending aussi — sentiment 'prêt à démarrer' vivant */
+  animation: jrn-followup-pulse-slow 4.5s ease-in-out infinite;
 }
 @keyframes jrn-followup-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(26, 46, 31, 0.35); }
   50%      { box-shadow: 0 0 0 6px rgba(26, 46, 31, 0); }
 }
+@keyframes jrn-followup-pulse-slow {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.25); opacity: 0.7; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .jrn-followup-hero--active .jrn-followup-hero__badge-dot {
+  .jrn-followup-hero--active .jrn-followup-hero__badge-dot,
+  .jrn-followup-hero--pending .jrn-followup-hero__badge-dot {
     animation: none;
   }
 }
@@ -4320,11 +4333,99 @@
   font-weight: 700;
   margin-top: 2px;
 }
+/* V97.13.17 : mini timeline jalons — temporalité du suivi qui va démarrer. */
+.jrn-followup-empty__timeline {
+  margin: 0 auto 36px;
+  max-width: 560px;
+  padding: 22px 24px 20px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(26, 46, 31, 0.10);
+  border-radius: 14px;
+  text-align: left;
+}
+.jrn-followup-empty__timeline-title {
+  font-family: var(--jrn-font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jrn-accent);
+  margin-bottom: 14px;
+}
+.jrn-followup-empty__timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+.jrn-followup-empty__timeline-list::before {
+  content: '';
+  position: absolute;
+  left: 26px;                 /* centre du pill J+X (≈ 52px / 2) */
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  background: linear-gradient(180deg,
+    var(--jrn-accent) 0%,
+    rgba(26, 46, 31, 0.18) 100%);
+  border-radius: 2px;
+  z-index: 0;
+}
+.jrn-followup-empty__timeline-list li {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 7px 0;
+  position: relative;
+}
+.jrn-followup-empty__timeline-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  background: var(--jrn-accent);
+  color: #fff;
+  border-radius: 999px;
+  font-family: var(--jrn-font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55);
+}
+.jrn-followup-empty__timeline-label {
+  font-size: 13.5px;
+  color: var(--jrn-text);
+  line-height: 1.45;
+}
+
+/* V97.13.17 : CTA premium — bascule officielle du suivi.
+   Plus grand, shadow renforcée, hover lift, halo accent. */
 .jrn-followup-empty__btn {
-  padding: 14px 24px;
-  font-size: 15px;
-  font-weight: 600;
+  padding: 16px 30px;
+  font-size: 16px;
+  font-weight: 700;
   letter-spacing: -0.005em;
+  border-radius: 14px;
+  box-shadow:
+    0 10px 26px -8px rgba(26, 46, 31, 0.45),
+    0 0 0 0 rgba(26, 46, 31, 0);
+  transition: transform 200ms var(--jrn-ease),
+              box-shadow 200ms var(--jrn-ease);
+}
+.jrn-followup-empty__btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 34px -10px rgba(26, 46, 31, 0.55),
+    0 0 0 6px rgba(26, 46, 31, 0.08);
+}
+.jrn-followup-empty__btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 /* ─── RESPONSIVE étape 8 ───────────────────────────────────────── */

@@ -3802,6 +3802,31 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             <li><span aria-hidden>✓</span> Adaptation IA du plan à partir des retours</li>
             <li><span aria-hidden>✓</span> Bilan de cycle + historique des versions</li>
           </ul>
+
+          {/* V97.13.17 : mini timeline jalons — temporalité du suivi qui démarre.
+              Donne à Anissa la projection "ce que vit Camille ensuite". */}
+          <div className="jrn-followup-empty__timeline">
+            <div className="jrn-followup-empty__timeline-title">Une fois démarré, voici les jalons</div>
+            <ol className="jrn-followup-empty__timeline-list">
+              <li>
+                <span className="jrn-followup-empty__timeline-day">J+0</span>
+                <span className="jrn-followup-empty__timeline-label">Première semaine publiée dans l'app de {prenom}</span>
+              </li>
+              <li>
+                <span className="jrn-followup-empty__timeline-day">J+1</span>
+                <span className="jrn-followup-empty__timeline-label">Premier ressenti quotidien attendu</span>
+              </li>
+              <li>
+                <span className="jrn-followup-empty__timeline-day">J+7</span>
+                <span className="jrn-followup-empty__timeline-label">Premier check-in hebdomadaire</span>
+              </li>
+              <li>
+                <span className="jrn-followup-empty__timeline-day">J+14</span>
+                <span className="jrn-followup-empty__timeline-label">Première adaptation IA possible</span>
+              </li>
+            </ol>
+          </div>
+
           <button
             onClick={handleStart}
             disabled={busy}
