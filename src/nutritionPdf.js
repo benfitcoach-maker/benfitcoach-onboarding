@@ -2103,32 +2103,54 @@ export function extractMeals(planText) {
       const line = lines[i];
       if (!regex.test(line)) continue;
 
-      const block = [];
+      // V97.13.10 : refonte du parsing — au lieu de joindre toutes les
+      // alternatives d'une section "ALTERNATIVES PAR REPAS" dans une seule
+      // chaine (qui rendait la Fiche Frigo en mode Apercu illisible), on
+      // detecte CHAQUE bullet comme une option separee. Les lignes sans
+      // bullet (continuation d'une option multi-lignes) sont concatenees a
+      // l'option courante avec un espace.
+      const options = [];
 
-      // V75 : inline content — format "Meal : content" (Claire's case)
+      // Inline content : "Petit-dejeuner : 2 œufs..." → 1 option directe
       const inlineMatch = line.match(inlineRegex);
       if (inlineMatch && inlineMatch[1].trim().length > 3) {
-        block.push(inlineMatch[1].trim());
-      }
-
-      // V75 : gather next lines only if no inline content (multi-line format)
-      if (block.length === 0) {
-        for (let j = i + 1; j < lines.length && block.length < 5; j++) {
+        options.push(inlineMatch[1].trim());
+      } else {
+        // Format multi-ligne : on lit les lignes suivantes jusqu'a un autre
+        // header. Chaque "- xxx" = nouvelle option. Ligne sans bullet =
+        // continuation de l'option courante.
+        let currentOption = '';
+        for (let j = i + 1; j < lines.length; j++) {
           const next = lines[j];
-          // V75 : stop on ANY section header — not gated on block.length > 0
           if (stopSectionPattern.test(next)) break;
           if (/^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/i.test(next)) break;
           if (/^\d+\.\s+[A-Z]/.test(next)) break;
-          const cleaned = next.replace(/^[-–•*]\s*/, '').trim();
-          if (cleaned.length > 3) block.push(cleaned);
+          const hasBullet = /^[-–—•*]\s/.test(next);
+          const cleaned = next.replace(/^[-–—•*]\s*/, '').trim();
+          if (cleaned.length < 3) continue;
+          if (hasBullet) {
+            // Nouvelle option : pousse l'option courante et redemarre.
+            if (currentOption) options.push(currentOption);
+            currentOption = cleaned;
+          } else if (currentOption) {
+            // Continuation : append a l'option courante.
+            currentOption += ' ' + cleaned;
+          } else {
+            // Premiere ligne sans bullet : la traite comme premiere option.
+            currentOption = cleaned;
+          }
+          if (options.length >= 5) break;
         }
+        if (currentOption && options.length < 5) options.push(currentOption);
       }
 
-      if (block.length > 0) {
-        const combined = block.slice(0, 4).join('\n');
-        if (!results.includes(combined)) results.push(combined);
+      // V97.13.10 : push CHAQUE option separement (pas de join). Anti-doublons
+      // pour eviter qu'une meme option Semaine 1 + Alternatives apparaisse 2x.
+      for (const option of options) {
+        if (!results.includes(option)) results.push(option);
       }
-      if (results.length >= 3) break;
+      // Cap : jusqu'a 6 options par repas (1 reference Semaine 1 + 4-5 alternatives).
+      if (results.length >= 6) break;
     }
     return results;
   }
@@ -2159,12 +2181,17 @@ export function extractMeals(planText) {
   }
 
   // Hydration
+  // V97.13.10 : cap remonte de 50 a 140 chars. 50 coupait au milieu d'une
+  // phrase (ex: "loin des repas : 30 min avant ou 2h apres pour ne" → cup-off
+  // en plein "pour ne pas diluer"). Le bandeau footer du PDF dispose de ~130mm
+  // de largeur ; 140 chars rentrent largement sur une ligne ou deux apres
+  // splitTextToSize au rendu.
   let hydration = '';
   for (const line of lines) {
     if (/hydratation|eau\s*(par|quotid|recommand|:)/i.test(line)) {
       const match = line.match(/(\d[\d.,]*\s*(?:l(?:itres?)?|ml|verres?))/i);
       if (match) { hydration = match[0]; break; }
-      hydration = line.replace(/^.*(?:hydratation|eau)[:\s]*/i, '').trim().substring(0, 50);
+      hydration = line.replace(/^.*(?:hydratation|eau)[:\s]*/i, '').trim().substring(0, 140);
       break;
     }
   }
@@ -2747,11 +2774,15 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
 
   // Mesure la hauteur requise pour rendre une colonne (doit rester
   // en phase avec le forEach de rendu ci-dessous : mêmes incréments)
+  // V97.13.10 : cap remonte de 3 a 4 options. Anissa attend a livrer toutes
+  // les alternatives qu'elle a editees. La page paysage A4 a largement la
+  // place. Le bornage visuel par contentBottom degradera quand meme si une
+  // option est tres longue (securite anti-overflow page).
   const measureColHeight = (items) => {
     const contentW = colWidth - contentPad * 2;
     let h = bandH + 4;   // bandeau titre + gap avant contenu
     h += 2;              // cy démarre à contentTop + 2
-    const maxOptions = Math.min(items?.length || 0, 3);
+    const maxOptions = Math.min(items?.length || 0, 4);
     if (maxOptions === 0) {
       h += 14;           // placeholder "empty"
     } else {
@@ -2808,7 +2839,8 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
     const contentBottom = colTop + colH - 4;
     let cy = contentTop + 2;
 
-    const maxOptions = Math.min(col.items.length, 3);
+    // V97.13.10 : cap remonte de 3 a 4 options (cf measureColHeight).
+    const maxOptions = Math.min(col.items.length, 4);
 
     if (col.items.length > 0) {
       for (let i = 0; i < maxOptions; i++) {
@@ -3065,8 +3097,24 @@ export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
   if (hydration) {
     doc.text('HYDRATATION', leftX, fy);
     doc.setFont('helvetica', 'normal');
-    doc.text(String(hydration), leftX + 26, fy);
-    fy += 4;
+    // V97.13.10 : splitTextToSize avec largeur safe (130mm) au lieu d'un
+    // doc.text brut qui depassait silencieusement le bandeau. Si le texte
+    // tient sur 1 ligne → 1 ligne. Sinon → 1ere ligne tronquee + "..." sur la
+    // 2e ligne max. Pas de debordement sur la zone contact Anissa a droite.
+    const hydStr = String(hydration);
+    const hydLines = doc.splitTextToSize(hydStr, 130);
+    if (hydLines.length <= 1) {
+      doc.text(hydLines[0] || hydStr, leftX + 26, fy);
+    } else {
+      doc.text(hydLines[0], leftX + 26, fy);
+      const second = hydLines[1] || '';
+      // Si une 3e ligne existe, ajoute "..." pour signaler la troncature.
+      const secondDisplay = hydLines.length > 2
+        ? second.replace(/\s+\S*$/, '') + '\u2026'
+        : second;
+      doc.text(secondDisplay, leftX + 26, fy + 3.2);
+    }
+    fy += hydLines.length > 1 ? 7 : 4;
   }
   if (meals.snack) {
     doc.setFont('helvetica', 'bold');

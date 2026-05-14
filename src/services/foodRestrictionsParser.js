@@ -21,6 +21,15 @@ const NEGATION_RE = /\b(pas|aucun(?:e|s)?|rien|non|jamais|sans|inconnu(?:e|s)?)\
 // Mots-charnieres qui indiquent une phrase, pas une liste d'aliments
 const PHRASE_HINT_RE = /\b(mais|cependant|toutefois|sauf|car|parce|puisque|deja|prepare|pour|avec)\b/i;
 
+// V97.13.10 : motifs d'allergies non-alimentaires.
+// Bug detecte sur Camille : "Rhinite saisonniere (graminees avril-juin)"
+// (allergie pollinique respiratoire) se retrouvait dans la colonne INTERDITS
+// de la Fiche Frigo, ce qui n'a aucun sens pour une cliente nutritionniste.
+// Cette regex filtre les allergies environnementales / respiratoires /
+// medicamenteuses / dermatologiques pour qu'elles ne polluent JAMAIS la
+// liste des restrictions alimentaires.
+const NON_FOOD_ALLERGY_RE = /\b(rhinite|pollens?|gramin[eé]es?|acariens?|chats?|chiens?|animal|animaux|moisissures?|latex|m[eé]dicaments?|m[eé]dicamenteux|saisonni[eè]re|respiratoire|asthme|eczema|ecz[eé]ma|atopique|urticaire|polluants?|fum[eé]e|parfum|nickel|piqures?|abeille|guepe|venin|pollens?\s+de|herbe\s+a\s+chat)\b/i;
+
 // Aliments les plus courants en consultation nutrition (whitelist heuristique
 // pour extraire un mot d'une phrase). Liste non-exhaustive, peut etre etendue.
 const KNOWN_FOODS = [
@@ -71,6 +80,18 @@ export function parseFoodRestrictions(input) {
   for (const seg of segments) {
     let candidate = seg;
 
+    // V97.13.10 : 0. Drop si allergie non-alimentaire (rhinite, pollens,
+    // acariens, latex, medicaments, etc.). On garde quand meme la possibilite
+    // d'extraire un aliment connu noye dans la phrase (defensif).
+    if (NON_FOOD_ALLERGY_RE.test(candidate)) {
+      const m = candidate.match(KNOWN_FOODS_RE);
+      if (m) {
+        candidate = m[1];
+      } else {
+        continue;
+      }
+    }
+
     // 1. Drop si negation explicite
     if (NEGATION_RE.test(candidate)) {
       // Mais on tente d'extraire un aliment connu si phrase longue
@@ -105,7 +126,14 @@ export function parseFoodRestrictions(input) {
     // 4. Drop si trop court (1-2 chars sont du bruit)
     if (candidate.length < 2) continue;
 
-    // 5. Normalize (trim espaces, premiere majuscule, lower comparison key)
+    // V97.13.10 : 5a. Strip parenthetical context (commentaires Anissa, dates,
+    // "eviction en essai depuis X mois", etc.). Bug detecte sur Camille :
+    // "Gluten" + "Gluten (eviction en essai depuis 6 mois)" produisaient 2
+    // entrees distinctes dans INTERDITS. Strip-paren + dedup ramene a 1 seule.
+    const stripped = candidate.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+    if (stripped.length >= 2) candidate = stripped;
+
+    // 5b. Normalize (trim espaces, premiere majuscule, lower comparison key)
     candidate = candidate.replace(/\s+/g, " ").trim();
     const key = candidate.toLowerCase();
     if (seen.has(key)) continue;

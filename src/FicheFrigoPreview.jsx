@@ -17,7 +17,10 @@ function cleanItem(text) {
 // ─── FRIDGE CARD (read-only visual) ───
 
 function MealSection({ title, items }) {
-  const cleaned = (items || []).slice(0, 2).map(cleanItem).filter(Boolean);
+  // V97.13.10 : cap remonte de 2 a 4 options (cf PDF export + extractMeals
+  // qui produit maintenant des options separees au lieu d'une chaine
+  // concatenee). 4 options = bon equilibre lisibilite / variete.
+  const cleaned = (items || []).slice(0, 4).map(cleanItem).filter(Boolean);
   if (cleaned.length === 0) return null;
   return (
     <div style={{ marginBottom: 18 }}>
