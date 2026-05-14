@@ -2849,6 +2849,40 @@
   border-color: var(--jrn-border-strong);
 }
 
+/* V97.13.9 : notice discrète au-dessus d'une section dont l'export Word
+   diverge du markdown éditeur (cas Fiche Frigo extraite en docx séparé).
+   Style ivoire/vert charte Anissa, non-bloquant, hover-friendly. */
+.jpe-section__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #f7f3e8;
+  border-top-left-radius: var(--jrn-radius-lg);
+  border-top-right-radius: var(--jrn-radius-lg);
+  border-bottom: 1px solid #e8dfc5;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4a3f1f;
+}
+.jpe-section__notice strong {
+  color: #2e4a2e;
+  font-weight: 600;
+}
+.jpe-section__notice em {
+  font-style: italic;
+  color: #5a4f2a;
+}
+.jpe-section__notice-icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.jpe-section--fridge .jpe-section__head {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .jpe-section__head {
   display: flex;
   align-items: center;

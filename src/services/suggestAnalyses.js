@@ -161,25 +161,34 @@ REGLE ANTI-SURCHARGE (critique) :
 Si plus, FUSIONNER. La force du systeme est sa synthese. Un cockpit
 illisible n'est plus un cockpit.
 
-OUTPUT (JSON strict, AUCUN texte autour) :
+REGLE ANTI-COPIE D EXEMPLE (CRITIQUE) :
+- Le schema ci-dessous montre la STRUCTURE attendue avec des placeholders abstraits.
+- Tu dois remplir CHAQUE valeur avec les VRAIES donnees de cette cliente extraites
+  de l anamnese fournie. JAMAIS de Hashimoto, post-antibiotique, pilule progestative,
+  Bristol 1-2, SOPK, chute cheveux, frilosite, etc. si ces elements ne sont pas
+  explicitement dans l anamnese de cette cliente.
+- Si un champ est vide / inconnu, ecris null ou un texte court neutre. Ne JAMAIS
+  inventer ni reutiliser un exemple precedent.
+
+OUTPUT (JSON strict, AUCUN texte autour) — SCHEMA, PAS UN GABARIT A COPIER :
 {
   "axes_principaux": [
-    "Terrain digestif fragilise",
-    "Axe micronutritionnel a explorer",
-    "Vigilance thyroidienne fonctionnelle"
+    "<axe 1 : 3-6 mots cliniques tires de l anamnese reelle>",
+    "<axe 2 : optionnel, ordonne par priorite>",
+    "<axe 3 : optionnel>"
   ],
-  "client_summary": "Contexte synthetique (2-3 phrases) qui prolonge les axes ci-dessus. Vocabulaire prudent. Ex: 'Constipation chronique Bristol 1-2 + ballonnements post-antibiotiques sur 12 mois. Antecedent maternel Hashimoto + signaux fonctionnels evoquant un axe thyroidien a explorer medicalement. 6 ans de pilule progestative pouvant moduler le statut micronutritionnel.'",
+  "client_summary": "<2-3 phrases qui prolongent les axes ci-dessus. Vocabulaire prudent. Structure : symptome/signal dominant + antecedent ou facteur de vie pertinent + impact micronutritionnel ou fonctionnel. Reformule avec les VRAIES donnees de la cliente, ne reproduit aucun mot de cet exemple de structure.>",
   "suggestions": [
     {
-      "lab_test_code": "ortho_mikroernaehrung",
-      "justification": "Antecedent de carence ferrique + 6 ans pilule progestative -> axe carentiel a explorer",
-      "pertinence_score": 9,
-      "recommended_default": true
+      "lab_test_code": "<code_du_catalogue>",
+      "justification": "<1 phrase ancree dans l anamnese reelle de cette cliente>",
+      "pertinence_score": "<1-10>",
+      "recommended_default": "<true pour les 2 plus prioritaires>"
     }
   ],
   "alerts_anissa": [
-    "Cycles longs 32-35j adolescence : SOPK leger non investigue, a clarifier en consultation",
-    "Antecedent maternel Hashimoto + signaux fonctionnels (chute cheveux, frilosite) : a orienter vers exploration thyroidienne medicale via Dr [medecin traitant]"
+    "<note interne 1 : signal clinique reel a creuser, ton prudent>",
+    "<note interne 2 : optionnel>"
   ]
 }
 

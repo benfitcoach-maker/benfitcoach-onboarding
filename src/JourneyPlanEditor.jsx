@@ -1074,6 +1074,13 @@ function PlanSection({ index, title, content, onTitleChange, onContentChange, on
   const menuRef = useRef(null);
   const optionsRef = useRef(null);
 
+  // V97.13.9 : signal UX — section "Fiche frigo" est extraite et exportée
+  // en docx séparé (V92.6) via le bouton "Ouvrir l'éditeur fiche frigo".
+  // Elle n'apparaîtra PAS dans le Word principal du plan. Anissa doit savoir
+  // que cette section a un comportement spécial pour éviter la confusion
+  // "où est passée la section 5 dans le Word ?".
+  const isFridgeSection = /fiche\s*frigo|^\s*frigo\b/i.test(title || '');
+
   // Close menus on outside click
   useEffect(() => {
     if (!menuOpen && !optionsOpen) return;
@@ -1088,7 +1095,18 @@ function PlanSection({ index, title, content, onTitleChange, onContentChange, on
   const canRunAi = !isBusy && content && content.trim().length >= 10;
 
   return (
-    <div className="jpe-section">
+    <div className={`jpe-section${isFridgeSection ? ' jpe-section--fridge' : ''}`}>
+      {isFridgeSection && (
+        <div className="jpe-section__notice" role="note">
+          <span className="jpe-section__notice-icon" aria-hidden="true">ℹ️</span>
+          <span>
+            <strong>Section exportée séparément.</strong>{' '}
+            Cette Fiche Frigo sera exclue du Word principal et générée en
+            <em> .docx indépendant</em> (à imprimer + plastifier) via l'onglet
+            <em> Fiche frigo</em> ci-dessus.
+          </span>
+        </div>
+      )}
       <header className="jpe-section__head">
         <span className="jpe-section__num">{index + 1}</span>
         <input
