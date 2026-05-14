@@ -3876,8 +3876,12 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   // tone: 'go' = action data-prête / 'warn' = signal manquant / 'ok' = RAS.
   let nextAction = { label: `Suivi en cours — rien d'urgent`, tone: 'ok' };
   if (started) {
-    // P1 — adaptation IA en attente de validation (data déjà prête)
-    if (lastVersion && lastVersion.status === 'a_valider') {
+    // V97.13.24 — cliente fraîchement activée (premier jour du pack, rien à signaler)
+    if (daysSincePack !== null && daysSincePack < 3 && feedbacks.length === 0 && consultationsUsed === 0) {
+      nextAction = { label: `Suivi tout juste lancé — attendre les premiers ressentis`, tone: 'ok' };
+    }
+    // P1 — adaptation IA en attente de validation (V2+, exclut le plan initial V1)
+    else if (lastVersion && lastVersion.status === 'a_valider' && versions.length >= 2) {
       nextAction = { label: `Adaptation V${versions.length} prête à valider`, tone: 'go' };
     }
     // P2 — poids décroche (delta absolu > 3kg sur ≥ 3 pesées)
