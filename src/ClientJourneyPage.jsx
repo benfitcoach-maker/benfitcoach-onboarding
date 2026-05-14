@@ -3883,11 +3883,9 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             </p>
 
             {consultationsLog.length === 0 && (
-              <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
-                <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-                  Aucune consultation enregistrée pour l'instant. Cliquez sur <strong>✅ Consultation effectuée</strong> après chaque RDV (cabinet ou visio).
-                </p>
-              </div>
+              <p className="jrn-cockpit-empty-row">
+                Aucune consultation — à logger après chaque RDV.
+              </p>
             )}
 
             {consultationsLog.length > 0 && (
@@ -3976,13 +3974,11 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             <p className="jrn-block__intro">
               Les ressentis quotidiens de la cliente nourrissent l'adaptation IA du plan (bloc 4 ci-dessous).
             </p>
-            {loadingFb && <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>}
+            {loadingFb && <p className="jrn-cockpit-empty-row">Chargement…</p>}
             {!loadingFb && feedbacks.length === 0 && (
-              <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
-                <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-                  Aucun ressenti reçu sur les 14 derniers jours.
-                </p>
-              </div>
+              <p className="jrn-cockpit-empty-row">
+                Aucun ressenti reçu sur 14 jours — cliente vient de démarrer.
+              </p>
             )}
             {!loadingFb && feedbacks.length > 0 && (
               <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
@@ -4015,17 +4011,11 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               <h3 className="jrn-block__title">Cycle de suivi — actions</h3>
             </div>
             <p className="jrn-block__intro">
-              Cycle : <strong>Adapter</strong> (IA depuis ressentis) → <strong>Éditer</strong> (étape 6) → <strong>Republier</strong> (étape 7) → retour ici. Plan de reprise = relance après pause.
+              Cycle : <strong>Adapter</strong> (bouton hero) → <strong>Éditer</strong> (étape 6) → <strong>Republier</strong> (étape 7) → retour ici. Plan de reprise = relance après pause.
             </p>
             <div className="jrn-actions" style={{ marginTop: 0 }}>
-              <button
-                onClick={handleAdaptFromFeedback}
-                disabled={adapting || feedbacks.length === 0}
-                className="jrn-btn jrn-btn--hero"
-                title={feedbacks.length === 0 ? 'Aucun ressenti à exploiter' : "L'IA adapte le plan en tenant compte des derniers ressentis cliente"}
-              >
-                {adapting ? 'Adaptation IA…' : '✨ Adapter le plan depuis les ressentis →'}
-              </button>
+              {/* V97.13.20 : bouton 'Adapter le plan' retiré ici — déjà présent dans
+                  le hero du cockpit. Plus de redondance d'action. */}
               <button onClick={handleRestartEditing} disabled={busy} className="jrn-btn jrn-btn--soft">
                 Éditer manuellement
               </button>
@@ -4262,6 +4252,26 @@ function WeightTrackingSection({ client, entries, loading }) {
     ? Number((last.weight_kg - oldest.weight_kg).toFixed(1))
     : null;
 
+  // V97.13.20 — densité progressive : si 0 pesée + tracking désactivé,
+  // le bloc se replie en 1 ligne avec lien 'Configurer'.
+  const isFullyEmpty = !loading && !loadingCfg && entries.length === 0 && !trackingEnabled;
+  const [showConfig, setShowConfig] = useState(false);
+
+  if (isFullyEmpty && !showConfig) {
+    return (
+      <p className="jrn-cockpit-empty-row">
+        Aucune pesée — suivi du poids inactif ·{' '}
+        <button
+          type="button"
+          onClick={() => setShowConfig(true)}
+          className="jrn-cockpit-empty-row__link"
+        >
+          Configurer
+        </button>
+      </p>
+    );
+  }
+
   return (
     <div style={{ marginBottom: 'var(--jrn-6)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)', flexWrap: 'wrap', gap: 8 }}>
@@ -4272,26 +4282,15 @@ function WeightTrackingSection({ client, entries, loading }) {
       </div>
 
       {(loading || loadingCfg) && (
-        <div style={{ color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>Chargement…</div>
-      )}
-
-      {!loading && !loadingCfg && !trackingEnabled && entries.length === 0 && (
-        <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
-          <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-            Suivi du poids désactivé.<br />
-            Cliquez sur <strong>Tracking activé</strong> ci-dessus pour l'activer pour cette cliente.
-          </p>
-        </div>
+        <p className="jrn-cockpit-empty-row">Chargement…</p>
       )}
 
       {!loading && !loadingCfg && entries.length === 0 && trackingEnabled && (
-        <div className="jrn-surface jrn-surface--quiet" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
-          <p style={{ margin: 0, color: 'var(--jrn-text-muted)', fontSize: 'var(--jrn-text-sm)' }}>
-            {visibleToClient
-              ? 'Suivi activé. La cliente peut saisir son poids depuis l\'app (champ visible dans son ressenti quotidien). Aucune pesée encore reçue.'
-              : 'Suivi activé en mode coach (champ caché à la cliente). Aucune pesée enregistrée.'}
-          </p>
-        </div>
+        <p className="jrn-cockpit-empty-row">
+          {visibleToClient
+            ? 'Suivi activé · la cliente peut saisir son poids depuis l\'app · aucune pesée encore.'
+            : 'Suivi activé en mode coach · aucune pesée enregistrée.'}
+        </p>
       )}
 
       {!loading && entries.length > 0 && (
@@ -4518,9 +4517,9 @@ function PackReviewSection({ client, onSendPackReview }) {
   if (!isFollowupPack) return null;
 
   return (
-    <div style={{ marginBottom: 'var(--jrn-6)' }}>
-      <p className="jrn-label">Bilan 4 semaines</p>
-      <div className="jrn-surface" style={{ padding: 'var(--jrn-6)' }}>
+    <div>
+      {/* V97.13.20 : label 'Bilan 4 semaines' retiré — doublon avec titre bloc cockpit */}
+      <div className="jrn-surface" style={{ padding: 'var(--jrn-5)' }}>
         {status === 'submitted' && latestReview && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
