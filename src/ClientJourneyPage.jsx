@@ -3137,13 +3137,43 @@ function StepDelivery({ client, onChange }) {
   // V97.13.22 — étape 3 : Anissa active l'espace cliente (= ancien markDelivered).
   // Le journey passe à 'followup', l'app cliente débloque le protocole complet,
   // la timeline du pack démarre.
+  // V97.13.22/25 — étape 3 : Anissa active l'espace cliente.
+  // V97.13.25 : 1 clic = publication du plan + activation espace.
+  // Plus besoin d'aller dans 'Aperçu app' séparément. Le workflow Anissa
+  // est unifié : "Activer l'espace" publie le protocole ET débloque l'app.
   const handleDelivered = async () => {
     setBusy(true); setErr(null);
     try {
+      // 1. Récupère la dernière consultation à publier
+      const { getNutritionConsultations } = await import('./store');
+      const consultations = getNutritionConsultations(client.id) || [];
+      const lastConsult = consultations[0];
+
+      // 2. Publie le plan vers l'app cliente AVANT de basculer journey à followup.
+      // Si le publish échoue (config manquante, plan vide, cliente sans email),
+      // on bloque l'activation pour éviter un espace cliente vide.
+      if (lastConsult) {
+        const {
+          publishConsultationToClientApp,
+          markPublishedLocally,
+          checkClientReadyForPublish,
+        } = await import('./services/publishToClientApp');
+
+        const ready = checkClientReadyForPublish(client, lastConsult);
+        if (!ready.ok) {
+          throw new Error(`Impossible de publier : ${ready.issues.join(' · ')}`);
+        }
+
+        await publishConsultationToClientApp(client, lastConsult);
+        markPublishedLocally(client.id);
+      }
+
+      // 3. Bascule journey à followup + flag delivered + packStartedAt
       await transitions.markDelivered(client.id);
       onChange();
-    } catch (e) { setErr(e?.message || 'Erreur'); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setErr(e?.message || 'Erreur lors de l\'activation');
+    } finally { setBusy(false); }
   };
 
   // V97.13.22 — Timeline de déploiement alignée sur workflow hybride (3 états).
