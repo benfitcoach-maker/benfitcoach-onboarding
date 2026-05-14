@@ -4445,3 +4445,196 @@
     font-size: 21px;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ÉTAPE 8 — COCKPIT CLINIQUE (V97.13.18)
+   Pivot directive : SaaS = cockpit praticienne (pas app hybride).
+   Memory : saas_cockpit_clinique_directive.md.
+   Hero compact 1 ligne + Card action prioritaire + Grid 2 colonnes
+   (état/décisions à gauche, signal/adaptation à droite).
+   Charge mentale minimale, signaux cliniques d'abord.
+   ════════════════════════════════════════════════════════════════ */
+
+.jrn-cockpit-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: var(--jrn-5) 0 28px;
+  padding: 16px 22px;
+  background: var(--jrn-surface);
+  border: 1px solid rgba(26, 46, 31, 0.10);
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset,
+              0 2px 6px -2px rgba(26, 46, 31, 0.08);
+  flex-wrap: wrap;
+}
+.jrn-cockpit-hero__id {
+  flex: 1;
+  min-width: 200px;
+}
+.jrn-cockpit-hero__title {
+  margin: 0 0 2px;
+  font-family: var(--jrn-font-ui);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--jrn-text);
+  letter-spacing: -0.01em;
+}
+.jrn-cockpit-hero__sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--jrn-text-muted);
+  letter-spacing: 0.01em;
+}
+.jrn-cockpit-hero__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ─── EMPTY STATE COMPACT ────────────────────────────────────── */
+
+.jrn-cockpit-empty {
+  margin: 0 0 28px;
+  padding: 28px 24px;
+  background: var(--jrn-surface);
+  border: 1px dashed rgba(26, 46, 31, 0.18);
+  border-radius: 12px;
+}
+.jrn-cockpit-empty__title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--jrn-text);
+}
+.jrn-cockpit-empty__hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--jrn-text-soft);
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+/* ─── CARD ACTION PRIORITAIRE (pleine largeur) ───────────────── */
+
+.jrn-cockpit-card {
+  background: var(--jrn-surface);
+  border: 1px solid rgba(26, 46, 31, 0.10);
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 2px rgba(26, 46, 31, 0.04);
+}
+.jrn-cockpit-card--priority {
+  margin: 0 0 24px;
+  border-width: 1.5px;
+}
+.jrn-cockpit-card--tone-warn {
+  border-color: rgba(184, 134, 38, 0.40);
+  background: rgba(184, 134, 38, 0.04);
+}
+.jrn-cockpit-card--tone-go {
+  border-color: rgba(26, 46, 31, 0.45);
+  background: rgba(26, 46, 31, 0.04);
+}
+.jrn-cockpit-card--tone-ok {
+  border-color: rgba(26, 46, 31, 0.10);
+}
+.jrn-cockpit-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.jrn-cockpit-card__eyebrow {
+  font-family: var(--jrn-font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jrn-text-muted);
+}
+.jrn-cockpit-card__tone {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+.jrn-cockpit-card__tone--warn { color: #b88626; }
+.jrn-cockpit-card__tone--go { color: var(--jrn-accent); }
+.jrn-cockpit-card__tone--ok { color: var(--jrn-text-muted); }
+.jrn-cockpit-card__priority-label {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--jrn-text);
+  line-height: 1.4;
+}
+.jrn-cockpit-card__priority-btn {
+  margin-top: 4px;
+}
+
+/* ─── GRID 2 COLONNES ─────────────────────────────────────────── */
+
+.jrn-cockpit-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 24px;
+  align-items: start;
+  margin-bottom: 32px;
+}
+.jrn-cockpit-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ─── OVERRIDE .jrn-block dans contexte cockpit ──────────────────
+   Les blocs existants (consultations, poids, ressentis, cycle,
+   bilan, versions) gardent leur logique mais perdent le margin
+   énorme + le num pédagogique + le titre 14px. Plus compact. */
+.jrn-cockpit-grid .jrn-block {
+  margin-bottom: 0 !important;
+  padding: 18px 20px;
+  background: var(--jrn-surface);
+  border: 1px solid rgba(26, 46, 31, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(26, 46, 31, 0.04);
+}
+.jrn-cockpit-grid .jrn-block__head {
+  margin-bottom: 10px !important;
+}
+.jrn-cockpit-grid .jrn-block__title {
+  font-size: 12.5px !important;
+  letter-spacing: 0.10em;
+}
+.jrn-cockpit-grid .jrn-block__intro {
+  font-size: 12.5px !important;
+  margin-bottom: 12px !important;
+  max-width: none !important;
+  line-height: 1.5 !important;
+}
+.jrn-cockpit-grid .jrn-block__num {
+  display: none;       /* Plus de num pédagogique — Anissa connaît son cockpit */
+}
+
+/* ─── RESPONSIVE cockpit ──────────────────────────────────────── */
+
+@media (max-width: 980px) {
+  .jrn-cockpit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .jrn-cockpit-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 16px;
+  }
+  .jrn-cockpit-hero__actions {
+    width: 100%;
+  }
+  .jrn-cockpit-hero__actions .jrn-btn {
+    flex: 1;
+  }
+}
