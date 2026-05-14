@@ -16,7 +16,7 @@
 // ⚠️  La modale recompute le JSON à chaque ouverture (cheap, le mapper
 // est pur). Pas de cache, pas de sync.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildClientAppPlanFromConsultation,
   diagnoseClientAppPlan,
@@ -40,7 +40,7 @@ const TABS = [
   { id: 'diagnostic', label: 'Diagnostic' },
 ];
 
-export default function ClientAppPreviewModal({ client, consultation, onClose }) {
+export default function ClientAppPreviewModal({ client, consultation, autoEnrich = false, onClose }) {
   const [tab, setTab] = useState('sections');
   const [copied, setCopied] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -158,6 +158,18 @@ export default function ClientAppPreviewModal({ client, consultation, onClose })
     setEnrichmentApplied(null);
     setEnrichmentDraft(null);
   };
+
+  // V97.13.27 — auto-trigger Enrichir IA quand la modal s'ouvre depuis le
+  // bouton 'Enrichir le plan avec IA' du cockpit étape 7. Anissa voit le
+  // résultat directement, sans avoir à cliquer Enrichir manuellement.
+  const autoEnrichTriggered = useRef(false);
+  useEffect(() => {
+    if (autoEnrich && rawPlan && !autoEnrichTriggered.current && !enriching && !enrichmentDraft && !enrichmentApplied) {
+      autoEnrichTriggered.current = true;
+      handleEnrich();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEnrich, rawPlan]);
 
   return (
     <div

@@ -41,13 +41,16 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const [error, setError] = useState(null);
   // Phase T : aperçu app cliente (modal mockup téléphone)
   const [showAppPreview, setShowAppPreview] = useState(false);
+  // V97.13.27 — flag pour auto-trigger Enrichir IA quand la modal s'ouvre.
+  // Permet à Anissa de cliquer "Enrichir IA" depuis l'étape 7 (1 clic au lieu de 3).
+  const [appPreviewAutoEnrich, setAppPreviewAutoEnrich] = useState(false);
   const [previewConsultation, setPreviewConsultation] = useState(null);
   // Phase AC : panel latéral messagerie SaaS ↔ cliente
   const [showMessages, setShowMessages] = useState(false);
   // Phase AE : panel latéral notes internes Anissa
   const [showNotes, setShowNotes] = useState(false);
 
-  const openAppPreview = useCallback(async () => {
+  const openAppPreview = useCallback(async (options = {}) => {
     if (!clientId) return;
     // Recup la derniere consultation : local store puis fallback Supabase
     let consult = (getNutritionConsultations(clientId) || [])[0] || null;
@@ -70,6 +73,8 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
       }
     }
     setPreviewConsultation(consult || { clientId, nutritionPlan: '', date: new Date().toISOString() });
+    // V97.13.27 — option autoEnrich pour déclencher Enrichir IA immédiatement
+    setAppPreviewAutoEnrich(!!options.autoEnrich);
     setShowAppPreview(true);
   }, [clientId]);
 
@@ -442,7 +447,8 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
           <ClientAppPreviewModal
             client={client}
             consultation={previewConsultation}
-            onClose={() => setShowAppPreview(false)}
+            autoEnrich={appPreviewAutoEnrich}
+            onClose={() => { setShowAppPreview(false); setAppPreviewAutoEnrich(false); }}
           />
         )}
 
@@ -469,7 +475,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
           {currentStep === 'results' && <StepResults client={client} onChange={refresh} />}
           {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'plan_editing' && <StepPlanEditing client={client} journey={journey} onChange={refresh} />}
-          {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} />}
+          {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} onOpenAppPreview={openAppPreview} />}
           {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} />}
         </main>
       </div>
@@ -2985,7 +2991,7 @@ function StepPlanEditing({ client, journey, onChange }) {
 // ÉTAPE 7 — LIVRAISON
 // ═══════════════════════════════════════════════════════════════════
 
-function StepDelivery({ client, onChange }) {
+function StepDelivery({ client, onChange, onOpenAppPreview }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -3473,9 +3479,25 @@ function StepDelivery({ client, onChange }) {
           </>
         )}
 
-        <p className="jrn-mirror-cta-hint">
-          → Pour visualiser exactement l'écran d'accueil de {prenom}, ouvre <strong>📱 Aperçu app</strong> en haut à droite. Tu peux y enrichir le plan avec une intro narrative IA via le bouton <strong>✨ Enrichir</strong>.
-        </p>
+        {/* V97.13.27 — actions inline : enrichir le plan IA + aperçu app. */}
+        <div className="jrn-mirror-actions">
+          <button
+            type="button"
+            onClick={() => onOpenAppPreview?.({ autoEnrich: true })}
+            className="jrn-btn jrn-btn--soft"
+            title="L'IA ajoute une intro narrative et enrichit les sections du plan. Tu pourras Accepter ou Rejeter le résultat avant publication."
+          >
+            ✨ Enrichir le plan avec IA
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenAppPreview?.()}
+            className="jrn-btn jrn-btn--ghost"
+            title="Visualiser exactement l'écran d'accueil de la cliente avant publication"
+          >
+            📱 Aperçu app
+          </button>
+        </div>
       </div>
 
       {/* ════════ Bloc 3 — Options de remise ════════ */}

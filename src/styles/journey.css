@@ -3617,6 +3617,18 @@
   font-weight: 600;
 }
 
+/* V97.13.27 — actions inline sur la card miroir (Enrichir IA + Aperçu app).
+   Remplace l'ancien hint texte qui demandait à Anissa d'aller chercher
+   le bouton en haut du dashboard. 1 clic au lieu de 3. */
+.jrn-mirror-actions {
+  margin: 22px 0 0;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(26, 46, 31, 0.10);
+}
+
 /* ─── CARTE LIVRET PAPIER ─────────────────────────────────────── */
 
 .jrn-paper-card {
