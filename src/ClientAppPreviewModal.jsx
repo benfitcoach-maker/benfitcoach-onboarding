@@ -202,11 +202,11 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
           }}
         >
           <div>
-            <h3 style={{ margin: 0, color: '#d4c9a8', fontSize: '1rem', fontWeight: 700 }}>
-              📱 Aperçu app cliente
+            <h3 style={{ margin: 0, color: '#d4c9a8', fontSize: '1.1rem', fontWeight: 700 }}>
+              Espace cliente de {client?.prenom || 'la cliente'}
             </h3>
-            <div style={{ fontSize: '.75rem', color: '#8a8a7a', marginTop: 2 }}>
-              JSON résolu pour <strong>{client?.prenom || 'cliente'}</strong> — non publié, lecture seule.
+            <div style={{ fontSize: '.78rem', color: '#8a8a7a', marginTop: 3 }}>
+              Voici ce que {client?.prenom || 'la cliente'} verra dans son app — vérifie chaque section avant publication.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -220,36 +220,37 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
                   : 'rgba(120,80,200,.08)',
                 border: `1px solid ${enrichmentApplied ? 'rgba(180,140,255,.4)' : 'rgba(180,140,255,.25)'}`,
                 color: enrichmentApplied ? '#cba8ff' : '#b89eff',
-                padding: '6px 12px',
-                borderRadius: 6,
-                fontSize: '.8rem',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontSize: '.82rem',
+                fontWeight: 600,
                 cursor: enriching ? 'wait' : 'pointer',
                 opacity: enriching ? 0.6 : 1,
               }}
-              title="Demander à l'IA un enrichissement éditorial (intro narrative, points clés, etc.)"
+              title="L'IA enrichit l'intro narrative, ajoute des points clés et signature. Anissa garde le contrôle."
             >
               {enriching
                 ? '✨ Génération…'
                 : enrichmentApplied
                   ? '✨ Enrichi ✓'
-                  : '✨ Enrichir'}
+                  : '✨ Enrichir avec IA'}
             </button>
+            {/* V97.13.28 — Bouton dev caché : double clic pour afficher détails techniques */}
             <button
               type="button"
-              onClick={handleCopy}
-              disabled={!plan}
+              onClick={() => setTab(tab === 'sections' ? 'diagnostic' : 'sections')}
               style={{
-                background: 'rgba(255,255,255,.05)',
-                border: '1px solid rgba(255,255,255,.1)',
-                color: '#d4c9a8',
-                padding: '6px 12px',
-                borderRadius: 6,
-                fontSize: '.8rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#555',
+                fontSize: '0.9rem',
                 cursor: 'pointer',
+                padding: '4px 8px',
+                opacity: 0.5,
               }}
-              title="Copier le JSON"
+              title="Mode développeur (Diagnostic + JSON)"
             >
-              {copied ? '✓ Copié' : 'Copier JSON'}
+              {tab === 'sections' ? '🔧' : '👁'}
             </button>
             <button
               type="button"
@@ -269,43 +270,67 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
           </div>
         </header>
 
-        {/* Onglets */}
-        <div
-          role="tablist"
-          aria-label="Vue"
-          style={{
-            display: 'flex',
-            gap: 4,
-            padding: '10px 22px 0',
-            borderBottom: '1px solid rgba(255,255,255,.06)',
-          }}
-        >
-          {TABS.map((t) => {
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={active}
-                type="button"
-                onClick={() => setTab(t.id)}
-                style={{
-                  background: active ? 'rgba(212,201,168,.1)' : 'transparent',
-                  border: 'none',
-                  borderBottom: active ? '2px solid #d4c9a8' : '2px solid transparent',
-                  color: active ? '#d4c9a8' : '#8a8a7a',
-                  padding: '8px 14px',
-                  fontSize: '.82rem',
-                  fontWeight: active ? 600 : 400,
-                  cursor: 'pointer',
-                  marginBottom: -1,
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* V97.13.28 — Onglets techniques cachés par défaut.
+            Visibles uniquement en mode dev (tab !== 'sections') déclenché par le bouton 🔧 du header. */}
+        {tab !== 'sections' && (
+          <div
+            role="tablist"
+            aria-label="Vue (mode dev)"
+            style={{
+              display: 'flex',
+              gap: 4,
+              padding: '10px 22px 0',
+              borderBottom: '1px solid rgba(255,255,255,.06)',
+              background: 'rgba(80, 30, 30, 0.10)',
+            }}
+          >
+            <span style={{ alignSelf: 'center', marginRight: 12, fontSize: '0.7rem', color: '#a86060', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              ⚙ Dev mode
+            </span>
+            {TABS.map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={active}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  style={{
+                    background: active ? 'rgba(212,201,168,.1)' : 'transparent',
+                    border: 'none',
+                    borderBottom: active ? '2px solid #d4c9a8' : '2px solid transparent',
+                    color: active ? '#d4c9a8' : '#8a8a7a',
+                    padding: '8px 14px',
+                    fontSize: '.82rem',
+                    fontWeight: active ? 600 : 400,
+                    cursor: 'pointer',
+                    marginBottom: -1,
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!plan}
+              style={{
+                marginLeft: 'auto',
+                background: 'rgba(255,255,255,.05)',
+                border: '1px solid rgba(255,255,255,.1)',
+                color: '#d4c9a8',
+                padding: '4px 12px',
+                borderRadius: 6,
+                fontSize: '.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              {copied ? '✓ Copié' : 'Copier JSON'}
+            </button>
+          </div>
+        )}
 
         {/* Bloc proposition IA (visible UNIQUEMENT si l'IA a renvoyé un draft non encore accepté) */}
         {(enrichmentDraft || enrichmentError || enrichmentApplied) && (
@@ -612,114 +637,435 @@ function PublishFooter({
 
 // ─── Aperçu sections (vue lisible) ──────────────────────────────────────
 
+// V97.13.28 — Refonte UX premium :
+// Au lieu de compteurs techniques + "manquants post-migration", on affiche
+// les vraies données de chaque section de l'app cliente, en formatage
+// clinique premium. Anissa voit immédiatement ce que Camille verra.
+//
+// Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
 function SectionsOverview({ plan }) {
   const s = plan.sections || {};
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontSize: '.85rem' }}>
-      <Meta plan={plan} />
-
-      <SectionCard title="🪶 Intro" empty={!s.intro_data?.body?.length}>
-        <KV label="Greeting" value={s.intro_data?.greeting} />
-        <KV label="Body (paragraphes)" value={`${s.intro_data?.body?.length || 0} paragraphe(s)`} />
-        <KV label="Signature" value={s.intro_data?.signature} />
-        <KV label="Coach role" value={s.intro_data?.coach_role} />
-        <Missing fields={[
-          ['greeting_tagline', s.intro_data?.greeting_tagline],
-          ['pull_quote', s.intro_data?.pull_quote],
-          ['tailored_points', s.intro_data?.tailored_points?.length],
-          ['eyebrow', s.intro_data?.eyebrow],
-          ['coach_avatar_url', s.intro_data?.coach_avatar_url],
-        ]} />
-      </SectionCard>
-
-      <SectionCard title="🧭 Stratégie" empty={!s.strategy_data?.essential?.length && !s.strategy_data?.pillars?.length}>
-        <KV label="Header" value={s.strategy_data?.header_title} />
-        <KV label="Essential (paragraphes)" value={`${s.strategy_data?.essential?.length || 0}`} />
-        <KV label="Pillars" value={`${s.strategy_data?.pillars?.length || 0}`} />
-        <KV label="Takeaways" value={`${s.strategy_data?.takeaways?.length || 0}`} />
-        {s.strategy_data?.pillars?.map((p) => (
-          <KV key={p.id} label={`  · ${p.id}`} value={p.title} indent />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* ─── Lettre d'intro ────────────────────────────────────────── */}
+      <CapsCard
+        icon="✉️"
+        title="Lettre d'intro"
+        empty={!s.intro_data?.body?.length}
+        emptyLabel="Pas encore de lettre d'intro générée"
+      >
+        {s.intro_data?.greeting && (
+          <p style={capsGreetingStyle}>{s.intro_data.greeting}</p>
+        )}
+        {s.intro_data?.body?.map((para, i) => (
+          <p key={i} style={capsBodyStyle}>{para}</p>
         ))}
-        <Missing fields={[
-          ['signature_phrase', s.strategy_data?.signature_phrase?.length],
-          ['expected_changes', s.strategy_data?.expected_changes?.length],
-        ]} />
-      </SectionCard>
+        {s.intro_data?.pull_quote && (
+          <blockquote style={capsQuoteStyle}>« {s.intro_data.pull_quote} »</blockquote>
+        )}
+        {s.intro_data?.tailored_points?.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {s.intro_data.tailored_points.map((tp, i) => (
+              <div key={tp.id || i} style={{ marginBottom: 10 }}>
+                <div style={capsPointTitleStyle}>{tp.title}</div>
+                <div style={capsPointDetailStyle}>{tp.detail}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {s.intro_data?.signature && (
+          <p style={capsSignatureStyle}>— {s.intro_data.signature}</p>
+        )}
+      </CapsCard>
 
-      <SectionCard title="🍽️ Semaine 1" empty={!s.week_meals?.days?.length}>
-        <KV label="Jours" value={`${s.week_meals?.days?.length || 0}`} />
-        {s.week_meals?.days?.[0] && (
-          <>
-            <KV
-              label="Repas / jour (j1)"
-              value={`${s.week_meals.days[0].meals?.length || 0} repas`}
-            />
-            <ul style={{ margin: '4px 0 0 14px', padding: 0, listStyle: 'disc', color: '#8a8a7a' }}>
-              {s.week_meals.days[0].meals?.map((m) => (
-                <li key={m.id} style={{ fontSize: '.78rem' }}>
-                  <strong>{m.slot_label}</strong> — {m.title}
-                </li>
+      {/* ─── Stratégie & piliers ───────────────────────────────────── */}
+      <CapsCard
+        icon="🎯"
+        title="Stratégie"
+        subtitle={s.strategy_data?.subtitle}
+        empty={!s.strategy_data?.pillars?.length}
+        emptyLabel="Pas de piliers détectés dans la stratégie"
+      >
+        {s.strategy_data?.essential?.length > 0 && s.strategy_data.essential.map((p, i) => (
+          <p key={i} style={capsBodyStyle}>{p}</p>
+        ))}
+        {s.strategy_data?.pillars?.length > 0 && (
+          <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
+            {s.strategy_data.pillars.map((p) => (
+              <div key={p.id} style={capsPillarStyle}>
+                <div style={capsPillarTitleStyle}>{p.title}</div>
+                <div style={capsPillarDescStyle}>{p.description}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {s.strategy_data?.takeaways?.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={capsSubTitleStyle}>{s.strategy_data.takeaways_title || 'À retenir'}</div>
+            <ul style={capsListStyle}>
+              {s.strategy_data.takeaways.map((t, i) => (
+                <li key={i} style={capsListItemStyle}>{t}</li>
               ))}
             </ul>
-            <Note>
-              Mode "semaine type" : tous les jours sont identiques. L'override par jour
-              viendra après migration DB.
-            </Note>
-          </>
+          </div>
         )}
-        <Missing fields={[
-          ['days[].focus', s.week_meals?.days?.some((d) => d.focus)],
-          ['meals[].time', s.week_meals?.days?.[0]?.meals?.some((m) => m.time)],
-          ['meals[].hint', s.week_meals?.days?.[0]?.meals?.some((m) => m.hint)],
-        ]} />
-      </SectionCard>
+      </CapsCard>
 
-      <SectionCard title="🔄 Rotation" empty={!s.rotation_data?.categories?.length}>
-        <KV label="Categories" value={`${s.rotation_data?.categories?.length || 0}`} />
-        {s.rotation_data?.categories?.map((c) => (
-          <KV
-            key={c.id}
-            label={`  · ${c.title}${c.primary ? ' ★' : ''}`}
-            value={`${c.items?.length || 0} alternatives`}
-            indent
-          />
-        ))}
-        <Missing fields={[['intro', s.rotation_data?.intro]]} />
-      </SectionCard>
-
-      <SectionCard
-        title="🧊 Frigo"
-        empty={
-          !s.fridge_data?.essentials?.length &&
-          !s.fridge_data?.favorite?.length &&
-          !s.fridge_data?.limit?.length
-        }
+      {/* ─── Semaine 1 ─────────────────────────────────────────────── */}
+      <CapsCard
+        icon="📅"
+        title="Semaine type"
+        subtitle={s.week_meals?.days?.length
+          ? `${s.week_meals.days.length} jours · ${s.week_meals.days[0]?.meals?.length || 0} repas/jour`
+          : null}
+        empty={!s.week_meals?.days?.length}
+        emptyLabel="Aucun repas généré"
       >
-        <KV label="Essentials" value={`${s.fridge_data?.essentials?.length || 0} items`} />
-        <KV label="Favorite" value={`${s.fridge_data?.favorite?.length || 0} catégories`} />
-        <KV label="Limit" value={`${s.fridge_data?.limit?.length || 0} catégories`} />
-        <Missing fields={[
-          ['intro', s.fridge_data?.intro],
-          ['essentials_subtitle', s.fridge_data?.essentials_subtitle],
-        ]} />
-      </SectionCard>
+        {s.week_meals?.days?.[0]?.meals?.length > 0 && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {s.week_meals.days[0].meals.map((m) => (
+              <div key={m.id} style={capsMealStyle}>
+                <div style={capsMealSlotStyle}>{m.slot_label}</div>
+                <div style={capsMealTitleStyle}>{m.title}</div>
+                {m.alternatives?.length > 0 && (
+                  <div style={capsMealAltsStyle}>
+                    {m.alternatives.length} alternative{m.alternatives.length > 1 ? 's' : ''} disponible{m.alternatives.length > 1 ? 's' : ''}
+                  </div>
+                )}
+                {m.recipe && (
+                  <div style={capsMealRecipeStyle}>🍳 Recette détaillée</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CapsCard>
 
-      <SectionCard title="💊 Compléments" empty={!s.protocols_data?.groups?.length}>
-        <KV label="Groupes (par moment)" value={`${s.protocols_data?.groups?.length || 0}`} />
-        {s.protocols_data?.groups?.map((g) => (
-          <KV
-            key={g.id}
-            label={`  · ${g.title}`}
-            value={`${g.items?.length || 0} compléments`}
-            indent
-          />
+      {/* ─── Frigo ─────────────────────────────────────────────────── */}
+      <CapsCard
+        icon="🧊"
+        title="Frigo & courses"
+        subtitle={s.fridge_data?.header_title}
+        empty={!s.fridge_data?.essentials?.length && !s.fridge_data?.favorite?.length}
+        emptyLabel="Pas encore de fiche frigo"
+      >
+        {s.fridge_data?.essentials?.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={capsSubTitleStyle}>{s.fridge_data.essentials_title || 'Essentiels'}</div>
+            <div style={capsPillsStyle}>
+              {s.fridge_data.essentials.map((e) => (
+                <span key={e.id} style={capsPillStyle}>{e.label}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {s.fridge_data?.favorite?.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            {s.fridge_data.favorite.map((cat) => (
+              <div key={cat.id} style={{ marginBottom: 8 }}>
+                <div style={capsSubTitleStyle}>✓ {cat.title}</div>
+                <div style={capsPillsStyle}>
+                  {cat.items?.map((it) => (
+                    <span key={it.id} style={capsPillStyle}>{it.label}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {s.fridge_data?.limit?.length > 0 && (
+          <div>
+            {s.fridge_data.limit.map((cat) => (
+              <div key={cat.id} style={{ marginBottom: 8 }}>
+                <div style={capsSubTitleStyle}>⚠ {cat.title}</div>
+                <div style={capsPillsStyle}>
+                  {cat.items?.map((it) => (
+                    <span key={it.id} style={{ ...capsPillStyle, ...capsPillLimitStyle }}>{it.label}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CapsCard>
+
+      {/* ─── Compléments ──────────────────────────────────────────── */}
+      <CapsCard
+        icon="💊"
+        title="Compléments"
+        subtitle={s.protocols_data?.header_title}
+        empty={!s.protocols_data?.groups?.length}
+        emptyLabel="Pas de compléments détectés"
+      >
+        {s.protocols_data?.groups?.length > 0 && s.protocols_data.groups.map((g) => (
+          <div key={g.id} style={{ marginBottom: 12 }}>
+            <div style={capsSubTitleStyle}>{g.title}</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {g.items?.map((it) => (
+                <div key={it.id} style={capsCompStyle}>
+                  <div style={capsCompNameStyle}>{it.name}</div>
+                  {it.dose && <div style={capsCompMetaStyle}>📦 {it.dose}</div>}
+                  {it.timing_detail && <div style={capsCompMetaStyle}>⏰ {it.timing_detail}</div>}
+                  {it.benefit && <div style={capsCompBenefitStyle}>{it.benefit}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
         ))}
-        <Missing fields={[['intro', s.protocols_data?.intro]]} />
-      </SectionCard>
+      </CapsCard>
+
+      {/* ─── Rotation (compact si vide) ───────────────────────────── */}
+      {s.rotation_data?.categories?.length > 0 && (
+        <CapsCard
+          icon="🔄"
+          title="Rotation alimentaire"
+          subtitle={`${s.rotation_data.categories.length} catégories`}
+          empty={false}
+        >
+          {s.rotation_data.categories.map((c) => (
+            <div key={c.id} style={{ marginBottom: 6 }}>
+              <span style={capsSubTitleStyle}>{c.title}{c.primary ? ' ★' : ''}</span>
+              <span style={{ color: '#8a8a7a', fontSize: '.78rem', marginLeft: 8 }}>
+                {c.items?.length || 0} alternatives
+              </span>
+            </div>
+          ))}
+        </CapsCard>
+      )}
     </div>
   );
 }
+
+// ─── Card premium pour l'aperçu Anissa ────────────────────────────────
+function CapsCard({ icon, title, subtitle, empty, emptyLabel, children }) {
+  return (
+    <div style={capsCardStyle}>
+      <header style={capsCardHeaderStyle}>
+        <span style={{ fontSize: '1.1rem' }}>{icon}</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={capsCardTitleStyle}>{title}</h4>
+          {subtitle && <p style={capsCardSubtitleStyle}>{subtitle}</p>}
+        </div>
+        {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+      </header>
+      <div style={capsCardBodyStyle}>
+        {empty ? (
+          <p style={capsEmptyStyle}>{emptyLabel}</p>
+        ) : children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Styles premium app cliente preview ──────────────────────────────
+const capsCardStyle = {
+  background: 'rgba(255, 255, 255, 0.04)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  borderRadius: 12,
+  padding: 0,
+  overflow: 'hidden',
+};
+const capsCardHeaderStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '12px 16px',
+  background: 'rgba(212, 201, 168, 0.04)',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+};
+const capsCardTitleStyle = {
+  margin: 0,
+  color: '#d4c9a8',
+  fontSize: '0.92rem',
+  fontWeight: 600,
+  letterSpacing: '-0.005em',
+};
+const capsCardSubtitleStyle = {
+  margin: '2px 0 0',
+  color: '#8a8a7a',
+  fontSize: '0.74rem',
+};
+const capsCardBadgeStyle = {
+  padding: '3px 10px',
+  background: 'rgba(220, 180, 80, 0.12)',
+  border: '1px solid rgba(220, 180, 80, 0.30)',
+  borderRadius: 999,
+  color: '#e5c878',
+  fontSize: '0.7rem',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+};
+const capsCardBodyStyle = {
+  padding: '14px 16px',
+};
+const capsEmptyStyle = {
+  margin: 0,
+  color: '#666',
+  fontSize: '0.82rem',
+  fontStyle: 'italic',
+};
+// Intro
+const capsGreetingStyle = {
+  margin: '0 0 10px',
+  color: '#d4c9a8',
+  fontSize: '1rem',
+  fontWeight: 500,
+  fontStyle: 'italic',
+  letterSpacing: '-0.005em',
+};
+const capsBodyStyle = {
+  margin: '0 0 8px',
+  color: '#cfcfc4',
+  fontSize: '0.86rem',
+  lineHeight: 1.55,
+};
+const capsQuoteStyle = {
+  margin: '12px 0 0',
+  padding: '10px 14px',
+  borderLeft: '3px solid #d4c9a8',
+  background: 'rgba(212, 201, 168, 0.04)',
+  color: '#d4c9a8',
+  fontSize: '0.88rem',
+  fontStyle: 'italic',
+  lineHeight: 1.5,
+};
+const capsPointTitleStyle = {
+  fontFamily: 'system-ui',
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: '#d4c9a8',
+  marginBottom: 3,
+};
+const capsPointDetailStyle = {
+  color: '#cfcfc4',
+  fontSize: '0.82rem',
+  lineHeight: 1.5,
+};
+const capsSignatureStyle = {
+  margin: '12px 0 0',
+  color: '#8a8a7a',
+  fontSize: '0.84rem',
+  fontStyle: 'italic',
+};
+// Stratégie
+const capsPillarStyle = {
+  padding: 12,
+  background: 'rgba(255, 255, 255, 0.03)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 8,
+};
+const capsPillarTitleStyle = {
+  color: '#d4c9a8',
+  fontSize: '0.86rem',
+  fontWeight: 600,
+  marginBottom: 4,
+};
+const capsPillarDescStyle = {
+  color: '#cfcfc4',
+  fontSize: '0.8rem',
+  lineHeight: 1.5,
+};
+const capsSubTitleStyle = {
+  color: '#d4c9a8',
+  fontSize: '0.72rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  marginBottom: 6,
+};
+const capsListStyle = {
+  margin: '4px 0 0',
+  padding: 0,
+  listStyle: 'none',
+};
+const capsListItemStyle = {
+  padding: '4px 0 4px 18px',
+  position: 'relative',
+  color: '#cfcfc4',
+  fontSize: '0.82rem',
+  lineHeight: 1.45,
+};
+// Semaine
+const capsMealStyle = {
+  padding: '10px 12px',
+  background: 'rgba(255, 255, 255, 0.03)',
+  borderLeft: '2px solid #d4c9a8',
+  borderRadius: '0 6px 6px 0',
+};
+const capsMealSlotStyle = {
+  color: '#d4c9a8',
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  marginBottom: 3,
+};
+const capsMealTitleStyle = {
+  color: '#cfcfc4',
+  fontSize: '0.85rem',
+  lineHeight: 1.45,
+};
+const capsMealAltsStyle = {
+  marginTop: 4,
+  color: '#9b9b89',
+  fontSize: '0.72rem',
+};
+const capsMealRecipeStyle = {
+  marginTop: 4,
+  color: '#a8e890',
+  fontSize: '0.72rem',
+  fontWeight: 600,
+};
+// Frigo
+const capsPillsStyle = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 6,
+};
+const capsPillStyle = {
+  padding: '4px 10px',
+  background: 'rgba(212, 201, 168, 0.08)',
+  border: '1px solid rgba(212, 201, 168, 0.18)',
+  borderRadius: 999,
+  color: '#d4c9a8',
+  fontSize: '0.76rem',
+};
+const capsPillLimitStyle = {
+  background: 'rgba(220, 140, 80, 0.06)',
+  border: '1px solid rgba(220, 140, 80, 0.20)',
+  color: '#e3a878',
+};
+// Compléments
+const capsCompStyle = {
+  padding: '10px 12px',
+  background: 'rgba(255, 255, 255, 0.03)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 8,
+};
+const capsCompNameStyle = {
+  color: '#d4c9a8',
+  fontSize: '0.84rem',
+  fontWeight: 600,
+  marginBottom: 4,
+};
+const capsCompMetaStyle = {
+  color: '#9b9b89',
+  fontSize: '0.74rem',
+  marginTop: 2,
+};
+const capsCompBenefitStyle = {
+  marginTop: 6,
+  paddingTop: 6,
+  borderTop: '1px dashed rgba(255, 255, 255, 0.08)',
+  color: '#cfcfc4',
+  fontSize: '0.78rem',
+  fontStyle: 'italic',
+  lineHeight: 1.4,
+};
 
 function Meta({ plan }) {
   return (
