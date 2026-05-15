@@ -4839,82 +4839,158 @@
 }
 
 /* ════════════════════════════════════════════════════════════════
-   MODAL APERÇU APP CLIENTE — V97.13.32
-   Layout 2 colonnes : mockup iPhone sticky à gauche + sections scroll à droite.
-   Réutilise les classes .jrn-phone-mockup* (V97.13.15) pour cohérence visuelle
-   avec l'étape 7 Activation cliente.
+   MODAL APERÇU APP CLIENTE — V97.13.34
+   Vue "page web cliente" pleine largeur. Plus de mockup iPhone — Anissa
+   voit l'intégralité de l'expérience cliente comme une vraie page web
+   premium (header chaleureux + sections grand format).
    ════════════════════════════════════════════════════════════════ */
 
-.jrn-app-preview-body {
+.jrn-app-preview-fullpage {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(280px, 340px) 1fr;
-  gap: 24px;
-  overflow: hidden;
-  padding: 16px 22px;
-  min-height: 0;
-}
-
-.jrn-app-preview-phone {
-  align-self: flex-start;
-  position: sticky;
-  top: 0;
-  padding-top: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.jrn-app-preview-phone .jrn-phone-mockup {
-  /* Légère réduction d'échelle pour rentrer dans la modal sans dépasser */
-  transform: scale(0.92);
-  transform-origin: top center;
-}
-.jrn-app-preview-phone__caption {
-  font-size: 11px;
-  color: rgba(212, 201, 168, 0.55);
-  text-align: center;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-top: -20px; /* compense l'espace pris par le transform scale */
-  line-height: 1.5;
-}
-.jrn-app-preview-phone__caption span {
-  display: block;
-  margin-top: 4px;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 10.5px;
-  color: rgba(138, 138, 122, 0.7);
-}
-
-.jrn-app-preview-content {
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
-  min-width: 0;
+  padding: 16px 22px 22px;
+  min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(212, 201, 168, 0.2) transparent;
 }
-.jrn-app-preview-content::-webkit-scrollbar {
+.jrn-app-preview-fullpage::-webkit-scrollbar {
   width: 6px;
 }
-.jrn-app-preview-content::-webkit-scrollbar-thumb {
+.jrn-app-preview-fullpage::-webkit-scrollbar-thumb {
   background: rgba(212, 201, 168, 0.2);
   border-radius: 3px;
 }
 
-/* Responsive : sous 980px, on stack phone au-dessus du contenu */
-@media (max-width: 980px) {
-  .jrn-app-preview-body {
-    grid-template-columns: 1fr;
-    gap: 16px;
+/* Conteneur "page cliente" complet : header chaleureux + sections */
+.jrn-clientpage {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* HERO — header chaleureux comme l'app cliente accueille */
+.jrn-clientpage__hero {
+  position: relative;
+  background:
+    radial-gradient(ellipse 100% 90% at top, rgba(212, 201, 168, 0.10) 0%, transparent 70%),
+    linear-gradient(180deg, #1B2A1F 0%, #131F16 100%);
+  border: 1px solid rgba(212, 201, 168, 0.18);
+  border-radius: 16px;
+  padding: 36px 36px 28px;
+  color: #f0f0e8;
+  overflow: hidden;
+}
+.jrn-clientpage__hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #d4c9a8 0%, rgba(212, 201, 168, 0.2) 100%);
+}
+.jrn-clientpage__hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.jrn-clientpage__hero-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d4c9a8 0%, #b8a880 100%);
+  color: #1A2E1F;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.jrn-clientpage__hero-brandname {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 16px;
+  color: #d4c9a8;
+  letter-spacing: 0.01em;
+}
+.jrn-clientpage__hero-greeting {
+  margin: 0 0 6px;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1.15;
+  color: #f5efde;
+  letter-spacing: -0.005em;
+  max-width: 22ch;
+}
+.jrn-clientpage__hero-sub {
+  margin: 0 0 22px;
+  font-size: 13.5px;
+  color: rgba(212, 201, 168, 0.7);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.jrn-clientpage__hero-stats {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+  border-top: 1px solid rgba(212, 201, 168, 0.14);
+}
+.jrn-clientpage__hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.jrn-clientpage__hero-stat strong {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 26px;
+  font-weight: 500;
+  color: #f5efde;
+  line-height: 1;
+}
+.jrn-clientpage__hero-stat span {
+  font-size: 11px;
+  color: rgba(212, 201, 168, 0.65);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.jrn-clientpage__hero-tag {
+  margin-top: 20px;
+  padding: 10px 14px;
+  background: rgba(212, 201, 168, 0.06);
+  border: 1px dashed rgba(212, 201, 168, 0.22);
+  border-radius: 8px;
+  font-size: 12px;
+  color: rgba(212, 201, 168, 0.75);
+  text-align: center;
+}
+
+/* Sections : SectionsOverview existant, juste plus aéré */
+.jrn-clientpage__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Responsive : sous 720px, hero plus compact */
+@media (max-width: 720px) {
+  .jrn-clientpage__hero {
+    padding: 24px 22px 22px;
   }
-  .jrn-app-preview-phone {
-    position: static;
-    align-self: center;
+  .jrn-clientpage__hero-greeting {
+    font-size: 26px;
   }
-  .jrn-app-preview-phone .jrn-phone-mockup {
-    transform: scale(0.85);
+  .jrn-clientpage__hero-stats {
+    gap: 18px;
+  }
+  .jrn-clientpage__hero-stat strong {
+    font-size: 22px;
   }
 }

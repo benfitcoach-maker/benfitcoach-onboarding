@@ -346,60 +346,53 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
           />
         )}
 
-        {/* Corps — V97.13.32 : layout 2 colonnes (phone sticky + sections scroll) */}
-        <div className="jrn-app-preview-body">
-          {/* Colonne gauche : aperçu téléphone sticky (uniquement en mode sections) */}
-          {tab === 'sections' && (
-            <aside className="jrn-app-preview-phone" aria-hidden="true">
-              <ClientPhoneMockup client={client} plan={plan} />
-              <div className="jrn-app-preview-phone__caption">
-                Vue côté {client?.prenom || 'cliente'}
-                <span>— rendu indicatif, l'app réelle peut varier légèrement.</span>
-              </div>
-            </aside>
+        {/* Corps — V97.13.34 : vue "page web cliente" pleine largeur.
+            Plus de mockup iPhone — Anissa voit l intégralité de l expérience
+            cliente comme une vraie page web premium (header chaleureux +
+            sections grand format). */}
+        <div className="jrn-app-preview-fullpage">
+          {error && (
+            <div
+              style={{
+                padding: 14,
+                borderRadius: 8,
+                background: 'rgba(220,80,80,.1)',
+                border: '1px solid rgba(220,80,80,.3)',
+                color: '#f5c6c6',
+                fontSize: '.85rem',
+                marginBottom: 12,
+              }}
+            >
+              <strong>Erreur de mapping :</strong> {error}
+            </div>
           )}
 
-          {/* Colonne droite : sections scrollable */}
-          <div className="jrn-app-preview-content">
-            {error && (
-              <div
-                style={{
-                  padding: 14,
-                  borderRadius: 8,
-                  background: 'rgba(220,80,80,.1)',
-                  border: '1px solid rgba(220,80,80,.3)',
-                  color: '#f5c6c6',
-                  fontSize: '.85rem',
-                  marginBottom: 12,
-                }}
-              >
-                <strong>Erreur de mapping :</strong> {error}
-              </div>
-            )}
+          {plan && tab === 'json' && (
+            <pre
+              style={{
+                margin: 0,
+                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                fontSize: '.78rem',
+                lineHeight: 1.5,
+                color: '#cfcfc4',
+                background: 'rgba(0,0,0,.25)',
+                padding: 14,
+                borderRadius: 8,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {JSON.stringify(plan, null, 2)}
+            </pre>
+          )}
 
-            {plan && tab === 'json' && (
-              <pre
-                style={{
-                  margin: 0,
-                  fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                  fontSize: '.78rem',
-                  lineHeight: 1.5,
-                  color: '#cfcfc4',
-                  background: 'rgba(0,0,0,.25)',
-                  padding: 14,
-                  borderRadius: 8,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {JSON.stringify(plan, null, 2)}
-              </pre>
-            )}
+          {plan && tab === 'sections' && (
+            <ClientFullPagePreview client={client} plan={plan}>
+              <SectionsOverview plan={plan} />
+            </ClientFullPagePreview>
+          )}
 
-            {plan && tab === 'sections' && <SectionsOverview plan={plan} />}
-
-            {plan && tab === 'diagnostic' && diag && <DiagnosticView diag={diag} />}
-          </div>
+          {plan && tab === 'diagnostic' && diag && <DiagnosticView diag={diag} />}
         </div>
 
         {/* Footer publication */}
@@ -1464,13 +1457,67 @@ function DiagnosticView({ diag }) {
   );
 }
 
-// ─── V97.13.32 — Aperçu téléphone réutilisable ─────────────────────────────
+// ─── V97.13.34 — Vue "page web cliente" pleine largeur ────────────────────
 //
-// Mockup iPhone CSS (charte .jrn-phone-mockup* du journey.css, V97.13.15)
-// adapté pour la modal Espace cliente. Pré-rempli avec les vraies données
-// du plan quand disponibles (prénom, premier repas, énergie target).
-// Permet à Anissa de "voir ce que voit la cliente" en un coup d'œil,
-// avant de plonger dans le détail des sections à droite.
+// Wrapper qui ajoute un header chaleureux style app cliente (greeting + meta)
+// au-dessus des sections existantes (SectionsOverview). Donne à Anissa la
+// sensation de voir l'expérience cliente complète en une vraie page web,
+// pas un aperçu fragmenté.
+
+function ClientFullPagePreview({ client, plan, children }) {
+  const prenom = (client?.prenom || client?.form?.prenom || 'Cliente').trim();
+  const pack = plan?.client_meta?.pack_label
+    || plan?.client_meta?.pack
+    || 'Accompagnement nutritionnel';
+
+  // Pioche un premier signal narratif si dispo
+  const intro = plan?.sections?.intro_data;
+  const greetingLine = intro?.greeting?.trim()
+    || `Bonjour ${prenom}, ton parcours commence aujourd'hui.`;
+
+  // Compte rapide des éléments majeurs pour le sous-header
+  const mealsCount = plan?.sections?.week_meals?.days?.[0]?.meals?.length || 0;
+  const suppGroups = plan?.sections?.protocols_data?.groups?.length || 0;
+  const fridgeItems = plan?.sections?.fridge_data?.essentials?.length || 0;
+
+  return (
+    <div className="jrn-clientpage">
+      {/* Header chaleureux style app cliente */}
+      <div className="jrn-clientpage__hero">
+        <div className="jrn-clientpage__hero-brand">
+          <span className="jrn-clientpage__hero-avatar" aria-hidden>A</span>
+          <span className="jrn-clientpage__hero-brandname">Anissa Deroubaix</span>
+        </div>
+        <h2 className="jrn-clientpage__hero-greeting">{greetingLine}</h2>
+        <p className="jrn-clientpage__hero-sub">{pack}</p>
+        <div className="jrn-clientpage__hero-stats">
+          <span className="jrn-clientpage__hero-stat">
+            <strong>{mealsCount || '—'}</strong>
+            <span>repas / jour</span>
+          </span>
+          <span className="jrn-clientpage__hero-stat">
+            <strong>{suppGroups || '—'}</strong>
+            <span>moments de prise</span>
+          </span>
+          <span className="jrn-clientpage__hero-stat">
+            <strong>{fridgeItems || '—'}</strong>
+            <span>essentiels frigo</span>
+          </span>
+        </div>
+        <div className="jrn-clientpage__hero-tag">
+          Aperçu côté {prenom} — exactement ce qu'elle verra dans son app.
+        </div>
+      </div>
+
+      {/* Sections cliente — SectionsOverview existant injecté tel quel */}
+      <div className="jrn-clientpage__sections">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mockup iPhone (legacy, conservé pour réutilisation future) ─────────────
 
 function ClientPhoneMockup({ client, plan }) {
   const prenom = (client?.prenom || client?.form?.prenom || 'Cliente').trim();
