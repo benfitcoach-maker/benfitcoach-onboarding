@@ -813,18 +813,7 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, sav
         {s.week_meals?.days?.[0]?.meals?.length > 0 && (
           <div style={{ display: 'grid', gap: 8 }}>
             {s.week_meals.days[0].meals.map((m) => (
-              <div key={m.id} style={capsMealStyle}>
-                <div style={capsMealSlotStyle}>{m.slot_label}</div>
-                <div style={capsMealTitleStyle}>{m.title}</div>
-                {m.alternatives?.length > 0 && (
-                  <div style={capsMealAltsStyle}>
-                    {m.alternatives.length} alternative{m.alternatives.length > 1 ? 's' : ''} disponible{m.alternatives.length > 1 ? 's' : ''}
-                  </div>
-                )}
-                {m.recipe && (
-                  <div style={capsMealRecipeStyle}>🍳 Recette détaillée</div>
-                )}
-              </div>
+              <MealCardExpandable key={m.id} meal={m} />
             ))}
           </div>
         )}
@@ -1560,6 +1549,85 @@ function DiagnosticView({ diag }) {
             ))}
           </ul>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── V97.13.40 — Carte repas avec alternatives expansibles ────────────────
+//
+// Cohérent avec l'app cliente Next.js qui affiche "Autres options · 4 →" sur
+// chaque repas. Avant V97.13.40 : la modal Aperçu n'affichait que le compteur
+// sans détail. Anissa devait ouvrir la fiche frigo PDF pour les voir.
+// Maintenant : click sur le bouton déroule la liste complète des alternatives
+// dans la même surface visuelle.
+
+function MealCardExpandable({ meal }) {
+  const [expanded, setExpanded] = useState(false);
+  const alts = meal?.alternatives || [];
+  const hasAlts = alts.length > 0;
+
+  return (
+    <div style={capsMealStyle}>
+      <div style={capsMealSlotStyle}>{meal.slot_label}</div>
+      <div style={capsMealTitleStyle}>{meal.title}</div>
+
+      {hasAlts && (
+        <>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            style={{
+              ...capsMealAltsStyle,
+              background: 'transparent',
+              border: 'none',
+              padding: '6px 0 2px',
+              cursor: 'pointer',
+              color: '#8abf9a',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '.78rem',
+            }}
+            title={expanded ? 'Replier les alternatives' : 'Voir les alternatives'}
+          >
+            Autres options · {alts.length}
+            <span style={{ transition: 'transform 140ms ease', transform: expanded ? 'rotate(90deg)' : 'rotate(0)', display: 'inline-block' }}>→</span>
+          </button>
+
+          {expanded && (
+            <ul style={{
+              listStyle: 'none',
+              margin: '8px 0 4px',
+              padding: '0 0 0 12px',
+              borderLeft: '2px solid rgba(106, 191, 138, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}>
+              {alts.map((alt, i) => (
+                <li key={alt.id || i} style={{
+                  fontSize: '.86rem',
+                  color: '#d4c9a8',
+                  lineHeight: 1.5,
+                }}>
+                  <span style={{ color: '#8abf9a', marginRight: 6, fontWeight: 600 }}>{i + 1}.</span>
+                  {alt.title || alt.name || alt.label || '—'}
+                  {alt.description && (
+                    <div style={{ fontSize: '.78rem', color: '#8a8a7a', marginTop: 2, fontStyle: 'italic' }}>
+                      {alt.description}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {meal.recipe && (
+        <div style={capsMealRecipeStyle}>🍳 Recette détaillée</div>
       )}
     </div>
   );
