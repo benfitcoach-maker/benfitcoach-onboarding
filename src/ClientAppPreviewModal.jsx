@@ -53,6 +53,10 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
   const [enrichmentDraft, setEnrichmentDraft] = useState(null); // proposition IA pas encore acceptée
   const [enrichmentApplied, setEnrichmentApplied] = useState(null); // accepté → injecté dans le plan publié
   const [enrichmentError, setEnrichmentError] = useState(null);
+  // V97.13.45 — section ciblee par le bouton "✨ Ameliorer" : 'intro' | 'strategy'
+  // | 'fridge' | 'protocols' | null (global). Permet de filtrer le draft a la
+  // seule section concernee plutot que d ecraser tout le plan.
+  const [enrichmentTargetSection, setEnrichmentTargetSection] = useState(null);
 
   // V97.13.38 — État local de la consultation pour refleter les edits inline
   // (greeting, signature, ...) sans attendre un round-trip parent. Initialise
@@ -158,13 +162,56 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     }
   };
 
+  // V97.13.45 — Enrichissement cible par section. Le user clique "✨ Ameliorer"
+  // sur une section specifique → on lance le meme enrichissement IA global
+  // mais on FILTRE l'application aux seuls champs concernes par cette section.
+  // Plus de "click frigo regenere tout le plan" — c'etait deroutant.
+  const handleEnrichForSection = async (section) => {
+    setEnrichmentTargetSection(section);
+    await handleEnrich();
+  };
+
+  // Filtre un enrichissement complet aux seuls champs d'une section donnee.
+  // Permet d'appliquer un enrichissement sans ecraser les autres sections.
+  const filterEnrichmentToSection = (enrichment, section) => {
+    if (!enrichment || !section) return enrichment;
+    switch (section) {
+      case 'intro':
+        return {
+          intro_body: enrichment.intro_body,
+          pull_quote: enrichment.pull_quote,
+          tailored_points: enrichment.tailored_points,
+          signature_phrase: enrichment.signature_phrase,
+        };
+      case 'strategy':
+        return {
+          signature_phrase: enrichment.signature_phrase,
+        };
+      case 'fridge':
+        return {
+          section_intros: { fridge: enrichment.section_intros?.fridge },
+        };
+      case 'protocols':
+        return {
+          section_intros: { protocols: enrichment.section_intros?.protocols },
+        };
+      default:
+        return enrichment;
+    }
+  };
+
   const handleAcceptEnrichment = () => {
-    setEnrichmentApplied(enrichmentDraft);
+    const toApply = enrichmentTargetSection
+      ? filterEnrichmentToSection(enrichmentDraft, enrichmentTargetSection)
+      : enrichmentDraft;
+    setEnrichmentApplied(toApply);
     setEnrichmentDraft(null);
+    setEnrichmentTargetSection(null);
   };
 
   const handleRejectEnrichment = () => {
     setEnrichmentDraft(null);
+    setEnrichmentTargetSection(null);
   };
 
   const handleResetEnrichment = () => {
@@ -611,11 +658,12 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
               onImprove={rawPlan ? handleEnrich : undefined}
               improving={enriching}
             >
-              {({ onImprove, improving }) => (
+              {() => (
                 <SectionsOverview
                   plan={plan}
-                  onImprove={onImprove}
-                  improving={improving}
+                  onImproveSection={rawPlan ? handleEnrichForSection : undefined}
+                  improving={enriching}
+                  improvingSection={enrichmentTargetSection}
                   onEditIntro={handleSaveIntroEdits}
                   onEditStrategy={handleSaveStrategyEdits}
                   onEditSupplementsIntro={handleSaveSupplementsIntroEdits}
@@ -888,7 +936,13 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onEditStrategy, onEditSupplementsIntro, onEditFridge, onEditMeals, savingEdits = false, editsSavedAt = null, editsError = null }) {
+function SectionsOverview({ plan, onImproveSection, improving = false, improvingSection = null, onEditIntro, onEditStrategy, onEditSupplementsIntro, onEditFridge, onEditMeals, savingEdits = false, editsSavedAt = null, editsError = null }) {
+  // V97.13.45 — onImproveSection(key) cible une section specifique au lieu
+  // du global onImprove. Chaque card recoit son propre handler.
+  const onImproveIntro = onImproveSection ? () => onImproveSection('intro') : undefined;
+  const onImproveStrategy = onImproveSection ? () => onImproveSection('strategy') : undefined;
+  const onImproveFridge = onImproveSection ? () => onImproveSection('fridge') : undefined;
+  const onImproveProtocols = onImproveSection ? () => onImproveSection('protocols') : undefined;
   const s = plan.sections || {};
 
   return (
@@ -896,8 +950,8 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onE
       {/* ─── Lettre d'intro ────────────────────────────────────────── */}
       <IntroCardEditable
         intro={s.intro_data}
-        onImprove={onImprove}
-        improving={improving}
+        onImprove={onImproveIntro}
+        improving={improving && improvingSection === 'intro'}
         onSave={onEditIntro}
         saving={savingEdits}
         savedAt={editsSavedAt}
@@ -907,20 +961,19 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onE
       {/* ─── Stratégie & piliers (A3a éditable) ─────────────────── */}
       <StrategyCardEditable
         strategy={s.strategy_data}
-        onImprove={onImprove}
-        improving={improving}
+        onImprove={onImproveStrategy}
+        improving={improving && improvingSection === 'strategy'}
         onSave={onEditStrategy}
         saving={savingEdits}
         savedAt={editsSavedAt}
         error={editsError}
       />
 
-      {/* ─── Semaine 1 ─────────────────────────────────────────────── */}
-      {/* ─── Semaine type (A3d — éditable) ─────────────────────── */}
+      {/* ─── Semaine type (A3d — éditable, pas d'IA Améliorer pour V1) ──── */}
       <WeekMealsCardEditable
         weekMeals={s.week_meals}
-        onImprove={onImprove}
-        improving={improving}
+        onImprove={undefined}
+        improving={false}
         onSave={onEditMeals}
         saving={savingEdits}
         savedAt={editsSavedAt}
@@ -930,8 +983,8 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onE
       {/* ─── Frigo & courses (A3c — éditable) ───────────────────── */}
       <FridgeCardEditable
         fridge={s.fridge_data}
-        onImprove={onImprove}
-        improving={improving}
+        onImprove={onImproveFridge}
+        improving={improving && improvingSection === 'fridge'}
         onSave={onEditFridge}
         saving={savingEdits}
         savedAt={editsSavedAt}
@@ -941,8 +994,8 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onE
       {/* ─── Compléments (A3b — intro éditable) ─────────────────── */}
       <SupplementsCardEditable
         protocols={s.protocols_data}
-        onImprove={onImprove}
-        improving={improving}
+        onImprove={onImproveProtocols}
+        improving={improving && improvingSection === 'protocols'}
         onSave={onEditSupplementsIntro}
         saving={savingEdits}
         savedAt={editsSavedAt}
