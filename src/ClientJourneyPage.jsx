@@ -3320,34 +3320,74 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
         </dl>
       </div>
 
-      {/* ════════ Bloc 1 — Déploiement de l'accompagnement ════════ */}
+      {/* ════════ Bloc 1 — Options de remise ════════
+          V97.13.36 : ordre logique repense (Options → Miroir → Deploiement).
+          Configurer AVANT de visualiser : Anissa decide d abord ce qu elle
+          inclut (papier oui/non, suivi poids), puis le miroir REFLETE ces
+          options, puis la timeline execute. Avant : Options arrivait apres
+          le miroir, ce qui demandait a Anissa de re-visualiser. */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">1</span>
-          <h3 className="jrn-block__title">Déploiement de l'accompagnement</h3>
+          <h3 className="jrn-block__title">Options de remise</h3>
         </div>
         <p className="jrn-block__intro">
-          Cinq jalons s'enchaînent. Le premier est validé. La confirmation finale ci-dessous déclenche les suivants.
+          Deux réglages avant l'activation. Tu peux les ajuster sans toucher au protocole lui-même.
         </p>
-        <ol className="jrn-deploy-list">
-          {deploymentSteps.map((step, i) => (
-            <li key={step.key} className={`jrn-deploy-item jrn-deploy-item--${step.status}`}>
-              <span className="jrn-deploy-marker" aria-hidden>
-                {step.status === 'done' ? '✓' : step.status === 'skipped' ? '—' : i + 1}
-              </span>
-              <div className="jrn-deploy-body">
-                <div className="jrn-deploy-label">{step.label}</div>
-                <div className="jrn-deploy-hint">{step.hint}</div>
+
+        {/* Toggle livret papier */}
+        <div className="jrn-paper-card">
+          <div className="jrn-paper-card__head">
+            <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
+            <button
+              type="button"
+              className="jrn-paper-card__head-text"
+              onClick={() => setIncludePaper(!includePaper)}
+            >
+              <div className="jrn-paper-card__title">
+                <span aria-hidden>📦</span> Livret papier postal
               </div>
-              {step.status === 'pending' && (
-                <span className="jrn-deploy-status">À l'activation</span>
-              )}
-              {step.status === 'done' && (
-                <span className="jrn-deploy-status jrn-deploy-status--done">Terminé</span>
-              )}
-            </li>
-          ))}
-        </ol>
+              <div className="jrn-paper-card__hint">
+                {isFirstVersion
+                  ? `Recommandé pour ce premier cycle — ancre l'expérience chez ${prenom}.`
+                  : `À activer uniquement pour les changements majeurs (nouvelle phase, refonte protocole).`}
+              </div>
+            </button>
+          </div>
+          {includePaper && (
+            <div className="jrn-paper-card__steps">
+              <div className="jrn-paper-card__steps-label">Marche à suivre</div>
+              <ol className="jrn-paper-card__steps-list">
+                <li>Exporter le document Word ci-dessous</li>
+                <li>Imprimer (recto-verso conseillé)</li>
+                <li>Préparer enveloppe + étiquette à l'adresse de {prenom}</li>
+                <li>Expédier postalement</li>
+              </ol>
+              <button
+                onClick={handleExportWord}
+                disabled={exporting}
+                className="jrn-btn jrn-btn--soft jrn-paper-card__btn"
+              >
+                {exporting ? 'Export en cours…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter le Word')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Toggle suivi poids — option fine */}
+        <div className="jrn-inline-card jrn-inline-card--accent">
+          <div className="jrn-inline-card__row">
+            <div className="jrn-inline-card__body">
+              <div className="jrn-inline-card__title">
+                <span aria-hidden>⚖️</span> Suivi du poids
+              </div>
+              <div className="jrn-inline-card__hint">
+                Activer si le poids est un axe du protocole. {prenom} saisira sa pesée dans le ressenti quotidien.
+              </div>
+            </div>
+            <WeightTogglesInline client={client} compact />
+          </div>
+        </div>
       </div>
 
       {/* ════════ Bloc 2 — Miroir cliente (app cliente centrale) ════════ */}
@@ -3494,69 +3534,37 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
         </div>
       </div>
 
-      {/* ════════ Bloc 3 — Options de remise ════════ */}
+      {/* ════════ Bloc 3 — Déploiement de l'accompagnement ════════
+          V97.13.36 : remonte ici (etait Bloc 1) pour que la timeline arrive
+          APRES la config et le miroir. Ordre narratif : configure → visualise
+          → execute. */}
       <div className="jrn-block">
         <div className="jrn-block__head">
           <span className="jrn-block__num">3</span>
-          <h3 className="jrn-block__title">Options de remise</h3>
+          <h3 className="jrn-block__title">Déploiement de l'accompagnement</h3>
         </div>
         <p className="jrn-block__intro">
-          Deux réglages avant l'activation. Tu peux les ajuster sans toucher au protocole lui-même.
+          Cinq jalons s'enchaînent. Le premier est validé. La confirmation finale ci-dessous déclenche les suivants.
         </p>
-
-        {/* Toggle livret papier */}
-        <div className="jrn-paper-card">
-          <div className="jrn-paper-card__head">
-            <PremiumSwitch checked={includePaper} onChange={setIncludePaper} />
-            <button
-              type="button"
-              className="jrn-paper-card__head-text"
-              onClick={() => setIncludePaper(!includePaper)}
-            >
-              <div className="jrn-paper-card__title">
-                <span aria-hidden>📦</span> Livret papier postal
+        <ol className="jrn-deploy-list">
+          {deploymentSteps.map((step, i) => (
+            <li key={step.key} className={`jrn-deploy-item jrn-deploy-item--${step.status}`}>
+              <span className="jrn-deploy-marker" aria-hidden>
+                {step.status === 'done' ? '✓' : step.status === 'skipped' ? '—' : i + 1}
+              </span>
+              <div className="jrn-deploy-body">
+                <div className="jrn-deploy-label">{step.label}</div>
+                <div className="jrn-deploy-hint">{step.hint}</div>
               </div>
-              <div className="jrn-paper-card__hint">
-                {isFirstVersion
-                  ? `Recommandé pour ce premier cycle — ancre l'expérience chez ${prenom}.`
-                  : `À activer uniquement pour les changements majeurs (nouvelle phase, refonte protocole).`}
-              </div>
-            </button>
-          </div>
-          {includePaper && (
-            <div className="jrn-paper-card__steps">
-              <div className="jrn-paper-card__steps-label">Marche à suivre</div>
-              <ol className="jrn-paper-card__steps-list">
-                <li>Exporter le document Word ci-dessous</li>
-                <li>Imprimer (recto-verso conseillé)</li>
-                <li>Préparer enveloppe + étiquette à l'adresse de {prenom}</li>
-                <li>Expédier postalement</li>
-              </ol>
-              <button
-                onClick={handleExportWord}
-                disabled={exporting}
-                className="jrn-btn jrn-btn--soft jrn-paper-card__btn"
-              >
-                {exporting ? 'Export en cours…' : (paperExported ? '✓ Word téléchargé — Re-télécharger' : '📥 Exporter le Word')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Toggle suivi poids — option fine */}
-        <div className="jrn-inline-card jrn-inline-card--accent">
-          <div className="jrn-inline-card__row">
-            <div className="jrn-inline-card__body">
-              <div className="jrn-inline-card__title">
-                <span aria-hidden>⚖️</span> Suivi du poids
-              </div>
-              <div className="jrn-inline-card__hint">
-                Activer si le poids est un axe du protocole. {prenom} saisira sa pesée dans le ressenti quotidien.
-              </div>
-            </div>
-            <WeightTogglesInline client={client} compact />
-          </div>
-        </div>
+              {step.status === 'pending' && (
+                <span className="jrn-deploy-status">À l'activation</span>
+              )}
+              {step.status === 'done' && (
+                <span className="jrn-deploy-status jrn-deploy-status--done">Terminé</span>
+              )}
+            </li>
+          ))}
+        </ol>
       </div>
 
       {/* ════════ Bloc 4 — Date d'activation (si déjà activé) ════════ */}
