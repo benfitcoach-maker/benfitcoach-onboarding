@@ -172,6 +172,33 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     setEnrichmentDraft(null);
   };
 
+  // V97.13.42 Phase A3b — Sauvegarde de l intro Complements.
+  // Persiste dans consultation.editorial_overrides.supplements_intro.
+  const handleSaveSupplementsIntroEdits = async (text) => {
+    if (typeof text !== 'string' || !localConsultation) return;
+    setEditsError(null);
+    setSavingEdits(true);
+    try {
+      const { saveNutritionConsultation } = await import('./store');
+      const existingOverrides = localConsultation.editorial_overrides || {};
+      const nextOverrides = {
+        ...existingOverrides,
+        supplements_intro: text.trim(),
+      };
+      const updated = await saveNutritionConsultation({
+        ...localConsultation,
+        editorial_overrides: nextOverrides,
+      });
+      setLocalConsultation(updated);
+      setEditsSavedAt(Date.now());
+      setTimeout(() => setEditsSavedAt((v) => (v && Date.now() - v >= 2400 ? null : v)), 2500);
+    } catch (err) {
+      setEditsError(err?.message || String(err));
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   // V97.13.41 Phase A3a — Sauvegarde des edits Strategie.
   // Persiste dans consultation.editorial_overrides.strategy (champ JSONB
   // generique). Necessite migration Supabase pour le sync cloud.
@@ -522,6 +549,7 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
                   improving={improving}
                   onEditIntro={handleSaveIntroEdits}
                   onEditStrategy={handleSaveStrategyEdits}
+                  onEditSupplementsIntro={handleSaveSupplementsIntroEdits}
                   savingEdits={savingEdits}
                   editsSavedAt={editsSavedAt}
                   editsError={editsError}
@@ -789,7 +817,7 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onEditStrategy, savingEdits = false, editsSavedAt = null, editsError = null }) {
+function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onEditStrategy, onEditSupplementsIntro, savingEdits = false, editsSavedAt = null, editsError = null }) {
   const s = plan.sections || {};
 
   return (
@@ -883,33 +911,16 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onE
         )}
       </CapsCard>
 
-      {/* ─── Compléments ──────────────────────────────────────────── */}
-      <CapsCard
-        icon="💊"
-        title="Compléments"
-        subtitle={s.protocols_data?.header_title}
-        empty={!s.protocols_data?.groups?.length}
-        emptyLabel="Pas de compléments détectés"
+      {/* ─── Compléments (A3b — intro éditable) ─────────────────── */}
+      <SupplementsCardEditable
+        protocols={s.protocols_data}
         onImprove={onImprove}
         improving={improving}
-        improveLabel="✨ Améliorer intro"
-      >
-        {s.protocols_data?.groups?.length > 0 && s.protocols_data.groups.map((g) => (
-          <div key={g.id} style={{ marginBottom: 12 }}>
-            <div style={capsSubTitleStyle}>{g.title}</div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              {g.items?.map((it) => (
-                <div key={it.id} style={capsCompStyle}>
-                  <div style={capsCompNameStyle}>{it.name}</div>
-                  {it.dose && <div style={capsCompMetaStyle}>📦 {it.dose}</div>}
-                  {it.timing_detail && <div style={capsCompMetaStyle}>⏰ {it.timing_detail}</div>}
-                  {it.benefit && <div style={capsCompBenefitStyle}>{it.benefit}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </CapsCard>
+        onSave={onEditSupplementsIntro}
+        saving={savingEdits}
+        savedAt={editsSavedAt}
+        error={editsError}
+      />
 
       {/* ─── Rotation (compact si vide) ───────────────────────────── */}
       {s.rotation_data?.categories?.length > 0 && (
@@ -2219,6 +2230,188 @@ function StrategyCardEditable({ strategy, onImprove, improving = false, onSave, 
                 </ul>
               </div>
             )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── V97.13.42 Phase A3b — Carte Compléments avec intro éditable ────────
+//
+// L'intro narrative de la section Compléments est éditable manuellement.
+// Les groupes (matin / midi / etc.) et items (noms, doses, timing) restent
+// non-éditables ici (ils viennent du plan markdown — l'édition se fait dans
+// l'atelier étape 6 si besoin). Le bouton ✨ Améliorer intro existe déjà
+// pour faire générer l'intro par l'IA.
+// Persistance via consultation.editorial_overrides.supplements_intro.
+
+function SupplementsCardEditable({ protocols, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null }) {
+  const empty = !protocols?.groups?.length;
+  const currentIntro = protocols?.intro || '';
+  const [editing, setEditing] = useState(false);
+  const [intro, setIntro] = useState(currentIntro);
+
+  useEffect(() => {
+    if (!editing) setIntro(currentIntro);
+  }, [currentIntro, editing]);
+
+  const canSave = typeof onSave === 'function' && !empty;
+  const dirty = (intro || '').trim() !== (currentIntro || '').trim();
+
+  const handleConfirm = async () => {
+    if (!onSave) return;
+    await onSave(intro.trim());
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setIntro(currentIntro);
+    setEditing(false);
+  };
+
+  return (
+    <div style={capsCardStyle}>
+      <header style={capsCardHeaderStyle}>
+        <span style={{ fontSize: '1.1rem' }}>💊</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={capsCardTitleStyle}>Compléments</h4>
+          {savedAt
+            ? <p style={{ ...capsCardSubtitleStyle, color: '#8abf9a' }}>✓ Enregistré</p>
+            : (protocols?.header_title && <p style={capsCardSubtitleStyle}>{protocols.header_title}</p>)}
+        </div>
+        {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+        {!empty && canSave && !editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              background: 'rgba(212, 201, 168, 0.08)',
+              border: '1px solid rgba(212, 201, 168, 0.20)',
+              color: '#d4c9a8',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            title="Modifier le texte d'intro des compléments"
+          >
+            ✏️ Éditer intro
+          </button>
+        )}
+        {!editing && onImprove && (
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            style={{
+              background: 'rgba(120, 80, 200, 0.08)',
+              border: '1px solid rgba(180, 140, 255, 0.25)',
+              color: '#b89eff',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: improving ? 'wait' : 'pointer',
+              opacity: improving ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            title="Demande à l'IA de régénérer l'intro narrative"
+          >
+            {improving ? '✨ …' : '✨ Améliorer intro'}
+          </button>
+        )}
+      </header>
+
+      <div style={capsCardBodyStyle}>
+        {empty ? (
+          <p style={capsEmptyStyle}>Pas de compléments détectés</p>
+        ) : (
+          <>
+            {/* Intro narrative — édition manuelle ou affichage */}
+            {editing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                <label style={{ fontSize: '.7rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                  Intro narrative
+                </label>
+                <textarea
+                  value={intro}
+                  onChange={(e) => setIntro(e.target.value)}
+                  rows={Math.max(2, Math.min(6, ((intro || '').length / 80) + 2))}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(212, 201, 168, 0.18)',
+                    borderRadius: 6,
+                    color: '#cfcfc4',
+                    fontFamily: 'inherit',
+                    fontSize: '.9rem',
+                    lineHeight: 1.55,
+                    resize: 'vertical',
+                  }}
+                  placeholder="Ex: Camille, voici les compléments qui vont soutenir ton parcours..."
+                />
+                <p style={{ fontSize: '.72rem', color: '#666', margin: 0 }}>
+                  Affichée en haut de la section Compléments dans l'app de la cliente.
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+                  {error && <span style={{ fontSize: '.75rem', color: '#f5c6c6', marginRight: 'auto' }}>⚠ {error}</span>}
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    disabled={saving}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#8a8a7a',
+                      padding: '8px 14px',
+                      borderRadius: 6,
+                      fontSize: '.82rem',
+                      cursor: saving ? 'wait' : 'pointer',
+                    }}
+                  >Annuler</button>
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={saving || !dirty}
+                    style={{
+                      background: dirty ? 'rgba(106, 191, 138, 0.15)' : 'rgba(106, 191, 138, 0.06)',
+                      border: `1px solid ${dirty ? 'rgba(106, 191, 138, 0.35)' : 'rgba(106, 191, 138, 0.18)'}`,
+                      color: dirty ? '#a8e0c0' : '#666',
+                      padding: '8px 16px',
+                      borderRadius: 6,
+                      fontSize: '.82rem',
+                      fontWeight: 600,
+                      cursor: (saving || !dirty) ? 'not-allowed' : 'pointer',
+                      opacity: saving ? 0.6 : 1,
+                    }}
+                  >{saving ? 'Enregistrement…' : '✓ Enregistrer'}</button>
+                </div>
+              </div>
+            ) : currentIntro ? (
+              <p style={{ ...capsBodyStyle, fontStyle: 'italic', color: '#d4c9a8', marginBottom: 14 }}>
+                {currentIntro}
+              </p>
+            ) : null}
+
+            {/* Groupes de compléments — non-éditables (source plan markdown) */}
+            {protocols?.groups?.length > 0 && protocols.groups.map((g) => (
+              <div key={g.id} style={{ marginBottom: 12 }}>
+                <div style={capsSubTitleStyle}>{g.title}</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {g.items?.map((it) => (
+                    <div key={it.id} style={capsCompStyle}>
+                      <div style={capsCompNameStyle}>{it.name}</div>
+                      {it.dose && <div style={capsCompMetaStyle}>📦 {it.dose}</div>}
+                      {it.timing_detail && <div style={capsCompMetaStyle}>⏰ {it.timing_detail}</div>}
+                      {it.benefit && <div style={capsCompBenefitStyle}>{it.benefit}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </>
         )}
       </div>

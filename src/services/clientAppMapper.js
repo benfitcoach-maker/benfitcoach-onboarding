@@ -1092,9 +1092,17 @@ function buildProtocolsData(client, consultation, sections) {
       items: groupBuckets.get(id),
     }));
 
+  // V97.13.42 Phase A3b — Override editorial manuel de l intro complements.
+  // Anissa peut editer le texte d intro depuis la modal Apercu app cote SaaS.
+  // Stocke dans consultation.editorial_overrides.supplements_intro.
+  // Note : l enrichissement IA (applyEnrichmentToPlan) ecrit sur 'intro' au
+  // niveau de protocols_data. L override manuel ici prime sur l enrichissement
+  // (l override est le dernier mot d Anissa).
+  const supplementsIntroOverride = (consultation?.editorial_overrides?.supplements_intro || '').trim();
+
   return {
     header_title: locale === "fr" ? "Vos compléments" : "Your supplements",
-    // intro → undefined (post-migration)
+    ...(supplementsIntroOverride ? { intro: supplementsIntroOverride } : {}),
     groups,
   };
 }
