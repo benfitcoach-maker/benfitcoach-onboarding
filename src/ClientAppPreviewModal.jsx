@@ -172,6 +172,75 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     setEnrichmentDraft(null);
   };
 
+  // V97.13.44 Phase A3d — Sauvegarde des edits Semaine type.
+  // Persiste dans consultation.editorial_overrides.meals = [{ slot, title,
+  // alternatives: [{ title }] }]. Le mapper applique aux jours.
+  const handleSaveMealsEdits = async (edits) => {
+    if (!Array.isArray(edits) || !localConsultation) return;
+    setEditsError(null);
+    setSavingEdits(true);
+    try {
+      const { saveNutritionConsultation } = await import('./store');
+      const existingOverrides = localConsultation.editorial_overrides || {};
+      const cleanedMeals = edits
+        .map((m) => ({
+          slot: String(m?.slot || '').trim(),
+          title: typeof m?.title === 'string' ? m.title.trim() : '',
+          alternatives: Array.isArray(m?.alternatives)
+            ? m.alternatives.map((alt) => ({ title: typeof alt?.title === 'string' ? alt.title.trim() : '' }))
+            : [],
+        }))
+        .filter((m) => m.slot && m.title);
+      const nextOverrides = {
+        ...existingOverrides,
+        meals: cleanedMeals,
+      };
+      const updated = await saveNutritionConsultation({
+        ...localConsultation,
+        editorial_overrides: nextOverrides,
+      });
+      setLocalConsultation(updated);
+      setEditsSavedAt(Date.now());
+      setTimeout(() => setEditsSavedAt((v) => (v && Date.now() - v >= 2400 ? null : v)), 2500);
+    } catch (err) {
+      setEditsError(err?.message || String(err));
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
+  // V97.13.43 Phase A3c — Sauvegarde des edits Frigo.
+  // Persiste dans consultation.editorial_overrides.fridge.
+  // Structure : { to_favor: string[], to_limit: string[] }
+  const handleSaveFridgeEdits = async (edits) => {
+    if (!edits || !localConsultation) return;
+    setEditsError(null);
+    setSavingEdits(true);
+    try {
+      const { saveNutritionConsultation } = await import('./store');
+      const existingOverrides = localConsultation.editorial_overrides || {};
+      const nextOverrides = {
+        ...existingOverrides,
+        fridge: {
+          ...(existingOverrides.fridge || {}),
+          ...(Array.isArray(edits.to_favor) ? { to_favor: edits.to_favor.map((s) => String(s || '').trim()).filter(Boolean) } : {}),
+          ...(Array.isArray(edits.to_limit) ? { to_limit: edits.to_limit.map((s) => String(s || '').trim()).filter(Boolean) } : {}),
+        },
+      };
+      const updated = await saveNutritionConsultation({
+        ...localConsultation,
+        editorial_overrides: nextOverrides,
+      });
+      setLocalConsultation(updated);
+      setEditsSavedAt(Date.now());
+      setTimeout(() => setEditsSavedAt((v) => (v && Date.now() - v >= 2400 ? null : v)), 2500);
+    } catch (err) {
+      setEditsError(err?.message || String(err));
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   // V97.13.42 Phase A3b — Sauvegarde de l intro Complements.
   // Persiste dans consultation.editorial_overrides.supplements_intro.
   const handleSaveSupplementsIntroEdits = async (text) => {
@@ -550,6 +619,8 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
                   onEditIntro={handleSaveIntroEdits}
                   onEditStrategy={handleSaveStrategyEdits}
                   onEditSupplementsIntro={handleSaveSupplementsIntroEdits}
+                  onEditFridge={handleSaveFridgeEdits}
+                  onEditMeals={handleSaveMealsEdits}
                   savingEdits={savingEdits}
                   editsSavedAt={editsSavedAt}
                   editsError={editsError}
@@ -817,7 +888,7 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onEditStrategy, onEditSupplementsIntro, savingEdits = false, editsSavedAt = null, editsError = null }) {
+function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onEditStrategy, onEditSupplementsIntro, onEditFridge, onEditMeals, savingEdits = false, editsSavedAt = null, editsError = null }) {
   const s = plan.sections || {};
 
   return (
@@ -845,71 +916,27 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onE
       />
 
       {/* ─── Semaine 1 ─────────────────────────────────────────────── */}
-      <CapsCard
-        icon="📅"
-        title="Semaine type"
-        subtitle={s.week_meals?.days?.length
-          ? `${s.week_meals.days.length} jours · ${s.week_meals.days[0]?.meals?.length || 0} repas/jour`
-          : null}
-        empty={!s.week_meals?.days?.length}
-        emptyLabel="Aucun repas généré"
-      >
-        {s.week_meals?.days?.[0]?.meals?.length > 0 && (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {s.week_meals.days[0].meals.map((m) => (
-              <MealCardExpandable key={m.id} meal={m} />
-            ))}
-          </div>
-        )}
-      </CapsCard>
+      {/* ─── Semaine type (A3d — éditable) ─────────────────────── */}
+      <WeekMealsCardEditable
+        weekMeals={s.week_meals}
+        onImprove={onImprove}
+        improving={improving}
+        onSave={onEditMeals}
+        saving={savingEdits}
+        savedAt={editsSavedAt}
+        error={editsError}
+      />
 
-      {/* ─── Frigo ─────────────────────────────────────────────────── */}
-      <CapsCard
-        icon="🧊"
-        title="Frigo & courses"
-        subtitle={s.fridge_data?.header_title}
-        empty={!s.fridge_data?.essentials?.length && !s.fridge_data?.favorite?.length}
-        emptyLabel="Pas encore de fiche frigo"
-      >
-        {s.fridge_data?.essentials?.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={capsSubTitleStyle}>{s.fridge_data.essentials_title || 'Essentiels'}</div>
-            <div style={capsPillsStyle}>
-              {s.fridge_data.essentials.map((e) => (
-                <span key={e.id} style={capsPillStyle}>{e.label}</span>
-              ))}
-            </div>
-          </div>
-        )}
-        {s.fridge_data?.favorite?.length > 0 && (
-          <div style={{ marginBottom: 10 }}>
-            {s.fridge_data.favorite.map((cat) => (
-              <div key={cat.id} style={{ marginBottom: 8 }}>
-                <div style={capsSubTitleStyle}>✓ {cat.title}</div>
-                <div style={capsPillsStyle}>
-                  {cat.items?.map((it) => (
-                    <span key={it.id} style={capsPillStyle}>{it.label}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {s.fridge_data?.limit?.length > 0 && (
-          <div>
-            {s.fridge_data.limit.map((cat) => (
-              <div key={cat.id} style={{ marginBottom: 8 }}>
-                <div style={capsSubTitleStyle}>⚠ {cat.title}</div>
-                <div style={capsPillsStyle}>
-                  {cat.items?.map((it) => (
-                    <span key={it.id} style={{ ...capsPillStyle, ...capsPillLimitStyle }}>{it.label}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CapsCard>
+      {/* ─── Frigo & courses (A3c — éditable) ───────────────────── */}
+      <FridgeCardEditable
+        fridge={s.fridge_data}
+        onImprove={onImprove}
+        improving={improving}
+        onSave={onEditFridge}
+        saving={savingEdits}
+        savedAt={editsSavedAt}
+        error={editsError}
+      />
 
       {/* ─── Compléments (A3b — intro éditable) ─────────────────── */}
       <SupplementsCardEditable
@@ -2413,6 +2440,529 @@ function SupplementsCardEditable({ protocols, onImprove, improving = false, onSa
               </div>
             ))}
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── V97.13.43 Phase A3c — Carte Frigo & courses éditable ──────────────
+//
+// Listes "À privilégier" et "À limiter" éditables comme tags/pills.
+// Anissa peut ajouter, supprimer ou renommer chaque item. Persistance via
+// consultation.editorial_overrides.fridge = { to_favor[], to_limit[] }.
+// Le bouton ✨ Améliorer relance l'enrichissement IA global.
+
+function FridgeCardEditable({ fridge, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null }) {
+  const empty = !fridge?.essentials?.length && !fridge?.favorite?.length;
+  const essentialsLabels = (fridge?.essentials || []).map((e) => e.label || '').filter(Boolean);
+  const limitLabels = (fridge?.limit || []).flatMap((cat) => (cat.items || []).map((it) => it.label || '')).filter(Boolean);
+  const [editing, setEditing] = useState(false);
+  const [toFavor, setToFavor] = useState(essentialsLabels);
+  const [toLimit, setToLimit] = useState(limitLabels);
+  const [newFavor, setNewFavor] = useState('');
+  const [newLimit, setNewLimit] = useState('');
+
+  useEffect(() => {
+    if (!editing) {
+      setToFavor(essentialsLabels);
+      setToLimit(limitLabels);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(essentialsLabels), JSON.stringify(limitLabels), editing]);
+
+  const canSave = typeof onSave === 'function' && !empty;
+  const dirty = JSON.stringify(toFavor) !== JSON.stringify(essentialsLabels)
+             || JSON.stringify(toLimit) !== JSON.stringify(limitLabels);
+
+  const handleConfirm = async () => {
+    if (!onSave) return;
+    await onSave({ to_favor: toFavor, to_limit: toLimit });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setToFavor(essentialsLabels);
+    setToLimit(limitLabels);
+    setEditing(false);
+  };
+
+  const removeAt = (list, setList, idx) => setList(list.filter((_, i) => i !== idx));
+  const addItem = (list, setList, value, setValue) => {
+    const v = (value || '').trim();
+    if (!v) return;
+    if (list.some((x) => x.toLowerCase() === v.toLowerCase())) {
+      setValue('');
+      return;
+    }
+    setList([...list, v]);
+    setValue('');
+  };
+
+  const renderPills = (list, setList, color) => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {list.map((label, i) => (
+        <span key={i} style={{
+          ...capsPillStyle,
+          ...(color === 'limit' ? capsPillLimitStyle : {}),
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 4px 4px 10px',
+        }}>
+          {label}
+          <button
+            type="button"
+            onClick={() => removeAt(list, setList, i)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              opacity: 0.6,
+              padding: '0 4px',
+              fontSize: '.75rem',
+            }}
+            title="Supprimer"
+          >×</button>
+        </span>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={capsCardStyle}>
+      <header style={capsCardHeaderStyle}>
+        <span style={{ fontSize: '1.1rem' }}>🧊</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={capsCardTitleStyle}>Frigo & courses</h4>
+          {savedAt
+            ? <p style={{ ...capsCardSubtitleStyle, color: '#8abf9a' }}>✓ Enregistré</p>
+            : (fridge?.header_title && <p style={capsCardSubtitleStyle}>{fridge.header_title}</p>)}
+        </div>
+        {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+        {!empty && canSave && !editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              background: 'rgba(212, 201, 168, 0.08)',
+              border: '1px solid rgba(212, 201, 168, 0.20)',
+              color: '#d4c9a8',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            title="Modifier les listes à privilégier et à limiter"
+          >✏️ Éditer</button>
+        )}
+        {!editing && onImprove && (
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            style={{
+              background: 'rgba(120, 80, 200, 0.08)',
+              border: '1px solid rgba(180, 140, 255, 0.25)',
+              color: '#b89eff',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: improving ? 'wait' : 'pointer',
+              opacity: improving ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            title="Demande à l'IA de régénérer le frigo"
+          >{improving ? '✨ …' : '✨ Améliorer'}</button>
+        )}
+      </header>
+
+      <div style={capsCardBodyStyle}>
+        {empty ? (
+          <p style={capsEmptyStyle}>Pas encore de fiche frigo</p>
+        ) : editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#8abf9a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
+                ✓ À privilégier
+              </label>
+              {renderPills(toFavor, setToFavor, 'favor')}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <input
+                  type="text"
+                  value={newFavor}
+                  onChange={(e) => setNewFavor(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(toFavor, setToFavor, newFavor, setNewFavor); } }}
+                  placeholder="Ajouter un aliment…"
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    background: 'rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(106, 191, 138, 0.20)',
+                    borderRadius: 6,
+                    color: '#f0f0e8',
+                    fontFamily: 'inherit',
+                    fontSize: '.85rem',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => addItem(toFavor, setToFavor, newFavor, setNewFavor)}
+                  style={{
+                    background: 'rgba(106, 191, 138, 0.12)',
+                    border: '1px solid rgba(106, 191, 138, 0.28)',
+                    color: '#a8e0c0',
+                    padding: '8px 14px',
+                    borderRadius: 6,
+                    fontSize: '.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >＋ Ajouter</button>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#d4806c', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
+                ⚠ À limiter / éviter
+              </label>
+              {renderPills(toLimit, setToLimit, 'limit')}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <input
+                  type="text"
+                  value={newLimit}
+                  onChange={(e) => setNewLimit(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(toLimit, setToLimit, newLimit, setNewLimit); } }}
+                  placeholder="Ajouter un aliment à limiter…"
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    background: 'rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(212, 92, 76, 0.20)',
+                    borderRadius: 6,
+                    color: '#f0f0e8',
+                    fontFamily: 'inherit',
+                    fontSize: '.85rem',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => addItem(toLimit, setToLimit, newLimit, setNewLimit)}
+                  style={{
+                    background: 'rgba(212, 92, 76, 0.12)',
+                    border: '1px solid rgba(212, 92, 76, 0.28)',
+                    color: '#d4806c',
+                    padding: '8px 14px',
+                    borderRadius: 6,
+                    fontSize: '.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >＋ Ajouter</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+              {error && <span style={{ fontSize: '.75rem', color: '#f5c6c6', marginRight: 'auto' }}>⚠ {error}</span>}
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#8a8a7a',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  cursor: saving ? 'wait' : 'pointer',
+                }}
+              >Annuler</button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={saving || !dirty}
+                style={{
+                  background: dirty ? 'rgba(106, 191, 138, 0.15)' : 'rgba(106, 191, 138, 0.06)',
+                  border: `1px solid ${dirty ? 'rgba(106, 191, 138, 0.35)' : 'rgba(106, 191, 138, 0.18)'}`,
+                  color: dirty ? '#a8e0c0' : '#666',
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  fontWeight: 600,
+                  cursor: (saving || !dirty) ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >{saving ? 'Enregistrement…' : '✓ Enregistrer'}</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {fridge?.essentials?.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={capsSubTitleStyle}>{fridge.essentials_title || 'À privilégier'}</div>
+                <div style={capsPillsStyle}>
+                  {fridge.essentials.map((e) => (
+                    <span key={e.id} style={capsPillStyle}>{e.label}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {fridge?.favorite?.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                {fridge.favorite.map((cat) => (
+                  <div key={cat.id} style={{ marginBottom: 8 }}>
+                    <div style={capsSubTitleStyle}>✓ {cat.title}</div>
+                    <div style={capsPillsStyle}>
+                      {cat.items?.map((it) => (
+                        <span key={it.id} style={capsPillStyle}>{it.label}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {fridge?.limit?.length > 0 && (
+              <div>
+                {fridge.limit.map((cat) => (
+                  <div key={cat.id} style={{ marginBottom: 8 }}>
+                    <div style={capsSubTitleStyle}>⚠ {cat.title}</div>
+                    <div style={capsPillsStyle}>
+                      {cat.items?.map((it) => (
+                        <span key={it.id} style={{ ...capsPillStyle, ...capsPillLimitStyle }}>{it.label}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── V97.13.44 Phase A3d — Carte Semaine type éditable ─────────────────
+//
+// Édition du titre des 4 repas du jour 1 + titres des alternatives.
+// Persistance via consultation.editorial_overrides.meals = [{ slot, title,
+// alternatives: [{ title }] }]. Mapper applique sur day1+ (semaine type
+// répétée chaque jour). Pas d'édition de description ni d'ajout/suppression
+// d'alternative pour V1 — pattern réplicable plus tard.
+
+function WeekMealsCardEditable({ weekMeals, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null }) {
+  const day1 = weekMeals?.days?.[0];
+  const meals = day1?.meals || [];
+  const empty = meals.length === 0;
+  const [editing, setEditing] = useState(false);
+  const [drafts, setDrafts] = useState(() => meals.map((m) => ({
+    slot: m.slot || '',
+    slot_label: m.slot_label || '',
+    title: m.title || '',
+    alternatives: (m.alternatives || []).map((alt) => ({ title: alt.title || alt.name || alt.label || '' })),
+  })));
+
+  useEffect(() => {
+    if (!editing) {
+      setDrafts(meals.map((m) => ({
+        slot: m.slot || '',
+        slot_label: m.slot_label || '',
+        title: m.title || '',
+        alternatives: (m.alternatives || []).map((alt) => ({ title: alt.title || alt.name || alt.label || '' })),
+      })));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(meals.map((m) => ({ title: m.title, alts: m.alternatives?.map((a) => a.title) }))), editing]);
+
+  const canSave = typeof onSave === 'function' && !empty;
+  const initial = JSON.stringify(meals.map((m) => ({ title: m.title || '', alts: (m.alternatives || []).map((a) => a.title || a.name || a.label || '') })));
+  const current = JSON.stringify(drafts.map((d) => ({ title: d.title, alts: d.alternatives.map((a) => a.title) })));
+  const dirty = current !== initial;
+
+  const handleConfirm = async () => {
+    if (!onSave) return;
+    await onSave(drafts);
+    setEditing(false);
+  };
+  const handleCancel = () => {
+    setDrafts(meals.map((m) => ({
+      slot: m.slot || '',
+      slot_label: m.slot_label || '',
+      title: m.title || '',
+      alternatives: (m.alternatives || []).map((alt) => ({ title: alt.title || alt.name || alt.label || '' })),
+    })));
+    setEditing(false);
+  };
+
+  const updateMeal = (idx, value) => setDrafts((arr) => arr.map((d, i) => (i === idx ? { ...d, title: value } : d)));
+  const updateAlt = (mealIdx, altIdx, value) => setDrafts((arr) => arr.map((d, i) => {
+    if (i !== mealIdx) return d;
+    return {
+      ...d,
+      alternatives: d.alternatives.map((alt, j) => (j === altIdx ? { ...alt, title: value } : alt)),
+    };
+  }));
+
+  return (
+    <div style={capsCardStyle}>
+      <header style={capsCardHeaderStyle}>
+        <span style={{ fontSize: '1.1rem' }}>📅</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={capsCardTitleStyle}>Semaine type</h4>
+          {savedAt
+            ? <p style={{ ...capsCardSubtitleStyle, color: '#8abf9a' }}>✓ Enregistré</p>
+            : (weekMeals?.days?.length
+                ? <p style={capsCardSubtitleStyle}>{weekMeals.days.length} jours · {meals.length} repas/jour</p>
+                : null)}
+        </div>
+        {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+        {!empty && canSave && !editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              background: 'rgba(212, 201, 168, 0.08)',
+              border: '1px solid rgba(212, 201, 168, 0.20)',
+              color: '#d4c9a8',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            title="Modifier les titres des repas et alternatives"
+          >✏️ Éditer</button>
+        )}
+        {!editing && onImprove && (
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            style={{
+              background: 'rgba(120, 80, 200, 0.08)',
+              border: '1px solid rgba(180, 140, 255, 0.25)',
+              color: '#b89eff',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: improving ? 'wait' : 'pointer',
+              opacity: improving ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            title="Demande à l'IA de régénérer la semaine"
+          >{improving ? '✨ …' : '✨ Améliorer'}</button>
+        )}
+      </header>
+
+      <div style={capsCardBodyStyle}>
+        {empty ? (
+          <p style={capsEmptyStyle}>Aucun repas généré</p>
+        ) : editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {drafts.map((d, mealIdx) => (
+              <div key={mealIdx} style={{
+                background: 'rgba(0,0,0,0.12)',
+                border: '1px solid rgba(212, 201, 168, 0.12)',
+                borderRadius: 8,
+                padding: 12,
+              }}>
+                <label style={{ fontSize: '.7rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                  {d.slot_label || d.slot || `Repas ${mealIdx + 1}`}
+                </label>
+                <input
+                  type="text"
+                  value={d.title}
+                  onChange={(e) => updateMeal(mealIdx, e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: 'rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(212, 201, 168, 0.18)',
+                    borderRadius: 6,
+                    color: '#f0f0e8',
+                    fontFamily: 'inherit',
+                    fontSize: '.9rem',
+                    fontWeight: 600,
+                    marginBottom: d.alternatives.length > 0 ? 10 : 0,
+                  }}
+                  placeholder="Repas principal…"
+                />
+                {d.alternatives.length > 0 && (
+                  <div style={{ borderLeft: '2px solid rgba(106, 191, 138, 0.18)', paddingLeft: 10, marginLeft: 4 }}>
+                    <label style={{ fontSize: '.66rem', fontWeight: 600, color: '#6a8a72', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                      Autres options ({d.alternatives.length})
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {d.alternatives.map((alt, altIdx) => (
+                        <input
+                          key={altIdx}
+                          type="text"
+                          value={alt.title}
+                          onChange={(e) => updateAlt(mealIdx, altIdx, e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '6px 9px',
+                            background: 'rgba(0,0,0,0.14)',
+                            border: '1px solid rgba(106, 191, 138, 0.16)',
+                            borderRadius: 5,
+                            color: '#cfcfc4',
+                            fontFamily: 'inherit',
+                            fontSize: '.82rem',
+                          }}
+                          placeholder={`Option ${altIdx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+              {error && <span style={{ fontSize: '.75rem', color: '#f5c6c6', marginRight: 'auto' }}>⚠ {error}</span>}
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#8a8a7a',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  cursor: saving ? 'wait' : 'pointer',
+                }}
+              >Annuler</button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={saving || !dirty}
+                style={{
+                  background: dirty ? 'rgba(106, 191, 138, 0.15)' : 'rgba(106, 191, 138, 0.06)',
+                  border: `1px solid ${dirty ? 'rgba(106, 191, 138, 0.35)' : 'rgba(106, 191, 138, 0.18)'}`,
+                  color: dirty ? '#a8e0c0' : '#666',
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  fontWeight: 600,
+                  cursor: (saving || !dirty) ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >{saving ? 'Enregistrement…' : '✓ Enregistrer'}</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {meals.map((m) => (
+              <MealCardExpandable key={m.id} meal={m} />
+            ))}
+          </div>
         )}
       </div>
     </div>

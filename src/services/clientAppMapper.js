@@ -951,13 +951,50 @@ function buildFridgeFromText(client, consultation, sections, locale) {
 
 function buildFridgeData(client, consultation, sections) {
   const locale = resolveLocale(client);
+
+  // V97.13.43 Phase A3c — Override editorial manuel du frigo. Anissa peut
+  // editer les listes "À privilégier" et "À limiter" depuis la modal Apercu.
+  // Stocke dans consultation.editorial_overrides.fridge.
+  // Structure : { to_favor: [string], to_limit: [string] }
+  // Si fourni, ces 2 listes ecrasent les essentiels et limit calcules.
+  const fridgeOverride = consultation?.editorial_overrides?.fridge || null;
+
   // V97.13.28 — accepte snake_case (Supabase) ET camelCase (store local)
   const ficheFrigoJsonAny = consultation?.fiche_frigo_json || consultation?.ficheFrigoJson;
   const fromJson = buildFridgeFromJson(ficheFrigoJsonAny, locale);
+  let baseData;
   if (fromJson && (fromJson.essentials.length || fromJson.favorite.length || fromJson.limit.length)) {
-    return fromJson;
+    baseData = fromJson;
+  } else {
+    baseData = buildFridgeFromText(client, consultation, sections, locale);
   }
-  return buildFridgeFromText(client, consultation, sections, locale);
+
+  // Applique l'override si fourni (apres le base build pour conserver
+  // header_title, favorite, etc.).
+  if (fridgeOverride) {
+    if (Array.isArray(fridgeOverride.to_favor) && fridgeOverride.to_favor.length > 0) {
+      const seen = new Set();
+      baseData = {
+        ...baseData,
+        essentials: fridgeOverride.to_favor
+          .map((label) => String(label || '').trim())
+          .filter((label) => label && !seen.has(label.toLowerCase()) && seen.add(label.toLowerCase()))
+          .map((label, i) => ({ id: `fav-${i + 1}`, label })),
+      };
+    }
+    if (Array.isArray(fridgeOverride.to_limit) && fridgeOverride.to_limit.length > 0) {
+      const seen = new Set();
+      baseData = {
+        ...baseData,
+        limit: fridgeOverride.to_limit
+          .map((label) => String(label || '').trim())
+          .filter((label) => label && !seen.has(label.toLowerCase()) && seen.add(label.toLowerCase()))
+          .map((label, i) => ({ id: `lim-${i + 1}`, label })),
+      };
+    }
+  }
+
+  return baseData;
 }
 
 // ─── 6. protocols_data ────────────────────────────────────────────────────
@@ -1133,7 +1170,44 @@ export function buildClientAppPlanFromConsultation(client, consultation) {
 
   const intro_data    = buildIntroData(client, consultation, sections);
   const strategy_data = buildStrategyData(client, consultation, sections);
-  const week_meals    = buildWeekMeals(client, consultation, sections);
+  let week_meals    = buildWeekMeals(client, consultation, sections);
+  // V97.13.44 Phase A3d — Override editorial manuel des repas day1.
+  // Anissa edite les titres des repas + alternatives depuis la modal Apercu.
+  // Stocke dans consultation.editorial_overrides.meals = [{ slot, title,
+  // alternatives: [{ title }] }]. On applique a chaque jour le meme override
+  // (semaine type repete pour tous les jours).
+  const mealsOverride = consultation?.editorial_overrides?.meals;
+  if (Array.isArray(mealsOverride) && mealsOverride.length > 0 && week_meals?.days?.length) {
+    const overrideBySlot = new Map();
+    for (const ov of mealsOverride) {
+      const slot = String(ov?.slot || '').trim();
+      if (!slot) continue;
+      overrideBySlot.set(slot, {
+        title: typeof ov.title === 'string' ? ov.title.trim() : null,
+        alternatives: Array.isArray(ov.alternatives) ? ov.alternatives : null,
+      });
+    }
+    week_meals = {
+      ...week_meals,
+      days: week_meals.days.map((day) => ({
+        ...day,
+        meals: (day.meals || []).map((m) => {
+          const ov = overrideBySlot.get(String(m.slot || ''));
+          if (!ov) return m;
+          let next = { ...m };
+          if (ov.title) next.title = ov.title;
+          if (ov.alternatives && Array.isArray(next.alternatives)) {
+            next.alternatives = next.alternatives.map((alt, i) => {
+              const altOv = ov.alternatives[i];
+              if (!altOv || typeof altOv.title !== 'string' || !altOv.title.trim()) return alt;
+              return { ...alt, title: altOv.title.trim() };
+            });
+          }
+          return next;
+        }),
+      })),
+    };
+  }
   const rotation_data = buildRotationData(client, consultation, sections);
   const fridge_data   = buildFridgeData(client, consultation, sections);
   const protocols_data= buildProtocolsData(client, consultation, sections);
