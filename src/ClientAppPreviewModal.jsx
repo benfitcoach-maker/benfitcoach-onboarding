@@ -172,10 +172,10 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     setEnrichmentDraft(null);
   };
 
-  // V97.13.38 — Sauvegarde des edits manuels inline (greeting, signature pour V1).
-  // Merge l'edit dans consultation.intro_letter (deja persiste cote DB et lu en
-  // priorite par le mapper). Si l'enrichissement IA est applique, on fusionne
-  // son body avec les edits pour ne pas perdre la matiere IA.
+  // V97.13.38 + A2 V97.13.39 — Sauvegarde des edits manuels inline.
+  // Champs supportes : greeting, signature (A1), body[] + pull_quote (A2).
+  // Merge dans consultation.intro_letter (deja persiste cote DB et lu en
+  // priorite par le mapper).
   const handleSaveIntroEdits = async (edits) => {
     if (!edits || !localConsultation) return;
     setEditsError(null);
@@ -184,15 +184,20 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
       const { saveNutritionConsultation } = await import('./store');
       const existing = localConsultation.intro_letter || {};
       // Si on a un draft enrichi non encore applique, ne pas le perdre :
-      // on prend en priorite enrichmentApplied.intro_body (si applique) > existing.body.
-      const body = enrichmentApplied?.intro_body?.length
-        ? enrichmentApplied.intro_body
-        : (existing.body || []);
+      // on prend en priorite l'edit explicite > enrichmentApplied > existing.
+      const body = Array.isArray(edits.body)
+        ? edits.body.map((p) => String(p || '').trim()).filter(Boolean)
+        : (enrichmentApplied?.intro_body?.length
+            ? enrichmentApplied.intro_body
+            : (existing.body || []));
       const next = {
         ...existing,
         body, // garantit body non-vide pour que le mapper utilise intro_letter
         ...(typeof edits.greeting === 'string' ? { greeting: edits.greeting.trim() } : {}),
         ...(typeof edits.signature === 'string' ? { signature: edits.signature.trim() } : {}),
+        ...(typeof edits.pull_quote === 'string'
+            ? { pull_quote: edits.pull_quote.trim() }
+            : {}),
       };
       const updated = await saveNutritionConsultation({
         ...localConsultation,
@@ -1574,29 +1579,59 @@ function IntroCardEditable({ intro, onImprove, improving = false, onSave, saving
   const [editing, setEditing] = useState(false);
   const [greeting, setGreeting] = useState(intro?.greeting || '');
   const [signature, setSignature] = useState(intro?.signature || 'Anissa');
+  // A2 V97.13.39 — edition body paragraphes + pull_quote
+  const [bodyParas, setBodyParas] = useState(intro?.body || []);
+  const [pullQuote, setPullQuote] = useState(intro?.pull_quote || '');
 
   // Sync local state quand intro change (apres save reussi par exemple)
   useEffect(() => {
     if (!editing) {
       setGreeting(intro?.greeting || '');
       setSignature(intro?.signature || 'Anissa');
+      setBodyParas(intro?.body || []);
+      setPullQuote(intro?.pull_quote || '');
     }
-  }, [intro?.greeting, intro?.signature, editing]);
+  }, [intro?.greeting, intro?.signature, intro?.body, intro?.pull_quote, editing]);
 
   const canSave = typeof onSave === 'function' && !empty;
+  const initialBody = (intro?.body || []).join('\n\n');
+  const currentBody = bodyParas.join('\n\n');
   const dirty = (greeting.trim() !== (intro?.greeting || '').trim())
-             || (signature.trim() !== (intro?.signature || 'Anissa').trim());
+             || (signature.trim() !== (intro?.signature || 'Anissa').trim())
+             || (currentBody !== initialBody)
+             || (pullQuote.trim() !== (intro?.pull_quote || '').trim());
 
   const handleConfirm = async () => {
     if (!onSave) return;
-    await onSave({ greeting: greeting.trim(), signature: signature.trim() });
+    await onSave({
+      greeting: greeting.trim(),
+      signature: signature.trim(),
+      body: bodyParas.map((p) => p.trim()).filter(Boolean),
+      pull_quote: pullQuote.trim(),
+    });
     setEditing(false);
   };
 
   const handleCancel = () => {
     setGreeting(intro?.greeting || '');
     setSignature(intro?.signature || 'Anissa');
+    setBodyParas(intro?.body || []);
+    setPullQuote(intro?.pull_quote || '');
     setEditing(false);
+  };
+
+  const updateParagraph = (idx, value) => {
+    setBodyParas((arr) => arr.map((p, i) => (i === idx ? value : p)));
+  };
+  const insertParagraphAfter = (idx) => {
+    setBodyParas((arr) => {
+      const next = [...arr];
+      next.splice(idx + 1, 0, '');
+      return next;
+    });
+  };
+  const removeParagraph = (idx) => {
+    setBodyParas((arr) => arr.filter((_, i) => i !== idx));
   };
 
   return (
@@ -1681,16 +1716,119 @@ function IntroCardEditable({ intro, onImprove, improving = false, onSave, saving
               />
             </div>
 
-            {intro?.body?.length > 0 && (
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: '1px dashed rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '.7rem', color: '#666', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>
-                  Corps de la lettre (non éditable ici — utilise ✨ Améliorer)
-                </div>
-                {intro.body.map((para, i) => (
-                  <p key={i} style={{ ...capsBodyStyle, opacity: 0.55, margin: '4px 0' }}>{para}</p>
+            {/* A2 V97.13.39 — Body paragraphes editables (1 textarea par para) */}
+            <div>
+              <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                Corps de la lettre
+              </label>
+              {bodyParas.length === 0 && (
+                <p style={{ fontSize: '.8rem', color: '#666', fontStyle: 'italic', margin: '0 0 8px' }}>
+                  Aucun paragraphe — clique sur ✨ Améliorer pour générer une intro IA, puis édite ci-dessous.
+                </p>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {bodyParas.map((para, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <textarea
+                      value={para}
+                      onChange={(e) => updateParagraph(i, e.target.value)}
+                      rows={Math.max(3, Math.min(8, (para.match(/\n/g)?.length || 0) + 3))}
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        background: 'rgba(0,0,0,0.18)',
+                        border: '1px solid rgba(212, 201, 168, 0.20)',
+                        borderRadius: 6,
+                        color: '#f0f0e8',
+                        fontFamily: 'inherit',
+                        fontSize: '.92rem',
+                        lineHeight: 1.55,
+                        resize: 'vertical',
+                      }}
+                      placeholder={`Paragraphe ${i + 1}…`}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => insertParagraphAfter(i)}
+                        title="Ajouter un paragraphe après celui-ci"
+                        style={{
+                          background: 'rgba(212, 201, 168, 0.06)',
+                          border: '1px solid rgba(212, 201, 168, 0.18)',
+                          color: '#8a8a7a',
+                          borderRadius: 4,
+                          width: 28,
+                          height: 28,
+                          cursor: 'pointer',
+                          fontSize: '.85rem',
+                        }}
+                      >＋</button>
+                      <button
+                        type="button"
+                        onClick={() => removeParagraph(i)}
+                        title="Supprimer ce paragraphe"
+                        style={{
+                          background: 'rgba(220, 80, 80, 0.06)',
+                          border: '1px solid rgba(220, 80, 80, 0.18)',
+                          color: '#d4806c',
+                          borderRadius: 4,
+                          width: 28,
+                          height: 28,
+                          cursor: 'pointer',
+                          fontSize: '.75rem',
+                        }}
+                      >🗑</button>
+                    </div>
+                  </div>
                 ))}
               </div>
-            )}
+              {bodyParas.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => insertParagraphAfter(-1)}
+                  style={{
+                    marginTop: 8,
+                    background: 'rgba(212, 201, 168, 0.06)',
+                    border: '1px dashed rgba(212, 201, 168, 0.25)',
+                    color: '#8a8a7a',
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    fontSize: '.8rem',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >＋ Ajouter un paragraphe</button>
+              )}
+            </div>
+
+            {/* A2 V97.13.39 — Pull quote optionnel */}
+            <div>
+              <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                Citation marquante (optionnel)
+              </label>
+              <textarea
+                value={pullQuote}
+                onChange={(e) => setPullQuote(e.target.value)}
+                rows={2}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'rgba(0,0,0,0.18)',
+                  border: '1px solid rgba(212, 201, 168, 0.20)',
+                  borderRadius: 6,
+                  color: '#f0f0e8',
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontStyle: 'italic',
+                  fontSize: '1.0rem',
+                  lineHeight: 1.5,
+                  resize: 'vertical',
+                }}
+                placeholder="Ex: La régularité reconstruit ce qui demande du temps."
+              />
+              <p style={{ fontSize: '.72rem', color: '#666', margin: '4px 0 0' }}>
+                Affichée en bloc italique vert dans l'app de la cliente. Laisse vide pour ne pas la montrer.
+              </p>
+            </div>
 
             <div>
               <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
