@@ -387,8 +387,15 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
           )}
 
           {plan && tab === 'sections' && (
-            <ClientFullPagePreview client={client} plan={plan}>
-              <SectionsOverview plan={plan} />
+            <ClientFullPagePreview
+              client={client}
+              plan={plan}
+              onImprove={rawPlan ? handleEnrich : undefined}
+              improving={enriching}
+            >
+              {({ onImprove, improving }) => (
+                <SectionsOverview plan={plan} onImprove={onImprove} improving={improving} />
+              )}
             </ClientFullPagePreview>
           )}
 
@@ -651,7 +658,7 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan }) {
+function SectionsOverview({ plan, onImprove, improving = false }) {
   const s = plan.sections || {};
 
   return (
@@ -662,6 +669,8 @@ function SectionsOverview({ plan }) {
         title="Lettre d'intro"
         empty={!s.intro_data?.body?.length}
         emptyLabel="Pas encore de lettre d'intro générée"
+        onImprove={onImprove}
+        improving={improving}
       >
         {s.intro_data?.greeting && (
           <p style={capsGreetingStyle}>{s.intro_data.greeting}</p>
@@ -694,6 +703,8 @@ function SectionsOverview({ plan }) {
         subtitle={s.strategy_data?.subtitle}
         empty={!s.strategy_data?.pillars?.length}
         emptyLabel="Pas de piliers détectés dans la stratégie"
+        onImprove={onImprove}
+        improving={improving}
       >
         {s.strategy_data?.essential?.length > 0 && s.strategy_data.essential.map((p, i) => (
           <p key={i} style={capsBodyStyle}>{p}</p>
@@ -805,6 +816,9 @@ function SectionsOverview({ plan }) {
         subtitle={s.protocols_data?.header_title}
         empty={!s.protocols_data?.groups?.length}
         emptyLabel="Pas de compléments détectés"
+        onImprove={onImprove}
+        improving={improving}
+        improveLabel="✨ Améliorer intro"
       >
         {s.protocols_data?.groups?.length > 0 && s.protocols_data.groups.map((g) => (
           <div key={g.id} style={{ marginBottom: 12 }}>
@@ -846,7 +860,7 @@ function SectionsOverview({ plan }) {
 }
 
 // ─── Card premium pour l'aperçu Anissa ────────────────────────────────
-function CapsCard({ icon, title, subtitle, empty, emptyLabel, children }) {
+function CapsCard({ icon, title, subtitle, empty, emptyLabel, children, onImprove, improving = false, improveLabel }) {
   return (
     <div style={capsCardStyle}>
       <header style={capsCardHeaderStyle}>
@@ -856,6 +870,31 @@ function CapsCard({ icon, title, subtitle, empty, emptyLabel, children }) {
           {subtitle && <p style={capsCardSubtitleStyle}>{subtitle}</p>}
         </div>
         {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+        {onImprove && (
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            style={{
+              background: 'rgba(120, 80, 200, 0.08)',
+              border: '1px solid rgba(180, 140, 255, 0.25)',
+              color: '#b89eff',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: improving ? 'wait' : 'pointer',
+              opacity: improving ? 0.6 : 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              whiteSpace: 'nowrap',
+            }}
+            title="Demande à l'IA d'enrichir cette section"
+          >
+            {improving ? '✨ …' : (improveLabel || '✨ Améliorer')}
+          </button>
+        )}
       </header>
       <div style={capsCardBodyStyle}>
         {empty ? (
@@ -1464,7 +1503,7 @@ function DiagnosticView({ diag }) {
 // sensation de voir l'expérience cliente complète en une vraie page web,
 // pas un aperçu fragmenté.
 
-function ClientFullPagePreview({ client, plan, children }) {
+function ClientFullPagePreview({ client, plan, children, onImprove, improving = false }) {
   const prenom = (client?.prenom || client?.form?.prenom || 'Cliente').trim();
   const pack = plan?.client_meta?.pack_label
     || plan?.client_meta?.pack
@@ -1509,9 +1548,12 @@ function ClientFullPagePreview({ client, plan, children }) {
         </div>
       </div>
 
-      {/* Sections cliente — SectionsOverview existant injecté tel quel */}
+      {/* Sections cliente — SectionsOverview existant injecté tel quel.
+          Propage onImprove pour les boutons "✨ Améliorer" par section. */}
       <div className="jrn-clientpage__sections">
-        {children}
+        {typeof children === 'function'
+          ? children({ onImprove, improving })
+          : children}
       </div>
     </div>
   );
