@@ -40,7 +40,7 @@ const TABS = [
   { id: 'diagnostic', label: 'Diagnostic' },
 ];
 
-export default function ClientAppPreviewModal({ client, consultation, autoEnrich = false, onClose }) {
+export default function ClientAppPreviewModal({ client, consultation, autoEnrich = false, onClose, onOpenMessages }) {
   const [tab, setTab] = useState('sections');
   const [copied, setCopied] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -210,6 +210,34 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* V97.13.37 — Acces direct a la messagerie sans quitter mentalement
+                le contexte Apercu. Ferme la modal et ouvre le panel Messages. */}
+            {onOpenMessages && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose?.();
+                  onOpenMessages();
+                }}
+                style={{
+                  background: 'rgba(120, 200, 160, 0.08)',
+                  border: '1px solid rgba(140, 220, 180, 0.28)',
+                  color: '#a8e0c0',
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  fontSize: '.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  whiteSpace: 'nowrap',
+                }}
+                title="Ouvrir la messagerie pour ecrire a la cliente"
+              >
+                💬 Messages
+              </button>
+            )}
             <button
               type="button"
               onClick={handleEnrich}

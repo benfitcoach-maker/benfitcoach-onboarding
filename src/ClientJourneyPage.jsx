@@ -449,6 +449,8 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
             consultation={previewConsultation}
             autoEnrich={appPreviewAutoEnrich}
             onClose={() => { setShowAppPreview(false); setAppPreviewAutoEnrich(false); }}
+            // V97.13.37 — Acces direct au panel Messages depuis la modal
+            onOpenMessages={() => setShowMessages(true)}
           />
         )}
 
@@ -4467,20 +4469,63 @@ function useClientWeightConfig(client) {
     }
   };
 
-  return { config, loadingCfg, updating, cfgError, toggleConfig };
+  // V97.13.37 : action atomique pour activer/desactiver les 2 settings ensemble
+  // (cas typique etape 7 Activation cliente : un seul toggle = simplicite UX).
+  const toggleBothWeight = async () => {
+    setUpdating('both');
+    setCfgError(null);
+    try {
+      const { updateClientAppConfig } = await import('./services/clientAppConfig');
+      const bothOn = !!config?.weight_tracking_enabled && !!config?.weight_visible_to_client;
+      const updates = bothOn
+        ? { weight_tracking_enabled: false, weight_visible_to_client: false }
+        : { weight_tracking_enabled: true, weight_visible_to_client: true };
+      const next = await updateClientAppConfig(client, updates);
+      setConfig(next);
+    } catch (e) {
+      setCfgError(e?.message || 'Erreur mise à jour');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  return { config, loadingCfg, updating, cfgError, toggleConfig, toggleBothWeight };
 }
 
 function WeightTogglesInline({ client, compact = false }) {
-  const { config, loadingCfg, updating, cfgError, toggleConfig } = useClientWeightConfig(client);
+  const { config, loadingCfg, updating, cfgError, toggleConfig, toggleBothWeight } = useClientWeightConfig(client);
   if (loadingCfg) return null;
   const trackingEnabled = !!config?.weight_tracking_enabled;
   const visibleToClient = !!config?.weight_visible_to_client;
 
+  // V97.13.37 : mode compact (etape 7 Activation cliente) = 1 SEUL toggle qui
+  // active les 2 settings ensemble (tracking + visible cliente). Cas typique :
+  // Anissa veut activer le suivi du poids ET autoriser Camille a saisir. Si
+  // elle a besoin du cas avance (tracking sans saisie cliente), elle passe par
+  // le drawer ⚙ Configurer de l'etape 8 (mode non-compact ci-dessous).
+  if (compact) {
+    const bothOn = trackingEnabled && visibleToClient;
+    return (
+      <>
+        <ToggleChip
+          label="Suivi du poids"
+          checked={bothOn}
+          onClick={toggleBothWeight}
+          loading={updating === 'both'}
+          title="Active le suivi du poids et autorise Camille a saisir sa pesee dans l'app"
+        />
+        {cfgError && <div className="jrn-error" style={{ marginTop: 6 }}>⚠ {cfgError}</div>}
+      </>
+    );
+  }
+
+  // Mode complet (drawer ⚙ Configurer étape 8) : 2 toggles granulaires pour
+  // les cas avancés (suivi privé coach sans saisie cliente, etc.).
   return (
     <>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <ToggleChip
-          label={compact ? 'Tracking' : 'Tracking activé'}
+          label="Suivi activé"
           checked={trackingEnabled}
           onClick={() => toggleConfig('weight_tracking_enabled')}
           loading={updating === 'tracking'}
@@ -4488,11 +4533,11 @@ function WeightTogglesInline({ client, compact = false }) {
         />
         {trackingEnabled && (
           <ToggleChip
-            label={compact ? 'Visible cliente' : 'Visible cliente'}
+            label="Camille saisit dans l'app"
             checked={visibleToClient}
             onClick={() => toggleConfig('weight_visible_to_client')}
             loading={updating === 'visible'}
-            title="Affiche le champ poids dans l'app cliente (sinon réservé coach)"
+            title="Affiche le champ poids dans l'app cliente (sinon Anissa saisit en consultation)"
           />
         )}
       </div>
