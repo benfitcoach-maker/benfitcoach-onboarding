@@ -363,6 +363,13 @@ async function cloudSyncNutritionConsultation(consultation) {
     //   alter table nutrition_consultations add column meal_recipes jsonb;
     intro_letter: consultation.intro_letter || null,
     meal_recipes: consultation.meal_recipes || null,
+    // V97.13.41 : champ generique editorial_overrides pour les edits manuels
+    // par section (Phase A3 option C). Structure :
+    //   { strategy: { pillars: [{ title, description }] },
+    //     supplements_intro: "...", ... }
+    // Necessite migration Supabase :
+    //   alter table nutrition_consultations add column editorial_overrides jsonb;
+    editorial_overrides: consultation.editorial_overrides || null,
   };
   supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
@@ -932,6 +939,10 @@ export function saveNutritionConsultation(consultation) {
     // whitelist du saveNutritionConsultation → perte au reload (bug user).
     intro_letter: consultation.intro_letter || null,
     meal_recipes: consultation.meal_recipes || null,
+    // V97.13.41 : champ generique pour les edits manuels par section
+    // (Phase A3 option C). Voir cloudSyncNutritionConsultation pour la
+    // migration Supabase requise.
+    editorial_overrides: consultation.editorial_overrides || null,
   };
   // V78 : si une consultation avec ce id existe deja et est soft-delete,
   // preserver le flag pour eviter un "undelete" silencieux via edit.

@@ -317,6 +317,34 @@ function buildIntroData(client, consultation, sections) {
 function buildStrategyData(client, consultation, sections) {
   const locale = resolveLocale(client);
 
+  // V97.13.41 : override editorial manuel (Phase A3 option C). Anissa edite
+  // les piliers strategie depuis la modal Apercu app cote SaaS. Stocke dans
+  // consultation.editorial_overrides.strategy. Si present, prime sur le
+  // parsing automatique du markdown. Anissa garde la possibilite de revenir
+  // au parsing en effacant l'override.
+  const override = consultation?.editorial_overrides?.strategy || null;
+  if (override && Array.isArray(override.pillars) && override.pillars.length > 0) {
+    const pillarSeen = new Set();
+    return {
+      header_title: locale === "fr" ? "Votre stratégie" : "Your strategy",
+      subtitle: typeof override.subtitle === "string" && override.subtitle.trim()
+        ? override.subtitle.trim()
+        : (locale === "fr" ? "Comprendre comment votre plan agit." : "Understand how your plan works."),
+      essential: Array.isArray(override.essential)
+        ? override.essential.map((s) => String(s || "").trim()).filter(Boolean)
+        : [],
+      pillars: override.pillars.map((p) => ({
+        id: uniqueId(slugify(p.title || ""), pillarSeen),
+        title: String(p?.title || "").trim(),
+        description: String(p?.description || "").trim(),
+      })).filter((p) => p.title && p.description),
+      takeaways_title: locale === "fr" ? "Ce que vous devez retenir" : "What you should remember",
+      takeaways: Array.isArray(override.takeaways)
+        ? override.takeaways.map((s) => String(s || "").trim()).filter(Boolean)
+        : [],
+    };
+  }
+
   // Sources : section "strategy" canonique + toutes les sections "soft"
   // détectées comme strategy_extra (BESOINS CALORIQUES, MACRONUTRIMENTS,
   // POINTS D'ATTENTION, APPROCHE ANTI-INFLAMMATOIRE, OPTIMISATION MICROBIOTE,

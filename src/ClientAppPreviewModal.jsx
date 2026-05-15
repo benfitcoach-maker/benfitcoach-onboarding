@@ -172,6 +172,45 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     setEnrichmentDraft(null);
   };
 
+  // V97.13.41 Phase A3a — Sauvegarde des edits Strategie.
+  // Persiste dans consultation.editorial_overrides.strategy (champ JSONB
+  // generique). Necessite migration Supabase pour le sync cloud.
+  const handleSaveStrategyEdits = async (edits) => {
+    if (!edits || !localConsultation) return;
+    setEditsError(null);
+    setSavingEdits(true);
+    try {
+      const { saveNutritionConsultation } = await import('./store');
+      const existingOverrides = localConsultation.editorial_overrides || {};
+      const nextStrategy = {
+        ...(existingOverrides.strategy || {}),
+        pillars: Array.isArray(edits.pillars)
+          ? edits.pillars
+              .map((p) => ({
+                title: String(p?.title || '').trim(),
+                description: String(p?.description || '').trim(),
+              }))
+              .filter((p) => p.title && p.description)
+          : (existingOverrides.strategy?.pillars || []),
+      };
+      const nextOverrides = {
+        ...existingOverrides,
+        strategy: nextStrategy,
+      };
+      const updated = await saveNutritionConsultation({
+        ...localConsultation,
+        editorial_overrides: nextOverrides,
+      });
+      setLocalConsultation(updated);
+      setEditsSavedAt(Date.now());
+      setTimeout(() => setEditsSavedAt((v) => (v && Date.now() - v >= 2400 ? null : v)), 2500);
+    } catch (err) {
+      setEditsError(err?.message || String(err));
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   // V97.13.38 + A2 V97.13.39 — Sauvegarde des edits manuels inline.
   // Champs supportes : greeting, signature (A1), body[] + pull_quote (A2).
   // Merge dans consultation.intro_letter (deja persiste cote DB et lu en
@@ -482,6 +521,7 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
                   onImprove={onImprove}
                   improving={improving}
                   onEditIntro={handleSaveIntroEdits}
+                  onEditStrategy={handleSaveStrategyEdits}
                   savingEdits={savingEdits}
                   editsSavedAt={editsSavedAt}
                   editsError={editsError}
@@ -749,7 +789,7 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, savingEdits = false, editsSavedAt = null, editsError = null }) {
+function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, onEditStrategy, savingEdits = false, editsSavedAt = null, editsError = null }) {
   const s = plan.sections || {};
 
   return (
@@ -765,40 +805,16 @@ function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, sav
         error={editsError}
       />
 
-      {/* ─── Stratégie & piliers ───────────────────────────────────── */}
-      <CapsCard
-        icon="🎯"
-        title="Stratégie"
-        subtitle={s.strategy_data?.subtitle}
-        empty={!s.strategy_data?.pillars?.length}
-        emptyLabel="Pas de piliers détectés dans la stratégie"
+      {/* ─── Stratégie & piliers (A3a éditable) ─────────────────── */}
+      <StrategyCardEditable
+        strategy={s.strategy_data}
         onImprove={onImprove}
         improving={improving}
-      >
-        {s.strategy_data?.essential?.length > 0 && s.strategy_data.essential.map((p, i) => (
-          <p key={i} style={capsBodyStyle}>{p}</p>
-        ))}
-        {s.strategy_data?.pillars?.length > 0 && (
-          <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
-            {s.strategy_data.pillars.map((p) => (
-              <div key={p.id} style={capsPillarStyle}>
-                <div style={capsPillarTitleStyle}>{p.title}</div>
-                <div style={capsPillarDescStyle}>{p.description}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {s.strategy_data?.takeaways?.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <div style={capsSubTitleStyle}>{s.strategy_data.takeaways_title || 'À retenir'}</div>
-            <ul style={capsListStyle}>
-              {s.strategy_data.takeaways.map((t, i) => (
-                <li key={i} style={capsListItemStyle}>{t}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </CapsCard>
+        onSave={onEditStrategy}
+        saving={savingEdits}
+        savedAt={editsSavedAt}
+        error={editsError}
+      />
 
       {/* ─── Semaine 1 ─────────────────────────────────────────────── */}
       <CapsCard
@@ -1984,6 +2000,224 @@ function IntroCardEditable({ intro, onImprove, improving = false, onSave, saving
             )}
             {intro?.signature && (
               <p style={capsSignatureStyle}>— {intro.signature}</p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── V97.13.41 Phase A3a — Carte Stratégie éditable inline ──────────────
+//
+// Variante de CapsCard pour la stratégie avec édition manuelle des 3 piliers
+// (Axe principal / Structure alimentaire / Priorités d'action typiquement).
+// Persistance via consultation.editorial_overrides.strategy (champ JSONB
+// generique nouveau pour les overrides editoriaux par section).
+// Reste les boutons ✨ Améliorer (IA) + ✏️ Éditer (manuel) comme sur l'intro.
+
+function StrategyCardEditable({ strategy, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null }) {
+  const empty = !strategy?.pillars?.length;
+  const [editing, setEditing] = useState(false);
+  const [pillars, setPillars] = useState(strategy?.pillars || []);
+
+  useEffect(() => {
+    if (!editing) {
+      setPillars(strategy?.pillars || []);
+    }
+  }, [strategy?.pillars, editing]);
+
+  const canSave = typeof onSave === 'function' && !empty;
+  const initial = JSON.stringify((strategy?.pillars || []).map((p) => ({ title: p.title || '', description: p.description || '' })));
+  const current = JSON.stringify(pillars.map((p) => ({ title: p.title || '', description: p.description || '' })));
+  const dirty = current !== initial;
+
+  const handleConfirm = async () => {
+    if (!onSave) return;
+    await onSave({
+      pillars: pillars
+        .map((p) => ({ title: (p.title || '').trim(), description: (p.description || '').trim() }))
+        .filter((p) => p.title && p.description),
+    });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setPillars(strategy?.pillars || []);
+    setEditing(false);
+  };
+
+  const updatePillar = (idx, field, value) => {
+    setPillars((arr) => arr.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
+  };
+
+  return (
+    <div style={capsCardStyle}>
+      <header style={capsCardHeaderStyle}>
+        <span style={{ fontSize: '1.1rem' }}>🎯</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={capsCardTitleStyle}>Stratégie</h4>
+          {savedAt
+            ? <p style={{ ...capsCardSubtitleStyle, color: '#8abf9a' }}>✓ Enregistré</p>
+            : (strategy?.subtitle && <p style={capsCardSubtitleStyle}>{strategy.subtitle}</p>)}
+        </div>
+        {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+        {!empty && canSave && !editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              background: 'rgba(212, 201, 168, 0.08)',
+              border: '1px solid rgba(212, 201, 168, 0.20)',
+              color: '#d4c9a8',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            title="Modifier les piliers stratégiques"
+          >
+            ✏️ Éditer
+          </button>
+        )}
+        {!editing && onImprove && (
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            style={{
+              background: 'rgba(120, 80, 200, 0.08)',
+              border: '1px solid rgba(180, 140, 255, 0.25)',
+              color: '#b89eff',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: improving ? 'wait' : 'pointer',
+              opacity: improving ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            title="Demande à l'IA de régénérer la stratégie"
+          >
+            {improving ? '✨ …' : '✨ Améliorer'}
+          </button>
+        )}
+      </header>
+
+      <div style={capsCardBodyStyle}>
+        {empty ? (
+          <p style={capsEmptyStyle}>Pas de piliers détectés dans la stratégie</p>
+        ) : editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {pillars.map((p, i) => (
+              <div key={i} style={{
+                background: 'rgba(0,0,0,0.12)',
+                border: '1px solid rgba(212, 201, 168, 0.12)',
+                borderRadius: 8,
+                padding: 12,
+              }}>
+                <label style={{ fontSize: '.7rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                  Pilier {i + 1} — Titre
+                </label>
+                <input
+                  type="text"
+                  value={p.title || ''}
+                  onChange={(e) => updatePillar(i, 'title', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: 'rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(212, 201, 168, 0.18)',
+                    borderRadius: 6,
+                    color: '#f0f0e8',
+                    fontFamily: 'inherit',
+                    fontSize: '.9rem',
+                    fontWeight: 600,
+                    marginBottom: 8,
+                  }}
+                  placeholder="Axe principal"
+                />
+                <label style={{ fontSize: '.7rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                  Description
+                </label>
+                <textarea
+                  value={p.description || ''}
+                  onChange={(e) => updatePillar(i, 'description', e.target.value)}
+                  rows={Math.max(2, Math.min(5, ((p.description || '').length / 80) + 1))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    background: 'rgba(0,0,0,0.18)',
+                    border: '1px solid rgba(212, 201, 168, 0.18)',
+                    borderRadius: 6,
+                    color: '#cfcfc4',
+                    fontFamily: 'inherit',
+                    fontSize: '.85rem',
+                    lineHeight: 1.5,
+                    resize: 'vertical',
+                  }}
+                  placeholder="Description du pilier…"
+                />
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+              {error && <span style={{ fontSize: '.75rem', color: '#f5c6c6', marginRight: 'auto' }}>⚠ {error}</span>}
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#8a8a7a',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  cursor: saving ? 'wait' : 'pointer',
+                }}
+              >Annuler</button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={saving || !dirty}
+                style={{
+                  background: dirty ? 'rgba(106, 191, 138, 0.15)' : 'rgba(106, 191, 138, 0.06)',
+                  border: `1px solid ${dirty ? 'rgba(106, 191, 138, 0.35)' : 'rgba(106, 191, 138, 0.18)'}`,
+                  color: dirty ? '#a8e0c0' : '#666',
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  fontWeight: 600,
+                  cursor: (saving || !dirty) ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >{saving ? 'Enregistrement…' : '✓ Enregistrer'}</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {strategy?.essential?.length > 0 && strategy.essential.map((p, i) => (
+              <p key={i} style={capsBodyStyle}>{p}</p>
+            ))}
+            <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
+              {strategy.pillars.map((p) => (
+                <div key={p.id} style={capsPillarStyle}>
+                  <div style={capsPillarTitleStyle}>{p.title}</div>
+                  <div style={capsPillarDescStyle}>{p.description}</div>
+                </div>
+              ))}
+            </div>
+            {strategy?.takeaways?.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={capsSubTitleStyle}>{strategy.takeaways_title || 'À retenir'}</div>
+                <ul style={capsListStyle}>
+                  {strategy.takeaways.map((t, i) => (
+                    <li key={i} style={capsListItemStyle}>{t}</li>
+                  ))}
+                </ul>
+              </div>
             )}
           </>
         )}
