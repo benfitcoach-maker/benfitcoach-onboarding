@@ -1482,7 +1482,9 @@ function ClientPhoneMockup({ client, plan }) {
   const mealTitle = firstMeal?.title || 'Œufs · avocat · pain complet';
 
   // Premier groupe de compléments si dispo (pour donner du contenu réel)
-  const supplementsGroups = plan?.sections?.supplements?.groups || [];
+  // Chemin correct : sections.protocols_data.groups (cf buildProtocolsData
+  // dans clientAppMapper.js). Pas .supplements.* — corrigé V97.13.33.
+  const supplementsGroups = plan?.sections?.protocols_data?.groups || [];
   const firstSuppGroup = supplementsGroups[0];
   const firstSuppItem = firstSuppGroup?.items?.[0];
 
@@ -1548,7 +1550,7 @@ function ClientPhoneMockup({ client, plan }) {
           <div className="jrn-phone-mockup__card">
             <span className="jrn-phone-mockup__card-icon">💊</span>
             <div className="jrn-phone-mockup__card-body">
-              <div className="jrn-phone-mockup__card-label">{firstSuppGroup?.timing || firstSuppGroup?.label || 'Compléments'}</div>
+              <div className="jrn-phone-mockup__card-label">{firstSuppGroup?.title || firstSuppGroup?.timing || 'Compléments'}</div>
               <div className="jrn-phone-mockup__card-text">{firstSuppItem.name}</div>
             </div>
           </div>
