@@ -184,9 +184,9 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
         onClick={(e) => e.stopPropagation()}
         style={{
           padding: 0,
-          maxWidth: 920,
-          width: '92vw',
-          maxHeight: '90vh',
+          maxWidth: 1280,
+          width: '94vw',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -346,45 +346,60 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
           />
         )}
 
-        {/* Corps */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px 22px' }}>
-          {error && (
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 8,
-                background: 'rgba(220,80,80,.1)',
-                border: '1px solid rgba(220,80,80,.3)',
-                color: '#f5c6c6',
-                fontSize: '.85rem',
-              }}
-            >
-              <strong>Erreur de mapping :</strong> {error}
-            </div>
+        {/* Corps — V97.13.32 : layout 2 colonnes (phone sticky + sections scroll) */}
+        <div className="jrn-app-preview-body">
+          {/* Colonne gauche : aperçu téléphone sticky (uniquement en mode sections) */}
+          {tab === 'sections' && (
+            <aside className="jrn-app-preview-phone" aria-hidden="true">
+              <ClientPhoneMockup client={client} plan={plan} />
+              <div className="jrn-app-preview-phone__caption">
+                Vue côté {client?.prenom || 'cliente'}
+                <span>— rendu indicatif, l'app réelle peut varier légèrement.</span>
+              </div>
+            </aside>
           )}
 
-          {plan && tab === 'json' && (
-            <pre
-              style={{
-                margin: 0,
-                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                fontSize: '.78rem',
-                lineHeight: 1.5,
-                color: '#cfcfc4',
-                background: 'rgba(0,0,0,.25)',
-                padding: 14,
-                borderRadius: 8,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {JSON.stringify(plan, null, 2)}
-            </pre>
-          )}
+          {/* Colonne droite : sections scrollable */}
+          <div className="jrn-app-preview-content">
+            {error && (
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 8,
+                  background: 'rgba(220,80,80,.1)',
+                  border: '1px solid rgba(220,80,80,.3)',
+                  color: '#f5c6c6',
+                  fontSize: '.85rem',
+                  marginBottom: 12,
+                }}
+              >
+                <strong>Erreur de mapping :</strong> {error}
+              </div>
+            )}
 
-          {plan && tab === 'sections' && <SectionsOverview plan={plan} />}
+            {plan && tab === 'json' && (
+              <pre
+                style={{
+                  margin: 0,
+                  fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                  fontSize: '.78rem',
+                  lineHeight: 1.5,
+                  color: '#cfcfc4',
+                  background: 'rgba(0,0,0,.25)',
+                  padding: 14,
+                  borderRadius: 8,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {JSON.stringify(plan, null, 2)}
+              </pre>
+            )}
 
-          {plan && tab === 'diagnostic' && diag && <DiagnosticView diag={diag} />}
+            {plan && tab === 'sections' && <SectionsOverview plan={plan} />}
+
+            {plan && tab === 'diagnostic' && diag && <DiagnosticView diag={diag} />}
+          </div>
         </div>
 
         {/* Footer publication */}
@@ -1445,6 +1460,115 @@ function DiagnosticView({ diag }) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── V97.13.32 — Aperçu téléphone réutilisable ─────────────────────────────
+//
+// Mockup iPhone CSS (charte .jrn-phone-mockup* du journey.css, V97.13.15)
+// adapté pour la modal Espace cliente. Pré-rempli avec les vraies données
+// du plan quand disponibles (prénom, premier repas, énergie target).
+// Permet à Anissa de "voir ce que voit la cliente" en un coup d'œil,
+// avant de plonger dans le détail des sections à droite.
+
+function ClientPhoneMockup({ client, plan }) {
+  const prenom = (client?.prenom || client?.form?.prenom || 'Cliente').trim();
+
+  // Pioche le premier repas du plan si dispo, sinon fallback neutre.
+  const firstDay = plan?.sections?.week_meals?.days?.[0];
+  const firstMeal = firstDay?.meals?.[0];
+  const mealLabel = firstMeal?.slot_label || 'Petit-déjeuner';
+  const mealTitle = firstMeal?.title || 'Œufs · avocat · pain complet';
+
+  // Premier groupe de compléments si dispo (pour donner du contenu réel)
+  const supplementsGroups = plan?.sections?.supplements?.groups || [];
+  const firstSuppGroup = supplementsGroups[0];
+  const firstSuppItem = firstSuppGroup?.items?.[0];
+
+  return (
+    <div className="jrn-phone-mockup">
+      <div className="jrn-phone-mockup__screen">
+        {/* iOS-like status bar */}
+        <div className="jrn-phone-mockup__statusbar">
+          <span>9:24</span>
+          <span className="jrn-phone-mockup__statusbar-right">
+            <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--s" />
+            <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--m" />
+            <span className="jrn-phone-mockup__bar jrn-phone-mockup__bar--l" />
+            <span className="jrn-phone-mockup__battery" />
+          </span>
+        </div>
+
+        {/* Header — avatar Anissa + greeting cliente */}
+        <div className="jrn-phone-mockup__header">
+          <div className="jrn-phone-mockup__avatar">A</div>
+          <div className="jrn-phone-mockup__header-text">
+            <div className="jrn-phone-mockup__hi">Bonjour {prenom}</div>
+            <div className="jrn-phone-mockup__sub">Jour 1 · semaine 1</div>
+          </div>
+        </div>
+
+        {/* Mini courbe ressentis 7j (indicative) */}
+        <div className="jrn-phone-mockup__chart">
+          <div className="jrn-phone-mockup__chart-head">
+            <span className="jrn-phone-mockup__chart-label">Énergie · 7 jours</span>
+            <span className="jrn-phone-mockup__chart-trend">+18%</span>
+          </div>
+          <svg className="jrn-phone-mockup__chart-svg" viewBox="0 0 200 44" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="jrnAppPreviewArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#1A2E1F" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#1A2E1F" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M5,36 Q35,32 60,26 T120,16 T195,7 L195,44 L5,44 Z" fill="url(#jrnAppPreviewArea)" />
+            <path d="M5,36 Q35,32 60,26 T120,16 T195,7" stroke="#1A2E1F" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="5" cy="36" r="2.2" fill="#1A2E1F" />
+            <circle cx="42" cy="30" r="2.2" fill="#1A2E1F" />
+            <circle cx="80" cy="22" r="2.2" fill="#1A2E1F" />
+            <circle cx="118" cy="16" r="2.2" fill="#1A2E1F" />
+            <circle cx="156" cy="11" r="2.2" fill="#1A2E1F" />
+            <circle cx="195" cy="7" r="3" fill="#fff" stroke="#1A2E1F" strokeWidth="2" />
+          </svg>
+        </div>
+
+        {/* Card repas — pioche le vrai premier repas si dispo */}
+        <div className="jrn-phone-mockup__card">
+          <span className="jrn-phone-mockup__card-icon">🥑</span>
+          <div className="jrn-phone-mockup__card-body">
+            <div className="jrn-phone-mockup__card-label">{mealLabel}</div>
+            <div className="jrn-phone-mockup__card-text">{mealTitle}</div>
+          </div>
+          <span className="jrn-phone-mockup__check">✓</span>
+        </div>
+
+        {/* Card complément si dispo, sinon fallback message */}
+        {firstSuppItem ? (
+          <div className="jrn-phone-mockup__card">
+            <span className="jrn-phone-mockup__card-icon">💊</span>
+            <div className="jrn-phone-mockup__card-body">
+              <div className="jrn-phone-mockup__card-label">{firstSuppGroup?.timing || firstSuppGroup?.label || 'Compléments'}</div>
+              <div className="jrn-phone-mockup__card-text">{firstSuppItem.name}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="jrn-phone-mockup__msg">
+            <div className="jrn-phone-mockup__msg-avatar">A</div>
+            <div className="jrn-phone-mockup__msg-bubble">
+              Comment se passe ta semaine ?
+            </div>
+          </div>
+        )}
+
+        {/* Tab bar */}
+        <div className="jrn-phone-mockup__tabbar">
+          <span className="jrn-phone-mockup__tab jrn-phone-mockup__tab--active" />
+          <span className="jrn-phone-mockup__tab" />
+          <span className="jrn-phone-mockup__tab" />
+          <span className="jrn-phone-mockup__tab" />
+        </div>
+      </div>
     </div>
   );
 }
