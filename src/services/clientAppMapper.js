@@ -160,6 +160,18 @@ function splitPlanSections(planText) {
       continue;
     }
     if (isUppercaseHeader(line)) {
+      // V97.13.31 : si on est DEJA dans une section type 'supplements' ou
+      // 'protocol', les lignes en MAJUSCULES sont des sous-titres internes
+      // (noms de supplements : "VITAMINE D3 + K2", "ZINC BISGLYCINATE"...).
+      // Elles ne doivent PAS couper la section, sinon le body de supplements
+      // se vide et parseSupplementEntriesStructured renvoie 0 entries.
+      // Resultat avant fix : 0 compléments cote app cliente malgre 6 supplements
+      // detailles dans le plan markdown. Cf bug Camille V97.13.30.
+      const currentType = classifyTitle(currentTitle || "");
+      if (currentType === "supplements" || currentType === "protocol") {
+        currentContent.push(line);
+        continue;
+      }
       flush();
       currentTitle = line.trim();
       continue;
