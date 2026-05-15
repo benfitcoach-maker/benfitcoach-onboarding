@@ -219,6 +219,65 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     setEnrichmentDraft(null);
   };
 
+  // V97.13.46 — Génération des recettes IA pour les repas du jour 1 (principaux
+  // + alternatives). Stocke dans consultation.meal_recipes (JSON map mealKey →
+  // recipe). Le mapper attache ensuite la recette à chaque meal/alternative
+  // affiché. Pas d'écrasement des recettes existantes — on merge.
+  const [generatingRecipes, setGeneratingRecipes] = useState(false);
+  const [recipesError, setRecipesError] = useState(null);
+  const handleGenerateRecipes = async () => {
+    if (!plan || !localConsultation) return;
+    setRecipesError(null);
+    setGeneratingRecipes(true);
+    try {
+      const { generateRecipesForMeals } = await import('./services/aiRecipeGenerator');
+      const { mealKey } = await import('./services/extractMealsFromPlan');
+      const { saveNutritionConsultation } = await import('./store');
+
+      // Construit la liste des repas + alternatives à enrichir (sans doublons,
+      // sans les repas qui ont déjà une recette).
+      const existingRecipes = localConsultation.meal_recipes || {};
+      const day1 = plan?.sections?.week_meals?.days?.[0];
+      const seenKeys = new Set();
+      const toGenerate = [];
+      for (const m of day1?.meals || []) {
+        const k = mealKey(m.slot, m.title);
+        if (k && !existingRecipes[k] && !seenKeys.has(k)) {
+          seenKeys.add(k);
+          toGenerate.push({ key: k, slot: m.slot, slot_label: m.slot_label, title: m.title });
+        }
+        for (const alt of m.alternatives || []) {
+          const ak = mealKey(m.slot, alt.title || alt.name || alt.label || '');
+          if (ak && !existingRecipes[ak] && !seenKeys.has(ak)) {
+            seenKeys.add(ak);
+            toGenerate.push({ key: ak, slot: m.slot, slot_label: m.slot_label, title: alt.title || alt.name || alt.label || '' });
+          }
+        }
+      }
+
+      if (toGenerate.length === 0) {
+        setRecipesError('Toutes les recettes sont déjà générées.');
+        return;
+      }
+
+      const generated = await generateRecipesForMeals(toGenerate, {
+        form: client?.form || {},
+        locale: plan?.locale || 'fr',
+      });
+
+      const merged = { ...existingRecipes, ...generated };
+      const updated = await saveNutritionConsultation({
+        ...localConsultation,
+        meal_recipes: merged,
+      });
+      setLocalConsultation(updated);
+    } catch (err) {
+      setRecipesError(err?.message || String(err));
+    } finally {
+      setGeneratingRecipes(false);
+    }
+  };
+
   // V97.13.44 Phase A3d — Sauvegarde des edits Semaine type.
   // Persiste dans consultation.editorial_overrides.meals = [{ slot, title,
   // alternatives: [{ title }] }]. Le mapper applique aux jours.
@@ -669,6 +728,9 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
                   onEditSupplementsIntro={handleSaveSupplementsIntroEdits}
                   onEditFridge={handleSaveFridgeEdits}
                   onEditMeals={handleSaveMealsEdits}
+                  onGenerateRecipes={handleGenerateRecipes}
+                  generatingRecipes={generatingRecipes}
+                  recipesError={recipesError}
                   savingEdits={savingEdits}
                   editsSavedAt={editsSavedAt}
                   editsError={editsError}
@@ -936,7 +998,7 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan, onImproveSection, improving = false, improvingSection = null, onEditIntro, onEditStrategy, onEditSupplementsIntro, onEditFridge, onEditMeals, savingEdits = false, editsSavedAt = null, editsError = null }) {
+function SectionsOverview({ plan, onImproveSection, improving = false, improvingSection = null, onEditIntro, onEditStrategy, onEditSupplementsIntro, onEditFridge, onEditMeals, onGenerateRecipes, generatingRecipes = false, recipesError = null, savingEdits = false, editsSavedAt = null, editsError = null }) {
   // V97.13.45 — onImproveSection(key) cible une section specifique au lieu
   // du global onImprove. Chaque card recoit son propre handler.
   const onImproveIntro = onImproveSection ? () => onImproveSection('intro') : undefined;
@@ -969,7 +1031,7 @@ function SectionsOverview({ plan, onImproveSection, improving = false, improving
         error={editsError}
       />
 
-      {/* ─── Semaine type (A3d — éditable, pas d'IA Améliorer pour V1) ──── */}
+      {/* ─── Semaine type (A3d — éditable + génération recettes IA) ──── */}
       <WeekMealsCardEditable
         weekMeals={s.week_meals}
         onImprove={undefined}
@@ -978,6 +1040,9 @@ function SectionsOverview({ plan, onImproveSection, improving = false, improving
         saving={savingEdits}
         savedAt={editsSavedAt}
         error={editsError}
+        onGenerateRecipes={onGenerateRecipes}
+        generatingRecipes={generatingRecipes}
+        recipesError={recipesError}
       />
 
       {/* ─── Frigo & courses (A3c — éditable) ───────────────────── */}
@@ -1671,13 +1736,43 @@ function DiagnosticView({ diag }) {
 
 function MealCardExpandable({ meal }) {
   const [expanded, setExpanded] = useState(false);
+  const [recipeOpen, setRecipeOpen] = useState(false);
   const alts = meal?.alternatives || [];
   const hasAlts = alts.length > 0;
+  const hasRecipe = !!(meal?.recipe?.ingredients?.length || meal?.recipe?.preparation?.length);
 
   return (
     <div style={capsMealStyle}>
       <div style={capsMealSlotStyle}>{meal.slot_label}</div>
       <div style={capsMealTitleStyle}>{meal.title}</div>
+
+      {/* V97.13.46 — Recette principale du repas, expansible */}
+      {hasRecipe && (
+        <>
+          <button
+            type="button"
+            onClick={() => setRecipeOpen((v) => !v)}
+            style={{
+              ...capsMealAltsStyle,
+              background: 'transparent',
+              border: 'none',
+              padding: '6px 0 2px',
+              cursor: 'pointer',
+              color: '#e5b878',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '.78rem',
+            }}
+            title={recipeOpen ? 'Replier la recette' : 'Voir la recette'}
+          >
+            🍳 Recette détaillée
+            <span style={{ transition: 'transform 140ms ease', transform: recipeOpen ? 'rotate(90deg)' : 'rotate(0)', display: 'inline-block' }}>→</span>
+          </button>
+          {recipeOpen && <RecipeDetail recipe={meal.recipe} />}
+        </>
+      )}
 
       {hasAlts && (
         <>
@@ -1711,30 +1806,85 @@ function MealCardExpandable({ meal }) {
               borderLeft: '2px solid rgba(106, 191, 138, 0.25)',
               display: 'flex',
               flexDirection: 'column',
-              gap: 6,
+              gap: 8,
             }}>
-              {alts.map((alt, i) => (
-                <li key={alt.id || i} style={{
-                  fontSize: '.86rem',
-                  color: '#d4c9a8',
-                  lineHeight: 1.5,
-                }}>
-                  <span style={{ color: '#8abf9a', marginRight: 6, fontWeight: 600 }}>{i + 1}.</span>
-                  {alt.title || alt.name || alt.label || '—'}
-                  {alt.description && (
-                    <div style={{ fontSize: '.78rem', color: '#8a8a7a', marginTop: 2, fontStyle: 'italic' }}>
-                      {alt.description}
+              {alts.map((alt, i) => {
+                const altHasRecipe = !!(alt?.recipe?.ingredients?.length || alt?.recipe?.preparation?.length);
+                return (
+                  <li key={alt.id || i} style={{
+                    fontSize: '.86rem',
+                    color: '#d4c9a8',
+                    lineHeight: 1.5,
+                  }}>
+                    <div>
+                      <span style={{ color: '#8abf9a', marginRight: 6, fontWeight: 600 }}>{i + 1}.</span>
+                      {alt.title || alt.name || alt.label || '—'}
+                      {altHasRecipe && (
+                        <span style={{ color: '#e5b878', marginLeft: 8, fontSize: '.72rem' }} title="Recette IA générée">🍳</span>
+                      )}
                     </div>
-                  )}
-                </li>
-              ))}
+                    {alt.description && (
+                      <div style={{ fontSize: '.78rem', color: '#8a8a7a', marginTop: 2, fontStyle: 'italic' }}>
+                        {alt.description}
+                      </div>
+                    )}
+                    {altHasRecipe && <RecipeDetail recipe={alt.recipe} compact />}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </>
       )}
+    </div>
+  );
+}
 
-      {meal.recipe && (
-        <div style={capsMealRecipeStyle}>🍳 Recette détaillée</div>
+// Composant compact pour afficher une recette (ingrédients + préparation)
+function RecipeDetail({ recipe, compact = false }) {
+  if (!recipe) return null;
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const preparation = Array.isArray(recipe.preparation) ? recipe.preparation : [];
+  return (
+    <div style={{
+      margin: compact ? '6px 0 2px' : '8px 0 4px',
+      padding: '10px 12px',
+      background: 'rgba(229, 184, 120, 0.05)',
+      border: '1px solid rgba(229, 184, 120, 0.15)',
+      borderRadius: 8,
+      fontSize: compact ? '.78rem' : '.82rem',
+    }}>
+      {(recipe.prep_time_min || recipe.cook_time_min || recipe.servings) && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 8, fontSize: '.72rem', color: '#8a8a7a', flexWrap: 'wrap' }}>
+          {recipe.prep_time_min ? <span>⏱ Prép. {recipe.prep_time_min} min</span> : null}
+          {recipe.cook_time_min ? <span>🔥 Cuisson {recipe.cook_time_min} min</span> : null}
+          {recipe.servings ? <span>👥 {recipe.servings} pers.</span> : null}
+        </div>
+      )}
+      {ingredients.length > 0 && (
+        <div style={{ marginBottom: preparation.length > 0 ? 8 : 0 }}>
+          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#e5b878', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>Ingrédients</div>
+          <ul style={{ margin: 0, paddingLeft: 16, color: '#d4c9a8' }}>
+            {ingredients.map((it, i) => (
+              <li key={i} style={{ marginBottom: 2 }}>{it}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preparation.length > 0 && (
+        <div>
+          <div style={{ fontSize: '.7rem', fontWeight: 700, color: '#e5b878', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>Préparation</div>
+          <ol style={{ margin: 0, paddingLeft: 18, color: '#d4c9a8' }}>
+            {preparation.map((step, i) => (
+              <li key={i} style={{ marginBottom: 3, paddingLeft: 4 }}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {recipe.tip && (
+        <div style={{ marginTop: 8, padding: '6px 10px', background: 'rgba(106, 191, 138, 0.06)', borderLeft: '2px solid rgba(106, 191, 138, 0.4)', borderRadius: 4, fontSize: '.78rem', color: '#8abf9a', fontStyle: 'italic' }}>
+          💡 {recipe.tip}
+        </div>
       )}
     </div>
   );
@@ -2807,7 +2957,7 @@ function FridgeCardEditable({ fridge, onImprove, improving = false, onSave, savi
 // répétée chaque jour). Pas d'édition de description ni d'ajout/suppression
 // d'alternative pour V1 — pattern réplicable plus tard.
 
-function WeekMealsCardEditable({ weekMeals, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null }) {
+function WeekMealsCardEditable({ weekMeals, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null, onGenerateRecipes, generatingRecipes = false, recipesError = null }) {
   const day1 = weekMeals?.days?.[0];
   const meals = day1?.meals || [];
   const empty = meals.length === 0;
@@ -2890,6 +3040,27 @@ function WeekMealsCardEditable({ weekMeals, onImprove, improving = false, onSave
             title="Modifier les titres des repas et alternatives"
           >✏️ Éditer</button>
         )}
+        {/* V97.13.46 — Générer recettes IA pour tous les repas + alternatives */}
+        {!empty && !editing && onGenerateRecipes && (
+          <button
+            type="button"
+            onClick={onGenerateRecipes}
+            disabled={generatingRecipes}
+            style={{
+              background: 'rgba(229, 184, 120, 0.10)',
+              border: '1px solid rgba(229, 184, 120, 0.28)',
+              color: '#e5b878',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: generatingRecipes ? 'wait' : 'pointer',
+              opacity: generatingRecipes ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            title="Génère les recettes IA (ingrédients + préparation) pour les repas qui n'en ont pas encore"
+          >{generatingRecipes ? '🍳 Génération…' : '🍳 Générer recettes'}</button>
+        )}
         {!editing && onImprove && (
           <button
             type="button"
@@ -2911,6 +3082,11 @@ function WeekMealsCardEditable({ weekMeals, onImprove, improving = false, onSave
           >{improving ? '✨ …' : '✨ Améliorer'}</button>
         )}
       </header>
+      {recipesError && (
+        <div style={{ padding: '8px 16px', background: 'rgba(220, 80, 80, 0.06)', borderBottom: '1px solid rgba(220, 80, 80, 0.18)', color: '#f5c6c6', fontSize: '.78rem' }}>
+          ⚠ {recipesError}
+        </div>
+      )}
 
       <div style={capsCardBodyStyle}>
         {empty ? (
