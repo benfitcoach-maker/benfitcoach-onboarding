@@ -54,11 +54,21 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
   const [enrichmentApplied, setEnrichmentApplied] = useState(null); // accepté → injecté dans le plan publié
   const [enrichmentError, setEnrichmentError] = useState(null);
 
+  // V97.13.38 — État local de la consultation pour refleter les edits inline
+  // (greeting, signature, ...) sans attendre un round-trip parent. Initialise
+  // depuis la prop, mis a jour par les handlers de save.
+  const [localConsultation, setLocalConsultation] = useState(consultation);
+  const [savingEdits, setSavingEdits] = useState(false);
+  const [editsSavedAt, setEditsSavedAt] = useState(null);
+  const [editsError, setEditsError] = useState(null);
+  // Re-sync si la prop consultation change (ex: parent reload apres publish)
+  useEffect(() => { setLocalConsultation(consultation); }, [consultation?.id, consultation?.intro_letter]);
+
   // Construire le plan brut. useMemo évite recompute à chaque changement de
   // tab — la dépendance est l'identité des inputs.
   const { rawPlan, error } = useMemo(() => {
     try {
-      const p = buildClientAppPlanFromConsultation(client, consultation);
+      const p = buildClientAppPlanFromConsultation(client, localConsultation);
       return { rawPlan: p, error: null };
     } catch (err) {
       // V94.67 : log le stack complet en console pour diagnostic.
@@ -68,11 +78,11 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
       // eslint-disable-next-line no-console
       console.error('[ClientAppPreviewModal] mapping error', err, {
         clientId: client?.id,
-        consultationId: consultation?.id,
+        consultationId: localConsultation?.id,
       });
       return { rawPlan: null, error: err?.message || String(err) };
     }
-  }, [client, consultation]);
+  }, [client, localConsultation]);
 
   // Plan affiché = brut + enrichissement appliqué si présent
   const plan = useMemo(
@@ -101,9 +111,12 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
     try {
       // V96.0 : options.effectiveAtOverride pour le bouton "Publier maintenant"
       // (force visible immédiate sur un plan de suivi).
+      // V97.13.38 : utilise localConsultation pour inclure les edits inline
+      // (greeting, signature) qui auraient ete sauves mais pas encore propages
+      // a la prop consultation par le parent.
       const res = await publishConsultationToClientApp(
         client,
-        consultation,
+        localConsultation,
         enrichmentApplied,
         options,
       );
@@ -157,6 +170,43 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
   const handleResetEnrichment = () => {
     setEnrichmentApplied(null);
     setEnrichmentDraft(null);
+  };
+
+  // V97.13.38 — Sauvegarde des edits manuels inline (greeting, signature pour V1).
+  // Merge l'edit dans consultation.intro_letter (deja persiste cote DB et lu en
+  // priorite par le mapper). Si l'enrichissement IA est applique, on fusionne
+  // son body avec les edits pour ne pas perdre la matiere IA.
+  const handleSaveIntroEdits = async (edits) => {
+    if (!edits || !localConsultation) return;
+    setEditsError(null);
+    setSavingEdits(true);
+    try {
+      const { saveNutritionConsultation } = await import('./store');
+      const existing = localConsultation.intro_letter || {};
+      // Si on a un draft enrichi non encore applique, ne pas le perdre :
+      // on prend en priorite enrichmentApplied.intro_body (si applique) > existing.body.
+      const body = enrichmentApplied?.intro_body?.length
+        ? enrichmentApplied.intro_body
+        : (existing.body || []);
+      const next = {
+        ...existing,
+        body, // garantit body non-vide pour que le mapper utilise intro_letter
+        ...(typeof edits.greeting === 'string' ? { greeting: edits.greeting.trim() } : {}),
+        ...(typeof edits.signature === 'string' ? { signature: edits.signature.trim() } : {}),
+      };
+      const updated = await saveNutritionConsultation({
+        ...localConsultation,
+        intro_letter: next,
+      });
+      setLocalConsultation(updated);
+      setEditsSavedAt(Date.now());
+      // Cache l'indicateur "Enregistre" apres 2.5s
+      setTimeout(() => setEditsSavedAt((v) => (v && Date.now() - v >= 2400 ? null : v)), 2500);
+    } catch (err) {
+      setEditsError(err?.message || String(err));
+    } finally {
+      setSavingEdits(false);
+    }
   };
 
   // V97.13.27 — auto-trigger Enrichir IA quand la modal s'ouvre depuis le
@@ -422,7 +472,15 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
               improving={enriching}
             >
               {({ onImprove, improving }) => (
-                <SectionsOverview plan={plan} onImprove={onImprove} improving={improving} />
+                <SectionsOverview
+                  plan={plan}
+                  onImprove={onImprove}
+                  improving={improving}
+                  onEditIntro={handleSaveIntroEdits}
+                  savingEdits={savingEdits}
+                  editsSavedAt={editsSavedAt}
+                  editsError={editsError}
+                />
               )}
             </ClientFullPagePreview>
           )}
@@ -686,43 +744,21 @@ function PublishFooter({
 // clinique premium. Anissa voit immédiatement ce que Camille verra.
 //
 // Pas d'onglets techniques visibles, pas de jargon. Vue verticale claire.
-function SectionsOverview({ plan, onImprove, improving = false }) {
+function SectionsOverview({ plan, onImprove, improving = false, onEditIntro, savingEdits = false, editsSavedAt = null, editsError = null }) {
   const s = plan.sections || {};
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* ─── Lettre d'intro ────────────────────────────────────────── */}
-      <CapsCard
-        icon="✉️"
-        title="Lettre d'intro"
-        empty={!s.intro_data?.body?.length}
-        emptyLabel="Pas encore de lettre d'intro générée"
+      <IntroCardEditable
+        intro={s.intro_data}
         onImprove={onImprove}
         improving={improving}
-      >
-        {s.intro_data?.greeting && (
-          <p style={capsGreetingStyle}>{s.intro_data.greeting}</p>
-        )}
-        {s.intro_data?.body?.map((para, i) => (
-          <p key={i} style={capsBodyStyle}>{para}</p>
-        ))}
-        {s.intro_data?.pull_quote && (
-          <blockquote style={capsQuoteStyle}>« {s.intro_data.pull_quote} »</blockquote>
-        )}
-        {s.intro_data?.tailored_points?.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            {s.intro_data.tailored_points.map((tp, i) => (
-              <div key={tp.id || i} style={{ marginBottom: 10 }}>
-                <div style={capsPointTitleStyle}>{tp.title}</div>
-                <div style={capsPointDetailStyle}>{tp.detail}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {s.intro_data?.signature && (
-          <p style={capsSignatureStyle}>— {s.intro_data.signature}</p>
-        )}
-      </CapsCard>
+        onSave={onEditIntro}
+        saving={savingEdits}
+        savedAt={editsSavedAt}
+        error={editsError}
+      />
 
       {/* ─── Stratégie & piliers ───────────────────────────────────── */}
       <CapsCard
@@ -1520,6 +1556,232 @@ function DiagnosticView({ diag }) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── V97.13.38 — Carte Lettre d'intro éditable inline ─────────────────────
+//
+// Variante de CapsCard pour la lettre d'intro avec edition manuelle du
+// greeting et de la signature (Phase A1 option C). Permet a Anissa de
+// peaufiner ces 2 champs courts sans quitter la modal. La persistance se
+// fait via consultation.intro_letter (deja gere par le mapper en priorite).
+// Les paragraphes body et les tailored_points restent geres par l'IA
+// Enrichir (Phase B option C, deja en place).
+
+function IntroCardEditable({ intro, onImprove, improving = false, onSave, saving = false, savedAt = null, error = null }) {
+  const empty = !intro?.body?.length;
+  const [editing, setEditing] = useState(false);
+  const [greeting, setGreeting] = useState(intro?.greeting || '');
+  const [signature, setSignature] = useState(intro?.signature || 'Anissa');
+
+  // Sync local state quand intro change (apres save reussi par exemple)
+  useEffect(() => {
+    if (!editing) {
+      setGreeting(intro?.greeting || '');
+      setSignature(intro?.signature || 'Anissa');
+    }
+  }, [intro?.greeting, intro?.signature, editing]);
+
+  const canSave = typeof onSave === 'function' && !empty;
+  const dirty = (greeting.trim() !== (intro?.greeting || '').trim())
+             || (signature.trim() !== (intro?.signature || 'Anissa').trim());
+
+  const handleConfirm = async () => {
+    if (!onSave) return;
+    await onSave({ greeting: greeting.trim(), signature: signature.trim() });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setGreeting(intro?.greeting || '');
+    setSignature(intro?.signature || 'Anissa');
+    setEditing(false);
+  };
+
+  return (
+    <div style={capsCardStyle}>
+      <header style={capsCardHeaderStyle}>
+        <span style={{ fontSize: '1.1rem' }}>✉️</span>
+        <div style={{ flex: 1 }}>
+          <h4 style={capsCardTitleStyle}>Lettre d'intro</h4>
+          {savedAt && (
+            <p style={{ ...capsCardSubtitleStyle, color: '#8abf9a' }}>✓ Enregistré</p>
+          )}
+        </div>
+        {empty && <span style={capsCardBadgeStyle}>à enrichir</span>}
+        {!empty && canSave && !editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              background: 'rgba(212, 201, 168, 0.08)',
+              border: '1px solid rgba(212, 201, 168, 0.20)',
+              color: '#d4c9a8',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            title="Modifier le bonjour et la signature"
+          >
+            ✏️ Éditer
+          </button>
+        )}
+        {!editing && onImprove && (
+          <button
+            type="button"
+            onClick={onImprove}
+            disabled={improving}
+            style={{
+              background: 'rgba(120, 80, 200, 0.08)',
+              border: '1px solid rgba(180, 140, 255, 0.25)',
+              color: '#b89eff',
+              padding: '5px 11px',
+              borderRadius: 6,
+              fontSize: '.75rem',
+              fontWeight: 600,
+              cursor: improving ? 'wait' : 'pointer',
+              opacity: improving ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+            title="Demande à l'IA de régénérer la lettre"
+          >
+            {improving ? '✨ …' : '✨ Améliorer'}
+          </button>
+        )}
+      </header>
+
+      <div style={capsCardBodyStyle}>
+        {empty ? (
+          <p style={capsEmptyStyle}>Pas encore de lettre d'intro générée</p>
+        ) : editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                Bonjour
+              </label>
+              <input
+                type="text"
+                value={greeting}
+                onChange={(e) => setGreeting(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'rgba(0,0,0,0.18)',
+                  border: '1px solid rgba(212, 201, 168, 0.20)',
+                  borderRadius: 6,
+                  color: '#f0f0e8',
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontStyle: 'italic',
+                  fontSize: '1.05rem',
+                }}
+                placeholder="Bonjour Camille,"
+              />
+            </div>
+
+            {intro?.body?.length > 0 && (
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: '1px dashed rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '.7rem', color: '#666', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+                  Corps de la lettre (non éditable ici — utilise ✨ Améliorer)
+                </div>
+                {intro.body.map((para, i) => (
+                  <p key={i} style={{ ...capsBodyStyle, opacity: 0.55, margin: '4px 0' }}>{para}</p>
+                ))}
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: '.72rem', fontWeight: 600, color: '#8a8a7a', letterSpacing: '.08em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                Signature
+              </label>
+              <input
+                type="text"
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'rgba(0,0,0,0.18)',
+                  border: '1px solid rgba(212, 201, 168, 0.20)',
+                  borderRadius: 6,
+                  color: '#f0f0e8',
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontStyle: 'italic',
+                  fontSize: '1.0rem',
+                }}
+                placeholder="Anissa"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+              {error && (
+                <span style={{ fontSize: '.75rem', color: '#f5c6c6', marginRight: 'auto' }}>⚠ {error}</span>
+              )}
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#8a8a7a',
+                  padding: '8px 14px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  cursor: saving ? 'wait' : 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={saving || !dirty}
+                style={{
+                  background: dirty ? 'rgba(106, 191, 138, 0.15)' : 'rgba(106, 191, 138, 0.06)',
+                  border: `1px solid ${dirty ? 'rgba(106, 191, 138, 0.35)' : 'rgba(106, 191, 138, 0.18)'}`,
+                  color: dirty ? '#a8e0c0' : '#666',
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  fontSize: '.82rem',
+                  fontWeight: 600,
+                  cursor: (saving || !dirty) ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? 'Enregistrement…' : '✓ Enregistrer'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {intro?.greeting && (
+              <p style={capsGreetingStyle}>{intro.greeting}</p>
+            )}
+            {intro?.body?.map((para, i) => (
+              <p key={i} style={capsBodyStyle}>{para}</p>
+            ))}
+            {intro?.pull_quote && (
+              <blockquote style={capsQuoteStyle}>« {intro.pull_quote} »</blockquote>
+            )}
+            {intro?.tailored_points?.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                {intro.tailored_points.map((tp, i) => (
+                  <div key={tp.id || i} style={{ marginBottom: 10 }}>
+                    <div style={capsPointTitleStyle}>{tp.title}</div>
+                    <div style={capsPointDetailStyle}>{tp.detail}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {intro?.signature && (
+              <p style={capsSignatureStyle}>— {intro.signature}</p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

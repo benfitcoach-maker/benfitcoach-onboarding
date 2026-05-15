@@ -222,7 +222,7 @@ function buildIntroData(client, consultation, sections) {
   const locale = resolveLocale(client);
   const prenom = (client?.prenom || "").trim();
 
-  const greeting = locale === "fr"
+  const defaultGreeting = locale === "fr"
     ? (prenom ? `Bonjour ${prenom},` : "Bonjour,")
     : (prenom ? `Hello ${prenom},` : "Hello,");
 
@@ -230,10 +230,14 @@ function buildIntroData(client, consultation, sections) {
   // par Anissa via l'onglet "Lettre" de NutritionConsultation. Si present,
   // on l'utilise tel quel (pas de filtrage looksLikeRawProfileData : Anissa
   // a deja valide le contenu).
+  // V97.13.38 : greeting et signature aussi pris depuis intro_letter si fournis
+  // (avant : hardcoded). Permet l'edition inline manuelle dans la modal Apercu.
   const introLetter = consultation?.intro_letter;
   if (introLetter && Array.isArray(introLetter.body) && introLetter.body.length > 0) {
+    const customGreeting = typeof introLetter.greeting === "string" ? introLetter.greeting.trim() : "";
+    const customSignature = typeof introLetter.signature === "string" ? introLetter.signature.trim() : "";
     return {
-      greeting,
+      greeting: customGreeting || defaultGreeting,
       body: introLetter.body
         .map((p) => String(p || "").trim())
         .filter(Boolean),
@@ -249,11 +253,13 @@ function buildIntroData(client, consultation, sections) {
             }))
             .filter((p) => p.title && p.detail)
         : undefined,
-      signature: "Anissa",
+      signature: customSignature || "Anissa",
       coach_name: "Anissa",
       coach_role: locale === "fr" ? "Votre nutritionniste" : "Your nutritionist",
     };
   }
+  // Variable conservee pour les fallbacks legacy ci-dessous
+  const greeting = defaultGreeting;
 
   // FALLBACK legacy — sources d'intro existantes :
   //   1. Section "intro" du plan (vraie intro narrative écrite par Anissa)
