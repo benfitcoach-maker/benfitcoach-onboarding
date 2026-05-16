@@ -370,6 +370,10 @@ async function cloudSyncNutritionConsultation(consultation) {
     // Necessite migration Supabase :
     //   alter table nutrition_consultations add column editorial_overrides jsonb;
     editorial_overrides: consultation.editorial_overrides || null,
+    // V97.17 Phase A : timeline therapeutique 5 phases (microbiote etc.).
+    // Cf migration V97.17_protocol_phases.sql + service protocolPhases.js.
+    protocol_phases: consultation.protocol_phases || null,
+    active_phase_id: consultation.active_phase_id || null,
   };
   supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' }).then(({ error }) => {
     if (error) {
@@ -943,6 +947,10 @@ export function saveNutritionConsultation(consultation) {
     // (Phase A3 option C). Voir cloudSyncNutritionConsultation pour la
     // migration Supabase requise.
     editorial_overrides: consultation.editorial_overrides || null,
+    // V97.17 Phase A : timeline therapeutique 5 phases. Migration
+    // V97.17_protocol_phases.sql sur Supabase.
+    protocol_phases: consultation.protocol_phases || null,
+    active_phase_id: consultation.active_phase_id || null,
   };
   // V78 : si une consultation avec ce id existe deja et est soft-delete,
   // preserver le flag pour eviter un "undelete" silencieux via edit.

@@ -1,0 +1,71 @@
+-- ============================================================
+-- V97.17 — protocol_phases : timeline therapeutique par cliente
+-- ============================================================
+-- Refonte /parcours app cliente : devient home therapeutique
+-- permanente avec timeline 5 phases (microbiote) ou variantes.
+-- Cf spec : memory `spec_v2_parcours_home_permanente_2026_05_16.md`.
+--
+-- Cote SaaS Anissa : nouveau bloc Parcours dans cockpit etape 8.
+-- Cote app cliente : page /parcours V2 affiche les phases.
+--
+-- Architecture choisie : JSONB unique sur nutrition_consultations
+-- (1 row par consultation = 1 parcours). Backward compatible :
+-- les consultations sans protocol_phases continuent de fonctionner
+-- normalement (legacy intro + strategy + plan).
+--
+-- ⚠️ APPLIQUER VIA SUPABASE DASHBOARD → SQL Editor → Run.
+-- Sur projet : Benfitcoach (SaaS prod), pas anissa-client-staging.
+-- ============================================================
+
+-- 1. Ajout colonnes (idempotent — IF NOT EXISTS)
+ALTER TABLE nutrition_consultations
+  ADD COLUMN IF NOT EXISTS protocol_phases JSONB,
+  ADD COLUMN IF NOT EXISTS active_phase_id TEXT;
+
+-- ============================================================
+-- STRUCTURE protocol_phases attendue (JSONB)
+-- ============================================================
+-- {
+--   "template": "microbiote_5_phases" | "microbiote_3_phases"
+--             | "nutrition_simple_2_phases" | "custom",
+--   "phases": [
+--     {
+--       "id": "p1",
+--       "order": 1,
+--       "client_name": "Apaisement digestif",
+--       "clinical_name": "Eradication",
+--       "duration_weeks_min": 4,
+--       "duration_weeks_max": 6,
+--       "narrative_present": "Cette phase apaise...",
+--       "narrative_past": "Vous avez traverse...",
+--       "narrative_future": "Votre parcours commencera par...",
+--       "status": "upcoming" | "active" | "completed",
+--       "started_at": "2026-05-09T00:00:00Z" | null,
+--       "completed_at": null,
+--       "retrospective": { "objectives_achieved": [], "dominant_feelings": [] }
+--     },
+--     ...
+--   ]
+-- }
+--
+-- active_phase_id = id de la phase actuellement en cours.
+-- Doit etre coherent avec phases[].status === "active".
+-- ============================================================
+
+-- ============================================================
+-- VERIFICATION post-migration
+-- ============================================================
+-- SELECT column_name, data_type
+--   FROM information_schema.columns
+--  WHERE table_name = 'nutrition_consultations'
+--    AND column_name IN ('protocol_phases', 'active_phase_id');
+--
+-- Resultat attendu :
+--   protocol_phases   | jsonb
+--   active_phase_id   | text
+--
+-- Pas d'index pour V1 (faible volumetrie, pas de query filtree
+-- sur phase active envisagee a court terme). A reconsiderer si
+-- besoin de filtrage cross-cliente type "toutes les clientes en
+-- phase 2 actuellement".
+-- ============================================================

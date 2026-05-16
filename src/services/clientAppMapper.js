@@ -1212,6 +1212,12 @@ export function buildClientAppPlanFromConsultation(client, consultation) {
   const fridge_data   = buildFridgeData(client, consultation, sections);
   const protocols_data= buildProtocolsData(client, consultation, sections);
 
+  // V97.17 Phase A — Expose protocol_phases (timeline therapeutique 5 phases)
+  // a l'app cliente pour /parcours V2. Pas de transformation cote SaaS :
+  // le format DB est le format consomme cote app. Null/undefined si pas
+  // encore configure pour cette consultation (backward compatible).
+  const journey_phases = consultation?.protocol_phases || null;
+
   return {
     client_id: client.id,
     status: "draft",
@@ -1224,6 +1230,7 @@ export function buildClientAppPlanFromConsultation(client, consultation) {
       : undefined,
     objective: client?.form?.objectif || client?.form?.objective || undefined,
     published_version: 0,
+    journey_phases,
     sections: {
       intro_data,
       strategy_data,
