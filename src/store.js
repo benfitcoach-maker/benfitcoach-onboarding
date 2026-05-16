@@ -436,6 +436,12 @@ export async function forceSyncAllConsultations() {
       // V94.59 : composantes app cliente
       intro_letter: c.intro_letter || null,
       meal_recipes: c.meal_recipes || null,
+      // V97.17.7.4 — Bugfix : forceSyncAllConsultations oubliait editorial_overrides
+      // et protocol_phases. Au sync force, les phases configurees etaient
+      // ecrasees par null cote cloud puis re-pull effacait le local.
+      editorial_overrides: c.editorial_overrides || null,
+      protocol_phases: c.protocol_phases || null,
+      active_phase_id: c.active_phase_id || null,
     };
     const { error } = await supabase.from('nutrition_consultations').upsert(row, { onConflict: 'id' });
     if (error) {
@@ -536,6 +542,15 @@ export async function pullFromCloud() {
       // V94.59 : composantes app cliente (lettre IA + recettes IA)
       intro_letter: n.intro_letter || null,
       meal_recipes: n.meal_recipes || null,
+      // V97.17.7.4 — BUGFIX critique : le mapping cloud→local oubliait
+      // editorial_overrides + protocol_phases + active_phase_id. Au refresh
+      // page, pullFromCloud ecrasait le localStorage avec une version sans
+      // ces champs → Anissa perdait son parcours therapeutique et devait le
+      // re-configurer. Cause : ajout des colonnes en V97.13.41 et V97.17.0
+      // sans toucher pullFromCloud (oubli pipeline).
+      editorial_overrides: n.editorial_overrides || null,
+      protocol_phases: n.protocol_phases || null,
+      active_phase_id: n.active_phase_id || null,
       createdAt: n.created_at,
     }));
     // Merge with existing local nutrition consultations
