@@ -28,10 +28,11 @@ import ClientAppPreviewModal from './ClientAppPreviewModal';
 import JourneyMessagesPanel from './JourneyMessagesPanel';
 import JourneyNotesPanel from './JourneyNotesPanel';
 import PremiumSwitch from './components/PremiumSwitch';
+import SuiviCockpitTimeline from './components/SuiviCockpitTimeline';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
 import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
-import { getNutritionConsultations } from './store';
+import { getNutritionConsultations, saveNutritionConsultation } from './store';
 import { trackPlanValidated, trackPlanModification } from './services/observability';
 import './styles/journey.css';
 
@@ -3721,6 +3722,37 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   // V97.13.16 — variables d'identité partagées avec étape 7
   const prenom = (client?.form?.prenom || client?.prenom || 'la cliente').trim();
 
+  // V97.17.1 — Consultation active (pour protocol_phases dans le cockpit timeline)
+  // Pattern identique a handleAdaptFromFeedback ligne 3865.
+  const [activeConsult, setActiveConsult] = useState(() =>
+    client?.id ? ((getNutritionConsultations(client.id) || [])[0] || null) : null
+  );
+  // Recharge si client change (changement de cliente)
+  useEffect(() => {
+    if (!client?.id) {
+      setActiveConsult(null);
+      return;
+    }
+    setActiveConsult((getNutritionConsultations(client.id) || [])[0] || null);
+  }, [client?.id]);
+
+  // Handler save phases — passe par store + reflete local optimiste
+  const handleSavePhases = useCallback(
+    async (newProtocolPhases) => {
+      if (!activeConsult) return;
+      const activePhaseId =
+        newProtocolPhases?.phases?.find((p) => p.status === 'active')?.id || null;
+      const next = {
+        ...activeConsult,
+        protocol_phases: newProtocolPhases,
+        active_phase_id: activePhaseId,
+      };
+      await saveNutritionConsultation(next);
+      setActiveConsult(next);
+    },
+    [activeConsult]
+  );
+
   // Phase AJ : log des consultations effectuees
   const pack = PACK_DEFINITIONS[client.packType] || null;
   const packLabel = pack?.label || 'Accompagnement';
@@ -4084,6 +4116,20 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
 
       {started && (
         <>
+          {/* V97.17.1 — Cockpit Timeline en tete : frise temporelle (Vous etes ici)
+              + parcours therapeutique 5 phases. Repond aux 3 questions du manifeste :
+              ou j'en suis, qu'est-ce qui se passe, qu'est-ce qui vient ensuite. */}
+          <SuiviCockpitTimeline
+            client={client}
+            consultation={activeConsult}
+            packLabel={packLabel}
+            daysSincePack={daysSincePack}
+            consultationsUsed={consultationsUsed}
+            consultationsTotal={consultationsTotal}
+            consultationsLog={consultationsLog}
+            onSavePhases={handleSavePhases}
+          />
+
           {/* BC.5 Étape 8 : refonte en blocs numérotés (alignement étapes 1-7)
               V97.13.16 : ajout bloc miroir cliente avec mockup phone (continuité étape 7) */}
 

@@ -43,7 +43,6 @@ import { extractMealsAndAlternativesFromPlan } from "./services/extractMealsFrom
 // cote staging) + backfill auto quand l'API confirme.
 import { hasBeenPublishedLocally, markPublishedLocally } from "./services/publishToClientApp";
 import JourneyCockpit from "./components/JourneyCockpit";
-import JourneyPhasesCard from "./components/JourneyPhasesCard";
 import PushNotifSender from "./components/PushNotifSender";
 import { useConfirmDialog, ConfirmDialog } from "./components/ConfirmDialog";
 
@@ -80,15 +79,6 @@ export default function ClientAppPanel({
   onOpenPreview,
   onPersistGlobally,
 }) {
-  // V97.17 — handler save pour JourneyPhasesCard. Pattern identique aux autres
-  // editorial overrides (intro_letter, meal_recipes, editorial_overrides).
-  const handleSavePhases = (newPhases) => {
-    onUpdateConsultation?.({
-      protocol_phases: newPhases,
-      active_phase_id:
-        newPhases?.phases?.find((p) => p.status === "active")?.id || null,
-    });
-  };
   const [activeTab, setActiveTab] = useState("overview");
   // V94.57 : banner onboarding affiche au 1er passage. Dismissable definitif
   // (localStorage flag par appareil/navigateur).
@@ -219,7 +209,6 @@ export default function ClientAppPanel({
             totalMeals={totalMeals}
             letterFilled={letterFilled}
             onJumpTo={setActiveTab}
-            onSavePhases={handleSavePhases}
           />
         )}
         {/* V94.48 : Lettre + Recettes regroupees ici (composantes app cliente).
@@ -259,7 +248,6 @@ function OverviewTab({
   totalMeals = 0,
   letterFilled = false,
   onJumpTo,
-  onSavePhases,
 }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -395,16 +383,6 @@ function OverviewTab({
         onUpdated={refreshStatus}
         clientPrenom={client?.prenom || client?.form?.prenom || ""}
         clientFormule={client?.formule || client?.packType || ""}
-      />
-
-      {/* V97.17 Phase B — Parcours therapeutique 5 phases (microbiote etc.).
-          Compose le cockpit clinique long terme. Affiche timeline phases +
-          suggestions transitions. Visible cote Anissa, alimente /parcours V2
-          cote app cliente. */}
-      <JourneyPhasesCard
-        client={client}
-        consultation={consultation}
-        onSavePhases={onSavePhases}
       />
 
       {/* V97.11.4 — Envoi notif push custom (carte repliée par défaut) */}

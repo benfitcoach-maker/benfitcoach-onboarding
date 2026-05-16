@@ -1,5 +1,8 @@
 // ─── JourneyPhasesCard ──────────────────────────────────────────────────
-// V97.17 Phase B — Cockpit Parcours therapeutique (5 phases microbiote).
+// V97.17.1 — Cockpit Parcours therapeutique (5 phases microbiote).
+//
+// Pensé pour vivre dans SuiviCockpitTimeline sur la page Suivi etape 8
+// (palette claire ivoire / vert sombre, cf charte journey.css).
 //
 // Composant autonome : consomme consultation.protocol_phases et appelle
 // onSavePhases(newProtocolPhases) en remontee. C'est le parent qui gere
@@ -31,7 +34,6 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
 
   const protocolPhases = consultation?.protocol_phases || null;
 
-  // Suggestion template (lazy, recalculee si client change)
   const suggestion = useMemo(
     () => suggestTemplateFromAnalyses(client || {}),
     [client]
@@ -84,29 +86,20 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
 
   if (!protocolPhases) {
     return (
-      <div style={cardStyle}>
-        <div style={titleRowStyle}>
-          <div style={titleStyle}>Parcours thérapeutique</div>
-          <div style={pillStyle}>Non configuré</div>
-        </div>
-
+      <div>
         <p style={mutedStyle}>
-          Ce parcours apparaîtra dans l'app cliente sous forme de timeline 5 phases.
-          Camille verra où elle en est, ce qui se passe, et ce qui vient ensuite.
+          Ce parcours apparaîtra dans l&apos;app cliente sous forme de timeline 5 phases.
+          La cliente verra où elle en est, ce qui se passe, et ce qui vient ensuite.
         </p>
 
         {/* Banner suggestion */}
         <div style={suggestionBannerStyle}>
-          <div style={{ fontSize: ".7rem", color: "#82c39e", fontWeight: 600, letterSpacing: ".05em" }}>
-            ✨ SUGGESTION
-          </div>
-          <div style={{ marginTop: 4, fontSize: ".88rem", color: "#FAF9F6" }}>
+          <div style={suggestionEyebrowStyle}>✨ SUGGESTION</div>
+          <div style={suggestionTitleStyle}>
             {ALL_TEMPLATES[suggestion.templateId]?.label || suggestion.templateId}
           </div>
-          <div style={{ marginTop: 4, fontSize: ".75rem", color: "#8a8a7a", fontStyle: "italic" }}>
-            {suggestion.reason}
-          </div>
-          <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={suggestionReasonStyle}>{suggestion.reason}</div>
+          <div style={btnRowStyle}>
             <button
               type="button"
               disabled={saving}
@@ -137,10 +130,8 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
                 onClick={() => handleInitFromTemplate(tpl.id)}
                 style={pickerItemStyle}
               >
-                <div style={{ fontWeight: 600, color: "#FAF9F6" }}>{tpl.label}</div>
-                <div style={{ marginTop: 2, fontSize: ".72rem", color: "#8a8a7a" }}>
-                  {tpl.description}
-                </div>
+                <div style={pickerLabelStyle}>{tpl.label}</div>
+                <div style={pickerDescStyle}>{tpl.description}</div>
               </button>
             ))}
           </div>
@@ -151,43 +142,31 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
 
   // ─── État 2 & 3 : configuré ───────────────────────────────────────────
 
-  const template = ALL_TEMPLATES[protocolPhases.template];
   const totalPhases = protocolPhases.phases.length;
   const completedCount = protocolPhases.phases.filter((p) => p.status === "completed").length;
   const activeIdx = protocolPhases.phases.findIndex((p) => p.status === "active");
 
   return (
-    <div style={cardStyle}>
-      <div style={titleRowStyle}>
-        <div style={titleStyle}>Parcours thérapeutique</div>
-        <div style={pillStyle}>
-          {template?.label || protocolPhases.template} · {totalPhases} phases
-        </div>
-      </div>
-
+    <div>
       {/* Hero phase active (si une est active) */}
       {activePhase && (
         <div style={activeHeroStyle}>
-          <div style={{ fontSize: ".7rem", color: "#82c39e", fontWeight: 600, letterSpacing: ".05em" }}>
-            PHASE ACTIVE
-          </div>
-          <div style={{ marginTop: 4, fontSize: "1rem", color: "#FAF9F6", fontWeight: 600 }}>
+          <div style={suggestionEyebrowStyle}>PHASE ACTIVE</div>
+          <div style={activeTitleStyle}>
             Phase {activePhase.order} · {activePhase.client_name}
           </div>
-          <div style={{ marginTop: 2, fontSize: ".72rem", color: "#8a8a7a", fontStyle: "italic" }}>
-            Clinique : {activePhase.clinical_name}
+          <div style={activeClinicalStyle}>
+            Nom clinique : {activePhase.clinical_name}
           </div>
           {weekInfo && (
-            <div style={{ marginTop: 8, fontSize: ".78rem", color: "#FAF9F6" }}>
+            <div style={activeWeekStyle}>
               Semaine {weekInfo.weekNumber}
               {weekInfo.maxWeeks > 0 ? ` sur ~${weekInfo.maxWeeks}` : " (phase ouverte)"}
             </div>
           )}
           {nextSuggestion.shouldSuggest && (
             <div style={transitionSuggestionStyle}>
-              <div style={{ fontSize: ".72rem", color: "#e0c87a" }}>
-                💡 {nextSuggestion.reason}
-              </div>
+              <div style={transitionLabelStyle}>💡 {nextSuggestion.reason}</div>
               <button
                 type="button"
                 disabled={saving}
@@ -202,8 +181,8 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
       )}
 
       {/* Timeline des phases */}
-      <div style={{ marginTop: 12 }}>
-        {protocolPhases.phases.map((phase, idx) => {
+      <div style={{ marginTop: 14 }}>
+        {protocolPhases.phases.map((phase) => {
           const isCompleted = phase.status === "completed";
           const isActive = phase.status === "active";
           const isUpcoming = phase.status === "upcoming";
@@ -213,11 +192,11 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
               <div style={phaseMarkerStyle(isCompleted, isActive)}>
                 {isCompleted ? "✓" : isActive ? "●" : "○"}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: ".82rem", color: isUpcoming ? "#8a8a7a" : "#FAF9F6", fontWeight: isActive ? 600 : 400 }}>
+              <div style={phaseBodyStyle}>
+                <div style={phaseTitleStyle(isUpcoming, isActive)}>
                   Phase {phase.order} · {phase.client_name}
                 </div>
-                <div style={{ fontSize: ".68rem", color: "#666", marginTop: 1 }}>
+                <div style={phaseMetaStyle}>
                   {isCompleted && phase.completed_at && `Terminée le ${formatDate(phase.completed_at)}`}
                   {isActive && phase.started_at && `Démarrée le ${formatDate(phase.started_at)}`}
                   {isUpcoming && (
@@ -227,16 +206,13 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
                   )}
                 </div>
               </div>
-              {idx < protocolPhases.phases.length - 1 && (
-                <div style={connectorStyle(isCompleted)} />
-              )}
             </div>
           );
         })}
       </div>
 
       {/* Actions globales */}
-      <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ ...btnRowStyle, marginTop: 14 }}>
         {!activePhase && completedCount === 0 && (
           <button
             type="button"
@@ -271,8 +247,8 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
       {/* Picker template (changement post-init) */}
       {showTemplatePicker && (
         <div style={{ ...pickerStyle, marginTop: 10 }}>
-          <div style={{ fontSize: ".72rem", color: "#e87070", marginBottom: 8 }}>
-            ⚠️ Changer le template écrasera l'état actuel des phases.
+          <div style={pickerWarningStyle}>
+            ⚠️ Changer le template écrasera l&apos;état actuel des phases.
           </div>
           {Object.values(ALL_TEMPLATES).map((tpl) => (
             <button
@@ -286,13 +262,11 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
                 cursor: tpl.id === protocolPhases.template ? "not-allowed" : "pointer",
               }}
             >
-              <div style={{ fontWeight: 600, color: "#FAF9F6" }}>
+              <div style={pickerLabelStyle}>
                 {tpl.label}
                 {tpl.id === protocolPhases.template && " (actuel)"}
               </div>
-              <div style={{ marginTop: 2, fontSize: ".72rem", color: "#8a8a7a" }}>
-                {tpl.description}
-              </div>
+              <div style={pickerDescStyle}>{tpl.description}</div>
             </button>
           ))}
         </div>
@@ -313,54 +287,50 @@ function formatDate(iso) {
   }
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────
-
-const cardStyle = {
-  background: "rgba(255,255,255,.02)",
-  border: "1px solid rgba(255,255,255,.06)",
-  borderRadius: 10,
-  padding: "14px 16px",
-  marginBottom: 12,
-};
-
-const titleRowStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: 10,
-  gap: 10,
-  flexWrap: "wrap",
-};
-
-const titleStyle = {
-  fontSize: ".9rem",
-  fontWeight: 600,
-  color: "#FAF9F6",
-  letterSpacing: ".01em",
-};
-
-const pillStyle = {
-  fontSize: ".68rem",
-  color: "#8a8a7a",
-  background: "rgba(255,255,255,.04)",
-  padding: "3px 9px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,.06)",
-};
+// ─── Styles (palette claire ivoire / vert sombre) ─────────────────────────
 
 const mutedStyle = {
-  fontSize: ".78rem",
-  color: "#8a8a7a",
+  fontSize: 13,
+  color: "var(--jrn-text-muted, #6b6f6b)",
   margin: "0 0 12px 0",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
 };
 
 const suggestionBannerStyle = {
-  background: "rgba(130,195,158,.08)",
-  border: "1px solid rgba(130,195,158,.25)",
+  background: "rgba(26, 46, 31, 0.04)",
+  border: "1px solid rgba(26, 46, 31, 0.12)",
   borderRadius: 8,
-  padding: "10px 12px",
-  marginBottom: 10,
+  padding: "12px 14px",
+  marginBottom: 8,
+};
+
+const suggestionEyebrowStyle = {
+  fontSize: 10,
+  letterSpacing: ".12em",
+  fontWeight: 700,
+  color: "#1A2E1F",
+  textTransform: "uppercase",
+};
+
+const suggestionTitleStyle = {
+  marginTop: 4,
+  fontSize: 14,
+  color: "#1A2E1F",
+  fontWeight: 600,
+};
+
+const suggestionReasonStyle = {
+  marginTop: 4,
+  fontSize: 12,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  fontStyle: "italic",
+};
+
+const btnRowStyle = {
+  marginTop: 10,
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
 };
 
 const pickerStyle = {
@@ -371,8 +341,8 @@ const pickerStyle = {
 };
 
 const pickerItemStyle = {
-  background: "rgba(255,255,255,.03)",
-  border: "1px solid rgba(255,255,255,.08)",
+  background: "white",
+  border: "1px solid rgba(26, 46, 31, 0.12)",
   borderRadius: 7,
   padding: "10px 12px",
   textAlign: "left",
@@ -380,15 +350,33 @@ const pickerItemStyle = {
   transition: "all 120ms ease",
 };
 
+const pickerLabelStyle = {
+  fontWeight: 600,
+  color: "#1A2E1F",
+  fontSize: 13,
+};
+
+const pickerDescStyle = {
+  marginTop: 2,
+  fontSize: 11.5,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+};
+
+const pickerWarningStyle = {
+  fontSize: 11.5,
+  color: "#a04040",
+  marginBottom: 6,
+};
+
 function primaryBtnStyle(disabled) {
   return {
-    background: disabled ? "rgba(255,255,255,.04)" : "rgba(130,195,158,0.15)",
-    border: `1px solid ${disabled ? "rgba(255,255,255,.08)" : "rgba(130,195,158,0.35)"}`,
+    background: disabled ? "rgba(26,46,31,.08)" : "#1A2E1F",
+    border: "1px solid #1A2E1F",
     borderRadius: 7,
-    padding: "7px 14px",
-    fontSize: ".78rem",
+    padding: "8px 14px",
+    fontSize: 12.5,
     fontWeight: 600,
-    color: disabled ? "#8a8a7a" : "#82c39e",
+    color: disabled ? "#6b6f6b" : "#FAF9F6",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
     transition: "all 120ms ease",
@@ -398,11 +386,11 @@ function primaryBtnStyle(disabled) {
 function ghostBtnStyle(disabled) {
   return {
     background: "transparent",
-    border: `1px solid ${disabled ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.12)"}`,
+    border: "1px solid rgba(26, 46, 31, 0.2)",
     borderRadius: 7,
-    padding: "7px 14px",
-    fontSize: ".78rem",
-    color: disabled ? "#666" : "#8a8a7a",
+    padding: "8px 14px",
+    fontSize: 12.5,
+    color: disabled ? "#9b9f9b" : "#1A2E1F",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
     transition: "all 120ms ease",
@@ -410,19 +398,46 @@ function ghostBtnStyle(disabled) {
 }
 
 const activeHeroStyle = {
-  background: "rgba(130,195,158,.06)",
-  border: "1px solid rgba(130,195,158,.18)",
+  background: "rgba(26, 46, 31, 0.06)",
+  border: "1px solid rgba(26, 46, 31, 0.18)",
   borderRadius: 8,
-  padding: "12px 14px",
-  marginBottom: 6,
+  padding: "14px 16px",
+  marginBottom: 4,
+};
+
+const activeTitleStyle = {
+  marginTop: 4,
+  fontSize: 15,
+  color: "#1A2E1F",
+  fontWeight: 700,
+};
+
+const activeClinicalStyle = {
+  marginTop: 3,
+  fontSize: 11.5,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  fontStyle: "italic",
+};
+
+const activeWeekStyle = {
+  marginTop: 8,
+  fontSize: 13,
+  color: "#1A2E1F",
+  fontWeight: 500,
 };
 
 const transitionSuggestionStyle = {
-  marginTop: 10,
+  marginTop: 12,
   padding: "10px 12px",
-  background: "rgba(224,200,122,.08)",
-  border: "1px solid rgba(224,200,122,.25)",
+  background: "rgba(184, 134, 38, 0.08)",
+  border: "1px solid rgba(184, 134, 38, 0.3)",
   borderRadius: 7,
+};
+
+const transitionLabelStyle = {
+  fontSize: 12,
+  color: "#785a1a",
+  lineHeight: 1.4,
 };
 
 function phaseRowStyle(isCompleted, isActive) {
@@ -430,9 +445,9 @@ function phaseRowStyle(isCompleted, isActive) {
     display: "flex",
     alignItems: "flex-start",
     gap: 10,
-    padding: "8px 4px",
-    borderBottom: "1px solid rgba(255,255,255,.04)",
-    opacity: isCompleted ? 0.7 : isActive ? 1 : 0.55,
+    padding: "9px 4px",
+    borderBottom: "1px solid rgba(26, 46, 31, 0.06)",
+    opacity: isCompleted ? 0.75 : isActive ? 1 : 0.6,
   };
 }
 
@@ -443,27 +458,42 @@ function phaseMarkerStyle(isCompleted, isActive) {
     minWidth: 22,
     borderRadius: "50%",
     background: isCompleted
-      ? "rgba(130,195,158,.2)"
+      ? "rgba(26, 46, 31, 0.85)"
       : isActive
-      ? "rgba(130,195,158,.35)"
-      : "rgba(255,255,255,.04)",
-    border: `1px solid ${
+      ? "rgba(26, 46, 31, 1)"
+      : "rgba(26, 46, 31, 0.04)",
+    border: `1.5px solid ${
       isCompleted
-        ? "rgba(130,195,158,.4)"
+        ? "rgba(26, 46, 31, 0.85)"
         : isActive
-        ? "#82c39e"
-        : "rgba(255,255,255,.1)"
+        ? "#1A2E1F"
+        : "rgba(26, 46, 31, 0.2)"
     }`,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: ".7rem",
-    color: isCompleted || isActive ? "#82c39e" : "#666",
-    fontWeight: 600,
+    fontSize: 11,
+    color: isCompleted || isActive ? "#FAF9F6" : "rgba(26,46,31,.4)",
+    fontWeight: 700,
     marginTop: 2,
   };
 }
 
-function connectorStyle() {
-  return {}; // visual connector via borderBottom de phaseRowStyle
+const phaseBodyStyle = {
+  flex: 1,
+  minWidth: 0,
+};
+
+function phaseTitleStyle(isUpcoming, isActive) {
+  return {
+    fontSize: 13,
+    color: isUpcoming ? "var(--jrn-text-muted, #6b6f6b)" : "#1A2E1F",
+    fontWeight: isActive ? 700 : 500,
+  };
 }
+
+const phaseMetaStyle = {
+  fontSize: 11,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  marginTop: 2,
+};
