@@ -4628,11 +4628,36 @@ function WeightTrackingSection({ client, entries, loading }) {
   return (
     <div style={{ marginBottom: 'var(--jrn-6)' }}>
       {/* V97.13.21 : toggles config sortis du flux clinique principal.
-          Bouton '⚙ Configurer' discret en haut à droite, drawer inline si cliqué. */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 'var(--jrn-3)', flexWrap: 'wrap', gap: 8 }}>
-        <p className="jrn-label" style={{ margin: 0 }}>
-          Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
-        </p>
+          Bouton '⚙ Configurer' discret en haut à droite, drawer inline si cliqué.
+          V97.17.2 : badge etat ACTIVE/INACTIF clair (feedback Anissa : on ne
+          voyait pas l'etat sur la card). */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--jrn-3)', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <p className="jrn-label" style={{ margin: 0 }}>
+            Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
+          </p>
+          {!loadingCfg && (
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '.08em',
+              textTransform: 'uppercase',
+              padding: '3px 8px',
+              borderRadius: 999,
+              background: trackingEnabled
+                ? 'rgba(26, 46, 31, 0.08)'
+                : 'rgba(120, 120, 120, 0.08)',
+              color: trackingEnabled ? '#1A2E1F' : '#8a8a8a',
+              border: trackingEnabled
+                ? '1px solid rgba(26, 46, 31, 0.25)'
+                : '1px solid rgba(120, 120, 120, 0.20)',
+            }}>
+              {trackingEnabled
+                ? (visibleToClient ? '✓ Activé · cliente saisit' : '✓ Activé · mode coach')
+                : '○ Désactivé'}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setShowConfig(!showConfig)}
@@ -4653,12 +4678,46 @@ function WeightTrackingSection({ client, entries, loading }) {
         <p className="jrn-cockpit-empty-row">Chargement…</p>
       )}
 
+      {/* V97.17.2 — placeholder graphique si activé sans data (au lieu d'une
+          ligne de texte sobre). Permet a Anissa de visualiser l'absence de
+          courbe en plus du badge etat ci-dessus. */}
       {!loading && !loadingCfg && entries.length === 0 && trackingEnabled && (
-        <p className="jrn-cockpit-empty-row">
-          {visibleToClient
-            ? 'Suivi activé · la cliente peut saisir son poids depuis l\'app · aucune pesée encore.'
-            : 'Suivi activé en mode coach · aucune pesée enregistrée.'}
-        </p>
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
+          <svg
+            width="100%"
+            height="60"
+            viewBox="0 0 200 60"
+            preserveAspectRatio="none"
+            style={{ display: 'block', opacity: 0.35 }}
+            aria-hidden="true"
+          >
+            <line x1="0" y1="50" x2="200" y2="50" stroke="rgba(26,46,31,.2)" strokeWidth="1" />
+            <line
+              x1="0" y1="30" x2="200" y2="30"
+              stroke="rgba(26,46,31,.4)"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+            />
+            <circle cx="10" cy="30" r="3" fill="rgba(26,46,31,.4)" />
+            <circle cx="100" cy="30" r="3" fill="rgba(26,46,31,.4)" />
+            <circle cx="190" cy="30" r="3" fill="rgba(26,46,31,.4)" />
+          </svg>
+          <p style={{ marginTop: 8, fontSize: 12, color: 'var(--jrn-text-muted)', fontStyle: 'italic' }}>
+            {visibleToClient
+              ? 'En attente des premières pesées de la cliente depuis l\'app.'
+              : 'Mode coach · aucune pesée enregistrée pour l\'instant.'}
+          </p>
+        </div>
+      )}
+
+      {/* V97.17.2 — placeholder "tracking desactive" plus visuel que la ligne
+          de texte precedente (qui etait dans le cas isFullyEmpty plus haut). */}
+      {!loading && !loadingCfg && entries.length === 0 && !trackingEnabled && (
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-5)' }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--jrn-text-muted)' }}>
+            Le suivi du poids est désactivé pour cette cliente. Active-le via le bouton ⚙ Configurer ci-dessus.
+          </p>
+        </div>
       )}
 
       {!loading && entries.length > 0 && (
