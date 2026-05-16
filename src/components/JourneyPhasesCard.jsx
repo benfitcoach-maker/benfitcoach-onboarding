@@ -1,8 +1,14 @@
 // ─── JourneyPhasesCard ──────────────────────────────────────────────────
-// V97.17.1 — Cockpit Parcours therapeutique (5 phases microbiote).
+// V97.17.3 — Cockpit Parcours therapeutique (5 phases microbiote).
 //
 // Pensé pour vivre dans SuiviCockpitTimeline sur la page Suivi etape 8
 // (palette claire ivoire / vert sombre, cf charte journey.css).
+//
+// V97.17.3 changes :
+//   - Vraie timeline HORIZONTALE des phases (au lieu de la liste verticale)
+//   - "Changer le template" derriere panel "Options avancees" repli par defaut
+//   - Confirmation explicite pour changement de template + force transition
+//   - Re-styled cards
 //
 // Composant autonome : consomme consultation.protocol_phases et appelle
 // onSavePhases(newProtocolPhases) en remontee. C'est le parent qui gere
@@ -11,10 +17,9 @@
 // 3 etats UI :
 //   1. Pas configure → banner suggestion template + bouton "Initialiser"
 //   2. Configure, aucune phase active → bouton "Demarrer le parcours"
-//   3. Configure, phase active → timeline visuelle + bouton transition
+//   3. Configure, phase active → hero + timeline horizontale + actions
 //
 // Cf spec : memory `spec_v2_parcours_home_permanente_2026_05_16.md`.
-// Cf service : services/protocolPhases.js (logique pure).
 
 import { useMemo, useState } from "react";
 import {
@@ -31,6 +36,9 @@ import {
 export default function JourneyPhasesCard({ consultation, client, onSavePhases }) {
   const [saving, setSaving] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [pendingTemplateId, setPendingTemplateId] = useState(null);
+  const [pendingForceTransition, setPendingForceTransition] = useState(false);
 
   const protocolPhases = consultation?.protocol_phases || null;
 
@@ -55,6 +63,8 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
       const next = instanceFromTemplate(templateId);
       await onSavePhases(next);
       setShowTemplatePicker(false);
+      setShowAdvanced(false);
+      setPendingTemplateId(null);
     } finally {
       setSaving(false);
     }
@@ -77,6 +87,7 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
     try {
       const next = transitionToNextPhase(protocolPhases);
       await onSavePhases(next);
+      setPendingForceTransition(false);
     } finally {
       setSaving(false);
     }
@@ -88,7 +99,7 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
     return (
       <div>
         <p style={mutedStyle}>
-          Ce parcours apparaîtra dans l&apos;app cliente sous forme de timeline 5 phases.
+          Ce parcours apparaîtra dans l&apos;app cliente sous forme de timeline.
           La cliente verra où elle en est, ce qui se passe, et ce qui vient ensuite.
         </p>
 
@@ -146,6 +157,26 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
   const completedCount = protocolPhases.phases.filter((p) => p.status === "completed").length;
   const activeIdx = protocolPhases.phases.findIndex((p) => p.status === "active");
 
+  // Progression globale en % pour la frise horizontale (curseur principal)
+  const cursorPct = useMemo(() => {
+    if (activeIdx < 0) {
+      // Aucune phase active : 0% (pas demarre) ou 100% (toutes terminees)
+      if (completedCount === totalPhases) return 100;
+      return 0;
+    }
+    // Position de base = milieu de la phase active
+    const phaseWidth = 100 / totalPhases;
+    let pct = activeIdx * phaseWidth;
+    // Affiner avec semaine dans la phase active si dispo
+    if (weekInfo && activePhase?.duration_weeks_max > 0) {
+      const phaseProgress = Math.min(1, weekInfo.weekNumber / activePhase.duration_weeks_max);
+      pct += phaseProgress * phaseWidth;
+    } else {
+      pct += phaseWidth * 0.3; // par defaut 30% dans la phase
+    }
+    return Math.min(100, pct);
+  }, [activeIdx, completedCount, totalPhases, weekInfo, activePhase]);
+
   return (
     <div>
       {/* Hero phase active (si une est active) */}
@@ -180,40 +211,139 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
         </div>
       )}
 
-      {/* Timeline des phases */}
-      <div style={{ marginTop: 14 }}>
-        {protocolPhases.phases.map((phase) => {
-          const isCompleted = phase.status === "completed";
-          const isActive = phase.status === "active";
-          const isUpcoming = phase.status === "upcoming";
+      {/* V97.17.3 — VRAIE TIMELINE HORIZONTALE des phases */}
+      <div style={timelineWrapperStyle}>
+        <div style={timelineTrackContainerStyle}>
+          {/* Segments par phase (base) */}
+          <div style={segmentsRowStyle}>
+            {protocolPhases.phases.map((phase, idx) => {
+              const isCompleted = phase.status === "completed";
+              const isActive = phase.status === "active";
+              return (
+                <div
+                  key={phase.id}
+                  style={{
+                    ...segmentStyle,
+                    background: isCompleted
+                      ? "rgba(26, 46, 31, 0.45)"
+                      : isActive
+                      ? "rgba(26, 46, 31, 0.18)"
+                      : "rgba(26, 46, 31, 0.05)",
+                    borderRight:
+                      idx < totalPhases - 1
+                        ? "1px solid rgba(255, 255, 255, 0.6)"
+                        : "none",
+                  }}
+                />
+              );
+            })}
+          </div>
 
-          return (
-            <div key={phase.id} style={phaseRowStyle(isCompleted, isActive, isUpcoming)}>
-              <div style={phaseMarkerStyle(isCompleted, isActive)}>
-                {isCompleted ? "✓" : isActive ? "●" : "○"}
-              </div>
-              <div style={phaseBodyStyle}>
-                <div style={phaseTitleStyle(isUpcoming, isActive)}>
-                  Phase {phase.order} · {phase.client_name}
-                </div>
-                <div style={phaseMetaStyle}>
-                  {isCompleted && phase.completed_at && `Terminée le ${formatDate(phase.completed_at)}`}
-                  {isActive && phase.started_at && `Démarrée le ${formatDate(phase.started_at)}`}
-                  {isUpcoming && (
-                    phase.duration_weeks_max > 0
-                      ? `À venir · ~${phase.duration_weeks_max} sem`
-                      : `À venir · durée ouverte`
-                  )}
-                </div>
-              </div>
+          {/* Curseur de progression (Vous etes ici dans la phase) */}
+          {activePhase && (
+            <div
+              style={{
+                ...cursorStyle,
+                left: `${cursorPct}%`,
+              }}
+            >
+              <div style={cursorDotStyle} />
             </div>
-          );
-        })}
+          )}
+
+          {/* Marqueurs ronds entre les phases (separateurs visuels) */}
+          {protocolPhases.phases.map((phase, idx) => {
+            const isCompleted = phase.status === "completed";
+            const isActive = phase.status === "active";
+            const leftPct = (idx / totalPhases) * 100;
+            return (
+              <div
+                key={`marker-${phase.id}`}
+                style={{
+                  ...timelineMarkerStyle,
+                  left: `${leftPct}%`,
+                  background: isCompleted
+                    ? "#1A2E1F"
+                    : isActive
+                    ? "#1A2E1F"
+                    : "white",
+                  border: `2px solid ${
+                    isCompleted || isActive ? "#1A2E1F" : "rgba(26,46,31,.25)"
+                  }`,
+                  color: isCompleted || isActive ? "white" : "rgba(26,46,31,.4)",
+                }}
+                title={`Phase ${phase.order} — ${phase.client_name} (${phase.status})`}
+              >
+                {phase.order}
+              </div>
+            );
+          })}
+
+          {/* Marqueur fin (apres la derniere phase) */}
+          <div
+            style={{
+              ...timelineMarkerStyle,
+              left: "100%",
+              background: completedCount === totalPhases ? "#1A2E1F" : "white",
+              border: "2px dashed rgba(26,46,31,.4)",
+              color: "rgba(26,46,31,.4)",
+              fontSize: 9,
+            }}
+            title="Fin du parcours"
+          >
+            ✓
+          </div>
+        </div>
+
+        {/* Labels sous la frise (1 par phase, alignés au début de segment) */}
+        <div style={labelsRowStyle}>
+          {protocolPhases.phases.map((phase, idx) => {
+            const isCompleted = phase.status === "completed";
+            const isActive = phase.status === "active";
+            const leftPct = (idx / totalPhases) * 100 + 100 / totalPhases / 2;
+            return (
+              <div
+                key={`label-${phase.id}`}
+                style={{
+                  ...phaseLabelStyle,
+                  left: `${leftPct}%`,
+                  color: isActive
+                    ? "#1A2E1F"
+                    : isCompleted
+                    ? "rgba(26,46,31,.7)"
+                    : "rgba(26,46,31,.45)",
+                  fontWeight: isActive ? 700 : 500,
+                }}
+              >
+                <div style={phaseLabelTopStyle}>Phase {phase.order}</div>
+                <div style={phaseLabelBottomStyle}>{phase.client_name}</div>
+                {isActive && weekInfo && (
+                  <div style={phaseLabelMetaStyle}>
+                    Semaine {weekInfo.weekNumber}
+                    {weekInfo.maxWeeks > 0 ? `/${weekInfo.maxWeeks}` : " (ouverte)"}
+                  </div>
+                )}
+                {isCompleted && phase.completed_at && (
+                  <div style={phaseLabelMetaStyle}>
+                    Terminée {formatDate(phase.completed_at)}
+                  </div>
+                )}
+                {!isActive && !isCompleted && (
+                  <div style={phaseLabelMetaStyle}>
+                    {phase.duration_weeks_max > 0
+                      ? `~${phase.duration_weeks_max} sem`
+                      : "durée ouverte"}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Actions globales */}
-      <div style={{ ...btnRowStyle, marginTop: 14 }}>
-        {!activePhase && completedCount === 0 && (
+      {/* Actions principales (start parcours ou rien) */}
+      {!activePhase && completedCount === 0 && (
+        <div style={{ ...btnRowStyle, marginTop: 18 }}>
           <button
             type="button"
             disabled={saving}
@@ -222,53 +352,137 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
           >
             {saving ? "Démarrage…" : "Démarrer le parcours (phase 1)"}
           </button>
-        )}
-        {activePhase && !nextSuggestion.shouldSuggest && activeIdx < totalPhases - 1 && (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleTransitionNext}
-            style={ghostBtnStyle(saving)}
-            title="Forcer la transition même si la durée minimale n'est pas atteinte"
-          >
-            Forcer passage à la phase suivante
-          </button>
-        )}
+        </div>
+      )}
+
+      {/* V97.17.3 — Options avancees REPLIES par defaut.
+          Empeche Anissa de cliquer "Changer le template" par erreur. */}
+      <div style={advancedToggleRowStyle}>
         <button
           type="button"
-          disabled={saving}
-          onClick={() => setShowTemplatePicker((v) => !v)}
-          style={ghostBtnStyle(saving)}
+          onClick={() => setShowAdvanced((v) => !v)}
+          style={advancedToggleBtnStyle}
         >
-          {showTemplatePicker ? "Annuler" : "Changer le template"}
+          {showAdvanced ? "▾ Masquer les options avancées" : "▸ Options avancées"}
         </button>
       </div>
 
-      {/* Picker template (changement post-init) */}
-      {showTemplatePicker && (
-        <div style={{ ...pickerStyle, marginTop: 10 }}>
-          <div style={pickerWarningStyle}>
-            ⚠️ Changer le template écrasera l&apos;état actuel des phases.
+      {showAdvanced && (
+        <div style={advancedPanelStyle}>
+          <div style={advancedWarningStyle}>
+            ⚠️ Ces actions modifient le parcours en cours. À utiliser uniquement
+            si tu sais ce que tu fais.
           </div>
-          {Object.values(ALL_TEMPLATES).map((tpl) => (
-            <button
-              key={tpl.id}
-              type="button"
-              disabled={saving || tpl.id === protocolPhases.template}
-              onClick={() => handleInitFromTemplate(tpl.id)}
-              style={{
-                ...pickerItemStyle,
-                opacity: tpl.id === protocolPhases.template ? 0.4 : 1,
-                cursor: tpl.id === protocolPhases.template ? "not-allowed" : "pointer",
-              }}
-            >
-              <div style={pickerLabelStyle}>
-                {tpl.label}
-                {tpl.id === protocolPhases.template && " (actuel)"}
+
+          {/* Forcer passage phase suivante (avec confirmation) */}
+          {activePhase && activeIdx < totalPhases - 1 && (
+            <div style={advancedActionRowStyle}>
+              {!pendingForceTransition ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setPendingForceTransition(true)}
+                  style={ghostBtnStyle(saving)}
+                >
+                  Forcer passage à la phase suivante
+                </button>
+              ) : (
+                <div style={confirmRowStyle}>
+                  <span style={confirmTextStyle}>
+                    Confirmer : passer de Phase {activePhase.order} (
+                    {activePhase.client_name}) à Phase {activePhase.order + 1} ?
+                  </span>
+                  <div style={btnRowStyle}>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleTransitionNext}
+                      style={primaryBtnStyle(saving)}
+                    >
+                      {saving ? "Transition…" : "Oui, transitionner"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingForceTransition(false)}
+                      style={ghostBtnStyle(false)}
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Changer template (avec confirmation explicite) */}
+          <div style={advancedActionRowStyle}>
+            {!showTemplatePicker ? (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setShowTemplatePicker(true)}
+                style={ghostBtnStyle(saving)}
+              >
+                Changer le template
+              </button>
+            ) : (
+              <div>
+                <div style={pickerWarningStyle}>
+                  ⚠️ Changer le template <strong>écrase</strong> l&apos;état actuel
+                  des phases. La cliente verra le nouveau parcours dès la prochaine
+                  publication.
+                </div>
+                <div style={pickerStyle}>
+                  {Object.values(ALL_TEMPLATES).map((tpl) => {
+                    const isCurrent = tpl.id === protocolPhases.template;
+                    const isPending = tpl.id === pendingTemplateId;
+                    return (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        disabled={saving || isCurrent}
+                        onClick={() =>
+                          isPending
+                            ? handleInitFromTemplate(tpl.id)
+                            : setPendingTemplateId(tpl.id)
+                        }
+                        style={{
+                          ...pickerItemStyle,
+                          opacity: isCurrent ? 0.4 : 1,
+                          cursor: isCurrent ? "not-allowed" : "pointer",
+                          background: isPending
+                            ? "rgba(184, 134, 38, 0.08)"
+                            : "white",
+                          borderColor: isPending
+                            ? "rgba(184, 134, 38, 0.5)"
+                            : "rgba(26, 46, 31, 0.12)",
+                        }}
+                      >
+                        <div style={pickerLabelStyle}>
+                          {tpl.label}
+                          {isCurrent && " (actuel)"}
+                          {isPending && " · CLIQUE À NOUVEAU POUR CONFIRMER"}
+                        </div>
+                        <div style={pickerDescStyle}>{tpl.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ ...btnRowStyle, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTemplatePicker(false);
+                      setPendingTemplateId(null);
+                    }}
+                    style={ghostBtnStyle(false)}
+                  >
+                    Annuler
+                  </button>
+                </div>
               </div>
-              <div style={pickerDescStyle}>{tpl.description}</div>
-            </button>
-          ))}
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -363,8 +577,12 @@ const pickerDescStyle = {
 };
 
 const pickerWarningStyle = {
-  fontSize: 11.5,
+  fontSize: 12,
   color: "#a04040",
+  background: "rgba(160, 64, 64, 0.06)",
+  border: "1px solid rgba(160, 64, 64, 0.2)",
+  borderRadius: 6,
+  padding: "8px 10px",
   marginBottom: 6,
 };
 
@@ -402,7 +620,7 @@ const activeHeroStyle = {
   border: "1px solid rgba(26, 46, 31, 0.18)",
   borderRadius: 8,
   padding: "14px 16px",
-  marginBottom: 4,
+  marginBottom: 10,
 };
 
 const activeTitleStyle = {
@@ -440,60 +658,158 @@ const transitionLabelStyle = {
   lineHeight: 1.4,
 };
 
-function phaseRowStyle(isCompleted, isActive) {
-  return {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: "9px 4px",
-    borderBottom: "1px solid rgba(26, 46, 31, 0.06)",
-    opacity: isCompleted ? 0.75 : isActive ? 1 : 0.6,
-  };
-}
+// ─── V97.17.3 — Timeline horizontale styles ───────────────────────────────
 
-function phaseMarkerStyle(isCompleted, isActive) {
-  return {
-    width: 22,
-    height: 22,
-    minWidth: 22,
-    borderRadius: "50%",
-    background: isCompleted
-      ? "rgba(26, 46, 31, 0.85)"
-      : isActive
-      ? "rgba(26, 46, 31, 1)"
-      : "rgba(26, 46, 31, 0.04)",
-    border: `1.5px solid ${
-      isCompleted
-        ? "rgba(26, 46, 31, 0.85)"
-        : isActive
-        ? "#1A2E1F"
-        : "rgba(26, 46, 31, 0.2)"
-    }`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 11,
-    color: isCompleted || isActive ? "#FAF9F6" : "rgba(26,46,31,.4)",
-    fontWeight: 700,
-    marginTop: 2,
-  };
-}
-
-const phaseBodyStyle = {
-  flex: 1,
-  minWidth: 0,
+const timelineWrapperStyle = {
+  position: "relative",
+  padding: "22px 16px 80px 16px",
 };
 
-function phaseTitleStyle(isUpcoming, isActive) {
-  return {
-    fontSize: 13,
-    color: isUpcoming ? "var(--jrn-text-muted, #6b6f6b)" : "#1A2E1F",
-    fontWeight: isActive ? 700 : 500,
-  };
-}
+const timelineTrackContainerStyle = {
+  position: "relative",
+  height: 18,
+};
 
-const phaseMetaStyle = {
+const segmentsRowStyle = {
+  display: "flex",
+  width: "100%",
+  height: 8,
+  marginTop: 5,
+  borderRadius: 4,
+  overflow: "hidden",
+  background: "rgba(26, 46, 31, 0.03)",
+};
+
+const segmentStyle = {
+  flex: 1,
+  height: "100%",
+  transition: "background 240ms ease",
+};
+
+const timelineMarkerStyle = {
+  position: "absolute",
+  top: 0,
+  transform: "translateX(-50%)",
+  width: 18,
+  height: 18,
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  zIndex: 2,
+};
+
+const cursorStyle = {
+  position: "absolute",
+  top: -4,
+  transform: "translateX(-50%)",
+  zIndex: 3,
+  pointerEvents: "none",
+};
+
+const cursorDotStyle = {
+  width: 14,
+  height: 14,
+  borderRadius: "50%",
+  background: "#1A2E1F",
+  border: "3px solid #FAF9F6",
+  boxShadow: "0 0 0 1px rgba(26,46,31,.5), 0 2px 6px rgba(26,46,31,.3)",
+};
+
+const labelsRowStyle = {
+  position: "relative",
+  height: 60,
+  marginTop: 18,
+};
+
+const phaseLabelStyle = {
+  position: "absolute",
+  transform: "translateX(-50%)",
+  textAlign: "center",
+  fontSize: 11,
+  lineHeight: 1.35,
+  minWidth: 80,
+  maxWidth: 140,
+};
+
+const phaseLabelTopStyle = {
+  fontSize: 9.5,
+  textTransform: "uppercase",
+  letterSpacing: ".05em",
+  opacity: 0.7,
+};
+
+const phaseLabelBottomStyle = {
+  fontSize: 12,
+  marginTop: 2,
+};
+
+const phaseLabelMetaStyle = {
+  fontSize: 10,
+  marginTop: 3,
+  fontWeight: 400,
+  opacity: 0.75,
+  fontStyle: "italic",
+};
+
+// ─── V97.17.3 — Options avancees (repliable) ──────────────────────────────
+
+const advancedToggleRowStyle = {
+  marginTop: 16,
+  paddingTop: 10,
+  borderTop: "1px solid rgba(26, 46, 31, 0.08)",
+};
+
+const advancedToggleBtnStyle = {
+  background: "transparent",
+  border: "none",
+  padding: "4px 0",
   fontSize: 11,
   color: "var(--jrn-text-muted, #6b6f6b)",
-  marginTop: 2,
+  cursor: "pointer",
+  letterSpacing: ".03em",
+  textTransform: "uppercase",
+  fontWeight: 600,
+};
+
+const advancedPanelStyle = {
+  marginTop: 8,
+  padding: "12px 14px",
+  background: "rgba(26, 46, 31, 0.03)",
+  border: "1px dashed rgba(26, 46, 31, 0.15)",
+  borderRadius: 7,
+};
+
+const advancedWarningStyle = {
+  fontSize: 11.5,
+  color: "#785a1a",
+  background: "rgba(184, 134, 38, 0.08)",
+  border: "1px solid rgba(184, 134, 38, 0.25)",
+  borderRadius: 6,
+  padding: "8px 10px",
+  marginBottom: 12,
+  lineHeight: 1.4,
+};
+
+const advancedActionRowStyle = {
+  marginBottom: 10,
+};
+
+const confirmRowStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: "10px 12px",
+  background: "rgba(184, 134, 38, 0.06)",
+  border: "1px solid rgba(184, 134, 38, 0.3)",
+  borderRadius: 6,
+};
+
+const confirmTextStyle = {
+  fontSize: 12,
+  color: "#1A2E1F",
+  fontWeight: 500,
+  lineHeight: 1.4,
 };
