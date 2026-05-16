@@ -403,7 +403,7 @@ export const transitions = {
   // Le compteur "X/Y consultations" du header se base sur la longueur du tableau.
   // Note : on lit l'etat courant pour merger l'array, sinon updateJourneyState
   // ecraserait toute la cle consultations_log.
-  logConsultation: async (clientId, { notes = '' } = {}) => {
+  logConsultation: async (clientId, { notes = '', clinical = null } = {}) => {
     if (!clientId) throw new Error('clientId requis');
     const { data: current, error: loadErr } = await supabase
       .from('clients')
@@ -413,10 +413,20 @@ export const transitions = {
     if (loadErr) throw new Error(loadErr.message);
     const state = current?.journey_state || {};
     const log = Array.isArray(state.consultations_log) ? state.consultations_log : [];
-    const next = [
-      ...log,
-      { date: new Date().toISOString(), notes: (notes || '').trim() },
-    ];
+    // V97.17.6 — append clinical structure (chips suivi clinique).
+    // Format : { symptoms: {digestion, energie, sommeil, transit, stress},
+    //            adherence: {alimentation, supplements, difficultes},
+    //            evolution: 'improved'|'stable'|'worsened',
+    //            decision: 'continue'|'transition'|'adapt'|'newVersion' }
+    // Backward compat : si clinical absent, c'est une consult legacy.
+    const entry = {
+      date: new Date().toISOString(),
+      notes: (notes || '').trim(),
+    };
+    if (clinical && typeof clinical === 'object') {
+      entry.clinical = clinical;
+    }
+    const next = [...log, entry];
     return updateJourneyState(clientId, { consultations_log: next });
   },
 

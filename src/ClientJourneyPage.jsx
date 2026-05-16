@@ -3799,11 +3799,15 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   const [logNote, setLogNote] = useState('');
   const [savingLog, setSavingLog] = useState(false);
 
-  const handleLogConsultation = async () => {
+  const handleLogConsultation = async (payload = {}) => {
+    // V97.17.6 — payload structure : { note?: string, clinical?: object|null }
+    // Backward compat : si appele sans argument, fallback sur logNote local.
+    const finalNote = typeof payload.note === 'string' ? payload.note : logNote;
+    const finalClinical = payload.clinical || null;
     setSavingLog(true);
     setErr(null);
     try {
-      await transitions.logConsultation(client.id, { notes: logNote });
+      await transitions.logConsultation(client.id, { notes: finalNote, clinical: finalClinical });
       setLogNote('');
       setShowLogModal(false);
       onChange();
@@ -4480,13 +4484,11 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         <PlanVersionPreviewModal version={previewVersion} onClose={() => setPreviewVersion(null)} />
       )}
 
-      {/* Modale saisie consultation effectuée */}
+      {/* Modale suivi clinique structure (V97.17.6) */}
       {showLogModal && (
         <LogConsultationModal
           consultationNumber={consultationsUsed + 1}
           totalIncluded={consultationsTotal}
-          note={logNote}
-          setNote={setLogNote}
           onCancel={() => { setShowLogModal(false); setLogNote(''); }}
           onConfirm={handleLogConsultation}
           saving={savingLog}
@@ -5052,13 +5054,75 @@ function PackReviewSection({ client, onSendPackReview }) {
   );
 }
 
-function LogConsultationModal({ consultationNumber, totalIncluded, note, setNote, onCancel, onConfirm, saving }) {
+// V97.17.6 — Modal clinique structurée (chips, peu de texte libre).
+// Cadrage Anissa : "saisie rapide, pas une usine à gaz médicale, sinon
+// elle n'utilisera plus le système après 20 clientes". 4 blocs structurés
+// + 1 note libre minimaliste optionnelle.
+//
+// onConfirm reçoit { note, clinical } structuré.
+
+const SYMPTOM_DIMS = [
+  { key: 'digestion', label: 'Digestion' },
+  { key: 'energy',    label: 'Énergie' },
+  { key: 'sleep',     label: 'Sommeil' },
+  { key: 'transit',   label: 'Transit' },
+  { key: 'stress',    label: 'Stress' },
+];
+
+const ADHERENCE_DIMS = [
+  { key: 'food',        label: 'Alimentation' },
+  { key: 'supplements', label: 'Suppléments' },
+];
+
+const SYMPTOM_VALUES = [
+  { value: 'good',     label: 'OK',       tone: 'ok' },
+  { value: 'mixed',    label: 'Mitigé',   tone: 'mixed' },
+  { value: 'bad',      label: 'Difficile', tone: 'bad' },
+];
+
+const ADHERENCE_VALUES = [
+  { value: 'good',     label: 'Suivi',    tone: 'ok' },
+  { value: 'partial',  label: 'Partiel',  tone: 'mixed' },
+  { value: 'low',      label: 'Faible',   tone: 'bad' },
+];
+
+const EVOLUTION_VALUES = [
+  { value: 'improved', label: 'Amélioré', tone: 'ok' },
+  { value: 'stable',   label: 'Stable',   tone: 'neutral' },
+  { value: 'worsened', label: 'Aggravé',  tone: 'bad' },
+];
+
+const DECISION_VALUES = [
+  { value: 'continue',     label: 'Poursuivre la phase actuelle',  hint: 'V actuelle inchangée' },
+  { value: 'adapt',        label: 'Adapter le protocole',          hint: 'Crée V suivante' },
+  { value: 'transition',   label: 'Transition vers phase suivante', hint: 'Avance dans le parcours' },
+  { value: 'newVersion',   label: 'Nouvelle version complète',     hint: 'Crée V suivante refondue' },
+];
+
+function LogConsultationModal({ consultationNumber, totalIncluded, onCancel, onConfirm, saving }) {
+  const [symptoms, setSymptoms] = useState({});
+  const [adherence, setAdherence] = useState({});
+  const [evolution, setEvolution] = useState(null);
+  const [decision, setDecision] = useState(null);
+  const [note, setNote] = useState('');
+
+  const hasSomething =
+    Object.keys(symptoms).length > 0 ||
+    Object.keys(adherence).length > 0 ||
+    evolution !== null ||
+    decision !== null;
+
+  const handleConfirm = () => {
+    const clinical = hasSomething ? { symptoms, adherence, evolution, decision } : null;
+    onConfirm({ note: note.trim(), clinical });
+  };
+
   return (
     <div className="jpe-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !saving) onCancel(); }}>
-      <div className="jpe-modal">
+      <div className="jpe-modal jpe-modal--xl">
         <header className="jpe-modal__header">
           <div>
-            <p className="jrn-step-eyebrow">Consultation effectuée</p>
+            <p className="jrn-step-eyebrow">Suivi clinique</p>
             <h3 className="jpe-modal__title">
               Consultation n°{consultationNumber}
               {totalIncluded > 0 && <span style={{ fontSize: 14, color: 'var(--jrn-text-muted)', fontStyle: 'normal', marginLeft: 8 }}>/ {totalIncluded}</span>}
@@ -5067,33 +5131,190 @@ function LogConsultationModal({ consultationNumber, totalIncluded, note, setNote
           <button onClick={onCancel} disabled={saving} className="jrn-btn jrn-btn--ghost">Fermer</button>
         </header>
         <div className="jpe-modal__body">
-          <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 0, marginBottom: 'var(--jrn-3)', lineHeight: 1.6 }}>
-            Marquez cette consultation comme effectuée. Vous pouvez ajouter une note rapide (axes abordés, décisions, ressentis cliente). Cette note reste interne — non envoyée à la cliente.
+          <p style={{ fontSize: 13, color: 'var(--jrn-text-soft)', marginTop: 0, marginBottom: 16, lineHeight: 1.5 }}>
+            Saisis rapidement les observations cliniques de cette consultation.
+            Ces données nourrissent l'historique du dossier thérapeutique vivant et
+            la prochaine adaptation IA. Tout est optionnel — clique seulement ce qui
+            est pertinent.
           </p>
 
-          <label className="jrn-label" htmlFor="consult-note">Note de consultation (optionnel)</label>
-          <textarea
-            id="consult-note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={6}
-            className="jrn-textarea"
-            placeholder="Ex : Cliente très motivée, fatigue résolue, microbiome amélioré. Décisions : continuer protocole 2 semaines puis ajouter mélatonine si insomnie persiste."
-            disabled={saving}
-          />
+          {/* Bloc 1 — Symptômes */}
+          <ClinicalSection title="1. Symptômes" eyebrow="Comment Camille a-t-elle évolué ?">
+            {SYMPTOM_DIMS.map((dim) => (
+              <ChipRow
+                key={dim.key}
+                label={dim.label}
+                values={SYMPTOM_VALUES}
+                selected={symptoms[dim.key]}
+                onChange={(v) => setSymptoms({ ...symptoms, [dim.key]: symptoms[dim.key] === v ? undefined : v })}
+                disabled={saving}
+              />
+            ))}
+          </ClinicalSection>
 
-          <div className="jrn-actions">
-            <button onClick={onConfirm} disabled={saving} className="jrn-btn jrn-btn--primary">
-              {saving ? 'Enregistrement…' : '✅ Marquer effectuée'}
+          {/* Bloc 2 — Adhérence */}
+          <ClinicalSection title="2. Adhérence" eyebrow="A-t-elle suivi le protocole ?">
+            {ADHERENCE_DIMS.map((dim) => (
+              <ChipRow
+                key={dim.key}
+                label={dim.label}
+                values={ADHERENCE_VALUES}
+                selected={adherence[dim.key]}
+                onChange={(v) => setAdherence({ ...adherence, [dim.key]: adherence[dim.key] === v ? undefined : v })}
+                disabled={saving}
+              />
+            ))}
+          </ClinicalSection>
+
+          {/* Bloc 3 — Évolution globale */}
+          <ClinicalSection title="3. Évolution globale" eyebrow="Verdict d'ensemble">
+            <ChipRow
+              label="Tendance"
+              values={EVOLUTION_VALUES}
+              selected={evolution}
+              onChange={(v) => setEvolution(evolution === v ? null : v)}
+              disabled={saving}
+            />
+          </ClinicalSection>
+
+          {/* Bloc 4 — Décision clinique */}
+          <ClinicalSection title="4. Décision clinique" eyebrow="Quelle suite donner au protocole ?">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {DECISION_VALUES.map((d) => {
+                const isSel = decision === d.value;
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() => setDecision(isSel ? null : d.value)}
+                    disabled={saving}
+                    style={{
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      borderRadius: 7,
+                      border: isSel ? '1.5px solid var(--jrn-accent, #1A2E1F)' : '1px solid rgba(26,46,31,.15)',
+                      background: isSel ? 'rgba(26,46,31,.06)' : 'white',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      transition: 'all 120ms ease',
+                      fontFamily: 'var(--jrn-font-ui, system-ui)',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1A2E1F' }}>
+                      {isSel && '✓ '}{d.label}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--jrn-text-muted, #6b6f6b)', marginTop: 2 }}>
+                      {d.hint}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </ClinicalSection>
+
+          {/* Note libre (minimaliste) */}
+          <ClinicalSection title="Note interne (optionnelle)" eyebrow="Précisions complémentaires">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              className="jrn-textarea"
+              placeholder="Précision rapide si besoin. Reste interne — non envoyée à la cliente."
+              disabled={saving}
+              style={{ fontSize: 13 }}
+            />
+          </ClinicalSection>
+
+          <div className="jrn-actions" style={{ marginTop: 18 }}>
+            <button onClick={handleConfirm} disabled={saving} className="jrn-btn jrn-btn--primary">
+              {saving ? 'Enregistrement…' : '✅ Enregistrer la consultation'}
             </button>
             <button onClick={onCancel} disabled={saving} className="jrn-btn jrn-btn--ghost">
               Annuler
             </button>
+            {!hasSomething && (
+              <span style={{ fontSize: 11, color: 'var(--jrn-text-muted, #6b6f6b)', fontStyle: 'italic', marginLeft: 8 }}>
+                Tu peux aussi enregistrer sans rien renseigner (consultation logguée sans suivi clinique structuré).
+              </span>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+// ─── Helpers internes pour LogConsultationModal ──────────────────────────
+
+function ClinicalSection({ title, eyebrow, children }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: 8 }}>
+        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--jrn-text-muted, #6b6f6b)' }}>
+          {eyebrow}
+        </p>
+        <h4 style={{ margin: '2px 0 0 0', fontSize: 14, color: '#1A2E1F', fontWeight: 600 }}>{title}</h4>
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function ChipRow({ label, values, selected, onChange, disabled }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 12, color: 'var(--jrn-text, #1A2E1F)', minWidth: 110, fontWeight: 500 }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {values.map((v) => {
+          const isSel = selected === v.value;
+          const toneStyles = chipToneStyles(v.tone, isSel);
+          return (
+            <button
+              key={v.value}
+              type="button"
+              onClick={() => onChange(v.value)}
+              disabled={disabled}
+              style={{
+                ...chipBaseStyle,
+                ...toneStyles,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const chipBaseStyle = {
+  border: '1px solid rgba(26,46,31,.15)',
+  background: 'white',
+  borderRadius: 999,
+  padding: '5px 12px',
+  fontSize: 11.5,
+  fontWeight: 600,
+  color: 'var(--jrn-text-muted, #6b6f6b)',
+  transition: 'all 120ms ease',
+  fontFamily: 'var(--jrn-font-ui, system-ui)',
+};
+
+function chipToneStyles(tone, isSelected) {
+  if (!isSelected) return {};
+  switch (tone) {
+    case 'ok':
+      return { background: 'rgba(46, 94, 62, 0.12)', borderColor: 'rgba(46, 94, 62, 0.5)', color: '#2E5E3E' };
+    case 'mixed':
+      return { background: 'rgba(184, 134, 38, 0.12)', borderColor: 'rgba(184, 134, 38, 0.5)', color: '#785a1a' };
+    case 'bad':
+      return { background: 'rgba(160, 64, 64, 0.10)', borderColor: 'rgba(160, 64, 64, 0.5)', color: '#a04040' };
+    case 'neutral':
+    default:
+      return { background: 'rgba(26, 46, 31, 0.08)', borderColor: 'rgba(26, 46, 31, 0.35)', color: '#1A2E1F' };
+  }
 }
 
 // Mini modale d'aperçu lecture seule d'une version du plan
