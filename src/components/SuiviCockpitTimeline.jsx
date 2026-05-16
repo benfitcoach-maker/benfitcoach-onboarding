@@ -59,6 +59,7 @@ export default function SuiviCockpitTimeline({
   versions,
   weightEntries,
   onSavePhases,
+  onOpenAppPreview,
 }) {
   const durationMonths = useMemo(
     () => extractDurationMonths(packLabel),
@@ -364,6 +365,25 @@ export default function SuiviCockpitTimeline({
           consultation={consultation}
           onSavePhases={onSavePhases}
         />
+
+        {/* V97.17.7.2 — Bouton publier contextuel.
+            Apres modification des phases, evite a Anissa de remonter en haut
+            de la page pour declencher "Apercu & Publier". */}
+        {protocolPhases && onOpenAppPreview && (
+          <div style={publishContextStyle}>
+            <div style={publishInfoStyle}>
+              💡 Une modification des phases ne devient visible côté cliente
+              qu&apos;après publication du programme.
+            </div>
+            <button
+              type="button"
+              onClick={onOpenAppPreview}
+              style={publishBtnStyle}
+            >
+              Publier les modifications côté cliente
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -614,4 +634,35 @@ const statDividerStyle = {
   width: 1,
   background: "rgba(26, 46, 31, 0.08)",
   margin: "4px 8px",
+};
+
+// V97.17.7.2 — Bouton publier contextuel dans bloc Parcours
+const publishContextStyle = {
+  marginTop: 14,
+  padding: "12px 14px",
+  background: "rgba(184, 134, 38, 0.06)",
+  border: "1px solid rgba(184, 134, 38, 0.25)",
+  borderRadius: 8,
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+const publishInfoStyle = {
+  fontSize: 12,
+  color: "#785a1a",
+  lineHeight: 1.45,
+};
+
+const publishBtnStyle = {
+  background: "#1A2E1F",
+  border: "1px solid #1A2E1F",
+  borderRadius: 7,
+  padding: "9px 14px",
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: "#FAF9F6",
+  cursor: "pointer",
+  transition: "all 120ms ease",
+  alignSelf: "flex-start",
 };

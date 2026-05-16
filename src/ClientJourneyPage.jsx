@@ -481,7 +481,7 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
           {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'plan_editing' && <StepPlanEditing client={client} journey={journey} onChange={refresh} />}
           {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} onOpenAppPreview={openAppPreview} />}
-          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} />}
+          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} onOpenAppPreview={openAppPreview} />}
         </main>
       </div>
     </div>
@@ -3711,7 +3711,7 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
 // ÉTAPE 8 — SUIVI
 // ═══════════════════════════════════════════════════════════════════
 
-function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendPackReview, onViewHistory }) {
+function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendPackReview, onViewHistory, onOpenAppPreview }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [feedbacks, setFeedbacks] = useState([]);
@@ -4201,6 +4201,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               versions={versions}
               weightEntries={weightEntries}
               onSavePhases={handleSavePhases}
+              onOpenAppPreview={onOpenAppPreview}
             />
           </CockpitErrorBoundary>
 
