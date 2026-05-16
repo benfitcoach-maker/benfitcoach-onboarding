@@ -110,6 +110,11 @@ export async function publishConsultationToClientApp(client, consultation, enric
     // V97.13.28 — fix casing : accepte les 2 conventions du store local et Supabase
     nutrition_plan: consultation.nutrition_plan || consultation.nutritionPlan || '',
     sections: plan.sections,
+    // V97.17.7.1 — Phase C : transmettre journey_phases pour que la tab Methode
+    // de l'app cliente puisse afficher la timeline 5 phases. Oubli initial du
+    // pipeline V97.17.0 : le mapper exposait journey_phases mais publishToClientApp
+    // ne le transmettait pas dans le payload.
+    journey_phases: plan.journey_phases || null,
     // V96.0
     followup_week: followupWeek,
     ...(options?.effectiveAtOverride
