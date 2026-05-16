@@ -30,6 +30,7 @@ import JourneyNotesPanel from './JourneyNotesPanel';
 import PremiumSwitch from './components/PremiumSwitch';
 import SuiviCockpitTimeline from './components/SuiviCockpitTimeline';
 import CockpitErrorBoundary from './components/CockpitErrorBoundary';
+import { transitionToNextPhase, getActivePhase } from './services/protocolPhases';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
 import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
@@ -3811,6 +3812,48 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
       setLogNote('');
       setShowLogModal(false);
       onChange();
+
+      // V97.17.6.1 — chaine de la decision clinique vers le workflow versioning.
+      // Apres save de la consultation, si la decision implique une action
+      // (adapter / nouvelle version / transition phase), on enchaine direct
+      // pour fermer la boucle clinique.
+      const dec = finalClinical?.decision;
+      if (dec === 'adapt' || dec === 'newVersion') {
+        // Confirm + trigger creation V suivante. handleAdaptFromFeedback a deja
+        // son propre confirm contextuel (V97.17.5).
+        setTimeout(() => {
+          handleAdaptFromFeedback();
+        }, 250);
+      } else if (dec === 'transition') {
+        // Transition vers phase suivante : on demande confirmation et on applique.
+        setTimeout(async () => {
+          const phases = activeConsult?.protocol_phases;
+          const active = getActivePhase(phases);
+          if (!phases || !active) {
+            window.alert('Aucune phase active pour cette cliente. Configurez d\'abord le parcours thérapeutique.');
+            return;
+          }
+          const phaseList = phases.phases || [];
+          const nextPhase = phaseList[phaseList.findIndex((p) => p.id === active.id) + 1];
+          if (!nextPhase) {
+            window.alert(`${prenom} est déjà sur la dernière phase du parcours (${active.client_name}).`);
+            return;
+          }
+          const ok = window.confirm(
+            `Transition de phase ?\n\n` +
+            `${prenom} passe de :\n  Phase ${active.order} · ${active.client_name}\nà :\n  Phase ${nextPhase.order} · ${nextPhase.client_name}\n\n` +
+            `Cette decision a ete prise lors de la consultation que tu viens d'enregistrer.`
+          );
+          if (!ok) return;
+          try {
+            const updated = transitionToNextPhase(phases);
+            await handleSavePhases(updated);
+          } catch (e) {
+            window.alert('Erreur transition : ' + (e?.message || 'inconnue'));
+          }
+        }, 250);
+      }
+      // dec === 'continue' → ne rien faire (V actuelle inchangee)
     } catch (e) {
       setErr(e?.message || 'Erreur enregistrement consultation');
     } finally {
@@ -5093,10 +5136,10 @@ const EVOLUTION_VALUES = [
 ];
 
 const DECISION_VALUES = [
-  { value: 'continue',     label: 'Poursuivre la phase actuelle',  hint: 'V actuelle inchangée' },
-  { value: 'adapt',        label: 'Adapter le protocole',          hint: 'Crée V suivante' },
-  { value: 'transition',   label: 'Transition vers phase suivante', hint: 'Avance dans le parcours' },
-  { value: 'newVersion',   label: 'Nouvelle version complète',     hint: 'Crée V suivante refondue' },
+  { value: 'continue',     label: 'Poursuivre la phase actuelle',  hint: 'V actuelle inchangée — rien d\'autre à faire' },
+  { value: 'adapt',        label: 'Adapter le protocole',          hint: 'À l\'enregistrement → propose direct la création de la V suivante via IA' },
+  { value: 'transition',   label: 'Transition vers phase suivante', hint: 'À l\'enregistrement → demande confirmation pour avancer dans le parcours' },
+  { value: 'newVersion',   label: 'Nouvelle version complète',     hint: 'À l\'enregistrement → propose direct la création d\'une V suivante refondue via IA' },
 ];
 
 function LogConsultationModal({ consultationNumber, totalIncluded, onCancel, onConfirm, saving }) {
