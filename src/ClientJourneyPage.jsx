@@ -4127,6 +4127,9 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             consultationsUsed={consultationsUsed}
             consultationsTotal={consultationsTotal}
             consultationsLog={consultationsLog}
+            feedbacks={feedbacks}
+            versions={versions}
+            weightEntries={weightEntries}
             onSavePhases={handleSavePhases}
           />
 
