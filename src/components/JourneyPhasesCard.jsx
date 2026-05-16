@@ -84,6 +84,35 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
     }
   }, [protocolPhases, consultation, suggestion, saving, onSavePhases]);
 
+  // V97.17.5.3 — HOOKS DOIVENT TOUS ETRE APPELES AVANT TOUT EARLY RETURN.
+  // Bug react #310 : cursorPct etait useMemo APRES le early return isEmptyPhases,
+  // causant un hook count different entre renders → page noire.
+  // cursorPct calcule sa logique en interne depuis protocolPhases (gere null).
+  const cursorPct = useMemo(() => {
+    if (!protocolPhases?.phases?.length) return 0;
+    const phases = protocolPhases.phases;
+    const total = phases.length;
+    const completed = phases.filter((p) => p.status === "completed").length;
+    const idx = phases.findIndex((p) => p.status === "active");
+
+    if (idx < 0) {
+      if (completed === total) return 100;
+      return 0;
+    }
+    const phaseWidth = 100 / total;
+    let pct = idx * phaseWidth;
+    if (weekInfo && activePhase?.duration_weeks_max > 0) {
+      const phaseProgress = Math.min(
+        1,
+        weekInfo.weekNumber / activePhase.duration_weeks_max
+      );
+      pct += phaseProgress * phaseWidth;
+    } else {
+      pct += phaseWidth * 0.3;
+    }
+    return Math.min(100, pct);
+  }, [protocolPhases, weekInfo, activePhase]);
+
   // ─── Handlers ─────────────────────────────────────────────────────────
 
   async function handleInitFromTemplate(templateId) {
@@ -233,26 +262,8 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
   const totalPhases = protocolPhases.phases.length;
   const completedCount = protocolPhases.phases.filter((p) => p.status === "completed").length;
   const activeIdx = protocolPhases.phases.findIndex((p) => p.status === "active");
-
-  // Progression globale en % pour la frise horizontale (curseur principal)
-  const cursorPct = useMemo(() => {
-    if (activeIdx < 0) {
-      // Aucune phase active : 0% (pas demarre) ou 100% (toutes terminees)
-      if (completedCount === totalPhases) return 100;
-      return 0;
-    }
-    // Position de base = milieu de la phase active
-    const phaseWidth = 100 / totalPhases;
-    let pct = activeIdx * phaseWidth;
-    // Affiner avec semaine dans la phase active si dispo
-    if (weekInfo && activePhase?.duration_weeks_max > 0) {
-      const phaseProgress = Math.min(1, weekInfo.weekNumber / activePhase.duration_weeks_max);
-      pct += phaseProgress * phaseWidth;
-    } else {
-      pct += phaseWidth * 0.3; // par defaut 30% dans la phase
-    }
-    return Math.min(100, pct);
-  }, [activeIdx, completedCount, totalPhases, weekInfo, activePhase]);
+  // cursorPct est calcule en haut du composant (avant early return) pour
+  // respecter la regle React des hooks (cf V97.17.5.3).
 
   return (
     <div>
