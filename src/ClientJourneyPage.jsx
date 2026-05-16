@@ -4702,12 +4702,12 @@ function WeightTrackingSection({ client, entries, loading }) {
       {/* V97.13.21 : toggles config sortis du flux clinique principal.
           Bouton '⚙ Configurer' discret en haut à droite, drawer inline si cliqué.
           V97.17.2 : badge etat ACTIVE/INACTIF clair (feedback Anissa : on ne
-          voyait pas l'etat sur la card). */}
+          voyait pas l'etat sur la card).
+          V97.17.6.3 : titre interne 'Suivi du poids' supprime — le titre
+          externe de la card (h3.jrn-block__title) le contient deja. Plus de
+          doublon visuel. */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--jrn-3)', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <p className="jrn-label" style={{ margin: 0 }}>
-            Suivi du poids {entries.length > 0 ? `(${entries.length} pesée${entries.length > 1 ? 's' : ''})` : ''}
-          </p>
           {!loadingCfg && (
             <span style={{
               fontSize: 10,
