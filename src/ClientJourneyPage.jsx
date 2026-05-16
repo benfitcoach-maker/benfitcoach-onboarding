@@ -30,6 +30,7 @@ import JourneyNotesPanel from './JourneyNotesPanel';
 import PremiumSwitch from './components/PremiumSwitch';
 import SuiviCockpitTimeline from './components/SuiviCockpitTimeline';
 import CockpitErrorBoundary from './components/CockpitErrorBoundary';
+import ConsultationClinicalSummary from './components/ConsultationClinicalSummary';
 import { transitionToNextPhase, getActivePhase } from './services/protocolPhases';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
@@ -4309,6 +4310,9 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                         {c.notes && (
                           <div style={{ fontSize: 12, color: 'var(--jrn-text-soft)', marginTop: 4, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{c.notes}</div>
                         )}
+                        {/* V97.17.8 — Chips cliniques (symptomes/adherence/verdict/decision)
+                            saisis via la modal LogConsultationModal V97.17.6. */}
+                        <ConsultationClinicalSummary clinical={c.clinical} />
                       </div>
                       {isLast && (
                         <button
