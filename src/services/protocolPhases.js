@@ -194,10 +194,18 @@ export const ALL_TEMPLATES = {
 
 /**
  * Suggère un template selon les analyses détectées sur la cliente.
- * Règle Anissa 2026-05-16 : pas pré-coché par défaut. Logique conditionnelle.
+ * V97.17.5.2 : ajout du flag `autoApply` + `confidence`.
+ *
+ * Règle Anissa 2026-05-16 affinée :
+ *  - confidence 'high' (analyse claire) → autoApply = true, Anissa n'a rien à valider
+ *  - confidence 'low' (fallback sans analyse) → autoApply = false, Anissa valide
+ *
+ * Le manifeste "IA suggère → Anissa valide" s'applique aux décisions cliniques,
+ * pas aux évidences. Si Camille a fait le microbiome, elle est OBVIOUS sur
+ * les 5 phases — pas besoin de cliquer Accepter.
  *
  * @param {object} client - Cliente avec analysisPlan / analyses
- * @returns {{ templateId: TemplateId, reason: string }}
+ * @returns {{ templateId: TemplateId, reason: string, confidence: 'high'|'low', autoApply: boolean }}
  */
 export function suggestTemplateFromAnalyses(client) {
   // Source possible des analyses : client.analysisPlan?.items[] ou
@@ -220,22 +228,26 @@ export function suggestTemplateFromAnalyses(client) {
   if (hasMicrobiome) {
     return {
       templateId: 'microbiote_5_phases',
-      reason: 'Microbiome detecte dans les analyses — parcours complet recommande.',
+      confidence: 'high',
+      autoApply: true,
+      reason: 'Microbiome detecte dans les analyses.',
     };
   }
   if (hasBlood && sources.length > 0) {
     return {
       templateId: 'nutrition_simple_2_phases',
-      reason: 'Bilan sanguin sans microbiome — parcours nutrition direct recommande.',
+      confidence: 'high',
+      autoApply: true,
+      reason: 'Bilan sanguin detecte (sans microbiome).',
     };
   }
-  // Aucune analyse identifiable → fallback microbiote 5 phases (le plus complet).
-  // Custom n'est jamais suggere par defaut (V97.17.5.1) car il a 0 phase et
-  // crashait la timeline a l'init. Anissa peut toujours le choisir manuellement
-  // via "Choisir un autre" si vraiment custom necessaire (V97.17.6+).
+  // Aucune analyse identifiable → fallback non auto-applique.
+  // Anissa valide via le banner suggestion + bouton Accepter.
   return {
     templateId: 'microbiote_5_phases',
-    reason: 'Pas d\'analyse identifiable — parcours complet 5 phases par defaut (modifiable).',
+    confidence: 'low',
+    autoApply: false,
+    reason: 'Pas d\'analyse identifiable - parcours 5 phases propose par defaut (a valider).',
   };
 }
 

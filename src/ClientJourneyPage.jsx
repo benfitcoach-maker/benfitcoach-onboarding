@@ -29,6 +29,7 @@ import JourneyMessagesPanel from './JourneyMessagesPanel';
 import JourneyNotesPanel from './JourneyNotesPanel';
 import PremiumSwitch from './components/PremiumSwitch';
 import SuiviCockpitTimeline from './components/SuiviCockpitTimeline';
+import CockpitErrorBoundary from './components/CockpitErrorBoundary';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
 import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
@@ -4137,20 +4138,24 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         <>
           {/* V97.17.1 — Cockpit Timeline en tete : frise temporelle (Vous etes ici)
               + parcours therapeutique 5 phases. Repond aux 3 questions du manifeste :
-              ou j'en suis, qu'est-ce qui se passe, qu'est-ce qui vient ensuite. */}
-          <SuiviCockpitTimeline
-            client={client}
-            consultation={activeConsult}
-            packLabel={packLabel}
-            daysSincePack={daysSincePack}
-            consultationsUsed={consultationsUsed}
-            consultationsTotal={consultationsTotal}
-            consultationsLog={consultationsLog}
-            feedbacks={feedbacks}
-            versions={versions}
-            weightEntries={weightEntries}
-            onSavePhases={handleSavePhases}
-          />
+              ou j'en suis, qu'est-ce qui se passe, qu'est-ce qui vient ensuite.
+              V97.17.5.2 : wrap dans ErrorBoundary pour eviter qu'un crash du
+              cockpit casse toute la page Suivi (page noire signalee). */}
+          <CockpitErrorBoundary>
+            <SuiviCockpitTimeline
+              client={client}
+              consultation={activeConsult}
+              packLabel={packLabel}
+              daysSincePack={daysSincePack}
+              consultationsUsed={consultationsUsed}
+              consultationsTotal={consultationsTotal}
+              consultationsLog={consultationsLog}
+              feedbacks={feedbacks}
+              versions={versions}
+              weightEntries={weightEntries}
+              onSavePhases={handleSavePhases}
+            />
+          </CockpitErrorBoundary>
 
           {/* BC.5 Étape 8 : refonte en blocs numérotés (alignement étapes 1-7)
               V97.13.16 : ajout bloc miroir cliente avec mockup phone (continuité étape 7) */}

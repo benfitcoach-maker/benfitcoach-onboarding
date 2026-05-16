@@ -21,7 +21,7 @@
 //
 // Cf spec : memory `spec_v2_parcours_home_permanente_2026_05_16.md`.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ALL_TEMPLATES,
   suggestTemplateFromAnalyses,
@@ -53,6 +53,36 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
     () => suggestNextPhase(protocolPhases),
     [protocolPhases]
   );
+
+  // V97.17.5.2 — auto-init quand confidence high (analyse claire).
+  // Si Camille a fait le microbiome → parcours 5 phases auto-applique.
+  // Anissa peut toujours modifier via Options avancees.
+  // Le ref empeche les boucles si le parent re-render avec le meme client.
+  const autoAppliedRef = useRef(false);
+  const [autoApplied, setAutoApplied] = useState(false);
+
+  useEffect(() => {
+    if (
+      !protocolPhases &&
+      consultation &&
+      suggestion.autoApply &&
+      !autoAppliedRef.current &&
+      !saving
+    ) {
+      autoAppliedRef.current = true;
+      (async () => {
+        try {
+          const next = instanceFromTemplate(suggestion.templateId);
+          await onSavePhases(next);
+          setAutoApplied(true);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("[JourneyPhasesCard] Auto-init failed :", err);
+          autoAppliedRef.current = false; // permet retry
+        }
+      })();
+    }
+  }, [protocolPhases, consultation, suggestion, saving, onSavePhases]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
 
@@ -195,6 +225,11 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
 
   // ─── État 2 & 3 : configuré ───────────────────────────────────────────
 
+  // V97.17.5.2 — Si le parcours vient d'être auto-applique (analyse claire
+  // detectee), afficher un banner discret pour informer Anissa. Disparait au
+  // prochain mount (state local, pas persiste).
+  const showAutoAppliedBanner = autoApplied;
+
   const totalPhases = protocolPhases.phases.length;
   const completedCount = protocolPhases.phases.filter((p) => p.status === "completed").length;
   const activeIdx = protocolPhases.phases.findIndex((p) => p.status === "active");
@@ -221,6 +256,49 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
 
   return (
     <div>
+      {/* V97.17.5.2 — Banner auto-détecté (visible juste après auto-init) */}
+      {showAutoAppliedBanner && (
+        <div
+          style={{
+            background: "rgba(26, 46, 31, 0.05)",
+            border: "1px solid rgba(26, 46, 31, 0.18)",
+            borderRadius: 7,
+            padding: "10px 12px",
+            marginBottom: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 12,
+            color: "#1A2E1F",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>✨</span>
+          <div style={{ flex: 1 }}>
+            <strong>Parcours auto-détecté</strong> · {suggestion.reason}
+            <br />
+            <span style={{ fontSize: 11, color: "var(--jrn-text-muted, #6b6f6b)" }}>
+              Tu peux modifier le template via Options avancées si besoin.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAutoApplied(false)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--jrn-text-muted, #6b6f6b)",
+              cursor: "pointer",
+              fontSize: 16,
+              padding: 0,
+              lineHeight: 1,
+            }}
+            title="Masquer"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Hero phase active (si une est active) */}
       {activePhase && (
         <div style={activeHeroStyle}>
