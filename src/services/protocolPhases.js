@@ -229,10 +229,13 @@ export function suggestTemplateFromAnalyses(client) {
       reason: 'Bilan sanguin sans microbiome — parcours nutrition direct recommande.',
     };
   }
-  // Aucune analyse identifiable → custom (Anissa configure)
+  // Aucune analyse identifiable → fallback microbiote 5 phases (le plus complet).
+  // Custom n'est jamais suggere par defaut (V97.17.5.1) car il a 0 phase et
+  // crashait la timeline a l'init. Anissa peut toujours le choisir manuellement
+  // via "Choisir un autre" si vraiment custom necessaire (V97.17.6+).
   return {
-    templateId: 'custom',
-    reason: 'Aucune analyse identifiable — a configurer manuellement.',
+    templateId: 'microbiote_5_phases',
+    reason: 'Pas d\'analyse identifiable — parcours complet 5 phases par defaut (modifiable).',
   };
 }
 

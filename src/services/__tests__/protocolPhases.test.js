@@ -85,9 +85,13 @@ describe('suggestTemplateFromAnalyses', () => {
     expect(s.templateId).toBe('microbiote_5_phases');
   });
 
-  it('Aucune analyse → custom', () => {
+  it('Aucune analyse → microbiote_5_phases (fallback V97.17.5.1)', () => {
+    // V97.17.5.1 : custom etait suggere mais avait phases: [] → crashait
+    // la timeline a l'init. Fallback sur microbiote 5 phases comme template
+    // le plus complet par defaut. Anissa peut toujours choisir custom
+    // manuellement via "Choisir un autre" (a debloquer V97.17.6).
     const s = suggestTemplateFromAnalyses({});
-    expect(s.templateId).toBe('custom');
+    expect(s.templateId).toBe('microbiote_5_phases');
   });
 
   it('Mot clef "sequencage" detecte aussi le microbiome', () => {

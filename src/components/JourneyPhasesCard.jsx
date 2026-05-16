@@ -58,6 +58,18 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
 
   async function handleInitFromTemplate(templateId) {
     if (saving) return;
+    // V97.17.5.1 — Garde-fou : template custom a phases: [] et casse l'UI
+    // (frise vide, segments map sur [], page noire reported par Anissa).
+    // Pour V1, on bloque l'init custom. A debloquer en V97.17.6 quand on
+    // ajoutera l'edition de phases manuelles.
+    if (templateId === 'custom') {
+      window.alert(
+        'Le parcours personnalise n\'est pas encore configurable directement.\n\n' +
+        'Pour cette cliente, choisis un template existant (Microbiote 5 ou 3 phases, Nutrition simple 2 phases).\n\n' +
+        'L\'edition manuelle des phases arrive dans une prochaine version.'
+      );
+      return;
+    }
     setSaving(true);
     try {
       const next = instanceFromTemplate(templateId);
@@ -93,11 +105,30 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
     }
   }
 
-  // ─── État 1 : pas configuré ───────────────────────────────────────────
+  // ─── État 1 : pas configuré OU configuré avec 0 phase (cas custom buggy) ──
+  // V97.17.5.1 : guard contre `{ template: 'custom', phases: [] }` qui causait
+  // une page noire (rendu de la frise sur tableau vide). Fallback sur l'etat
+  // "non configure" + permet de re-choisir un template valide.
+  const isEmptyPhases =
+    protocolPhases && (!Array.isArray(protocolPhases.phases) || protocolPhases.phases.length === 0);
 
-  if (!protocolPhases) {
+  if (!protocolPhases || isEmptyPhases) {
     return (
       <div>
+        {isEmptyPhases && (
+          <div style={{
+            background: 'rgba(184, 134, 38, 0.08)',
+            border: '1px solid rgba(184, 134, 38, 0.3)',
+            borderRadius: 7,
+            padding: '10px 12px',
+            marginBottom: 10,
+            fontSize: 12,
+            color: '#785a1a',
+          }}>
+            ⚠ Le parcours actuel n&apos;a pas de phases configurées. Choisis un template
+            ci-dessous pour redémarrer proprement.
+          </div>
+        )}
         <p style={mutedStyle}>
           Ce parcours apparaîtra dans l&apos;app cliente sous forme de timeline.
           La cliente verra où elle en est, ce qui se passe, et ce qui vient ensuite.
@@ -133,18 +164,29 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
         {/* Picker template manuel */}
         {showTemplatePicker && (
           <div style={pickerStyle}>
-            {Object.values(ALL_TEMPLATES).map((tpl) => (
-              <button
-                key={tpl.id}
-                type="button"
-                disabled={saving}
-                onClick={() => handleInitFromTemplate(tpl.id)}
-                style={pickerItemStyle}
-              >
-                <div style={pickerLabelStyle}>{tpl.label}</div>
-                <div style={pickerDescStyle}>{tpl.description}</div>
-              </button>
-            ))}
+            {Object.values(ALL_TEMPLATES).map((tpl) => {
+              const isCustom = tpl.id === 'custom';
+              return (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  disabled={saving || isCustom}
+                  onClick={() => handleInitFromTemplate(tpl.id)}
+                  style={{
+                    ...pickerItemStyle,
+                    opacity: isCustom ? 0.4 : 1,
+                    cursor: isCustom ? 'not-allowed' : 'pointer',
+                  }}
+                  title={isCustom ? 'Pas encore configurable — disponible en V97.17.6' : ''}
+                >
+                  <div style={pickerLabelStyle}>
+                    {tpl.label}
+                    {isCustom && ' (bientot disponible)'}
+                  </div>
+                  <div style={pickerDescStyle}>{tpl.description}</div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
