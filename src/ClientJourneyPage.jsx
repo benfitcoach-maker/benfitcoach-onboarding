@@ -3882,10 +3882,15 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
 
   const handleAdaptFromFeedback = async () => {
     if (feedbacks.length === 0) {
-      setErr('Aucun ressenti à exploiter pour adapter le plan.');
+      setErr('Aucun ressenti à exploiter pour créer la suite du protocole.');
       return;
     }
-    if (!window.confirm('Adapter le plan à partir des ressentis cliente ?\n\nL\'IA va générer une nouvelle version du plan en tenant compte des derniers retours. Vous serez ensuite redirigée vers l\'éditeur étape 6 pour relire et publier.')) return;
+    {
+      const nextVersionNum = (versions?.length || 0) + 1;
+      const previousVersion = versions?.length || 0;
+      const msg = `Créer la suite du protocole — V${nextVersionNum} ?\n\nL'IA va proposer la prochaine version du protocole de ${prenom} en tenant compte des derniers ressentis. La V${previousVersion || 1} actuelle sera conservée dans l'historique. Vous serez ensuite redirigée vers l'éditeur pour relire et publier la V${nextVersionNum}.\n\nLe parcours thérapeutique se poursuit — ce n'est pas un nouveau plan, c'est l'évolution de celui en cours.`;
+      if (!window.confirm(msg)) return;
+    }
     setAdapting(true);
     setErr(null);
     try {
@@ -3977,7 +3982,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     }
     // P1 — adaptation IA en attente de validation (V2+, exclut le plan initial V1)
     else if (lastVersion && lastVersion.status === 'a_valider' && versions.length >= 2) {
-      nextAction = { label: `Adaptation V${versions.length} prête à valider`, tone: 'go' };
+      nextAction = { label: `Version V${versions.length} du protocole prête à valider`, tone: 'go' };
     }
     // P2 — poids décroche (delta absolu > 3kg sur ≥ 3 pesées)
     else if (weightDelta !== null && Math.abs(weightDelta) >= 3 && weightEntries.length >= 3) {
@@ -3996,13 +4001,13 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     else if (feedbacks.length === 0 && daysSincePack !== null && daysSincePack >= 3) {
       nextAction = { label: `Pas de ressenti reçu — relancer ${prenom}`, tone: 'warn' };
     }
-    // P6 — première adaptation IA possible (data accumulée)
+    // P6 — première suite du protocole possible (data accumulée)
     else if (feedbacks.length >= 5 && versions.length <= 1) {
-      nextAction = { label: 'Première adaptation IA possible', tone: 'go' };
+      nextAction = { label: 'Suite du protocole possible — V2 à créer', tone: 'go' };
     }
-    // P7 — nouvelle adaptation à envisager (cycle long depuis dernière)
+    // P7 — nouvelle suite à envisager (cycle long depuis dernière)
     else if (versions.length >= 2 && daysSinceLastVersion !== null && daysSinceLastVersion >= 14) {
-      nextAction = { label: `Nouvelle adaptation à envisager (${daysSinceLastVersion}j depuis V${versions.length})`, tone: 'go' };
+      nextAction = { label: `Suite du protocole à envisager — V${versions.length + 1} (${daysSinceLastVersion}j depuis V${versions.length})`, tone: 'go' };
     }
   }
 
@@ -4059,8 +4064,22 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             {packLabel}
             {daysSincePack ? ` · jour ${daysSincePack}` : ''}
             {started ? ` · cycle actif` : ' · à démarrer'}
-            {started && lastVersion ? ` · plan V${versions.length}` : ''}
+            {started && lastVersion ? ` · protocole V${versions.length} active` : ''}
           </p>
+          {started && (
+            <p
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color: 'var(--jrn-text-muted, #6b6f6b)',
+                fontStyle: 'italic',
+                letterSpacing: '.01em',
+              }}
+              title="Le protocole n'est pas figé : chaque consultation peut générer une nouvelle version (V2, V3...) en conservant l'historique complet. C'est un dossier thérapeutique vivant."
+            >
+              Dossier thérapeutique vivant — chaque consultation peut faire évoluer le protocole vers une V suivante.
+            </p>
+          )}
           {started && heroSignals.length > 0 && (
             <ul className="jrn-cockpit-hero__signals">
               {heroSignals.map(s => (
@@ -4081,7 +4100,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               onClick={() => setShowLogModal(true)}
               disabled={consultationsTotal > 0 && consultationsUsed >= consultationsTotal}
               className="jrn-btn jrn-btn--soft"
-              title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Marquer une consultation effectuée'}
+              title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Logger une consultation — point de pivot pour la prochaine version du protocole'}
             >
               + Consultation
             </button>
@@ -4089,9 +4108,9 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               onClick={handleAdaptFromFeedback}
               disabled={adapting || feedbacks.length === 0}
               className="jrn-btn jrn-btn--primary"
-              title={feedbacks.length === 0 ? 'Aucun ressenti à exploiter' : "L'IA adapte le plan en tenant compte des derniers ressentis cliente"}
+              title={feedbacks.length === 0 ? 'Aucun ressenti à exploiter pour générer la V suivante' : `L'IA propose la V${(versions?.length || 0) + 1} du protocole à partir des derniers ressentis cliente. La version actuelle est conservée dans l'historique.`}
             >
-              {adapting ? 'Adaptation…' : 'Adapter le plan'}
+              {adapting ? 'Création V…' : `Créer la suite du protocole${versions?.length ? ` — V${versions.length + 1}` : ''}`}
             </button>
           </div>
         )}
@@ -4155,7 +4174,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                 disabled={adapting}
                 className="jrn-btn jrn-btn--primary jrn-cockpit-card__priority-btn"
               >
-                {adapting ? 'Adaptation…' : 'Lancer l\'adaptation IA →'}
+                {adapting ? 'Création V…' : `Créer la V${(versions?.length || 0) + 1} du protocole →`}
               </button>
             )}
             {nextAction.tone === 'warn' && consultationsUsed === 0 && (
@@ -4185,7 +4204,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                   onClick={() => setShowLogModal(true)}
                   disabled={consultationsTotal > 0 && consultationsUsed >= consultationsTotal}
                   className="jrn-btn jrn-btn--soft"
-                  title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Marquer une nouvelle consultation effectuée'}
+                  title={consultationsTotal > 0 && consultationsUsed >= consultationsTotal ? 'Quota du pack atteint' : 'Logger une consultation — chaque consultation peut donner naissance à une V suivante du protocole'}
                 >
                   ✅ Consultation effectuée
                 </button>
@@ -4324,7 +4343,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               <h3 className="jrn-block__title">Cycle de suivi — actions</h3>
             </div>
             <p className="jrn-block__intro">
-              Cycle : <strong>Adapter</strong> (bouton hero) → <strong>Éditer</strong> (étape 6) → <strong>Republier</strong> (étape 7) → retour ici. Plan de reprise = relance après pause.
+              Cycle : <strong>Créer la suite</strong> (bouton hero) → <strong>Relire</strong> (étape 6) → <strong>Publier la nouvelle version</strong> (étape 7) → retour ici. Plan de reprise = relance après pause.
             </p>
             <div className="jrn-actions" style={{ marginTop: 0 }}>
               {/* V97.13.20 : bouton 'Adapter le plan' retiré ici — déjà présent dans
@@ -4371,7 +4390,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                 <h3 className="jrn-block__title">Historique des versions · {versions.length}</h3>
               </div>
               <p className="jrn-block__intro">
-                Une nouvelle version est créée à chaque adaptation. La cliente voit uniquement la version active.
+                Chaque suite du protocole crée une nouvelle version. La cliente voit toujours la version active, son protocole évolue avec elle.
               </p>
               <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
                 {versions.map((v, i) => {
