@@ -4588,7 +4588,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         <PlanVersionPreviewModal version={previewVersion} onClose={() => setPreviewVersion(null)} />
       )}
 
-      {/* Modale suivi clinique structure (V97.17.6) */}
+      {/* Modale suivi clinique structure (V97.17.6 + V97.17.23 contexte ressentis) */}
       {showLogModal && (
         <LogConsultationModal
           consultationNumber={consultationsUsed + 1}
@@ -4596,6 +4596,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
           onCancel={() => { setShowLogModal(false); setLogNote(''); }}
           onConfirm={handleLogConsultation}
           saving={savingLog}
+          recentFeedbacks={feedbacks?.slice(0, 7) || []}
         />
       )}
     </section>
@@ -5203,7 +5204,7 @@ const DECISION_VALUES = [
   { value: 'newVersion',   label: 'Nouvelle version complète',     hint: 'À l\'enregistrement → propose direct la création d\'une V suivante refondue via IA' },
 ];
 
-function LogConsultationModal({ consultationNumber, totalIncluded, onCancel, onConfirm, saving }) {
+function LogConsultationModal({ consultationNumber, totalIncluded, onCancel, onConfirm, saving, recentFeedbacks = [] }) {
   const [symptoms, setSymptoms] = useState({});
   const [adherence, setAdherence] = useState({});
   const [evolution, setEvolution] = useState(null);
@@ -5241,6 +5242,9 @@ function LogConsultationModal({ consultationNumber, totalIncluded, onCancel, onC
             la prochaine adaptation IA. Tout est optionnel — clique seulement ce qui
             est pertinent.
           </p>
+
+          {/* V97.17.23 — Contexte ressentis cliente 7 derniers jours */}
+          <FeedbackContextHelper recentFeedbacks={recentFeedbacks} />
 
           {/* Bloc 1 — Symptômes */}
           <ClinicalSection title="1. Symptômes" eyebrow="Comment Camille a-t-elle évolué ?">
@@ -5348,6 +5352,101 @@ function LogConsultationModal({ consultationNumber, totalIncluded, onCancel, onC
 }
 
 // ─── Helpers internes pour LogConsultationModal ──────────────────────────
+
+// V97.17.23 — Helper : resume des ressentis cliente sur 7 derniers jours.
+// Affiche en haut de la modal clinique un encart de contexte (Anissa decide
+// en connaissance de cause sans biais d'auto-fill).
+
+const FEEDBACK_DIMS = [
+  { key: 'digestion', label: 'Digestion', values: { better: 'Mieux', same: 'Pareil', worse: 'Pire' } },
+  { key: 'fatigue',   label: 'Fatigue',   values: { better: 'Mieux', same: 'Pareil', worse: 'Pire' } },
+  { key: 'energie',   label: 'Energie',   values: { good: 'Bonne', ok: 'OK', low: 'Basse' } },
+  { key: 'faim',      label: 'Faim',      values: { low: 'Pas assez', ok: 'OK', high: 'Trop' } },
+];
+
+function FeedbackContextHelper({ recentFeedbacks }) {
+  if (!Array.isArray(recentFeedbacks) || recentFeedbacks.length === 0) return null;
+
+  // Pour chaque dimension : compter occurrences par valeur, trouver dominante
+  const summaries = FEEDBACK_DIMS.map((dim) => {
+    const counts = {};
+    for (const f of recentFeedbacks) {
+      const v = f[dim.key];
+      if (!v) continue;
+      counts[v] = (counts[v] || 0) + 1;
+    }
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) return null;
+    const [topValue, topCount] = entries[0];
+    return {
+      dim,
+      label: dim.values[topValue] || topValue,
+      count: topCount,
+      total: recentFeedbacks.length,
+    };
+  }).filter(Boolean);
+
+  if (summaries.length === 0) {
+    return (
+      <div style={{
+        padding: '10px 12px',
+        background: 'rgba(26, 46, 31, 0.04)',
+        border: '1px dashed rgba(26, 46, 31, 0.15)',
+        borderRadius: 7,
+        marginBottom: 16,
+        fontSize: 11.5,
+        color: 'var(--jrn-text-muted, #6b6f6b)',
+        fontStyle: 'italic',
+      }}>
+        Aucun ressenti cliente reçu sur les 7 derniers jours.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      background: 'rgba(26, 46, 31, 0.04)',
+      border: '1px solid rgba(26, 46, 31, 0.10)',
+      borderRadius: 7,
+      marginBottom: 16,
+    }}>
+      <div style={{
+        fontSize: 9.5,
+        fontWeight: 700,
+        letterSpacing: '.12em',
+        textTransform: 'uppercase',
+        color: 'var(--jrn-text-muted, #6b6f6b)',
+        marginBottom: 6,
+      }}>
+        Contexte ressentis · 7 derniers jours
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {summaries.map((s) => (
+          <span
+            key={s.dim.key}
+            style={{
+              fontSize: 11,
+              padding: '3px 9px',
+              borderRadius: 999,
+              background: 'white',
+              color: '#1A2E1F',
+              border: '1px solid rgba(26, 46, 31, 0.10)',
+              fontFamily: 'var(--jrn-font-ui, system-ui)',
+            }}
+            title={`Dominante sur ${s.total} ressentis`}
+          >
+            <strong>{s.dim.label}</strong>{' '}
+            <span style={{ opacity: 0.7 }}>· dominante {s.label}</span>{' '}
+            <span style={{ fontSize: 10, color: 'var(--jrn-text-muted, #6b6f6b)' }}>
+              ({s.count}/{s.total})
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ClinicalSection({ title, eyebrow, children }) {
   return (
