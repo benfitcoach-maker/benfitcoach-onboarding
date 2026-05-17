@@ -23,6 +23,21 @@ import { useMemo } from "react";
 import JourneyPhasesCard from "./JourneyPhasesCard";
 import { ALL_TEMPLATES } from "../services/protocolPhases";
 
+// V97.17.26 — Detection pattern positif recent pour renforcer la suggestion
+// de transition (>= 2 ressentis better/good sur 7 derniers jours).
+function hasRecentPositivePattern(feedbacks) {
+  if (!Array.isArray(feedbacks) || feedbacks.length < 2) return false;
+  const cutoff = Date.now() - 7 * 86400000;
+  const recent = feedbacks.filter((f) => {
+    const ts = f.created_at ? new Date(f.created_at).getTime() : 0;
+    return ts >= cutoff;
+  });
+  const positives = recent.filter(
+    (f) => f.digestion === 'better' || f.fatigue === 'better' || f.energie === 'good'
+  ).length;
+  return positives >= 2;
+}
+
 /**
  * Parse "Suivi 6 mois" → 6, "Suivi 3 mois" → 3, default 6.
  */
@@ -364,6 +379,7 @@ export default function SuiviCockpitTimeline({
           client={client}
           consultation={consultation}
           onSavePhases={onSavePhases}
+          hasRecentPositivePattern={hasRecentPositivePattern(feedbacks)}
         />
 
         {/* V97.17.7.2 — Bouton publier contextuel.

@@ -33,7 +33,7 @@ import {
   startParcours,
 } from "../services/protocolPhases";
 
-export default function JourneyPhasesCard({ consultation, client, onSavePhases }) {
+export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false }) {
   const [saving, setSaving] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -327,8 +327,29 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
             </div>
           )}
           {nextSuggestion.shouldSuggest && (
-            <div style={transitionSuggestionStyle}>
-              <div style={transitionLabelStyle}>💡 {nextSuggestion.reason}</div>
+            <div
+              style={
+                hasRecentPositivePattern
+                  ? transitionSuggestionEnforcedStyle
+                  : transitionSuggestionStyle
+              }
+            >
+              <div
+                style={
+                  hasRecentPositivePattern
+                    ? transitionLabelEnforcedStyle
+                    : transitionLabelStyle
+                }
+              >
+                {hasRecentPositivePattern
+                  ? "✨ Pattern positif détecté ces 7 derniers jours. La cliente semble prête pour la phase suivante."
+                  : `💡 ${nextSuggestion.reason}`}
+              </div>
+              {hasRecentPositivePattern && (
+                <div style={transitionDetailStyle}>
+                  Durée minimale de phase atteinte + amélioration soutenue dans les ressentis.
+                </div>
+              )}
               <button
                 type="button"
                 disabled={saving}
@@ -865,6 +886,29 @@ const transitionSuggestionStyle = {
 const transitionLabelStyle = {
   fontSize: 12,
   color: "#785a1a",
+  lineHeight: 1.4,
+};
+
+// V97.17.26 — Style renforce quand pattern positif detecte (vert sage = encourage transition)
+const transitionSuggestionEnforcedStyle = {
+  marginTop: 12,
+  padding: "12px 14px",
+  background: "rgba(46, 94, 62, 0.10)",
+  border: "1.5px solid rgba(46, 94, 62, 0.45)",
+  borderRadius: 7,
+};
+
+const transitionLabelEnforcedStyle = {
+  fontSize: 12.5,
+  color: "#2E5E3E",
+  lineHeight: 1.4,
+  fontWeight: 600,
+};
+
+const transitionDetailStyle = {
+  fontSize: 11,
+  color: "rgba(46, 94, 62, 0.85)",
+  marginTop: 4,
   lineHeight: 1.4,
 };
 
