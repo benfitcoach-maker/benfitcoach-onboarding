@@ -3744,17 +3744,55 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   const handleSavePhases = useCallback(
     async (newProtocolPhases) => {
       if (!activeConsult) return;
-      const activePhaseId =
+      const newActivePhaseId =
         newProtocolPhases?.phases?.find((p) => p.status === 'active')?.id || null;
+      const prevActivePhaseId = activeConsult.active_phase_id || null;
+      // V97.17.16 — Detection d'une vraie transition de phase (pas init ni reset).
+      // Si prev et new sont differents ET les deux non-null → push notif cliente.
+      const isTransition =
+        prevActivePhaseId &&
+        newActivePhaseId &&
+        prevActivePhaseId !== newActivePhaseId;
+
       const next = {
         ...activeConsult,
         protocol_phases: newProtocolPhases,
-        active_phase_id: activePhaseId,
+        active_phase_id: newActivePhaseId,
       };
       await saveNutritionConsultation(next);
       setActiveConsult(next);
+
+      // V97.17.16 — Push notif a la cliente a chaque transition de phase.
+      // Best-effort : si la cliente n'a pas active les push, ignore silencieusement.
+      if (isTransition) {
+        const newPhase = newProtocolPhases?.phases?.find(
+          (p) => p.id === newActivePhaseId
+        );
+        const email = client?.form?.email || client?.email;
+        if (newPhase && email) {
+          try {
+            const { clientAppFetch } = await import('./services/clientAppFetch');
+            await clientAppFetch('/api/admin/push/send', {
+              method: 'POST',
+              payload: {
+                email,
+                title: 'Votre parcours évolue',
+                body: `Vous êtes maintenant en Phase ${newPhase.order} : ${newPhase.client_name}.`,
+                url: '/plan#strategie',
+                tag: `phase-transition-${newPhase.id}`,
+              },
+            });
+          } catch (pushErr) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              '[phase-transition-push] failed (non-bloquant):',
+              pushErr?.message || pushErr
+            );
+          }
+        }
+      }
     },
-    [activeConsult]
+    [activeConsult, client]
   );
 
   // Phase AJ : log des consultations effectuees
