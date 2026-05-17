@@ -339,6 +339,14 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
               </button>
             </div>
           )}
+
+          {/* V97.17.17 — V97.18 amorce : recommandations cliniques pre-configurees
+              de la phase active (depuis protocolPhases.js). Repliable. Pour
+              l'instant DONNEES INDICATIVES : pas auto-appliquees au plan, sert
+              de cheat-sheet pour Anissa quand elle cree la V suivante. */}
+          {activePhase.recommendations && (
+            <PhaseRecommendationsBlock recommendations={activePhase.recommendations} />
+          )}
         </div>
       )}
 
@@ -620,6 +628,77 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases }
   );
 }
 
+// ─── V97.17.17 — Sous-composant : recommandations de la phase active ─────
+
+function PhaseRecommendationsBlock({ recommendations }) {
+  const [expanded, setExpanded] = useState(false);
+  const r = recommendations || {};
+  const hasContent =
+    (r.foods_favor?.length || 0) > 0 ||
+    (r.foods_limit?.length || 0) > 0 ||
+    (r.supplements?.length || 0) > 0 ||
+    (r.clinical_notes || '').length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div style={recoBlockStyle}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        style={recoToggleStyle}
+      >
+        {expanded ? '▾ Masquer' : '▸ Voir'} les recommandations de cette phase
+        <span style={recoIndicatorStyle}>indicatif — non auto-appliqué</span>
+      </button>
+
+      {expanded && (
+        <div style={recoContentStyle}>
+          {r.clinical_notes && (
+            <p style={recoNotesStyle}>{r.clinical_notes}</p>
+          )}
+
+          {r.foods_favor?.length > 0 && (
+            <div style={recoSectionStyle}>
+              <div style={recoLabelStyle}>À privilégier</div>
+              <div style={recoChipsStyle}>
+                {r.foods_favor.map((f, i) => (
+                  <span key={i} style={recoChipFavorStyle}>{f}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {r.foods_limit?.length > 0 && (
+            <div style={recoSectionStyle}>
+              <div style={recoLabelStyle}>À limiter</div>
+              <div style={recoChipsStyle}>
+                {r.foods_limit.map((f, i) => (
+                  <span key={i} style={recoChipLimitStyle}>{f}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {r.supplements?.length > 0 && (
+            <div style={recoSectionStyle}>
+              <div style={recoLabelStyle}>Suppléments</div>
+              <ul style={recoSupplementsListStyle}>
+                {r.supplements.map((s, i) => (
+                  <li key={i} style={recoSupplementItemStyle}>
+                    <span style={recoSupplementNameStyle}>{s.name}</span>
+                    {s.dose && <span style={recoSupplementMetaStyle}>{s.dose}</span>}
+                    {s.timing && <span style={recoSupplementMetaStyle}>{s.timing}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function formatDate(iso) {
@@ -787,6 +866,121 @@ const transitionLabelStyle = {
   fontSize: 12,
   color: "#785a1a",
   lineHeight: 1.4,
+};
+
+// V97.17.17 — Styles du bloc recommandations phase (V97.18 amorce)
+const recoBlockStyle = {
+  marginTop: 12,
+  padding: "10px 12px",
+  background: "rgba(26, 46, 31, 0.03)",
+  border: "1px dashed rgba(26, 46, 31, 0.15)",
+  borderRadius: 7,
+};
+
+const recoToggleStyle = {
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  fontSize: 11.5,
+  color: "#1A2E1F",
+  cursor: "pointer",
+  fontWeight: 600,
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  fontFamily: "inherit",
+};
+
+const recoIndicatorStyle = {
+  fontSize: 10,
+  fontStyle: "italic",
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  fontWeight: 400,
+  letterSpacing: ".02em",
+};
+
+const recoContentStyle = {
+  marginTop: 12,
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+const recoNotesStyle = {
+  fontSize: 12,
+  fontStyle: "italic",
+  color: "#1A2E1F",
+  lineHeight: 1.5,
+  background: "rgba(26, 46, 31, 0.05)",
+  padding: "8px 10px",
+  borderRadius: 6,
+  margin: 0,
+};
+
+const recoSectionStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 5,
+};
+
+const recoLabelStyle = {
+  fontSize: 9.5,
+  fontWeight: 700,
+  letterSpacing: ".12em",
+  textTransform: "uppercase",
+  color: "var(--jrn-text-muted, #6b6f6b)",
+};
+
+const recoChipsStyle = {
+  display: "flex",
+  gap: 5,
+  flexWrap: "wrap",
+};
+
+const recoChipFavorStyle = {
+  fontSize: 11,
+  padding: "3px 9px",
+  borderRadius: 999,
+  background: "rgba(46, 94, 62, 0.10)",
+  color: "#2E5E3E",
+  fontWeight: 500,
+};
+
+const recoChipLimitStyle = {
+  fontSize: 11,
+  padding: "3px 9px",
+  borderRadius: 999,
+  background: "rgba(160, 64, 64, 0.08)",
+  color: "#a04040",
+  fontWeight: 500,
+};
+
+const recoSupplementsListStyle = {
+  margin: 0,
+  paddingLeft: 0,
+  listStyle: "none",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const recoSupplementItemStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "baseline",
+  gap: 8,
+  fontSize: 11.5,
+  color: "#1A2E1F",
+};
+
+const recoSupplementNameStyle = {
+  fontWeight: 600,
+};
+
+const recoSupplementMetaStyle = {
+  fontSize: 10.5,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  fontStyle: "italic",
 };
 
 // ─── V97.17.3 — Timeline horizontale styles ───────────────────────────────

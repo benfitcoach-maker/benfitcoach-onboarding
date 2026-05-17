@@ -47,6 +47,39 @@ export const TEMPLATE_MICROBIOTE_5 = {
       narrative_present: 'Cette phase apaise votre système digestif et prépare le terrain.',
       narrative_past: 'Vous avez traversé la phase d\'apaisement. Votre digestion s\'est progressivement stabilisée.',
       narrative_future: 'Votre parcours commencera par l\'apaisement de votre système digestif.',
+      // V97.18 amorce (V97.17.17) — Recommandations cliniques pre-configurees
+      // par phase. Pour l'instant : DONNEES INDICATIVES qu'Anissa pourra
+      // editer/valider en V97.19+. Sert deja a alimenter le bloc 'A faire
+      // cette phase' du cockpit SaaS (visible mais pas encore auto-applique
+      // au plan en cours).
+      recommendations: {
+        foods_favor: [
+          'Cuissons douces (vapeur, mijoté, bouilli)',
+          'Légumes pelés et bien cuits',
+          'Bouillons d\'os',
+          'Volailles maigres',
+          'Riz blanc, sarrasin',
+          'Bananes mûres',
+          'Tisanes digestives (gingembre, fenouil)',
+        ],
+        foods_limit: [
+          'Crudités et fibres dures (chou cru, légumineuses)',
+          'Gluten',
+          'Lait de vache et fromages affinés',
+          'Sucres rapides',
+          'Alcool',
+          'Aliments industriels et émulsifiants',
+        ],
+        cooking: ['Vapeur', 'Mijoté lent', 'Bouillon'],
+        cooking_avoid: ['Friture', 'Cru en grande quantité', 'Grillé fort'],
+        supplements: [
+          { name: 'L-glutamine', dose: '5 g', timing: 'matin à jeun' },
+          { name: 'Probiotique multi-souches', dose: '1 gélule', timing: 'avant petit-déjeuner' },
+          { name: 'Bouillon d\'os', dose: '1 bol', timing: 'soir avant repas' },
+        ],
+        clinical_notes:
+          'Phase d\'apaisement : éviter tout ce qui irrite la muqueuse. Cuissons douces, fibres modérées. La L-glutamine soutient la barrière intestinale. Probiotique doux pour amorcer la diversité.',
+      },
     },
     {
       id: 'p2',
