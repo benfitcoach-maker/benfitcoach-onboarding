@@ -91,6 +91,35 @@ export const TEMPLATE_MICROBIOTE_5 = {
       narrative_present: 'Votre flore intestinale se rééquilibre progressivement. Cette phase soutient la diversité de votre microbiote.',
       narrative_past: 'Vous avez traversé la phase de rééquilibrage. Votre microbiote a gagné en stabilité.',
       narrative_future: 'Lorsque l\'apaisement sera installé, votre parcours s\'ouvrira au rééquilibrage de votre flore.',
+      // V97.17.18 — recommandations indicatives (premier jet, a valider Anissa)
+      recommendations: {
+        foods_favor: [
+          'Légumes cuits diversifiés (carottes, courgettes, fenouil, panais)',
+          'Légumineuses bien cuites en petites quantités (lentilles corail)',
+          'Fruits cuits (compote pommes, poires)',
+          'Poissons gras (sardine, maquereau)',
+          'Œufs bio',
+          'Huile d\'olive vierge extra',
+          'Yaourt brebis ou chèvre (si toléré)',
+        ],
+        foods_limit: [
+          'Crudités en grandes quantités',
+          'Fromages industriels',
+          'Charcuteries',
+          'Boissons sucrées',
+          'Gluten (maintenu en pause)',
+        ],
+        cooking: ['Vapeur', 'Étuvée', 'Court bouillon'],
+        cooking_avoid: ['Grillé fort', 'Friture'],
+        supplements: [
+          { name: 'Prébiotiques doux (PHGG, inuline)', dose: '5 g', timing: 'matin avec le petit-déjeuner' },
+          { name: 'Probiotique multi-souches', dose: '1 gélule', timing: 'à jeun matin' },
+          { name: 'L-glutamine', dose: '5 g', timing: 'continuer le matin à jeun' },
+          { name: 'Magnésium bisglycinate', dose: '300 mg', timing: 'soir' },
+        ],
+        clinical_notes:
+          'Réintroduction progressive de la diversité alimentaire. Prébiotiques doux pour nourrir la flore. Maintenir la pause gluten encore 4 semaines. Surveiller la tolérance des légumineuses et fibres.',
+      },
     },
     {
       id: 'p3',
@@ -102,6 +131,35 @@ export const TEMPLATE_MICROBIOTE_5 = {
       narrative_present: 'Cette phase soutient la réparation de votre barrière intestinale en profondeur.',
       narrative_past: 'Vous avez traversé la phase de réparation. Votre barrière intestinale a été renforcée.',
       narrative_future: 'Cette phase de réparation profonde viendra ensuite consolider votre barrière intestinale.',
+      recommendations: {
+        foods_favor: [
+          'Poissons gras 2-3×/semaine (saumon sauvage, sardines)',
+          'Œufs bio',
+          'Foie de volaille (1×/semaine, source vitamine A naturelle)',
+          'Légumes verts à feuilles (épinards, blettes, kale cuit)',
+          'Avocat',
+          'Graines de chia et lin (moulues, en petites quantités)',
+          'Bouillon d\'os enrichi en collagène',
+          'Curcuma + poivre noir dans les plats',
+        ],
+        foods_limit: [
+          'Sucres ajoutés (même naturels en excès)',
+          'Aliments ultra-transformés',
+          'Alcool',
+          'Café fort (1 max le matin)',
+        ],
+        cooking: ['Vapeur', 'Mijoté', 'Cuissons douces avec curcuma'],
+        cooking_avoid: ['Cuissons hautes températures', 'Carbonisation'],
+        supplements: [
+          { name: 'Zinc bisglycinate', dose: '15 mg', timing: 'soir avec repas' },
+          { name: 'Vitamine A naturelle (huile de foie de morue)', dose: '1 cuillère café', timing: 'matin' },
+          { name: 'Oméga-3 EPA/DHA', dose: '2 g', timing: 'midi avec repas gras' },
+          { name: 'L-glutamine', dose: '10 g', timing: 'matin et soir à jeun' },
+          { name: 'Vitamine D3 + K2', dose: '2000 UI', timing: 'matin avec repas gras' },
+        ],
+        clinical_notes:
+          'Phase clé de réparation de la barrière intestinale. Combinaison zinc + vitamine A + oméga 3 + L-glutamine à dose thérapeutique. Anti-inflammatoires naturels (curcuma). Diminuer charge inflammatoire (sucre, alcool).',
+      },
     },
     {
       id: 'p4',
@@ -113,6 +171,31 @@ export const TEMPLATE_MICROBIOTE_5 = {
       narrative_present: 'Votre terrain digestif se consolide. Cette phase ancre durablement les bénéfices acquis.',
       narrative_past: 'Vous avez traversé la phase de consolidation. Votre terrain digestif s\'est ancré.',
       narrative_future: 'Une phase de consolidation viendra ensuite ancrer durablement les bénéfices acquis.',
+      recommendations: {
+        foods_favor: [
+          'Aliments fermentés natuels (choucroute crue, kéfir d\'eau, miso non pasteurisé)',
+          'Diversité maximale de légumes (30 variétés/semaine, défi microbiote)',
+          'Fibres prébiotiques (oignon cuit, ail cuit, poireau, artichaut)',
+          'Réintroduction progressive gluten (pain au levain, épeautre)',
+          'Fruits frais variés (selon saison)',
+          'Noix et amandes (poignée/jour, trempées si mieux tolérées)',
+          'Légumineuses 2×/semaine',
+        ],
+        foods_limit: [
+          'Restrictions levées sauf intolérances individuelles confirmées',
+          'Garder vigilance sur ultra-transformés',
+        ],
+        cooking: ['Toutes méthodes', 'Variété encouragée'],
+        cooking_avoid: ['Carbonisation systématique'],
+        supplements: [
+          { name: 'Probiotique multi-souches', dose: '1 gélule', timing: 'matin à jeun' },
+          { name: 'Oméga-3', dose: '1 g', timing: 'midi' },
+          { name: 'Vitamine D3 + K2', dose: '2000 UI', timing: 'matin' },
+          { name: 'L-glutamine', dose: '5 g', timing: 'maintien matin si confort digestif maintenu' },
+        ],
+        clinical_notes:
+          'Consolidation du terrain restauré. Introduction des fermentés naturels pour ensemencer la flore. Défi des 30 légumes/semaine (Tim Spector) pour maximiser la diversité. Diminution progressive des suppléments thérapeutiques.',
+      },
     },
     {
       id: 'p5',
@@ -124,6 +207,30 @@ export const TEMPLATE_MICROBIOTE_5 = {
       narrative_present: 'Vous êtes dans la phase d\'équilibre durable. Votre nouveau terrain devient votre normalité.',
       narrative_past: 'Vous avez traversé votre parcours complet. Votre équilibre est désormais installé.',
       narrative_future: 'Votre parcours se conclura par une phase d\'équilibre durable.',
+      recommendations: {
+        foods_favor: [
+          'Régime méditerranéen flexitarien',
+          'Diversité maximale (30+ variétés végétales/semaine)',
+          'Poissons 2-3×/semaine',
+          'Cuissons douces majoritaires',
+          'Fermentés réguliers',
+          'Saisonnalité et localité privilégiées',
+          'Plaisir et convivialité conservés',
+        ],
+        foods_limit: [
+          'Pas de restriction stricte',
+          'Écouter signaux individuels',
+        ],
+        cooking: ['Toutes méthodes', 'Plaisir et variété'],
+        cooking_avoid: [],
+        supplements: [
+          { name: 'Oméga-3', dose: '1 g', timing: 'midi (entretien)' },
+          { name: 'Vitamine D3 + K2', dose: '1000-2000 UI', timing: 'matin (modulé selon dosage sanguin)' },
+          { name: 'Probiotique', dose: '1 gélule', timing: 'cure de 4 semaines tous les 3 mois' },
+        ],
+        clinical_notes:
+          'Phase de croisière. Plus de restrictions thérapeutiques. Maintien des bons réflexes acquis. Bilan biologique annuel recommandé pour ajuster D3 et oméga 3. Réactiver une phase plus intensive si signaux de rechute (fatigue chronique, ballonnements récurrents).',
+      },
     },
   ],
 };
