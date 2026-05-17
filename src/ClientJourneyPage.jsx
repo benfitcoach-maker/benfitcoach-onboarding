@@ -31,6 +31,7 @@ import PremiumSwitch from './components/PremiumSwitch';
 import SuiviCockpitTimeline from './components/SuiviCockpitTimeline';
 import CockpitErrorBoundary from './components/CockpitErrorBoundary';
 import ConsultationClinicalSummary from './components/ConsultationClinicalSummary';
+import ClientPulseSummary from './components/ClientPulseSummary';
 import { transitionToNextPhase, getActivePhase } from './services/protocolPhases';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
@@ -4245,6 +4246,12 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
           {/* ─── Grid 2 colonnes ─────────────────────────────────────── */}
           <div className="jrn-cockpit-grid">
             <div className="jrn-cockpit-col jrn-cockpit-col--main">
+
+          {/* V97.17.12 — Pouls clinique : agregation chips 3 dernieres consults.
+              S'affiche au-dessus de Consultations si au moins 1 consult avec
+              clinical existe. Permet a Anissa de voir l'evolution en 1 coup
+              d'oeil sans relire chaque consultation. */}
+          <ClientPulseSummary consultationsLog={consultationsLog} />
 
           {/* ─── Bloc 2 : Consultations ─────────────────────────── */}
           <div className="jrn-block">
