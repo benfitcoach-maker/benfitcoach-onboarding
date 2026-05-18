@@ -909,6 +909,23 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
     return () => { alive = false; };
   }, [showDraftsPanel]); // refresh apres close
 
+  // V97.23.5 — Realtime subscription : badge live sans refresh.
+  // Quand une transition de phase auto-genere un draft, le badge s'incremente
+  // automatiquement chez Anissa. Quand elle Accept/Refuse, decremente aussi.
+  useEffect(() => {
+    const channel = supabase
+      .channel('drafts-pending-live')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'plan_drafts_pending_review',
+      }, () => {
+        countAllPendingDrafts().then((c) => setPendingDraftsCount(c));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   // V97.22.2 — Preload phase recommendations DB → cache module au mount.
   // Idempotent (TTL 5 min). Fallback silencieux sur hardcode JS si DB down.
   useEffect(() => {
