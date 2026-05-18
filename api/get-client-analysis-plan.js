@@ -27,12 +27,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const ALLOWED_ORIGINS = [
-  'https://anissa-client-app.vercel.app',
-  'https://app.anissanutrition.ch',
-  'http://localhost:3000',
-  'http://localhost:5173',
-];
+// V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
+import { setCorsHeaders, requireAdminAuth } from './_security.js';
 
 // Pack credits (must match src/services/packSystem.js).
 // Duplicated here car packSystem.js est ESM côté Vite et cette fonction tourne
@@ -56,25 +52,15 @@ function inferCollectionMethod(category) {
   return 'lab_visit';
 }
 
-function setCorsHeaders(req, res) {
-  const origin = req.headers.origin;
-  if (
-    origin
-    && ALLOWED_ORIGINS.some((allowed) => origin === allowed || origin.endsWith('.vercel.app'))
-  ) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Max-Age', '86400');
-}
-
 export default async function handler(req, res) {
-  setCorsHeaders(req, res);
+  setCorsHeaders(req, res, 'GET, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  // V97.24.6 (audit critical fix CRIT-1) — Bearer admin obligatoire.
+  const auth = requireAdminAuth(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : null;
   if (!email) return res.status(400).json({ error: 'Email query param required' });

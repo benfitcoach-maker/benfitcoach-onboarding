@@ -47,21 +47,8 @@ const PROMPT_VERSION = '2026-05-12-v1';
 const BRIEFING_VERSION = 'v1';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
-const ALLOWED_ORIGINS = [
-  'https://app.anissanutrition.ch',
-  'http://localhost:5173',
-];
-
-function setCorsHeaders(req, res) {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.some((allowed) => origin === allowed || origin.endsWith('.vercel.app'))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Max-Age', '86400');
-}
+// V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
+import { setCorsHeaders, requireAdminAuth } from './_security.js';
 
 // ─── System prompt (versionné — PROMPT_VERSION) ────────────────────────
 const SYSTEM_PROMPT = `Tu es un assistant clinique préparatoire pour Anissa Deroubaix, nutritionniste fonctionnelle (TCMA Genève, école de praticienne en nutrition). Tu prépares un briefing court pour aider Anissa à arriver mieux préparée à son RDV d'anamnèse de 1h avec une nouvelle cliente.
@@ -165,10 +152,16 @@ async function callClaude(form) {
 
 // ─── Main handler ──────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  setCorsHeaders(req, res);
+  setCorsHeaders(req, res, 'POST, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // V97.24.6 (audit critical fix CRIT-2) — Bearer admin obligatoire.
+  // Avant ce patch, n'importe qui pouvait POST avec un clientId valide pour
+  // lire le questionnaire sante + declencher un call Claude facture Anissa.
+  const auth = requireAdminAuth(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   // ── Parse body
   let body;

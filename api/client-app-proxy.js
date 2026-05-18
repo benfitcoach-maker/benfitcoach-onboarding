@@ -68,8 +68,11 @@ export default async function handler(req, res) {
   }
 
   const { path, method = 'POST', payload = null, query = null } = body;
-  if (typeof path !== 'string' || !path.startsWith('/api/admin/')) {
-    res.status(400).json({ error: 'path invalide (doit commencer par /api/admin/)' });
+  // V97.24.6 (audit HIGH-2 fix) — strict path validation (anti SSRF / path traversal).
+  // Avant : startsWith permettait /api/admin/../public-endpoint ou %2e%2e.
+  // Apres : regex stricte sur segments alphanum + dash + slash.
+  if (typeof path !== 'string' || !/^\/api\/admin\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/i.test(path)) {
+    res.status(400).json({ error: 'path invalide (format: /api/admin/<segment>[/<segment>])' });
     return;
   }
   const upstreamMethod = String(method).toUpperCase();

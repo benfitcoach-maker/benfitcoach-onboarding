@@ -16,7 +16,14 @@ const fs = require("fs");
 const USE_LOCAL = process.argv.includes("--local");
 const BASE_URL = USE_LOCAL ? "http://localhost:5173" : "https://app.anissanutrition.ch";
 const OUTPUT_DIR = path.join(__dirname, "..", "audit", "saas");
-const PASSWORD = "Luxembourg2010#";
+// V97.24.6 (audit CRIT-5 fix) — Password via env, jamais hardcode.
+// ROTATE le password Supabase d'Anissa : le precedent est en git history
+// depuis commit 8168ce32 (4 mai 2026), considere compromis pour de bon.
+const PASSWORD = process.env.SAAS_AUDIT_PASSWORD;
+if (!PASSWORD) {
+  console.error("ERROR : Set SAAS_AUDIT_PASSWORD dans l'env (rotate Supabase password d'abord).");
+  process.exit(1);
+}
 
 async function shoot(page, name) {
   const out = path.join(OUTPUT_DIR, `${name}.png`);

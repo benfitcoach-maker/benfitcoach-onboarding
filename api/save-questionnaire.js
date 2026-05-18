@@ -29,27 +29,11 @@
 //   500 { error: "..." }
 
 import { createClient } from '@supabase/supabase-js';
-
-const ALLOWED_ORIGINS = [
-  'https://anissa-client-app.vercel.app',
-  'https://app.anissanutrition.ch',
-  'http://localhost:3000', // app cliente dev
-  'http://localhost:5173', // SaaS dev
-];
-
-function setCorsHeaders(req, res) {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.some((allowed) => origin === allowed || origin.endsWith('.vercel.app'))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Max-Age', '86400');
-}
+// V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
+import { setCorsHeaders, requireAdminAuth } from './_security.js';
 
 export default async function handler(req, res) {
-  setCorsHeaders(req, res);
+  setCorsHeaders(req, res, 'POST, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -57,6 +41,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // V97.24.6 (audit critical fix CRIT-6) — Bearer admin obligatoire.
+  // Avant ce patch, n'importe qui pouvait POST avec email + form arbitraire
+  // → data poisoning des form clientes (IA composer plan dangereux).
+  const auth = requireAdminAuth(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   // ── Parse body
   let body;

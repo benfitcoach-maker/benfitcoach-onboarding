@@ -22,44 +22,18 @@
 //   400/401/404/500
 
 import { createClient } from '@supabase/supabase-js';
-
-const ALLOWED_ORIGINS = [
-  'https://anissa-client-app.vercel.app',
-  'https://app.anissanutrition.ch',
-  'http://localhost:3000',
-  'http://localhost:5173',
-];
-
-function setCorsHeaders(req, res) {
-  const origin = req.headers.origin;
-  if (
-    origin
-    && ALLOWED_ORIGINS.some((allowed) => origin === allowed || origin.endsWith('.vercel.app'))
-  ) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Max-Age', '86400');
-}
+// V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
+import { setCorsHeaders, requireAdminAuth } from './_security.js';
 
 export default async function handler(req, res) {
-  setCorsHeaders(req, res);
+  setCorsHeaders(req, res, 'POST, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Auth : Bearer admin secret partagé avec l'app cliente
-  const expected = process.env.CLIENT_APP_ADMIN_SECRET;
-  if (!expected) {
-    return res.status(500).json({ error: 'CLIENT_APP_ADMIN_SECRET not configured server-side' });
-  }
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '');
-  if (token !== expected) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // V97.24.6 (audit critical fix CRIT-3 CORS regex) — Bearer admin obligatoire.
+  const auth = requireAdminAuth(req);
+  if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   // Parse body
   let body;
