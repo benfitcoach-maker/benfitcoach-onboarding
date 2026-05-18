@@ -6,7 +6,7 @@
 //   - startParcours / transitionToNextPhase : transitions OK
 //   - isValidProtocolPhases : guards de base
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   ALL_TEMPLATES,
   TEMPLATE_MICROBIOTE_5,
@@ -20,6 +20,10 @@ import {
   transitionToNextPhase,
   startParcours,
   isValidProtocolPhases,
+  preloadPhaseRecommendationsFromSupabase,
+  getLivePhaseRecommendations,
+  getPhaseRecoSource,
+  _resetPhaseRecoCache,
 } from '../protocolPhases';
 
 describe('ALL_TEMPLATES', () => {
@@ -214,5 +218,140 @@ describe('isValidProtocolPhases', () => {
     expect(isValidProtocolPhases(undefined)).toBe(false);
     expect(isValidProtocolPhases({})).toBe(false);
     expect(isValidProtocolPhases({ template: 'x' })).toBe(false);
+  });
+});
+
+// ─── V97.22.2 — preloadPhaseRecommendationsFromSupabase + cache DB ───────
+
+describe('preloadPhaseRecommendationsFromSupabase', () => {
+  beforeEach(() => {
+    _resetPhaseRecoCache();
+  });
+
+  it('Pas de supabase client → fallback hardcode', async () => {
+    const res = await preloadPhaseRecommendationsFromSupabase(null);
+    expect(res.ok).toBe(false);
+    expect(res.source).toBe('hardcode');
+    expect(getPhaseRecoSource()).toBe('hardcode');
+  });
+
+  it('DB erreur → fallback hardcode', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+        }),
+      }),
+    };
+    const res = await preloadPhaseRecommendationsFromSupabase(fakeSupabase);
+    expect(res.ok).toBe(false);
+    expect(res.source).toBe('hardcode');
+  });
+
+  it('Table vide → fallback hardcode', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({ data: [], error: null }),
+        }),
+      }),
+    };
+    const res = await preloadPhaseRecommendationsFromSupabase(fakeSupabase);
+    expect(res.ok).toBe(false);
+    expect(getPhaseRecoSource()).toBe('hardcode');
+  });
+
+  it('Cache les phases et getLive les utilise', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({
+            data: [{
+              template_key: 'microbiote_5_phases',
+              phase_id: 'p1',
+              phase_order: 1,
+              client_name: 'Apaisement DB',
+              clinical_name: 'Eradication DB',
+              foods_favor: ['kiwi DB'],
+              foods_limit: ['cafe DB'],
+              cooking: ['vapeur DB'],
+              cooking_avoid: ['grille DB'],
+              supplements: [{ name: 'X DB', dose: '5g', timing: 'matin' }],
+              clinical_notes: 'Notes DB',
+              enabled: true,
+            }],
+            error: null,
+          }),
+        }),
+      }),
+    };
+    const res = await preloadPhaseRecommendationsFromSupabase(fakeSupabase);
+    expect(res.ok).toBe(true);
+    expect(res.source).toBe('supabase');
+    expect(getPhaseRecoSource()).toBe('supabase');
+
+    const reco = getLivePhaseRecommendations('microbiote_5_phases', 'p1');
+    expect(reco.source).toBe('supabase');
+    expect(reco.client_name).toBe('Apaisement DB');
+    expect(reco.foods_favor).toContain('kiwi DB');
+  });
+
+  it('getLive avec phase non en DB → fallback hardcode pour cette phase', async () => {
+    // DB contient p1 mais pas p2 → getLive('p2') retombe sur hardcode
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({
+            data: [{
+              template_key: 'microbiote_5_phases',
+              phase_id: 'p1',
+              phase_order: 1,
+              client_name: 'Apaisement DB',
+              clinical_name: 'Eradication DB',
+              foods_favor: ['DB'],
+              foods_limit: [], cooking: [], cooking_avoid: [],
+              supplements: [], clinical_notes: '', enabled: true,
+            }],
+            error: null,
+          }),
+        }),
+      }),
+    };
+    await preloadPhaseRecommendationsFromSupabase(fakeSupabase);
+    const p2 = getLivePhaseRecommendations('microbiote_5_phases', 'p2');
+    expect(p2.source).toBe('hardcode');
+    // p2 = Reequilibrage dans le hardcode JS
+    expect(p2.clinical_name).toBe('Restitution');
+  });
+
+  it('getLive avec template inexistant → null', () => {
+    _resetPhaseRecoCache();
+    const reco = getLivePhaseRecommendations('inexistant', 'p1');
+    expect(reco).toBe(null);
+  });
+
+  it('Reset cache fait retomber sur hardcode', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({
+            data: [{
+              template_key: 'microbiote_5_phases', phase_id: 'p1', phase_order: 1,
+              client_name: 'DB', clinical_name: 'DB',
+              foods_favor: ['DB'], foods_limit: [], cooking: [], cooking_avoid: [],
+              supplements: [], clinical_notes: '', enabled: true,
+            }],
+            error: null,
+          }),
+        }),
+      }),
+    };
+    await preloadPhaseRecommendationsFromSupabase(fakeSupabase);
+    expect(getPhaseRecoSource()).toBe('supabase');
+    _resetPhaseRecoCache();
+    expect(getPhaseRecoSource()).toBe('hardcode');
+    const reco = getLivePhaseRecommendations('microbiote_5_phases', 'p1');
+    expect(reco.source).toBe('hardcode');
+    expect(reco.client_name).toBe('Apaisement digestif'); // hardcode
   });
 });

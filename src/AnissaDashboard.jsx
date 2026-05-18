@@ -22,6 +22,9 @@ import ClinicalGuardrailsPanel from './components/ClinicalGuardrailsPanel';
 import ObservabilityPanel from './components/ObservabilityPanel';
 // V97.22 — Cockpit recommandations par phase.
 import PhaseRecommendationsPanel from './components/PhaseRecommendationsPanel';
+// V97.22.2 — Preload phase recommendations depuis DB pour readiness V97.18 D-F.
+import { preloadPhaseRecommendationsFromSupabase } from './services/protocolPhases';
+import { supabase } from './supabaseClient';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -890,6 +893,20 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   const [showObservabilityPanel, setShowObservabilityPanel] = useState(false);
   // V97.22 — open/close cockpit phase recommendations
   const [showPhasesPanel, setShowPhasesPanel] = useState(false);
+
+  // V97.22.2 — Preload phase recommendations DB → cache module au mount.
+  // Idempotent (TTL 5 min). Fallback silencieux sur hardcode JS si DB down.
+  useEffect(() => {
+    preloadPhaseRecommendationsFromSupabase(supabase).then((res) => {
+      if (res.ok) {
+        // eslint-disable-next-line no-console
+        console.log(`[phase-reco] preload OK from ${res.source} (${res.count} phases)`);
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(`[phase-reco] preload fallback to hardcode: ${res.error}`);
+      }
+    });
+  }, []);
 
   // V97.11 — Ctrl+K (ou Cmd+K macOS) → focus la barre de recherche
   const searchInputRef = useRef(null);

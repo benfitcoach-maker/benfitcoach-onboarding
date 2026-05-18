@@ -330,6 +330,149 @@ export const ALL_TEMPLATES = {
   custom: TEMPLATE_CUSTOM,
 };
 
+// ─── CACHE DB phase_recommendations (V97.22.2) ───────────────────────────
+// Permet de lire les recommandations cliniques editees par Anissa via le
+// cockpit "📋 Phases" plutôt que le hardcode JS. Pattern identique aux
+// clinical_guardrails (cf _clinicalGuardrails.fr.js).
+//
+// Structure cache : { [`${templateKey}/${phaseId}`]: row }
+// TTL 5 min pour eviter les fetch repetes en session.
+//
+// IMPORTANT : ALL_TEMPLATES + instanceFromTemplate NE LISENT PAS ce cache.
+// Ils restent sur le hardcode JS pour la creation initiale du protocolPhases
+// JSONB (snapshot stable). Le cache DB sert aux consumers V97.18 D-F qui
+// veulent la version la plus a jour au moment d'une transition de phase.
+
+let _phaseRecoCache = null; // Map<string, row>
+let _phaseRecoCacheLoadedAt = 0;
+const PHASE_RECO_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Précharge les recommandations par phase depuis Supabase.
+ * Idempotent (no-op si TTL pas expire).
+ * Fallback silencieux sur hardcode si DB down.
+ *
+ * @param {object} supabaseClient
+ * @param {object} [opts]
+ * @param {boolean} [opts.force=false]
+ * @returns {Promise<{ ok: boolean, count?: number, source: 'supabase'|'hardcode', error?: string }>}
+ */
+export async function preloadPhaseRecommendationsFromSupabase(supabaseClient, opts = {}) {
+  const { force = false } = opts;
+  if (!force && _phaseRecoCache && (Date.now() - _phaseRecoCacheLoadedAt < PHASE_RECO_CACHE_TTL_MS)) {
+    return { ok: true, count: _phaseRecoCache.size, source: 'supabase' };
+  }
+  if (!supabaseClient || typeof supabaseClient.from !== 'function') {
+    return { ok: false, error: 'no supabase client', source: 'hardcode' };
+  }
+  try {
+    const { data, error } = await supabaseClient
+      .from('phase_recommendations')
+      .select('template_key, phase_id, phase_order, client_name, clinical_name, foods_favor, foods_limit, cooking, cooking_avoid, supplements, clinical_notes, enabled')
+      .eq('enabled', true);
+    if (error || !Array.isArray(data) || data.length === 0) {
+      return { ok: false, error: error?.message || 'empty table', source: 'hardcode' };
+    }
+    const map = new Map();
+    for (const row of data) {
+      map.set(`${row.template_key}/${row.phase_id}`, {
+        ...row,
+        foods_favor: row.foods_favor || [],
+        foods_limit: row.foods_limit || [],
+        cooking: row.cooking || [],
+        cooking_avoid: row.cooking_avoid || [],
+        supplements: row.supplements || [],
+        clinical_notes: row.clinical_notes || '',
+      });
+    }
+    _phaseRecoCache = map;
+    _phaseRecoCacheLoadedAt = Date.now();
+    return { ok: true, count: data.length, source: 'supabase' };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e), source: 'hardcode' };
+  }
+}
+
+/**
+ * Reset cache (utilise par tests).
+ * @internal
+ */
+export function _resetPhaseRecoCache() {
+  _phaseRecoCache = null;
+  _phaseRecoCacheLoadedAt = 0;
+}
+
+/**
+ * Source effective utilisee par getLivePhaseRecommendations.
+ * @returns {'supabase'|'hardcode'}
+ */
+export function getPhaseRecoSource() {
+  if (_phaseRecoCache && (Date.now() - _phaseRecoCacheLoadedAt < PHASE_RECO_CACHE_TTL_MS)) {
+    return 'supabase';
+  }
+  return 'hardcode';
+}
+
+/**
+ * Recupere les recommandations courantes (DB cache si frais, sinon hardcode)
+ * pour une (templateKey, phaseId) donnee.
+ *
+ * Shape retournee :
+ *   { client_name, clinical_name, foods_favor[], foods_limit[],
+ *     cooking[], cooking_avoid[], supplements[{name,dose,timing}],
+ *     clinical_notes, source: 'supabase'|'hardcode' }
+ *
+ * Retourne null si introuvable dans les 2 sources.
+ *
+ * @param {string} templateKey
+ * @param {string} phaseId
+ */
+export function getLivePhaseRecommendations(templateKey, phaseId) {
+  // 1. Try cache DB
+  if (_phaseRecoCache && (Date.now() - _phaseRecoCacheLoadedAt < PHASE_RECO_CACHE_TTL_MS)) {
+    const cached = _phaseRecoCache.get(`${templateKey}/${phaseId}`);
+    if (cached) {
+      return {
+        client_name: cached.client_name,
+        clinical_name: cached.clinical_name,
+        foods_favor: cached.foods_favor,
+        foods_limit: cached.foods_limit,
+        cooking: cached.cooking,
+        cooking_avoid: cached.cooking_avoid,
+        supplements: cached.supplements,
+        clinical_notes: cached.clinical_notes,
+        source: 'supabase',
+      };
+    }
+  }
+  // 2. Fallback hardcode JS
+  const template = ALL_TEMPLATES[templateKey];
+  if (!template?.phases) return null;
+  const phase = template.phases.find((p) => p.id === phaseId);
+  if (!phase) return null;
+  const reco = phase.recommendations;
+  if (!reco) {
+    return {
+      client_name: phase.client_name,
+      clinical_name: phase.clinical_name,
+      foods_favor: [], foods_limit: [], cooking: [], cooking_avoid: [],
+      supplements: [], clinical_notes: '',
+      source: 'hardcode',
+    };
+  }
+  return {
+    client_name: phase.client_name,
+    clinical_name: phase.clinical_name,
+    foods_favor: reco.foods_favor || [],
+    foods_limit: reco.foods_limit || [],
+    cooking: reco.cooking || [],
+    cooking_avoid: reco.cooking_avoid || [],
+    supplements: reco.supplements || [],
+    clinical_notes: reco.clinical_notes || '',
+    source: 'hardcode',
+  };
+}
+
 // ─── SUGGESTION TEMPLATE selon analyses ──────────────────────────────────
 
 /**
