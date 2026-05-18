@@ -15,13 +15,20 @@
 // auto-invalide post-save (force refresh dans clinicalGuardrailsService).
 
 import { useState, useEffect } from 'react';
-import { listAllGuardrails, updateGuardrail } from '../services/clinicalGuardrailsService';
+import { listAllGuardrails, updateGuardrail, listAuditLog } from '../services/clinicalGuardrailsService';
+// V97.19.1 — Indicateur source DB vs hardcode (debug/transparence)
+import { getGuardrailsSource } from '../services/prompts/nutrition/_clinicalGuardrails.fr';
 
 export default function ClinicalGuardrailsPanel({ onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [guardrails, setGuardrails] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
+  // V97.19.1 — Onglet ('matrix' = edition, 'history' = audit log)
+  const [tab, setTab] = useState('matrix');
+  const [auditEntries, setAuditEntries] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const source = getGuardrailsSource(); // 'supabase' ou 'hardcode'
 
   useEffect(() => {
     let alive = true;
@@ -40,8 +47,22 @@ export default function ClinicalGuardrailsPanel({ onClose }) {
     return () => { alive = false; };
   }, []);
 
-  const handleSave = async (id, patch) => {
-    const res = await updateGuardrail(id, patch);
+  // V97.19.1 — Charge l'audit log uniquement au switch d'onglet (lazy)
+  useEffect(() => {
+    if (tab !== 'history') return;
+    let alive = true;
+    (async () => {
+      setAuditLoading(true);
+      const res = await listAuditLog(20);
+      if (!alive) return;
+      if (res.ok) setAuditEntries(res.data);
+      setAuditLoading(false);
+    })();
+    return () => { alive = false; };
+  }, [tab]);
+
+  const handleSave = async (id, patch, beforeState) => {
+    const res = await updateGuardrail(id, patch, beforeState);
     if (res.ok) {
       // Reload list pour refleter le serveur
       const refresh = await listAllGuardrails();
@@ -54,43 +75,75 @@ export default function ClinicalGuardrailsPanel({ onClose }) {
     <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={modalStyle}>
         <div style={headerStyle}>
-          <div>
+          <div style={{ flex: 1 }}>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
               Garde-fous cliniques
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b6f6b' }}>
               Matrice des règles non-négociables injectées dans le composer IA.
-              {' '}Édite les phrases interdites, micronutriments, évictions par profil.
             </p>
+            {/* V97.19.1 — Indicateur source effectif */}
+            <div style={{ marginTop: 6, fontSize: 11, color: '#6b6f6b' }}>
+              Source active :{' '}
+              <span style={{
+                fontWeight: 600,
+                color: source === 'supabase' ? '#2E5E3E' : '#785a1a',
+              }}>
+                {source === 'supabase' ? '✓ Supabase (DB)' : '⚠ Fallback hardcode JS'}
+              </span>
+              {source === 'hardcode' && (
+                <span style={{ marginLeft: 8, fontStyle: 'italic' }}>
+                  — DB injoignable ou cache expiré, recharge la page.
+                </span>
+              )}
+            </div>
           </div>
           <button onClick={onClose} style={closeBtnStyle} title="Fermer">×</button>
         </div>
 
+        {/* V97.19.1 — Tabs */}
+        <div style={{ display: 'flex', gap: 4, padding: '0 22px', borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+          <TabButton active={tab === 'matrix'} onClick={() => setTab('matrix')}>
+            Matrice ({guardrails.length})
+          </TabButton>
+          <TabButton active={tab === 'history'} onClick={() => setTab('history')}>
+            Historique
+          </TabButton>
+        </div>
+
         <div style={bodyStyle}>
-          {loading && <div style={{ padding: 20, textAlign: 'center', color: '#6b6f6b' }}>Chargement...</div>}
-          {error && (
-            <div style={{
-              padding: 12, background: 'rgba(184,64,64,.08)',
-              border: '1px solid rgba(184,64,64,.3)', borderRadius: 8,
-              color: '#a04040', fontSize: 13,
-            }}>
-              Erreur : {error}
-            </div>
+          {tab === 'matrix' && (
+            <>
+              {loading && <div style={{ padding: 20, textAlign: 'center', color: '#6b6f6b' }}>Chargement...</div>}
+              {error && (
+                <div style={{
+                  padding: 12, background: 'rgba(184,64,64,.08)',
+                  border: '1px solid rgba(184,64,64,.3)', borderRadius: 8,
+                  color: '#a04040', fontSize: 13,
+                }}>
+                  Erreur : {error}
+                </div>
+              )}
+              {!loading && !error && guardrails.length === 0 && (
+                <div style={{ padding: 20, textAlign: 'center', color: '#6b6f6b' }}>
+                  Aucun guardrail en base. Applique la migration V97.18.1 (seed).
+                </div>
+              )}
+              {!loading && !error && guardrails.map((g) => (
+                <GuardrailCard
+                  key={g.id}
+                  guardrail={g}
+                  expanded={expandedId === g.id}
+                  onToggleExpand={() => setExpandedId(expandedId === g.id ? null : g.id)}
+                  onSave={(patch) => handleSave(g.id, patch, g)}
+                />
+              ))}
+            </>
           )}
-          {!loading && !error && guardrails.length === 0 && (
-            <div style={{ padding: 20, textAlign: 'center', color: '#6b6f6b' }}>
-              Aucun guardrail en base. Applique la migration V97.18.1 (seed).
-            </div>
+
+          {tab === 'history' && (
+            <HistorySection entries={auditEntries} loading={auditLoading} />
           )}
-          {!loading && !error && guardrails.map((g) => (
-            <GuardrailCard
-              key={g.id}
-              guardrail={g}
-              expanded={expandedId === g.id}
-              onToggleExpand={() => setExpandedId(expandedId === g.id ? null : g.id)}
-              onSave={(patch) => handleSave(g.id, patch)}
-            />
-          ))}
         </div>
       </div>
     </div>
@@ -473,6 +526,126 @@ function VocabEditor({ label, hint, value, onChange }) {
           Ajouter
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── TabButton ──────────────────────────────────────────────────────────
+
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'transparent', border: 'none',
+        padding: '10px 14px', fontSize: 13,
+        fontWeight: active ? 600 : 400,
+        color: active ? '#2a2d2a' : '#6b6f6b',
+        borderBottom: `2px solid ${active ? '#2E5E3E' : 'transparent'}`,
+        cursor: 'pointer',
+        marginBottom: -1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── HistorySection : audit log lecture ──────────────────────────────────
+
+function HistorySection({ entries, loading }) {
+  if (loading) {
+    return <div style={{ padding: 20, textAlign: 'center', color: '#6b6f6b' }}>Chargement…</div>;
+  }
+  if (!entries || entries.length === 0) {
+    return (
+      <div style={{
+        padding: 20, textAlign: 'center', color: '#6b6f6b', fontSize: 13,
+      }}>
+        Aucune modification enregistrée.
+        <div style={{ fontSize: 11, marginTop: 6, fontStyle: 'italic' }}>
+          Les modifs faites depuis ce cockpit seront tracées ici (qui, quand, quoi).
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      {entries.map((e) => (
+        <AuditEntry key={e.id} entry={e} />
+      ))}
+    </div>
+  );
+}
+
+function AuditEntry({ entry }) {
+  const [showDiff, setShowDiff] = useState(false);
+  const diff = entry.diff || {};
+  const changedFields = Object.keys(diff);
+  const date = entry.created_at ? new Date(entry.created_at) : null;
+
+  return (
+    <div style={{
+      marginBottom: 8,
+      background: 'white',
+      border: '1px solid rgba(0,0,0,.08)',
+      borderRadius: 8,
+      padding: '10px 14px',
+      fontSize: 12,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <div>
+          <strong style={{ color: '#2a2d2a' }}>{entry.profile_key}</strong>
+          <span style={{ marginLeft: 6, color: '#6b6f6b' }}>
+            · {entry.action}
+          </span>
+          {entry.changed_by && (
+            <span style={{ marginLeft: 6, color: '#6b6f6b' }}>
+              · par <code style={{ fontSize: 11 }}>{entry.changed_by}</code>
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: 11, color: '#9a9d9a' }}>
+          {date ? date.toLocaleString('fr-CH', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+          }) : '—'}
+        </span>
+      </div>
+      {changedFields.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: '#6b6f6b' }}>
+            {changedFields.length} champ{changedFields.length > 1 ? 's' : ''} modifié{changedFields.length > 1 ? 's' : ''} :{' '}
+            {changedFields.map((f) => (
+              <code key={f} style={{
+                fontSize: 10, padding: '1px 6px', marginRight: 4,
+                background: 'rgba(0,0,0,.04)', borderRadius: 4,
+              }}>{f}</code>
+            ))}
+            <button
+              onClick={() => setShowDiff(!showDiff)}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: '#7e5ec7', fontSize: 11, padding: 0, marginLeft: 4,
+                textDecoration: 'underline',
+              }}
+            >
+              {showDiff ? 'masquer' : 'voir diff'}
+            </button>
+          </div>
+          {showDiff && (
+            <pre style={{
+              marginTop: 6, padding: 10,
+              background: 'rgba(0,0,0,.04)', borderRadius: 6,
+              fontSize: 10.5, color: '#2a2d2a',
+              maxHeight: 240, overflow: 'auto',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}>
+              {JSON.stringify(diff, null, 2)}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }

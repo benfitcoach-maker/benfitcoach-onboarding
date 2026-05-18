@@ -9,8 +9,29 @@
 // Pas de create/delete : les 7 profils sont figes cote code (cf
 // detectClinicalGuardrails dans _clinicalGuardrails.fr.js).
 
-import { supabase } from '../supabaseClient';
+import { supabase, getCurrentUser } from '../supabaseClient';
 import { preloadGuardrailsFromSupabase } from './prompts/nutrition/_clinicalGuardrails.fr';
+
+// V97.19.1 — Fields trackes dans l'audit log (memes que le whitelist update).
+const TRACKED_FIELDS = ['display_name', 'forbidden_phrases', 'required_phrases',
+  'micronutrients', 'evictions', 'precaution_vocab', 'enabled'];
+
+/**
+ * Calcule un diff minimal entre before et after sur les TRACKED_FIELDS.
+ * Renvoie un objet { fieldName: { before, after } } limite aux fields changes.
+ */
+function computeDiff(before, after) {
+  const diff = {};
+  if (!before || !after) return diff;
+  for (const key of TRACKED_FIELDS) {
+    const b = before[key];
+    const a = after[key];
+    if (JSON.stringify(b) !== JSON.stringify(a)) {
+      diff[key] = { before: b, after: a };
+    }
+  }
+  return diff;
+}
 
 /**
  * Liste tous les guardrails depuis la DB (enabled + disabled).
@@ -32,23 +53,22 @@ export async function listAllGuardrails() {
 }
 
 /**
- * Met a jour un guardrail (par id).
+ * Met a jour un guardrail (par id) + ecrit un audit log si beforeState fourni.
  * Patch fields uniquement : pas besoin de tout passer.
  *
  * @param {string} id - UUID du guardrail
  * @param {object} patch - Fields a updater (display_name, forbidden_phrases,
  *   required_phrases, micronutrients, evictions, precaution_vocab, enabled)
- * @returns {Promise<{ ok: boolean, data?: object, error?: string }>}
+ * @param {object} [beforeState] - L'etat AVANT modification (pour computer le diff
+ *   et l'inscrire dans clinical_guardrails_audit). Optionnel (sans, pas de log).
+ * @returns {Promise<{ ok: boolean, data?: object, error?: string, auditLogged?: boolean }>}
  */
-export async function updateGuardrail(id, patch) {
+export async function updateGuardrail(id, patch, beforeState = null) {
   if (!id) return { ok: false, error: 'id manquant' };
   if (!patch || typeof patch !== 'object') return { ok: false, error: 'patch invalide' };
 
-  // Whitelist des fields editables
-  const editable = ['display_name', 'forbidden_phrases', 'required_phrases',
-    'micronutrients', 'evictions', 'precaution_vocab', 'enabled'];
   const cleanPatch = {};
-  for (const key of editable) {
+  for (const key of TRACKED_FIELDS) {
     if (key in patch) cleanPatch[key] = patch[key];
   }
   if (Object.keys(cleanPatch).length === 0) {
@@ -64,9 +84,39 @@ export async function updateGuardrail(id, patch) {
       .select()
       .single();
     if (error) return { ok: false, error: error.message };
+
+    // V97.19.1 — Audit log si beforeState fourni et qu'il y a au moins un changement.
+    let auditLogged = false;
+    if (beforeState) {
+      try {
+        const diff = computeDiff(beforeState, data);
+        if (Object.keys(diff).length > 0) {
+          let changedBy = null;
+          try {
+            const user = await getCurrentUser();
+            changedBy = user?.email || user?.id || null;
+          } catch { /* noop */ }
+          const { error: auditError } = await supabase
+            .from('clinical_guardrails_audit')
+            .insert({
+              guardrail_id: id,
+              profile_key: data.profile_key,
+              action: 'update',
+              changed_by: changedBy,
+              diff,
+            });
+          if (!auditError) auditLogged = true;
+          // L'erreur audit n'est pas bloquante : on a deja update la regle principale
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[guardrails-audit] insert failed:', e?.message);
+      }
+    }
+
     // Invalide le cache pour que la prochaine generation utilise les nouvelles regles
     await preloadGuardrailsFromSupabase(supabase, { force: true });
-    return { ok: true, data };
+    return { ok: true, data, auditLogged };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
   }
