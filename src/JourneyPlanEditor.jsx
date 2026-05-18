@@ -39,6 +39,8 @@ import {
 import { rewriteSlopSection, replaceLineInPlan } from './services/rewriteSlopSection';
 // V97.20 (OBS-1) — Tracking des generations de plans.
 import { recordPlanGeneration, recordSlopAction, updateSlopFlagsCount } from './services/planObservability';
+// V97.22.3 (V97.18 Phase D) — Phase active du parcours injectee dans le composer.
+import { getActivePhase, getActivePhaseWeek } from './services/protocolPhases';
 // V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
 // Utilisé uniquement quand composerBeta === true (path composer opt-in).
 import { buildClinicalContext } from './services/clinical/buildClinicalContext';
@@ -778,11 +780,26 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     try {
       const form = client.form || {};
       const planMode = form.consultationType === 'oneshot' ? 'oneshot' : 'followup';
+
+      // V97.18 Phase D — Extrait la phase active du parcours pour injecter
+      // ses recommandations cliniques (foods_favor/limit, supplements, etc.)
+      // dans le composer. Source : consultation.protocol_phases ou client.protocol_phases.
+      // Best-effort : null si pas de parcours active (legacy ou pas encore demarre).
+      const pp = consultation?.protocol_phases || client?.protocol_phases || null;
+      const activePhaseObj = getActivePhase(pp);
+      const weekInfo = activePhaseObj ? getActivePhaseWeek(pp) : null;
+      const activePhase = (pp?.template && activePhaseObj?.id) ? {
+        templateKey: pp.template,
+        phaseId: activePhaseObj.id,
+        weekNumber: weekInfo?.weekNumber,
+      } : null;
+
       const opts = {
         isFollowup: false,
         clientFormule: client.formule || 'nutrition',
         followupWeek: 0,
         planMode,
+        activePhase,
       };
 
       // Phase AN : choix du builder selon le toggle composer beta

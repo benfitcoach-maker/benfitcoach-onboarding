@@ -984,18 +984,26 @@ import { composeSystemPromptFr } from './composer.fr';
 
 export function buildSystemPromptFrV2(form, opts = {}, options = {}) {
   if (options.useComposer) {
-    const { prompt, profile, blocked } = composeSystemPromptFr(
+    // V97.x Phase 2 fix : pass-through guardrails (audit post-gen).
+    // V97.18 Phase D : pass-through phaseRecommendations (observability + UI).
+    const composerResult = composeSystemPromptFr(
       form,
       opts,
       options.clinicalContext || null,
     );
-    if (blocked) {
+    if (composerResult.blocked) {
       // Caller must check this before calling the AI. We return null for
       // the prompt so any naive consumer fails loudly instead of sending
       // a generic plan to a high-risk client.
-      return { prompt: null, profile, blocked: true };
+      return { prompt: null, profile: composerResult.profile, blocked: true };
     }
-    return { prompt, profile, blocked: false };
+    return {
+      prompt: composerResult.prompt,
+      profile: composerResult.profile,
+      blocked: false,
+      guardrails: composerResult.guardrails || [],
+      phaseRecommendations: composerResult.phaseRecommendations || null,
+    };
   }
   return {
     prompt: buildSystemPromptFr(form, opts),

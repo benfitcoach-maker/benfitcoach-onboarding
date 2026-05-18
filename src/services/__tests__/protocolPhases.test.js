@@ -24,6 +24,7 @@ import {
   getLivePhaseRecommendations,
   getPhaseRecoSource,
   _resetPhaseRecoCache,
+  buildPhaseRecommendationsBlockFr,
 } from '../protocolPhases';
 
 describe('ALL_TEMPLATES', () => {
@@ -328,6 +329,38 @@ describe('preloadPhaseRecommendationsFromSupabase', () => {
     _resetPhaseRecoCache();
     const reco = getLivePhaseRecommendations('inexistant', 'p1');
     expect(reco).toBe(null);
+  });
+
+  it('buildPhaseRecommendationsBlockFr produit un bloc structure', () => {
+    const reco = {
+      client_name: 'Apaisement digestif',
+      clinical_name: 'Eradication',
+      foods_favor: ['Riz blanc', 'Bouillon'],
+      foods_limit: ['Gluten', 'Alcool'],
+      cooking: ['Vapeur'],
+      cooking_avoid: ['Friture'],
+      supplements: [{ name: 'L-glutamine', dose: '5 g', timing: 'matin' }],
+      clinical_notes: 'Phase d\'apaisement test.',
+      source: 'supabase',
+    };
+    const block = buildPhaseRecommendationsBlockFr(reco, { weekNumber: 2 });
+    expect(block).toContain('RECOMMANDATIONS DE LA PHASE ACTIVE');
+    expect(block).toContain('Apaisement digestif');
+    expect(block).toContain('clinique : Eradication');
+    expect(block).toContain('Semaine en cours : 2');
+    expect(block).toContain('Riz blanc');
+    expect(block).toContain('Gluten');
+    expect(block).toContain('L-glutamine — 5 g — matin');
+    expect(block).toContain('Phase d\'apaisement test.');
+  });
+
+  it('buildPhaseRecommendationsBlockFr retourne \'\' si null ou vide', () => {
+    expect(buildPhaseRecommendationsBlockFr(null)).toBe('');
+    expect(buildPhaseRecommendationsBlockFr({})).toBe('');
+    expect(buildPhaseRecommendationsBlockFr({
+      foods_favor: [], foods_limit: [], cooking: [], cooking_avoid: [],
+      supplements: [], clinical_notes: '',
+    })).toBe('');
   });
 
   it('Reset cache fait retomber sur hardcode', async () => {

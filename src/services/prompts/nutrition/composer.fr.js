@@ -35,6 +35,10 @@ import { formatPrioritizedObjectivesFr } from './_objectives.fr';
 // Phrases interdites + vocab précaution injectés en TÊTE du prompt pour
 // que le LLM les voie en premier (priorité maximale).
 import { detectClinicalGuardrails, buildGuardrailsBlockFr } from './_clinicalGuardrails.fr';
+// V97.18 Phase D : recommandations cliniques de la phase active du parcours.
+// Permet a Anissa d'editer la matrice via cockpit "📋 Phases" et que les
+// generations de plans alignent automatiquement les recommandations.
+import { getLivePhaseRecommendations, buildPhaseRecommendationsBlockFr } from '../../protocolPhases';
 
 /**
  * Build the FR system prompt with profile-aware composition.
@@ -69,7 +73,12 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
     return { prompt: '', profile, blocked: true };
   }
 
-  const { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = opts;
+  const {
+    isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup',
+    // V97.18 Phase D : context de la phase active du parcours (optionnel).
+    // Shape : { templateKey: string, phaseId: string, weekNumber?: number }
+    activePhase = null,
+  } = opts;
   const parts = [SYSTEM_PROMPT_FR, SWISS_BRANDS_PROMPT_FR];
 
   // V97.x Phase 1 — Garde-fous cliniques (urgent risque légal).
@@ -80,6 +89,18 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
   const guardrailsBlock = buildGuardrailsBlockFr(guardrails);
   if (guardrailsBlock) {
     parts.push(guardrailsBlock);
+  }
+
+  // V97.18 Phase D — Recommandations de la phase active du parcours.
+  // Source : cache DB (cockpit "📋 Phases") avec fallback hardcode JS.
+  // Le LLM aligne le plan sur foods_favor/foods_limit/cooking/supplements.
+  let phaseReco = null;
+  if (activePhase?.templateKey && activePhase?.phaseId) {
+    phaseReco = getLivePhaseRecommendations(activePhase.templateKey, activePhase.phaseId);
+    const phaseBlock = buildPhaseRecommendationsBlockFr(phaseReco, {
+      weekNumber: activePhase.weekNumber,
+    });
+    if (phaseBlock) parts.push(phaseBlock);
   }
 
   // Supplements gate (unchanged from legacy path).
@@ -142,5 +163,8 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
     // auditPlanForGuardrails(plan, guardrails) après réception du draft IA
     // pour vérifier qu'aucune phrase interdite n'est passée.
     guardrails,
+    // V97.18 Phase D — Recommandations de la phase active exposees pour
+    // observability + UI. Null si pas de phase active fournie.
+    phaseRecommendations: phaseReco,
   };
 }

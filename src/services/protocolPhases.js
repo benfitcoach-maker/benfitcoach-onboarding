@@ -473,6 +473,86 @@ export function getLivePhaseRecommendations(templateKey, phaseId) {
   };
 }
 
+/**
+ * Construit un bloc de prompt FR a injecter dans le composer pour
+ * transmettre les recommandations de la phase active au LLM.
+ * V97.18 Phase D.
+ *
+ * Format texte structure (pas markdown lourd, le LLM lit plus vite des
+ * sections etiquetees en plain text).
+ *
+ * @param {object|null} reco - Output de getLivePhaseRecommendations
+ * @param {object} [opts]
+ * @param {number} [opts.weekNumber] - Semaine courante dans la phase (info contextuelle)
+ * @returns {string} Bloc texte a concatener au prompt, '' si reco null/vide
+ */
+export function buildPhaseRecommendationsBlockFr(reco, opts = {}) {
+  if (!reco) return '';
+  const { weekNumber } = opts;
+
+  // Si tout est vide (cas TEMPLATE_NUTRITION_2 sans recommendations) → skip
+  const hasContent =
+    (reco.foods_favor?.length || 0) +
+    (reco.foods_limit?.length || 0) +
+    (reco.cooking?.length || 0) +
+    (reco.cooking_avoid?.length || 0) +
+    (reco.supplements?.length || 0) +
+    (reco.clinical_notes?.trim()?.length || 0) > 0;
+  if (!hasContent) return '';
+
+  const lines = [];
+  lines.push('// ═══ RECOMMANDATIONS DE LA PHASE ACTIVE ═══');
+  lines.push('');
+  const phaseLabel = reco.client_name
+    ? `${reco.client_name}${reco.clinical_name ? ` (clinique : ${reco.clinical_name})` : ''}`
+    : (reco.clinical_name || 'Phase courante');
+  lines.push(`Phase : ${phaseLabel}`);
+  if (Number.isFinite(weekNumber) && weekNumber > 0) {
+    lines.push(`Semaine en cours : ${weekNumber}`);
+  }
+  lines.push('');
+
+  if (reco.foods_favor?.length) {
+    lines.push('À PRIVILÉGIER dans le plan :');
+    for (const item of reco.foods_favor) lines.push(`  - ${item}`);
+    lines.push('');
+  }
+  if (reco.foods_limit?.length) {
+    lines.push('À LIMITER ou ÉVITER (phase therapeutique) :');
+    for (const item of reco.foods_limit) lines.push(`  - ${item}`);
+    lines.push('');
+  }
+  if (reco.cooking?.length) {
+    lines.push(`MODES DE CUISSON recommandés : ${reco.cooking.join(', ')}`);
+  }
+  if (reco.cooking_avoid?.length) {
+    lines.push(`Cuissons à éviter : ${reco.cooking_avoid.join(', ')}`);
+  }
+  if (reco.cooking?.length || reco.cooking_avoid?.length) lines.push('');
+
+  if (reco.supplements?.length) {
+    lines.push('COMPLÉMENTS du protocole (à mentionner explicitement dans le plan si la cliente est ouverte) :');
+    for (const s of reco.supplements) {
+      const parts = [s.name];
+      if (s.dose) parts.push(s.dose);
+      if (s.timing) parts.push(s.timing);
+      lines.push(`  - ${parts.join(' — ')}`);
+    }
+    lines.push('');
+  }
+
+  if (reco.clinical_notes?.trim()) {
+    lines.push('Notes cliniques de la phase :');
+    lines.push(`  ${reco.clinical_notes.trim()}`);
+    lines.push('');
+  }
+
+  lines.push('Regle : cette phase est therapeutique. Aligne le plan sur ces recommandations.');
+  lines.push('Les aliments "à privilégier" doivent dominer ; les "à limiter" ne doivent pas apparaître comme suggestions principales.');
+
+  return lines.join('\n');
+}
+
 // ─── SUGGESTION TEMPLATE selon analyses ──────────────────────────────────
 
 /**
