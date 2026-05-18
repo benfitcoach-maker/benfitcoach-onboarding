@@ -15,6 +15,8 @@ import { useState, useEffect } from 'react';
 import { listPlanDrafts, acceptPlanDraft, refusePlanDraft } from '../services/planDraftsService';
 import { saveNutritionConsultation } from '../store';
 import { COACH_IDENTITY } from '../services/coachIdentity';
+// V97.23.2 — Accept+Publish atomic workflow (push notif cliente automatique)
+import { publishConsultationToClientApp } from '../services/publishToClientApp';
 
 export default function PendingDraftsPanel({ onClose, clientsById }) {
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,64 @@ export default function PendingDraftsPanel({ onClose, clientsById }) {
         setActionState({ ok: true, msg: 'Brouillon accepte. Consultation creee (status à valider).' });
       }
       // 3. Reload list et clear selected
+      setSelectedDraft(null);
+      await refresh();
+    } catch (e) {
+      setActionState({ ok: false, msg: e?.message || 'erreur conversion' });
+    }
+  };
+
+  /**
+   * V97.23.2 — Workflow atomique Accept+Publish.
+   * Cree la consultation (statut 'publie' direct), publie vers l'app cliente
+   * (qui declenche push notif PWA), marque le draft accepted. Best-effort
+   * sur la publication : si echec, la consultation reste creee, Anissa peut
+   * re-publier manuellement via flow normal.
+   */
+  const handleAcceptAndPublish = async (draft, draftTextOverride, note) => {
+    setActionState(null);
+    const finalText = (draftTextOverride && draftTextOverride.trim().length > 0)
+      ? draftTextOverride
+      : draft.draft_text;
+    const client = clientsById?.[draft.client_id];
+    if (!client) {
+      setActionState({ ok: false, msg: 'Cliente introuvable dans la liste — impossible de publier.' });
+      return;
+    }
+    try {
+      const consultation = {
+        clientId: draft.client_id,
+        nutritionPlan: finalText,
+        createdAt: new Date().toISOString(),
+        status: 'publie',
+        consultantName: COACH_IDENTITY?.name || 'Anissa',
+        sourceDraftId: draft.id,
+        sourceMetadata: draft.trigger_metadata || null,
+      };
+      await saveNutritionConsultation(consultation);
+      // Publie a l'app cliente (push notif declenche)
+      let publishedOk = false;
+      let publishError = null;
+      try {
+        await publishConsultationToClientApp(client, consultation);
+        publishedOk = true;
+      } catch (pe) {
+        publishError = pe?.message || 'erreur publication';
+      }
+      const accRes = await acceptPlanDraft(draft.id, note);
+      if (publishedOk) {
+        setActionState({
+          ok: true,
+          msg: accRes.ok
+            ? 'Brouillon accepte et publie a la cliente. Push notif envoye.'
+            : `Publie OK mais marquage draft echec : ${accRes.error}`,
+        });
+      } else {
+        setActionState({
+          ok: false,
+          msg: `Consultation creee (statut publie) mais publication app cliente echec : ${publishError}. Re-publie via flow normal SaaS.`,
+        });
+      }
       setSelectedDraft(null);
       await refresh();
     } catch (e) {
@@ -156,6 +216,7 @@ export default function PendingDraftsPanel({ onClose, clientsById }) {
               clientsById={clientsById}
               onBack={() => setSelectedDraft(null)}
               onAccept={handleAccept}
+              onAcceptAndPublish={handleAcceptAndPublish}
               onRefuse={handleRefuse}
             />
           )}
@@ -218,10 +279,10 @@ function DraftRow({ draft, onClick }) {
 
 // ─── DraftDetail (split view editor + actions) ──────────────────────────
 
-function DraftDetail({ draft, clientsById, onBack, onAccept, onRefuse }) {
+function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish, onRefuse }) {
   const [editedText, setEditedText] = useState(draft.draft_text);
   const [note, setNote] = useState('');
-  const [confirming, setConfirming] = useState(null); // null | 'accept' | 'refuse'
+  const [confirming, setConfirming] = useState(null); // null | 'accept' | 'acceptPublish' | 'refuse'
   const meta = draft.trigger_metadata || {};
   const c = clientsById?.[draft.client_id];
   const clientLabel = c?.prenom || c?.form?.prenom || `client ${draft.client_id.slice(0, 8)}…`;
@@ -299,14 +360,27 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onRefuse }) {
         {confirming === null && (
           <>
             <button
-              onClick={() => setConfirming('accept')}
+              onClick={() => setConfirming('acceptPublish')}
               style={{
                 background: '#2E5E3E', color: 'white', border: 'none',
                 padding: '8px 18px', borderRadius: 6,
                 fontSize: 13, fontWeight: 600, cursor: 'pointer',
               }}
+              title="Crée la consultation, publie immédiatement à l'app cliente, déclenche push notif"
             >
-              ✓ Accepter et créer consultation
+              ✓ Accepter et publier
+            </button>
+            <button
+              onClick={() => setConfirming('accept')}
+              style={{
+                background: 'rgba(46,94,62,.12)', color: '#2E5E3E',
+                border: '1px solid rgba(46,94,62,.4)',
+                padding: '8px 18px', borderRadius: 6,
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+              title="Crée juste la consultation en statut 'à valider' (Anissa publie plus tard)"
+            >
+              ✓ Accepter (à valider)
             </button>
             <button
               onClick={() => setConfirming('refuse')}
@@ -319,6 +393,30 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onRefuse }) {
             >
               Refuser
             </button>
+          </>
+        )}
+
+        {confirming === 'acceptPublish' && (
+          <>
+            <span style={{ fontSize: 12, color: '#2a2d2a' }}>
+              Publier immédiatement à la cliente ? Push notif sera envoyé.
+            </span>
+            <button
+              onClick={() => { setConfirming(null); onAcceptAndPublish(draft, editedText, note); }}
+              style={{
+                background: '#2E5E3E', color: 'white', border: 'none',
+                padding: '6px 14px', borderRadius: 6,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}
+            >Confirmer publier</button>
+            <button
+              onClick={() => setConfirming(null)}
+              style={{
+                background: 'transparent', border: '1px solid rgba(0,0,0,.15)',
+                padding: '5px 12px', borderRadius: 6,
+                fontSize: 12, cursor: 'pointer',
+              }}
+            >Annuler</button>
           </>
         )}
 
