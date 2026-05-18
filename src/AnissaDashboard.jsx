@@ -20,6 +20,8 @@ import AnalysisPlansFollowupBlock from './AnalysisPlansFollowupBlock';
 import ClinicalGuardrailsPanel from './components/ClinicalGuardrailsPanel';
 // V97.21 (OBS-2) — Dashboard stats observability.
 import ObservabilityPanel from './components/ObservabilityPanel';
+// V97.22 — Cockpit recommandations par phase.
+import PhaseRecommendationsPanel from './components/PhaseRecommendationsPanel';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -886,6 +888,8 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   const [showGuardrailsPanel, setShowGuardrailsPanel] = useState(false);
   // V97.21 (OBS-2) — open/close dashboard stats observability
   const [showObservabilityPanel, setShowObservabilityPanel] = useState(false);
+  // V97.22 — open/close cockpit phase recommendations
+  const [showPhasesPanel, setShowPhasesPanel] = useState(false);
 
   // V97.11 — Ctrl+K (ou Cmd+K macOS) → focus la barre de recherche
   const searchInputRef = useRef(null);
@@ -1093,6 +1097,19 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           }}
         >
           {syncing ? 'Sync...' : syncResult ? `${syncResult.synced} synced` : 'Sync cloud'}
+        </button>
+        {/* V97.22 — bouton ouverture cockpit recommandations par phase */}
+        <button
+          onClick={() => setShowPhasesPanel(true)}
+          title="Éditer les recommandations cliniques par phase du parcours (aliments, cuissons, compléments)"
+          style={{
+            padding: '8px 12px', borderRadius: 8,
+            border: '1px solid rgba(255,255,255,.1)', background: 'none',
+            color: 'rgba(255,255,255,.5)', cursor: 'pointer',
+            fontSize: '.75rem', marginRight: 8, minHeight: 36,
+          }}
+        >
+          📋 Phases
         </button>
         {/* V97.21 (OBS-2) — bouton stats observability */}
         <button
@@ -1322,6 +1339,11 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
       {/* V97.21 (OBS-2) — Dashboard stats observability (modal) */}
       {showObservabilityPanel && (
         <ObservabilityPanel onClose={() => setShowObservabilityPanel(false)} />
+      )}
+
+      {/* V97.22 — Cockpit recommandations par phase (modal) */}
+      {showPhasesPanel && (
+        <PhaseRecommendationsPanel onClose={() => setShowPhasesPanel(false)} />
       )}
     </div>
   );
