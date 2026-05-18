@@ -33,6 +33,8 @@ import {
   summarizeSlopFlags,
   CATEGORY_LABELS as SLOP_CATEGORY_LABELS,
 } from './services/prompts/nutrition/_antiSlop.fr';
+// V97.x Phase 4 — Reformulation LLM Haiku ciblée par flag anti-slop.
+import { rewriteSlopSection, replaceLineInPlan } from './services/rewriteSlopSection';
 // V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
 // Utilisé uniquement quand composerBeta === true (path composer opt-in).
 import { buildClinicalContext } from './services/clinical/buildClinicalContext';
@@ -717,6 +719,9 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   // null = pas encore lancé, [] = audit lancé sans flags, [...] = flags.
   const [slopFlags, setSlopFlags] = useState(null);
   const [slopRunning, setSlopRunning] = useState(false);
+  // V97.x Phase 4 — Cache des reformulations LLM par flag.id.
+  // Shape : { [flagId]: { status: 'loading'|'ready'|'error'|'accepted'|'refused', text?: string, error?: string } }
+  const [slopRewrites, setSlopRewrites] = useState({});
 
   // Barre de progression estimee : asymptote vers 92% sur ~60s, puis 100% a l'arrivee.
   // L'API Claude ne stream pas la progression reelle ; on simule pour donner du feedback.
@@ -741,6 +746,7 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     setDetectedProfile(null);
     setGuardrailsState(null);
     setSlopFlags(null);
+    setSlopRewrites({});
     // V97.3 Phase B : timer + capture system prompt pour observabilité
     const startedAt = Date.now();
     const MODEL = 'claude-sonnet-4-20250514';
@@ -971,6 +977,8 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
             <AntiSlopSection
               flags={slopFlags}
               running={slopRunning}
+              rewrites={slopRewrites}
+              planText={result}
               onRun={() => {
                 setSlopRunning(true);
                 // Synchrone mais wrap async pour permettre re-render avec spinner
@@ -986,6 +994,59 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                     setSlopRunning(false);
                   }
                 }, 30);
+              }}
+              onRewrite={async (flag) => {
+                // Extrait la ligne complète depuis result via lineIndex
+                const lines = (result || '').split('\n');
+                const passage = lines[flag.lineIndex] || flag.snippet || '';
+                if (!passage.trim()) return;
+                setSlopRewrites((prev) => ({
+                  ...prev,
+                  [flag.id]: { status: 'loading' },
+                }));
+                try {
+                  const res = await rewriteSlopSection({
+                    passage,
+                    flags: [flag],
+                  });
+                  if (res.ok && res.rewritten) {
+                    setSlopRewrites((prev) => ({
+                      ...prev,
+                      [flag.id]: { status: 'ready', text: res.rewritten, original: passage },
+                    }));
+                  } else {
+                    setSlopRewrites((prev) => ({
+                      ...prev,
+                      [flag.id]: { status: 'error', error: res.error || 'reformulation impossible' },
+                    }));
+                  }
+                } catch (e) {
+                  setSlopRewrites((prev) => ({
+                    ...prev,
+                    [flag.id]: { status: 'error', error: e?.message || 'erreur' },
+                  }));
+                }
+              }}
+              onAcceptRewrite={(flag) => {
+                const entry = slopRewrites[flag.id];
+                if (!entry || entry.status !== 'ready' || !entry.text) return;
+                const newPlan = replaceLineInPlan(result, flag.lineIndex, entry.text);
+                setResult(newPlan);
+                setSlopRewrites((prev) => ({
+                  ...prev,
+                  [flag.id]: { ...entry, status: 'accepted' },
+                }));
+                // Re-détecte les flags sur le plan modifié (la ligne flaggée peut être clean maintenant)
+                try {
+                  const refreshed = detectSlopHeuristics(newPlan);
+                  setSlopFlags(refreshed);
+                } catch { /* noop */ }
+              }}
+              onRefuseRewrite={(flag) => {
+                setSlopRewrites((prev) => ({
+                  ...prev,
+                  [flag.id]: { ...(prev[flag.id] || {}), status: 'refused' },
+                }));
               }}
             />
             <div className="jpe-preview">
@@ -1544,7 +1605,7 @@ function GuardrailsAuditBanner({ state }) {
 // Phase 3 = heuristiques uniquement (déterministe, gratuit, instantané).
 // Phase 4 ajoutera reformulation LLM ciblée des sections flaggées.
 
-function AntiSlopSection({ flags, running, onRun }) {
+function AntiSlopSection({ flags, running, onRun, rewrites = {}, planText, onRewrite, onAcceptRewrite, onRefuseRewrite }) {
   // Pas encore lancé
   if (flags === null && !running) {
     return (
@@ -1675,23 +1736,177 @@ function AntiSlopSection({ flags, running, onRun }) {
         ))}
       </div>
 
-      {/* Top 5 flags détaillés */}
+      {/* Top 5 flags détaillés avec reformulation Haiku par flag (Phase 4) */}
       <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', fontSize: 11.5, color: palette.fg, lineHeight: 1.5 }}>
-        {flags.slice(0, 5).map((f) => (
-          <li key={f.id} style={{ marginBottom: 6, paddingLeft: 16, position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0, top: 0 }}>
-              {f.severity === 'high' ? '●' : f.severity === 'medium' ? '◐' : '○'}
-            </span>
-            <strong>{SLOP_CATEGORY_LABELS[f.category] || f.category}</strong>
-            {' — '}
-            <em style={{ fontWeight: 400 }}>{f.snippet}</em>
-            {f.suggestion && (
-              <div style={{ marginTop: 2, fontSize: 10.5, fontStyle: 'italic', opacity: 0.8 }}>
-                → {f.suggestion}
+        {flags.slice(0, 5).map((f) => {
+          const rewrite = rewrites[f.id];
+          // On peut reformuler uniquement si la ligne du plan est extractible
+          const lines = (planText || '').split('\n');
+          const lineText = typeof f.lineIndex === 'number' ? lines[f.lineIndex] : '';
+          const canRewrite = !!(lineText && lineText.trim().length > 0 && typeof onRewrite === 'function');
+          return (
+            <li key={f.id} style={{ marginBottom: 10, paddingLeft: 16, position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 0, top: 0 }}>
+                {f.severity === 'high' ? '●' : f.severity === 'medium' ? '◐' : '○'}
+              </span>
+              <div>
+                <strong>{SLOP_CATEGORY_LABELS[f.category] || f.category}</strong>
+                {' — '}
+                <em style={{ fontWeight: 400 }}>{f.snippet}</em>
               </div>
-            )}
-          </li>
-        ))}
+              {f.suggestion && (
+                <div style={{ marginTop: 2, fontSize: 10.5, fontStyle: 'italic', opacity: 0.8 }}>
+                  → {f.suggestion}
+                </div>
+              )}
+
+              {/* Bouton "Reformuler (Haiku)" si pas encore lancé sur ce flag */}
+              {canRewrite && !rewrite && (
+                <button
+                  type="button"
+                  onClick={() => onRewrite(f)}
+                  style={{
+                    marginTop: 4,
+                    background: 'white',
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: 6,
+                    padding: '3px 9px',
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: palette.fg,
+                    cursor: 'pointer',
+                  }}
+                  title="Reformule ce passage via Claude Haiku, voix Anissa"
+                >
+                  ✎ Reformuler ce passage
+                </button>
+              )}
+
+              {/* Loading */}
+              {rewrite?.status === 'loading' && (
+                <div style={{ marginTop: 4, fontSize: 10.5, fontStyle: 'italic', color: palette.fg, opacity: 0.8 }}>
+                  Reformulation en cours…
+                </div>
+              )}
+
+              {/* Erreur */}
+              {rewrite?.status === 'error' && (
+                <div style={{ marginTop: 4, fontSize: 10.5, color: '#a04040' }}>
+                  Erreur reformulation : {rewrite.error}
+                  <button
+                    type="button"
+                    onClick={() => onRewrite(f)}
+                    style={{
+                      marginLeft: 8,
+                      background: 'transparent',
+                      border: `1px solid ${palette.border}`,
+                      borderRadius: 5,
+                      padding: '1px 7px',
+                      fontSize: 10,
+                      color: palette.fg,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              )}
+
+              {/* Reformulation prête — affiche original vs reformulé + Accept/Refuse */}
+              {rewrite?.status === 'ready' && (
+                <div style={{
+                  marginTop: 6,
+                  padding: '8px 10px',
+                  background: 'white',
+                  border: `1px solid ${palette.border}`,
+                  borderRadius: 6,
+                  fontSize: 11,
+                  color: '#2a2d2a',
+                }}>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: palette.fg, textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                      Original
+                    </span>
+                    <div style={{ marginTop: 2, fontStyle: 'italic', opacity: 0.7 }}>
+                      {rewrite.original}
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#2E5E3E', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                      Reformulé
+                    </span>
+                    <div style={{ marginTop: 2 }}>
+                      {rewrite.text}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => onAcceptRewrite(f)}
+                      style={{
+                        background: '#2E5E3E',
+                        border: '1px solid #2E5E3E',
+                        borderRadius: 5,
+                        padding: '4px 11px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'white',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✓ Accepter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRefuseRewrite(f)}
+                      style={{
+                        background: 'transparent',
+                        border: `1px solid ${palette.border}`,
+                        borderRadius: 5,
+                        padding: '4px 11px',
+                        fontSize: 11,
+                        color: palette.fg,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Refuser
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Accepted */}
+              {rewrite?.status === 'accepted' && (
+                <div style={{ marginTop: 4, fontSize: 10.5, color: '#2E5E3E', fontWeight: 600 }}>
+                  ✓ Reformulation appliquée au plan.
+                </div>
+              )}
+
+              {/* Refused */}
+              {rewrite?.status === 'refused' && (
+                <div style={{ marginTop: 4, fontSize: 10.5, fontStyle: 'italic', opacity: 0.7 }}>
+                  Reformulation refusée.
+                  <button
+                    type="button"
+                    onClick={() => onRewrite(f)}
+                    style={{
+                      marginLeft: 8,
+                      background: 'transparent',
+                      border: `1px solid ${palette.border}`,
+                      borderRadius: 5,
+                      padding: '1px 7px',
+                      fontSize: 10,
+                      color: palette.fg,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Refaire
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
         {flags.length > 5 && (
           <li style={{ fontSize: 10.5, fontStyle: 'italic', opacity: 0.7, paddingLeft: 16 }}>
             … et {flags.length - 5} autre{flags.length - 5 > 1 ? 's' : ''} pattern{flags.length - 5 > 1 ? 's' : ''}.
