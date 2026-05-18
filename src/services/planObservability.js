@@ -15,6 +15,145 @@
 import { supabase } from '../supabaseClient';
 import { summarizeSlopFlags } from './prompts/nutrition/_antiSlop.fr';
 
+// V97.21 (OBS-2) — Helpers de lecture pour le dashboard stats.
+
+/**
+ * Liste les rows d'observability filtrees par fenetre temporelle.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.daysBack=30]
+ * @param {number} [opts.limit=500]
+ * @returns {Promise<{ ok: boolean, data?: Array, error?: string }>}
+ */
+export async function listObservability({ daysBack = 30, limit = 500 } = {}) {
+  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { data, error } = await supabase
+      .from('plan_generation_observability')
+      .select('*')
+      .gte('generated_at', since)
+      .order('generated_at', { ascending: false })
+      .limit(limit);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: data || [] };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
+ * Aggregations cote client pour le dashboard.
+ * Pour V1, on garde simple : pas de RPC SQL.
+ *
+ * @param {Array} rows - Output de listObservability
+ * @returns {object} Stats agrégées
+ */
+export function aggregateObservability(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      total: 0,
+      composerBetaRatio: 0,
+      avgViolations: 0,
+      avgSlopFlags: 0,
+      avgPlanLength: 0,
+      haikuAcceptRate: null,
+      haikuRequested: 0,
+      haikuAccepted: 0,
+      haikuRefused: 0,
+      generationsByWeek: [],
+      topGuardrails: [],
+      topMissingProfiles: [],
+      topSlopCategories: [],
+    };
+  }
+
+  const total = rows.length;
+  const composerBetaCount = rows.filter((r) => r.composer_beta).length;
+  const sumViolations = rows.reduce((a, r) => a + (r.violations_count || 0), 0);
+  const sumSlop = rows.reduce((a, r) => a + (r.slop_flags_count || 0), 0);
+  const sumLen = rows.reduce((a, r) => a + (r.plan_length_chars || 0), 0);
+  const haikuReq = rows.reduce((a, r) => a + (r.slop_rewrites_requested_count || 0), 0);
+  const haikuAcc = rows.reduce((a, r) => a + (r.slop_rewrites_accepted_count || 0), 0);
+  const haikuRef = rows.reduce((a, r) => a + (r.slop_rewrites_refused_count || 0), 0);
+
+  // Generations par semaine (lundi ISO)
+  const byWeek = new Map();
+  for (const r of rows) {
+    if (!r.generated_at) continue;
+    const d = new Date(r.generated_at);
+    const monday = new Date(d);
+    const day = monday.getDay();
+    const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
+    monday.setDate(diff);
+    monday.setHours(0, 0, 0, 0);
+    const key = monday.toISOString().slice(0, 10);
+    byWeek.set(key, (byWeek.get(key) || 0) + 1);
+  }
+  const generationsByWeek = Array.from(byWeek.entries())
+    .map(([weekStart, count]) => ({ weekStart, count }))
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+  // Top guardrails actifs
+  const guardrailCounts = new Map();
+  for (const r of rows) {
+    for (const key of r.guardrails_applied || []) {
+      guardrailCounts.set(key, (guardrailCounts.get(key) || 0) + 1);
+    }
+  }
+  const topGuardrails = Array.from(guardrailCounts.entries())
+    .map(([profile_key, count]) => ({ profile_key, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Profils avec micros/evictions manquantes
+  const missingByProfile = new Map();
+  for (const r of rows) {
+    const m = (r.missing_micronutrients_count || 0) + (r.missing_evictions_count || 0);
+    if (m > 0) {
+      for (const key of r.guardrails_applied || []) {
+        const cur = missingByProfile.get(key) || { gens: 0, totalMissing: 0 };
+        cur.gens += 1;
+        cur.totalMissing += m;
+        missingByProfile.set(key, cur);
+      }
+    }
+  }
+  const topMissingProfiles = Array.from(missingByProfile.entries())
+    .map(([profile_key, v]) => ({
+      profile_key,
+      gens: v.gens,
+      avgMissing: v.gens > 0 ? (v.totalMissing / v.gens) : 0,
+    }))
+    .sort((a, b) => b.gens - a.gens);
+
+  // Top categories anti-slop
+  const slopCatCounts = new Map();
+  for (const r of rows) {
+    const cat = r.slop_flags_by_category || {};
+    for (const [k, v] of Object.entries(cat)) {
+      slopCatCounts.set(k, (slopCatCounts.get(k) || 0) + (v || 0));
+    }
+  }
+  const topSlopCategories = Array.from(slopCatCounts.entries())
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    total,
+    composerBetaRatio: total > 0 ? composerBetaCount / total : 0,
+    avgViolations: total > 0 ? sumViolations / total : 0,
+    avgSlopFlags: total > 0 ? sumSlop / total : 0,
+    avgPlanLength: total > 0 ? sumLen / total : 0,
+    haikuRequested: haikuReq,
+    haikuAccepted: haikuAcc,
+    haikuRefused: haikuRef,
+    haikuAcceptRate: haikuReq > 0 ? haikuAcc / haikuReq : null,
+    generationsByWeek,
+    topGuardrails,
+    topMissingProfiles,
+    topSlopCategories,
+  };
+}
+
 /**
  * Enregistre une nouvelle generation de plan avec ses metrics initiaux.
  * Doit etre appele apres callClaude + audits clinique + audit anti-slop.

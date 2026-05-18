@@ -18,6 +18,8 @@ import { PARTNER_IDENTITY, emailSubjectQuestionnaire, emailSubjectFollowupReview
 import AnalysisPlansFollowupBlock from './AnalysisPlansFollowupBlock';
 // V97.19 — Cockpit edition garde-fous cliniques (modal).
 import ClinicalGuardrailsPanel from './components/ClinicalGuardrailsPanel';
+// V97.21 (OBS-2) — Dashboard stats observability.
+import ObservabilityPanel from './components/ObservabilityPanel';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -882,6 +884,8 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   const [markAllResult, setMarkAllResult] = useState(null);
   // V97.19 — open/close cockpit garde-fous cliniques
   const [showGuardrailsPanel, setShowGuardrailsPanel] = useState(false);
+  // V97.21 (OBS-2) — open/close dashboard stats observability
+  const [showObservabilityPanel, setShowObservabilityPanel] = useState(false);
 
   // V97.11 — Ctrl+K (ou Cmd+K macOS) → focus la barre de recherche
   const searchInputRef = useRef(null);
@@ -1089,6 +1093,19 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           }}
         >
           {syncing ? 'Sync...' : syncResult ? `${syncResult.synced} synced` : 'Sync cloud'}
+        </button>
+        {/* V97.21 (OBS-2) — bouton stats observability */}
+        <button
+          onClick={() => setShowObservabilityPanel(true)}
+          title="Stats IA des générations de plans (couverture clinique, patterns slop, usage Haiku)"
+          style={{
+            padding: '8px 12px', borderRadius: 8,
+            border: '1px solid rgba(255,255,255,.1)', background: 'none',
+            color: 'rgba(255,255,255,.5)', cursor: 'pointer',
+            fontSize: '.75rem', marginRight: 8, minHeight: 36,
+          }}
+        >
+          📊 Stats IA
         </button>
         {/* V97.19 — bouton ouverture cockpit garde-fous cliniques */}
         <button
@@ -1300,6 +1317,11 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
       {/* V97.19 — Cockpit garde-fous cliniques (modal) */}
       {showGuardrailsPanel && (
         <ClinicalGuardrailsPanel onClose={() => setShowGuardrailsPanel(false)} />
+      )}
+
+      {/* V97.21 (OBS-2) — Dashboard stats observability (modal) */}
+      {showObservabilityPanel && (
+        <ObservabilityPanel onClose={() => setShowObservabilityPanel(false)} />
       )}
     </div>
   );
