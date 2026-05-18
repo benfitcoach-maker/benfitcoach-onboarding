@@ -9,13 +9,16 @@
 //   - Regression Hawazen : les 2 phrases médicales à risque sont bien
 //     détectées par l'audit
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   GUARDRAILS_FR,
   detectClinicalGuardrails,
   buildGuardrailsBlockFr,
   auditPlanForGuardrails,
   auditPlanCompleteness,
+  preloadGuardrailsFromSupabase,
+  getGuardrailsSource,
+  _resetGuardrailsCache,
 } from '../_clinicalGuardrails.fr';
 
 // ─── detectClinicalGuardrails ────────────────────────────────────────────
@@ -275,5 +278,111 @@ describe('auditPlanCompleteness — completude Phase 2', () => {
     const result = auditPlanCompleteness(hawazenPlan, grossesseGuardrails);
     const missingMicros = result.missing_micronutrients.map((m) => m.item);
     expect(missingMicros).toContain('iode');
+  });
+});
+
+// ─── V97.18.2 — preloadGuardrailsFromSupabase + cache DB ─────────────────
+
+describe('preloadGuardrailsFromSupabase', () => {
+  beforeEach(() => {
+    _resetGuardrailsCache();
+  });
+
+  it('Retourne ok:false si pas de supabase client', async () => {
+    const res = await preloadGuardrailsFromSupabase(null);
+    expect(res.ok).toBe(false);
+    expect(res.source).toBe('hardcode');
+    expect(getGuardrailsSource()).toBe('hardcode');
+  });
+
+  it('Retourne ok:false + fallback hardcode si DB retourne erreur', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+        }),
+      }),
+    };
+    const res = await preloadGuardrailsFromSupabase(fakeSupabase);
+    expect(res.ok).toBe(false);
+    expect(res.source).toBe('hardcode');
+    expect(getGuardrailsSource()).toBe('hardcode');
+  });
+
+  it('Retourne ok:false + fallback hardcode si table vide', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({ data: [], error: null }),
+        }),
+      }),
+    };
+    const res = await preloadGuardrailsFromSupabase(fakeSupabase);
+    expect(res.ok).toBe(false);
+    expect(getGuardrailsSource()).toBe('hardcode');
+  });
+
+  it('Cache les guardrails DB et detectClinicalGuardrails les utilise', async () => {
+    // Mock un seul profil grossesse avec phrase forbidden custom DB-only
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({
+            data: [{
+              profile_key: 'grossesse',
+              display_name: 'Grossesse DB',
+              forbidden_phrases: ['phrase interdite DB only'],
+              required_phrases: [],
+              micronutrients: ['fer DB'],
+              evictions: [],
+              precaution_vocab: {},
+            }],
+            error: null,
+          }),
+        }),
+      }),
+    };
+    const res = await preloadGuardrailsFromSupabase(fakeSupabase);
+    expect(res.ok).toBe(true);
+    expect(res.count).toBe(1);
+    expect(res.source).toBe('supabase');
+    expect(getGuardrailsSource()).toBe('supabase');
+
+    // Maintenant detectClinicalGuardrails doit retourner la version DB
+    const matched = detectClinicalGuardrails({ tag: 'grossesse', all: ['grossesse'] }, {});
+    expect(matched).toHaveLength(1);
+    expect(matched[0].display_name).toBe('Grossesse DB');
+    expect(matched[0].forbidden_phrases).toContain('phrase interdite DB only');
+    // La version hardcode contenait 'éviter tes injections' → plus là dans DB mock
+    expect(matched[0].forbidden_phrases).not.toContain('éviter tes injections');
+  });
+
+  it('Reset cache fait retomber sur hardcode', async () => {
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => Promise.resolve({
+            data: [{
+              profile_key: 'grossesse',
+              display_name: 'Grossesse DB',
+              forbidden_phrases: ['phrase DB'],
+              required_phrases: [],
+              micronutrients: [],
+              evictions: [],
+              precaution_vocab: {},
+            }],
+            error: null,
+          }),
+        }),
+      }),
+    };
+    await preloadGuardrailsFromSupabase(fakeSupabase);
+    expect(getGuardrailsSource()).toBe('supabase');
+    _resetGuardrailsCache();
+    expect(getGuardrailsSource()).toBe('hardcode');
+    // Et detect retombe sur hardcode
+    const matched = detectClinicalGuardrails({ tag: 'grossesse', all: ['grossesse'] }, {});
+    expect(matched[0].display_name).toBe('Grossesse');
+    expect(matched[0].forbidden_phrases).toContain('éviter tes injections');
   });
 });

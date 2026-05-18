@@ -288,11 +288,103 @@ export const GUARDRAILS_FR = {
   },
 };
 
+// ─── CACHE DB SUPABASE (V97.18.2 — migration JS hardcode → DB read) ─────
+// _dbCache : map { profile_key: Guardrail } depuis la table clinical_guardrails.
+// Préchargé au mount via preloadGuardrailsFromSupabase(). TTL 5 min pour
+// éviter les fetch répétés au sein d'une session.
+// Si le cache est expiré OU vide (DB indisponible/erreur), getActiveGuardrailsMap()
+// retombe silencieusement sur GUARDRAILS_FR hardcode → zéro régression possible.
+let _dbCache = null;
+let _dbCacheLoadedAt = 0;
+const DB_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
+/**
+ * Précharge les garde-fous depuis Supabase et remplit le cache module-level.
+ * À appeler au mount d'un composant qui va générer un plan (ex: JourneyPlanEditor).
+ * Idempotent : appels multiples = un seul fetch par TTL window.
+ * Fallback silencieux sur hardcode JS si DB down ou table vide.
+ *
+ * @param {object} supabaseClient - Client Supabase initialisé (from('clinical_guardrails'))
+ * @param {object} [opts]
+ * @param {boolean} [opts.force=false] - Bypass cache TTL et refetch
+ * @returns {Promise<{ ok: boolean, count?: number, source: 'supabase'|'hardcode', error?: string }>}
+ */
+export async function preloadGuardrailsFromSupabase(supabaseClient, opts = {}) {
+  const { force = false } = opts;
+  // Cache encore valide → no-op
+  if (!force && _dbCache && (Date.now() - _dbCacheLoadedAt < DB_CACHE_TTL_MS)) {
+    return { ok: true, count: Object.keys(_dbCache).length, source: 'supabase' };
+  }
+  if (!supabaseClient || typeof supabaseClient.from !== 'function') {
+    return { ok: false, error: 'no supabase client', source: 'hardcode' };
+  }
+  try {
+    const { data, error } = await supabaseClient
+      .from('clinical_guardrails')
+      .select('profile_key, display_name, forbidden_phrases, required_phrases, micronutrients, evictions, precaution_vocab')
+      .eq('enabled', true);
+    if (error || !Array.isArray(data) || data.length === 0) {
+      return { ok: false, error: error?.message || 'empty table', source: 'hardcode' };
+    }
+    const map = {};
+    for (const row of data) {
+      map[row.profile_key] = {
+        profile_key: row.profile_key,
+        display_name: row.display_name,
+        forbidden_phrases: row.forbidden_phrases || [],
+        required_phrases: row.required_phrases || [],
+        micronutrients: row.micronutrients || [],
+        evictions: row.evictions || [],
+        precaution_vocab: row.precaution_vocab || {},
+      };
+    }
+    _dbCache = map;
+    _dbCacheLoadedAt = Date.now();
+    return { ok: true, count: data.length, source: 'supabase' };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e), source: 'hardcode' };
+  }
+}
+
+/**
+ * Helper interne : retourne la map active des guardrails.
+ * - DB cache si frais (TTL < 5 min)
+ * - Hardcode JS GUARDRAILS_FR sinon (fallback transparent)
+ */
+function getActiveGuardrailsMap() {
+  if (_dbCache && (Date.now() - _dbCacheLoadedAt < DB_CACHE_TTL_MS)) {
+    return _dbCache;
+  }
+  return GUARDRAILS_FR;
+}
+
+/**
+ * Reset le cache. Utilisé par les tests pour repartir d'un état propre.
+ * @internal
+ */
+export function _resetGuardrailsCache() {
+  _dbCache = null;
+  _dbCacheLoadedAt = 0;
+}
+
+/**
+ * Indique la source effective utilisée par detectClinicalGuardrails.
+ * Pour debug / observabilité UI.
+ * @returns {'supabase'|'hardcode'}
+ */
+export function getGuardrailsSource() {
+  if (_dbCache && (Date.now() - _dbCacheLoadedAt < DB_CACHE_TTL_MS)) {
+    return 'supabase';
+  }
+  return 'hardcode';
+}
+
 /**
  * Détecte les garde-fous applicables selon le profil et le form de la cliente.
  *
- * Phase 1 simple : si profile.tag === 'grossesse' OU tags contient 'grossesse'
- * → applique le guardrail grossesse. Pas de distinction trimestre en V1.
+ * V97.18.2 : lit depuis le cache Supabase si disponible (préchargé via
+ * preloadGuardrailsFromSupabase), sinon retombe sur GUARDRAILS_FR hardcode.
+ * API sync inchangée pour rétro-compat.
  *
  * @param {{ tag?: string, all?: string[] }} profile - Output de detectClientProfile
  * @param {object} form - L'anamnèse client (clients.form)
@@ -300,47 +392,48 @@ export const GUARDRAILS_FR = {
  */
 export function detectClinicalGuardrails(profile, form) {
   if (!profile) return [];
+  const source = getActiveGuardrailsMap();
   const matched = [];
   const allTags = [profile.tag, ...(profile.all || [])].filter(Boolean);
   const f = form || {};
 
   // Grossesse : tag primaire OU dans la liste all (cumul avec pathologie)
-  if (allTags.includes('grossesse')) {
-    matched.push(GUARDRAILS_FR.grossesse);
+  if (allTags.includes('grossesse') && source.grossesse) {
+    matched.push(source.grossesse);
   }
 
   // Allaitement
-  if (allTags.includes('allaitement')) {
-    matched.push(GUARDRAILS_FR.allaitement);
+  if (allTags.includes('allaitement') && source.allaitement) {
+    matched.push(source.allaitement);
   }
 
   // Post-partum
-  if (allTags.includes('postPartum')) {
-    matched.push(GUARDRAILS_FR.postPartum);
+  if (allTags.includes('postPartum') && source.postPartum) {
+    matched.push(source.postPartum);
   }
 
   // Adolescente <18 ans (depuis le form, pas le profile)
   const age = Number.parseInt(f.age || f.ageActuel || '', 10);
-  if (Number.isFinite(age) && age > 0 && age < 18) {
-    matched.push(GUARDRAILS_FR.adolescente);
+  if (Number.isFinite(age) && age > 0 && age < 18 && source.adolescente) {
+    matched.push(source.adolescente);
   }
 
   // Ménopause (peri ou post)
-  if (allTags.includes('menopause') || allTags.includes('perimenopause')) {
-    matched.push(GUARDRAILS_FR.menopause);
+  if ((allTags.includes('menopause') || allTags.includes('perimenopause')) && source.menopause) {
+    matched.push(source.menopause);
   }
 
   // Diabète (T1 et T2)
-  if (allTags.includes('diabete') || allTags.includes('complicationsDiabete')) {
-    matched.push(GUARDRAILS_FR.diabete);
+  if ((allTags.includes('diabete') || allTags.includes('complicationsDiabete')) && source.diabete) {
+    matched.push(source.diabete);
   }
 
   // Pathologies critiques (fallback générique) — si tags spécifiques
   const criticalTags = ['clostridiumDifficile', 'nephropathie', 'saos'];
-  if (criticalTags.some((t) => allTags.includes(t))) {
+  if (criticalTags.some((t) => allTags.includes(t)) && source.pathologieCritique) {
     // Ne pas dupliquer si déjà couvert par un guardrail spécifique
     if (!matched.some((g) => g.profile_key === 'pathologieCritique')) {
-      matched.push(GUARDRAILS_FR.pathologieCritique);
+      matched.push(source.pathologieCritique);
     }
   }
 

@@ -23,9 +23,11 @@ import { callClaude } from './services/anthropic';
 import { trackPlanGenerated, trackPlanGenerationFailed, trackPlanModification } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
 // V97.x Phase 2 — Audit clinique post-génération (phrases interdites + complétude).
+// V97.18.2 — preloadGuardrailsFromSupabase : précharge depuis DB (fallback hardcode).
 import {
   auditPlanForGuardrails,
   auditPlanCompleteness,
+  preloadGuardrailsFromSupabase,
 } from './services/prompts/nutrition/_clinicalGuardrails.fr';
 // V97.x Phase 3 — Anti-slop heuristiques (détection patterns AI visibles).
 import {
@@ -722,6 +724,20 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   // V97.x Phase 4 — Cache des reformulations LLM par flag.id.
   // Shape : { [flagId]: { status: 'loading'|'ready'|'error'|'accepted'|'refused', text?: string, error?: string } }
   const [slopRewrites, setSlopRewrites] = useState({});
+
+  // V97.18.2 — Précharge les guardrails depuis Supabase au mount.
+  // Fallback silencieux sur hardcode JS si DB down. Idempotent (TTL 5 min).
+  useEffect(() => {
+    preloadGuardrailsFromSupabase(supabase).then((res) => {
+      if (res.ok) {
+        // eslint-disable-next-line no-console
+        console.log(`[guardrails] preload OK from ${res.source} (${res.count} profils)`);
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(`[guardrails] preload fallback to hardcode: ${res.error}`);
+      }
+    });
+  }, []);
 
   // Barre de progression estimee : asymptote vers 92% sur ~60s, puis 100% a l'arrivee.
   // L'API Claude ne stream pas la progression reelle ; on simule pour donner du feedback.
