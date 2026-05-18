@@ -13,10 +13,12 @@
 
 import { useState, useEffect } from 'react';
 import { listPlanDrafts, acceptPlanDraft, refusePlanDraft } from '../services/planDraftsService';
-import { saveNutritionConsultation } from '../store';
+import { saveNutritionConsultation, getNutritionConsultations } from '../store';
 import { COACH_IDENTITY } from '../services/coachIdentity';
 // V97.23.2 — Accept+Publish atomic workflow (push notif cliente automatique)
 import { publishConsultationToClientApp } from '../services/publishToClientApp';
+// V97.23.4 — Diff visualization entre V actuelle et draft propose.
+import { diffLines, diffStats } from '../services/textDiff';
 
 export default function PendingDraftsPanel({ onClose, clientsById }) {
   const [loading, setLoading] = useState(true);
@@ -283,6 +285,27 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish,
   const [editedText, setEditedText] = useState(draft.draft_text);
   const [note, setNote] = useState('');
   const [confirming, setConfirming] = useState(null); // null | 'accept' | 'acceptPublish' | 'refuse'
+  // V97.23.4 — Toggle diff vs full + reference V actuelle fetched on mount
+  const [viewMode, setViewMode] = useState('full'); // 'full' | 'diff'
+  const [currentV, setCurrentV] = useState(null); // consultation publiee la plus recente
+
+  useEffect(() => {
+    // Charge la V actuelle (la plus recente consultation publiee pour la cliente)
+    let alive = true;
+    (async () => {
+      try {
+        const list = await getNutritionConsultations(draft.client_id);
+        if (!alive || !Array.isArray(list)) return;
+        // Trie par date desc et prend la premiere publiee (statut 'publie')
+        // Ignore le draft accepted en cours s'il a deja cree une consult
+        const published = list
+          .filter((c) => c.id !== draft.sourceConsultationId && (c.status === 'publie' || c.status === 'a_valider'))
+          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        setCurrentV(published[0] || null);
+      } catch { /* noop */ }
+    })();
+    return () => { alive = false; };
+  }, [draft.client_id, draft.sourceConsultationId]);
   const meta = draft.trigger_metadata || {};
   const c = clientsById?.[draft.client_id];
   const clientLabel = c?.prenom || c?.form?.prenom || `client ${draft.client_id.slice(0, 8)}…`;
@@ -326,22 +349,70 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish,
         </div>
       </div>
 
-      {/* Editor */}
-      <textarea
-        value={editedText}
-        onChange={(e) => setEditedText(e.target.value)}
-        rows={18}
-        style={{
-          width: '100%', padding: '10px 12px',
-          fontSize: 13, fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
-          border: '1px solid rgba(0,0,0,.15)', borderRadius: 8,
-          background: 'white', resize: 'vertical',
-        }}
-      />
-      <div style={{ fontSize: 10.5, color: '#9a9d9a', marginTop: 4, textAlign: 'right' }}>
-        {editedText.length.toLocaleString('fr-CH')} caractères
-        {dirty && <span style={{ color: '#785a1a', marginLeft: 8 }}>(modifié)</span>}
+      {/* V97.23.4 — Toggle vue plein texte / diff */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8, alignItems: 'center' }}>
+        <button
+          onClick={() => setViewMode('full')}
+          style={{
+            background: viewMode === 'full' ? '#2E5E3E' : 'transparent',
+            color: viewMode === 'full' ? 'white' : '#2a2d2a',
+            border: `1px solid ${viewMode === 'full' ? '#2E5E3E' : 'rgba(0,0,0,.15)'}`,
+            padding: '4px 12px', borderRadius: 6,
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Plein texte
+        </button>
+        <button
+          onClick={() => setViewMode('diff')}
+          disabled={!currentV}
+          title={!currentV ? 'Aucune version précédente trouvée pour cette cliente' : 'Comparer avec la version actuelle'}
+          style={{
+            background: viewMode === 'diff' ? '#7e5ec7' : 'transparent',
+            color: viewMode === 'diff' ? 'white' : (currentV ? '#2a2d2a' : '#9a9d9a'),
+            border: `1px solid ${viewMode === 'diff' ? '#7e5ec7' : 'rgba(0,0,0,.15)'}`,
+            padding: '4px 12px', borderRadius: 6,
+            fontSize: 11, fontWeight: 600,
+            cursor: currentV ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Diff vs V actuelle
+        </button>
+        {viewMode === 'diff' && currentV && (
+          <span style={{ marginLeft: 8, fontSize: 11, color: '#6b6f6b' }}>
+            V actuelle : {currentV.createdAt
+              ? new Date(currentV.createdAt).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : '—'}
+          </span>
+        )}
       </div>
+
+      {viewMode === 'full' && (
+        <>
+          <textarea
+            value={editedText}
+            onChange={(e) => setEditedText(e.target.value)}
+            rows={18}
+            style={{
+              width: '100%', padding: '10px 12px',
+              fontSize: 13, fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+              border: '1px solid rgba(0,0,0,.15)', borderRadius: 8,
+              background: 'white', resize: 'vertical',
+            }}
+          />
+          <div style={{ fontSize: 10.5, color: '#9a9d9a', marginTop: 4, textAlign: 'right' }}>
+            {editedText.length.toLocaleString('fr-CH')} caractères
+            {dirty && <span style={{ color: '#785a1a', marginLeft: 8 }}>(modifié)</span>}
+          </div>
+        </>
+      )}
+
+      {viewMode === 'diff' && currentV && (
+        <DiffView
+          oldText={currentV.nutritionPlan || currentV.nutrition_plan || ''}
+          newText={editedText}
+        />
+      )}
 
       {/* Note refuse/accept */}
       <input
@@ -467,6 +538,80 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish,
             >Annuler</button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── DiffView (V97.23.4) : visualisation diff line par line ──────────────
+
+function DiffView({ oldText, newText }) {
+  const ops = diffLines(oldText, newText);
+  const stats = diffStats(ops);
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', gap: 12, alignItems: 'center',
+        padding: '6px 10px', marginBottom: 6,
+        background: 'rgba(126,94,199,.06)',
+        border: '1px solid rgba(126,94,199,.2)',
+        borderRadius: 6, fontSize: 11,
+      }}>
+        <span style={{ fontWeight: 600, color: '#2a2d2a' }}>{stats.total} lignes</span>
+        <span style={{ color: '#2E5E3E' }}>+{stats.added} ajoutée{stats.added > 1 ? 's' : ''}</span>
+        <span style={{ color: '#a04040' }}>−{stats.removed} retirée{stats.removed > 1 ? 's' : ''}</span>
+        <span style={{ color: '#6b6f6b' }}>={stats.unchanged} inchangée{stats.unchanged > 1 ? 's' : ''}</span>
+      </div>
+      <div style={{
+        padding: 0, background: 'white',
+        border: '1px solid rgba(0,0,0,.15)', borderRadius: 8,
+        overflow: 'auto', maxHeight: 500,
+        fontSize: 12, fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+        lineHeight: 1.55,
+      }}>
+        {ops.length === 0 && (
+          <div style={{ padding: 16, color: '#9a9d9a', fontStyle: 'italic', textAlign: 'center' }}>
+            Aucune différence détectée.
+          </div>
+        )}
+        {ops.map((op, i) => {
+          const isAdded = op.type === 'added';
+          const isRemoved = op.type === 'removed';
+          const bg = isAdded
+            ? 'rgba(46,94,62,.10)'
+            : isRemoved
+              ? 'rgba(184,64,64,.10)'
+              : 'transparent';
+          const marker = isAdded ? '+' : isRemoved ? '−' : ' ';
+          const color = isAdded ? '#2E5E3E' : isRemoved ? '#a04040' : '#2a2d2a';
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                background: bg,
+                padding: '2px 0',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              }}
+            >
+              <span style={{
+                flex: '0 0 24px', textAlign: 'center', color,
+                userSelect: 'none', fontWeight: 700,
+              }}>
+                {marker}
+              </span>
+              <span style={{
+                flex: 1, color,
+                paddingRight: 10,
+                textDecoration: isRemoved ? 'line-through' : 'none',
+                opacity: op.type === 'unchanged' ? 0.6 : 1,
+              }}>
+                {op.text || ' '}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
