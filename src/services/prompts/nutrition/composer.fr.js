@@ -31,6 +31,10 @@ import { getProfileModuleFr } from './profiles/index.fr';
 import { buildClinicalContextBlockFr } from './_clinicalContext.fr';
 // V97.4 V3.H Gap #3 : objectifs priorisés pour focaliser le plan IA.
 import { formatPrioritizedObjectivesFr } from './_objectives.fr';
+// V97.x Phase 1 (urgent risque légal) : couche garde-fous cliniques.
+// Phrases interdites + vocab précaution injectés en TÊTE du prompt pour
+// que le LLM les voie en premier (priorité maximale).
+import { detectClinicalGuardrails, buildGuardrailsBlockFr } from './_clinicalGuardrails.fr';
 
 /**
  * Build the FR system prompt with profile-aware composition.
@@ -67,6 +71,16 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
 
   const { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = opts;
   const parts = [SYSTEM_PROMPT_FR, SWISS_BRANDS_PROMPT_FR];
+
+  // V97.x Phase 1 — Garde-fous cliniques (urgent risque légal).
+  // Injectés IMMÉDIATEMENT après l'identité pour priorité LLM maximale.
+  // Détecte profil → liste phrases interdites + vocab précaution.
+  // Cf _clinicalGuardrails.fr.js + spec composer-v97-clinical-antislop.
+  const guardrails = detectClinicalGuardrails(profile, form);
+  const guardrailsBlock = buildGuardrailsBlockFr(guardrails);
+  if (guardrailsBlock) {
+    parts.push(guardrailsBlock);
+  }
 
   // Supplements gate (unchanged from legacy path).
   const pretProtocole = form?.pretProtocole || '';
@@ -123,5 +137,10 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
     prompt: parts.join('\n\n'),
     profile,
     blocked: false,
+    // V97.x Phase 1 — Garde-fous exposés au caller pour audit post-génération.
+    // Le caller (NutritionConsultation / JourneyPlanEditor) peut appeler
+    // auditPlanForGuardrails(plan, guardrails) après réception du draft IA
+    // pour vérifier qu'aucune phrase interdite n'est passée.
+    guardrails,
   };
 }
