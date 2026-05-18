@@ -35,6 +35,8 @@ import ClientPulseSummary from './components/ClientPulseSummary';
 import ClinicalAlertBanner from './components/ClinicalAlertBanner';
 import FeedbacksTrendChart from './components/FeedbacksTrendChart';
 import { transitionToNextPhase, getActivePhase } from './services/protocolPhases';
+// V97.23 (V97.18 Phase E) — Auto-generation brouillon IA apres transition phase.
+import { autoGeneratePlanForPhaseTransition } from './services/autoGeneratePlanForPhaseTransition';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
 import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
@@ -3890,6 +3892,27 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
           try {
             const updated = transitionToNextPhase(phases);
             await handleSavePhases(updated);
+
+            // V97.23 (V97.18 Phase E) — Auto-generation brouillon IA pour la
+            // nouvelle phase active. Fire-and-forget, ne bloque pas l'UI.
+            // Anissa verra le brouillon dans Phase F (cockpit drafts) une
+            // fois Claude termine (~30-60s). Si echec, log warn silencieux.
+            autoGeneratePlanForPhaseTransition({
+              client,
+              fromPhaseId: active.id,
+              toPhaseId: nextPhase.id,
+              templateKey: updated.template,
+              weekNumber: 1,
+              sourceConsultationId: activeConsult?.id,
+            }).then((res) => {
+              if (res.ok) {
+                // eslint-disable-next-line no-console
+                console.log(`[auto-gen-phase] brouillon ${res.draftId} pret a valider pour ${prenom}`);
+              } else {
+                // eslint-disable-next-line no-console
+                console.warn(`[auto-gen-phase] echec pour ${prenom}:`, res.error);
+              }
+            });
           } catch (e) {
             window.alert('Erreur transition : ' + (e?.message || 'inconnue'));
           }
