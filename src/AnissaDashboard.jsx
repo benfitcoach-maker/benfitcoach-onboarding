@@ -16,6 +16,8 @@ import { markClientReviewed } from './services/markClientReviewed';
 import { clearStatusCache } from './services/fetchClientsStatus';
 import { PARTNER_IDENTITY, emailSubjectQuestionnaire, emailSubjectFollowupReview } from './services/coachIdentity';
 import AnalysisPlansFollowupBlock from './AnalysisPlansFollowupBlock';
+// V97.19 — Cockpit edition garde-fous cliniques (modal).
+import ClinicalGuardrailsPanel from './components/ClinicalGuardrailsPanel';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -878,6 +880,8 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   // V97.11 — bouton "Tout marquer lu" (batch)
   const [markingAll, setMarkingAll] = useState(false);
   const [markAllResult, setMarkAllResult] = useState(null);
+  // V97.19 — open/close cockpit garde-fous cliniques
+  const [showGuardrailsPanel, setShowGuardrailsPanel] = useState(false);
 
   // V97.11 — Ctrl+K (ou Cmd+K macOS) → focus la barre de recherche
   const searchInputRef = useRef(null);
@@ -1086,6 +1090,19 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
         >
           {syncing ? 'Sync...' : syncResult ? `${syncResult.synced} synced` : 'Sync cloud'}
         </button>
+        {/* V97.19 — bouton ouverture cockpit garde-fous cliniques */}
+        <button
+          onClick={() => setShowGuardrailsPanel(true)}
+          title="Éditer la matrice des garde-fous cliniques (phrases interdites, micronutriments, évictions par profil)"
+          style={{
+            padding: '8px 12px', borderRadius: 8,
+            border: '1px solid rgba(255,255,255,.1)', background: 'none',
+            color: 'rgba(255,255,255,.5)', cursor: 'pointer',
+            fontSize: '.75rem', marginRight: 8, minHeight: 36,
+          }}
+        >
+          ⚙ Garde-fous
+        </button>
         <button className="btn btn-sm btn-anissa-primary" onClick={onNewClient}>
           + Nouveau client
         </button>
@@ -1278,6 +1295,11 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
             setSelectedReviewClient(null);
           }}
         />
+      )}
+
+      {/* V97.19 — Cockpit garde-fous cliniques (modal) */}
+      {showGuardrailsPanel && (
+        <ClinicalGuardrailsPanel onClose={() => setShowGuardrailsPanel(false)} />
       )}
     </div>
   );
