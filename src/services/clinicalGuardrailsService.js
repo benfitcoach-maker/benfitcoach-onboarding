@@ -20,7 +20,9 @@ const TRACKED_FIELDS = ['display_name', 'forbidden_phrases', 'required_phrases',
  * Calcule un diff minimal entre before et after sur les TRACKED_FIELDS.
  * Renvoie un objet { fieldName: { before, after } } limite aux fields changes.
  */
-function computeDiff(before, after) {
+// V97.26 — exporte pour tests (logique pure testable, pattern reutilise
+// dans phaseTemplatesService).
+export function computeDiff(before, after) {
   const diff = {};
   if (!before || !after) return diff;
   for (const key of TRACKED_FIELDS) {

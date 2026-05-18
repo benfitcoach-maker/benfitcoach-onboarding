@@ -75,13 +75,15 @@ Reformule en gardant le sens exact mais avec la voix de référence. Renvoie uni
     if (!rewritten || rewritten.trim().length === 0) {
       return { ok: false, error: 'reformulation vide' };
     }
-    // Nettoyage : enlève guillemets éventuels ajoutés par le LLM
+    // Nettoyage : enlève guillemets éventuels ajoutés par le LLM.
+    // V97.26 (audit test gap fix) — Triple quotes AVANT single quotes,
+    // sinon le single quote strip casse le triple match.
     const cleaned = rewritten
       .trim()
-      .replace(/^["«»]/, '')
-      .replace(/["«»]$/, '')
       .replace(/^"""[\s\n]*/, '')
       .replace(/[\s\n]*"""$/, '')
+      .replace(/^["«»]/, '')
+      .replace(/["«»]$/, '')
       .trim();
     return { ok: true, rewritten: cleaned };
   } catch (err) {
