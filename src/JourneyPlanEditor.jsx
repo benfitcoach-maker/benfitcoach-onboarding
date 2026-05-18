@@ -37,6 +37,8 @@ import {
 } from './services/prompts/nutrition/_antiSlop.fr';
 // V97.x Phase 4 — Reformulation LLM Haiku ciblée par flag anti-slop.
 import { rewriteSlopSection, replaceLineInPlan } from './services/rewriteSlopSection';
+// V97.20 (OBS-1) — Tracking des generations de plans.
+import { recordPlanGeneration, recordSlopAction, updateSlopFlagsCount } from './services/planObservability';
 // V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
 // Utilisé uniquement quand composerBeta === true (path composer opt-in).
 import { buildClinicalContext } from './services/clinical/buildClinicalContext';
@@ -724,6 +726,9 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   // V97.x Phase 4 — Cache des reformulations LLM par flag.id.
   // Shape : { [flagId]: { status: 'loading'|'ready'|'error'|'accepted'|'refused', text?: string, error?: string } }
   const [slopRewrites, setSlopRewrites] = useState({});
+  // V97.20 (OBS-1) — id de la row d'observability associee a la generation courante.
+  // null tant que pas encore enregistree. Utilise pour increment compteurs slop.
+  const [observabilityId, setObservabilityId] = useState(null);
 
   // V97.18.2 — Précharge les guardrails depuis Supabase au mount.
   // Fallback silencieux sur hardcode JS si DB down. Idempotent (TTL 5 min).
@@ -763,10 +768,13 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     setGuardrailsState(null);
     setSlopFlags(null);
     setSlopRewrites({});
+    setObservabilityId(null);
     // V97.3 Phase B : timer + capture system prompt pour observabilité
     const startedAt = Date.now();
     const MODEL = 'claude-sonnet-4-20250514';
     let systemForTracking = null;
+    // V97.20 (OBS-1) — capture locale du profile (state async pas dispo a temps)
+    let profileForObs = null;
     try {
       const form = client.form || {};
       const planMode = form.consultationType === 'oneshot' ? 'oneshot' : 'followup';
@@ -811,6 +819,7 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
         }
         system = v2.prompt;
         setDetectedProfile(v2.profile || null);
+        profileForObs = v2.profile || null;
         // V97.x Phase 2 — Stocker les guardrails actifs pour audit post-génération
         if (Array.isArray(v2.guardrails) && v2.guardrails.length > 0) {
           setGuardrailsState({ guardrails: v2.guardrails, violations: [], completeness: null });
@@ -835,17 +844,39 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
 
       // V97.x Phase 2 — Audit clinique post-génération : phrases interdites
       // détectées + complétude (micronutriments + évictions). Best-effort.
+      let auditViolations = [];
+      let auditCompleteness = null;
+      let activeGuardrails = [];
       setGuardrailsState((prev) => {
         if (!prev?.guardrails?.length) return prev;
         try {
           const violations = auditPlanForGuardrails(responseText, prev.guardrails);
           const completeness = auditPlanCompleteness(responseText, prev.guardrails);
+          auditViolations = violations;
+          auditCompleteness = completeness;
+          activeGuardrails = prev.guardrails;
           return { ...prev, violations, completeness };
         } catch (auditErr) {
           // eslint-disable-next-line no-console
           console.warn('[guardrails-audit] post-generation failed (non-bloquant):', auditErr?.message);
           return prev;
         }
+      });
+
+      // V97.20 (OBS-1) — Record generation observability (best-effort, non-bloquant)
+      recordPlanGeneration({
+        clientId: client?.id,
+        generationDurationMs: Date.now() - startedAt,
+        model: MODEL,
+        composerBeta,
+        profile: profileForObs,
+        guardrails: activeGuardrails,
+        violations: auditViolations,
+        completeness: auditCompleteness,
+        slopFlags: null, // pas encore audite
+        planText: responseText,
+      }).then((res) => {
+        if (res.ok && res.id) setObservabilityId(res.id);
       });
 
       // V97.3 Phase B : tracking succès (best-effort, non bloquant)
@@ -1002,6 +1033,8 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                   try {
                     const flags = detectSlopHeuristics(result);
                     setSlopFlags(flags);
+                    // V97.20 (OBS-1) — Sync compteurs slop avec la row d'obs
+                    if (observabilityId) updateSlopFlagsCount(observabilityId, flags);
                   } catch (e) {
                     // eslint-disable-next-line no-console
                     console.warn('[anti-slop] failed:', e?.message);
@@ -1016,6 +1049,8 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                 const lines = (result || '').split('\n');
                 const passage = lines[flag.lineIndex] || flag.snippet || '';
                 if (!passage.trim()) return;
+                // V97.20 (OBS-1) — Track demande de reformulation
+                if (observabilityId) recordSlopAction(observabilityId, 'requested');
                 setSlopRewrites((prev) => ({
                   ...prev,
                   [flag.id]: { status: 'loading' },
@@ -1052,10 +1087,13 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                   ...prev,
                   [flag.id]: { ...entry, status: 'accepted' },
                 }));
+                // V97.20 (OBS-1) — Track accept + sync compteurs
+                if (observabilityId) recordSlopAction(observabilityId, 'accepted');
                 // Re-détecte les flags sur le plan modifié (la ligne flaggée peut être clean maintenant)
                 try {
                   const refreshed = detectSlopHeuristics(newPlan);
                   setSlopFlags(refreshed);
+                  if (observabilityId) updateSlopFlagsCount(observabilityId, refreshed);
                 } catch { /* noop */ }
               }}
               onRefuseRewrite={(flag) => {
@@ -1063,6 +1101,8 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
                   ...prev,
                   [flag.id]: { ...(prev[flag.id] || {}), status: 'refused' },
                 }));
+                // V97.20 (OBS-1) — Track refus
+                if (observabilityId) recordSlopAction(observabilityId, 'refused');
               }}
             />
             <div className="jpe-preview">
