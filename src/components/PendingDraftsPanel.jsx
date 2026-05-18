@@ -1,0 +1,407 @@
+// ─── PendingDraftsPanel.jsx ──────────────────────────────────────────────
+// V97.23.1 (V97.18 Phase F) — Cockpit UI Anissa pour valider/refuser les
+// brouillons IA generes automatiquement aux transitions de phase.
+//
+// Cf migration : V97.23_plan_drafts_pending_review.sql
+// Cf service : services/planDraftsService.js
+// Cf auto-gen : services/autoGeneratePlanForPhaseTransition.js
+//
+// Modal pleine page avec liste des drafts pending (groupes par cliente).
+// Click un draft → split view : metadata + draft_text. Boutons Accept
+// (convertit en consultation 'a_valider' + marque draft accepted) /
+// Refuse (marque draft refused avec note optionnelle).
+
+import { useState, useEffect } from 'react';
+import { listPlanDrafts, acceptPlanDraft, refusePlanDraft } from '../services/planDraftsService';
+import { saveNutritionConsultation } from '../store';
+import { COACH_IDENTITY } from '../services/coachIdentity';
+
+export default function PendingDraftsPanel({ onClose, clientsById }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [drafts, setDrafts] = useState([]);
+  const [selectedDraft, setSelectedDraft] = useState(null);
+  const [actionState, setActionState] = useState(null); // null | { ok, msg }
+
+  const refresh = async () => {
+    setLoading(true);
+    const res = await listPlanDrafts({ status: 'pending', limit: 50 });
+    if (res.ok) {
+      setDrafts(res.data);
+      setError(null);
+    } else {
+      setError(res.error || 'erreur chargement');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const handleAccept = async (draft, draftTextOverride, note) => {
+    setActionState(null);
+    const finalText = (draftTextOverride && draftTextOverride.trim().length > 0)
+      ? draftTextOverride
+      : draft.draft_text;
+    try {
+      // 1. Cree une consultation (status a_valider) avec le texte du draft
+      const next = {
+        clientId: draft.client_id,
+        nutritionPlan: finalText,
+        createdAt: new Date().toISOString(),
+        status: 'a_valider',
+        consultantName: COACH_IDENTITY?.name || 'Anissa',
+        // Trace de l'origine pour debug futur
+        sourceDraftId: draft.id,
+        sourceMetadata: draft.trigger_metadata || null,
+      };
+      await saveNutritionConsultation(next);
+      // 2. Marque draft accepted
+      const accRes = await acceptPlanDraft(draft.id, note);
+      if (!accRes.ok) {
+        setActionState({ ok: false, msg: `Consultation cree mais marquage draft echec : ${accRes.error}` });
+      } else {
+        setActionState({ ok: true, msg: 'Brouillon accepte. Consultation creee (status à valider).' });
+      }
+      // 3. Reload list et clear selected
+      setSelectedDraft(null);
+      await refresh();
+    } catch (e) {
+      setActionState({ ok: false, msg: e?.message || 'erreur conversion' });
+    }
+  };
+
+  const handleRefuse = async (draft, note) => {
+    setActionState(null);
+    const res = await refusePlanDraft(draft.id, note);
+    if (res.ok) {
+      setActionState({ ok: true, msg: 'Brouillon refuse.' });
+      setSelectedDraft(null);
+      await refresh();
+    } else {
+      setActionState({ ok: false, msg: res.error });
+    }
+  };
+
+  // Group by client_id
+  const grouped = drafts.reduce((acc, d) => {
+    if (!acc[d.client_id]) acc[d.client_id] = [];
+    acc[d.client_id].push(d);
+    return acc;
+  }, {});
+
+  return (
+    <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={modalStyle}>
+        <div style={headerStyle}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+              Brouillons IA en attente de validation
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b6f6b' }}>
+              Plans générés automatiquement aux transitions de phase. Valide ou refuse pour chaque cliente.
+            </p>
+          </div>
+          <button onClick={onClose} style={closeBtnStyle} title="Fermer">×</button>
+        </div>
+
+        {actionState && (
+          <div style={{
+            padding: '8px 22px', fontSize: 12,
+            background: actionState.ok ? 'rgba(46,94,62,.08)' : 'rgba(184,64,64,.08)',
+            color: actionState.ok ? '#2E5E3E' : '#a04040',
+            borderBottom: '1px solid rgba(0,0,0,.06)',
+          }}>
+            {actionState.ok ? '✓ ' : '⚠ '}{actionState.msg}
+          </div>
+        )}
+
+        <div style={bodyStyle}>
+          {loading && <div style={{ padding: 30, textAlign: 'center', color: '#6b6f6b' }}>Chargement…</div>}
+          {error && (
+            <div style={{
+              padding: 12, background: 'rgba(184,64,64,.08)',
+              border: '1px solid rgba(184,64,64,.3)', borderRadius: 8,
+              color: '#a04040', fontSize: 13,
+            }}>
+              Erreur : {error}
+            </div>
+          )}
+          {!loading && !error && drafts.length === 0 && (
+            <div style={{ padding: 30, textAlign: 'center', color: '#6b6f6b', fontSize: 13 }}>
+              Aucun brouillon en attente.
+              <div style={{ fontSize: 11, marginTop: 6, fontStyle: 'italic' }}>
+                Les brouillons apparaîtront ici dès qu&apos;une cliente passe à une nouvelle phase de son parcours.
+              </div>
+            </div>
+          )}
+          {!loading && !error && !selectedDraft && Object.entries(grouped).map(([clientId, list]) => {
+            const c = clientsById?.[clientId];
+            const clientLabel = c?.prenom || c?.form?.prenom || `client ${clientId.slice(0, 8)}…`;
+            return (
+              <div key={clientId} style={{ marginBottom: 18 }}>
+                <h3 style={{
+                  margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#2a2d2a',
+                }}>{clientLabel} <span style={{ fontWeight: 400, color: '#9a9d9a', fontSize: 11 }}>({list.length})</span></h3>
+                {list.map((d) => (
+                  <DraftRow key={d.id} draft={d} onClick={() => setSelectedDraft(d)} />
+                ))}
+              </div>
+            );
+          })}
+          {!loading && !error && selectedDraft && (
+            <DraftDetail
+              draft={selectedDraft}
+              clientsById={clientsById}
+              onBack={() => setSelectedDraft(null)}
+              onAccept={handleAccept}
+              onRefuse={handleRefuse}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DraftRow (liste compacte) ──────────────────────────────────────────
+
+function DraftRow({ draft, onClick }) {
+  const meta = draft.trigger_metadata || {};
+  const date = draft.generated_at ? new Date(draft.generated_at) : null;
+  const fmtDate = date ? date.toLocaleString('fr-CH', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }) : '—';
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '10px 14px', marginBottom: 6,
+        background: 'white', border: '1px solid rgba(0,0,0,.08)',
+        borderRadius: 8, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}
+    >
+      <div style={{
+        padding: '3px 8px', borderRadius: 4,
+        background: draft.source === 'auto_phase_transition' ? '#7e5ec7' : '#6b6f6b',
+        color: 'white', fontSize: 10, fontWeight: 700,
+      }}>
+        {draft.source === 'auto_phase_transition' ? 'AUTO' : 'MANUEL'}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12.5, color: '#2a2d2a' }}>
+          {meta.template_key && <code style={{ fontSize: 11, marginRight: 6 }}>{meta.template_key}</code>}
+          {meta.from_phase_id && meta.to_phase_id && (
+            <>
+              <span style={{ color: '#6b6f6b' }}>
+                <code style={{ fontSize: 10 }}>{meta.from_phase_id}</code>
+                {' → '}
+                <code style={{ fontSize: 10 }}>{meta.to_phase_id}</code>
+              </span>
+            </>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: '#9a9d9a', marginTop: 2 }}>
+          {draft.draft_length_chars?.toLocaleString('fr-CH') || '—'} caractères
+          {' · généré le '}{fmtDate}
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: '#7e5ec7', fontWeight: 600 }}>
+        Voir →
+      </div>
+    </div>
+  );
+}
+
+// ─── DraftDetail (split view editor + actions) ──────────────────────────
+
+function DraftDetail({ draft, clientsById, onBack, onAccept, onRefuse }) {
+  const [editedText, setEditedText] = useState(draft.draft_text);
+  const [note, setNote] = useState('');
+  const [confirming, setConfirming] = useState(null); // null | 'accept' | 'refuse'
+  const meta = draft.trigger_metadata || {};
+  const c = clientsById?.[draft.client_id];
+  const clientLabel = c?.prenom || c?.form?.prenom || `client ${draft.client_id.slice(0, 8)}…`;
+
+  const dirty = editedText !== draft.draft_text;
+
+  return (
+    <div>
+      <button
+        onClick={onBack}
+        style={{
+          background: 'transparent', border: '1px solid rgba(0,0,0,.15)',
+          padding: '4px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+          marginBottom: 12, color: '#2a2d2a',
+        }}
+      >
+        ← Retour à la liste
+      </button>
+
+      {/* Metadata */}
+      <div style={{
+        padding: '10px 14px', marginBottom: 12,
+        background: 'rgba(126,94,199,.06)', border: '1px solid rgba(126,94,199,.2)',
+        borderRadius: 8, fontSize: 12,
+      }}>
+        <div style={{ fontWeight: 600, color: '#2a2d2a', marginBottom: 4 }}>
+          {clientLabel}
+        </div>
+        <div style={{ color: '#6b6f6b' }}>
+          {meta.template_key && <><code style={{ fontSize: 11 }}>{meta.template_key}</code> · </>}
+          {meta.from_phase_id && meta.to_phase_id && (
+            <>Transition <code>{meta.from_phase_id}</code> → <code>{meta.to_phase_id}</code> · </>
+          )}
+          {Number.isFinite(meta.generation_duration_ms) && (
+            <>{Math.round(meta.generation_duration_ms / 1000)}s génération · </>
+          )}
+          {meta.profile_tag && <>profil <code>{meta.profile_tag}</code> · </>}
+          {meta.phase_recommendations_source && (
+            <>source recos <code>{meta.phase_recommendations_source}</code></>
+          )}
+        </div>
+      </div>
+
+      {/* Editor */}
+      <textarea
+        value={editedText}
+        onChange={(e) => setEditedText(e.target.value)}
+        rows={18}
+        style={{
+          width: '100%', padding: '10px 12px',
+          fontSize: 13, fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+          border: '1px solid rgba(0,0,0,.15)', borderRadius: 8,
+          background: 'white', resize: 'vertical',
+        }}
+      />
+      <div style={{ fontSize: 10.5, color: '#9a9d9a', marginTop: 4, textAlign: 'right' }}>
+        {editedText.length.toLocaleString('fr-CH')} caractères
+        {dirty && <span style={{ color: '#785a1a', marginLeft: 8 }}>(modifié)</span>}
+      </div>
+
+      {/* Note refuse/accept */}
+      <input
+        type="text"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Note (optionnel)"
+        style={{
+          width: '100%', padding: '8px 12px', marginTop: 10,
+          fontSize: 12, border: '1px solid rgba(0,0,0,.15)', borderRadius: 6,
+        }}
+      />
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        {confirming === null && (
+          <>
+            <button
+              onClick={() => setConfirming('accept')}
+              style={{
+                background: '#2E5E3E', color: 'white', border: 'none',
+                padding: '8px 18px', borderRadius: 6,
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              ✓ Accepter et créer consultation
+            </button>
+            <button
+              onClick={() => setConfirming('refuse')}
+              style={{
+                background: 'transparent', color: '#a04040',
+                border: '1px solid rgba(184,64,64,.4)',
+                padding: '8px 18px', borderRadius: 6,
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Refuser
+            </button>
+          </>
+        )}
+
+        {confirming === 'accept' && (
+          <>
+            <span style={{ fontSize: 12, color: '#2a2d2a' }}>
+              Créer une consultation (status &quot;à valider&quot;) avec ce texte ?
+            </span>
+            <button
+              onClick={() => { setConfirming(null); onAccept(draft, editedText, note); }}
+              style={{
+                background: '#2E5E3E', color: 'white', border: 'none',
+                padding: '6px 14px', borderRadius: 6,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}
+            >Confirmer accept</button>
+            <button
+              onClick={() => setConfirming(null)}
+              style={{
+                background: 'transparent', border: '1px solid rgba(0,0,0,.15)',
+                padding: '5px 12px', borderRadius: 6,
+                fontSize: 12, cursor: 'pointer',
+              }}
+            >Annuler</button>
+          </>
+        )}
+
+        {confirming === 'refuse' && (
+          <>
+            <span style={{ fontSize: 12, color: '#2a2d2a' }}>
+              Refuser ce brouillon ? Il restera en DB pour audit.
+            </span>
+            <button
+              onClick={() => { setConfirming(null); onRefuse(draft, note); }}
+              style={{
+                background: '#a04040', color: 'white', border: 'none',
+                padding: '6px 14px', borderRadius: 6,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}
+            >Confirmer refus</button>
+            <button
+              onClick={() => setConfirming(null)}
+              style={{
+                background: 'transparent', border: '1px solid rgba(0,0,0,.15)',
+                padding: '5px 12px', borderRadius: 6,
+                fontSize: 12, cursor: 'pointer',
+              }}
+            >Annuler</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── styles ──────────────────────────────────────────────────────────────
+
+const overlayStyle = {
+  position: 'fixed', inset: 0,
+  background: 'rgba(0,0,0,.5)', zIndex: 9999,
+  display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+  padding: '40px 20px', overflowY: 'auto',
+};
+
+const modalStyle = {
+  background: '#fbf9f4', borderRadius: 14,
+  maxWidth: 980, width: '100%',
+  boxShadow: '0 20px 60px rgba(0,0,0,.25)',
+  display: 'flex', flexDirection: 'column',
+  maxHeight: 'calc(100vh - 80px)',
+};
+
+const headerStyle = {
+  padding: '18px 22px',
+  borderBottom: '1px solid rgba(0,0,0,.08)',
+  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12,
+};
+
+const closeBtnStyle = {
+  background: 'transparent', border: 'none', cursor: 'pointer',
+  fontSize: 24, lineHeight: 1, color: '#6b6f6b', padding: 0,
+};
+
+const bodyStyle = {
+  padding: 18, overflowY: 'auto', flex: 1,
+};

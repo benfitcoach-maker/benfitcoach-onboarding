@@ -155,3 +155,19 @@ export async function countPendingDrafts(clientId) {
     return 0;
   }
 }
+
+/**
+ * Compte global des drafts pending (toutes clientes confondues).
+ */
+export async function countAllPendingDrafts() {
+  try {
+    const { count, error } = await supabase
+      .from('plan_drafts_pending_review')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    if (error) return 0;
+    return count || 0;
+  } catch {
+    return 0;
+  }
+}

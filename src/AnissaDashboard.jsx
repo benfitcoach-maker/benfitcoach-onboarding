@@ -25,6 +25,9 @@ import PhaseRecommendationsPanel from './components/PhaseRecommendationsPanel';
 // V97.22.2 — Preload phase recommendations depuis DB pour readiness V97.18 D-F.
 import { preloadPhaseRecommendationsFromSupabase } from './services/protocolPhases';
 import { supabase } from './supabaseClient';
+// V97.23.1 (V97.18 Phase F) — Cockpit brouillons IA en attente de validation.
+import PendingDraftsPanel from './components/PendingDraftsPanel';
+import { countAllPendingDrafts } from './services/planDraftsService';
 
 // V86.2 : prend le client entier pour pouvoir brancher FR/EN via getClientNutritionLocale.
 // Cliente FR (defaut) → pre-questionnaire /questionnaire/:id (inchange).
@@ -893,6 +896,18 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
   const [showObservabilityPanel, setShowObservabilityPanel] = useState(false);
   // V97.22 — open/close cockpit phase recommendations
   const [showPhasesPanel, setShowPhasesPanel] = useState(false);
+  // V97.23.1 (V97.18 Phase F) — Cockpit brouillons IA + badge count
+  const [showDraftsPanel, setShowDraftsPanel] = useState(false);
+  const [pendingDraftsCount, setPendingDraftsCount] = useState(0);
+
+  // V97.23.1 — Compte les drafts pending au mount et refresh apres fermeture modal
+  useEffect(() => {
+    let alive = true;
+    countAllPendingDrafts().then((c) => {
+      if (alive) setPendingDraftsCount(c);
+    });
+    return () => { alive = false; };
+  }, [showDraftsPanel]); // refresh apres close
 
   // V97.22.2 — Preload phase recommendations DB → cache module au mount.
   // Idempotent (TTL 5 min). Fallback silencieux sur hardcode JS si DB down.
@@ -1114,6 +1129,28 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
           }}
         >
           {syncing ? 'Sync...' : syncResult ? `${syncResult.synced} synced` : 'Sync cloud'}
+        </button>
+        {/* V97.23.1 — bouton cockpit brouillons IA en attente */}
+        <button
+          onClick={() => setShowDraftsPanel(true)}
+          title="Brouillons IA générés automatiquement aux transitions de phase, en attente de validation"
+          style={{
+            padding: '8px 12px', borderRadius: 8,
+            border: `1px solid ${pendingDraftsCount > 0 ? 'rgba(126,94,199,.5)' : 'rgba(255,255,255,.1)'}`,
+            background: pendingDraftsCount > 0 ? 'rgba(126,94,199,.18)' : 'none',
+            color: pendingDraftsCount > 0 ? '#c4b3f0' : 'rgba(255,255,255,.5)',
+            cursor: 'pointer',
+            fontSize: '.75rem', marginRight: 8, minHeight: 36,
+            fontWeight: pendingDraftsCount > 0 ? 600 : 400,
+          }}
+        >
+          📨 Brouillons
+          {pendingDraftsCount > 0 && (
+            <span style={{
+              marginLeft: 6, padding: '1px 7px', borderRadius: 999,
+              background: '#7e5ec7', color: 'white', fontSize: 10, fontWeight: 700,
+            }}>{pendingDraftsCount}</span>
+          )}
         </button>
         {/* V97.22 — bouton ouverture cockpit recommandations par phase */}
         <button
@@ -1361,6 +1398,14 @@ export default function AnissaDashboard({ sharedClients, ownClients, onConsultat
       {/* V97.22 — Cockpit recommandations par phase (modal) */}
       {showPhasesPanel && (
         <PhaseRecommendationsPanel onClose={() => setShowPhasesPanel(false)} />
+      )}
+
+      {/* V97.23.1 — Cockpit brouillons IA en attente de validation */}
+      {showDraftsPanel && (
+        <PendingDraftsPanel
+          onClose={() => setShowDraftsPanel(false)}
+          clientsById={Object.fromEntries(allClients.map((c) => [c.id, c]))}
+        />
       )}
     </div>
   );
