@@ -22,6 +22,35 @@ function isAllowedOrigin(origin) {
   return false;
 }
 
+// V97.25 (audit HIGH fix) — Rate limit in-memory anti-runaway.
+// Pas un vrai daily budget (necessiterait Supabase) mais bloque le
+// scenario worst-case d'un bug de boucle qui consomme la facture
+// Anthropic en quelques minutes. 30 calls / 5 min par instance Vercel.
+//
+// Limites assumees :
+//   - Reset au cold start (Vercel scale-up = nouveau compteur).
+//   - Pas de cross-instance (concurrence limitee chez Anissa = OK).
+//   - Pas de differentiation client/admin (single-tenant).
+//
+// Pour un vrai budget multi-tenant, migrer en V97.26 vers une table
+// Supabase llm_daily_quota.
+const RATE_WINDOW_MS = 5 * 60 * 1000;
+const RATE_LIMIT = 30;
+const _rateLog = []; // [timestamp_ms, ...]
+
+function checkRateLimit() {
+  const now = Date.now();
+  // Purge entries hors fenetre
+  while (_rateLog.length > 0 && _rateLog[0] < now - RATE_WINDOW_MS) {
+    _rateLog.shift();
+  }
+  if (_rateLog.length >= RATE_LIMIT) {
+    return { allowed: false, retryAfterSec: Math.ceil((_rateLog[0] + RATE_WINDOW_MS - now) / 1000) };
+  }
+  _rateLog.push(now);
+  return { allowed: true };
+}
+
 export default async function handler(req, res) {
   const origin = req.headers.origin;
   if (isAllowedOrigin(origin)) {
@@ -38,6 +67,19 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     res.status(405).json({ error: { message: 'Method not allowed' } });
+    return;
+  }
+
+  // V97.25 — Rate limit anti-runaway (avant verif API key pour eviter
+  // qu'un attaquant force le check API key 1000 fois).
+  const rate = checkRateLimit();
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(rate.retryAfterSec));
+    res.status(429).json({
+      error: {
+        message: `Rate limit Claude atteint (${RATE_LIMIT} calls / ${RATE_WINDOW_MS / 60000} min). Retry dans ${rate.retryAfterSec}s.`,
+      },
+    });
     return;
   }
 

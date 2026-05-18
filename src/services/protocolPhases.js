@@ -713,6 +713,10 @@ export function suggestNextPhase(protocolPhases) {
 /**
  * Marque la phase courante terminée et active la suivante.
  * Logique pure — retourne le nouveau protocolPhases. À cloudSync ensuite.
+ *
+ * V97.25 (audit HIGH-8 fix) — Garde le throw pour rétro-compat avec les
+ * 2 callers actuels (ClientJourneyPage / JourneyPhasesCard) qui wrap en
+ * try/catch. Future API recommandee : transitionToNextPhaseSafe ci-dessous.
  */
 export function transitionToNextPhase(protocolPhases) {
   const active = getActivePhase(protocolPhases);
@@ -734,6 +738,24 @@ export function transitionToNextPhase(protocolPhases) {
     ...protocolPhases,
     phases: updatedPhases,
   };
+}
+
+/**
+ * V97.25 — Variante safe (Result pattern) cohérente avec le reste du module.
+ * @returns {{ ok: true, data: object } | { ok: false, error: string, reason: string }}
+ */
+export function transitionToNextPhaseSafe(protocolPhases) {
+  try {
+    const data = transitionToNextPhase(protocolPhases);
+    return { ok: true, data };
+  } catch (e) {
+    const msg = e?.message || 'erreur transition';
+    return {
+      ok: false,
+      error: msg,
+      reason: msg.includes('derniere phase') ? 'last_phase' : 'no_active_phase',
+    };
+  }
 }
 
 /**

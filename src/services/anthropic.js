@@ -79,6 +79,11 @@ export function safeParseJson(text) {
  * @returns {Promise<string|object|null>}
  * @throws {ClaudeApiError} sur erreur HTTP/reseau
  */
+// V97.25 (audit HIGH-7 fix) — Timeout par defaut pour eviter calls orphelins
+// quand Anissa quitte la page ou change de cliente. Sonnet maxTokens=16000
+// prend typiquement 30-60s, on laisse 120s de marge.
+const DEFAULT_TIMEOUT_MS = 120 * 1000;
+
 export async function callClaude({
   system,
   user,
@@ -89,6 +94,10 @@ export async function callClaude({
   trim = true,
   skipVocabularyGuard = false,
   sanitizeOutput = false,
+  // V97.25 — AbortSignal externe (caller peut canceller). Si non fourni,
+  // un timeout interne de DEFAULT_TIMEOUT_MS s'applique.
+  signal = null,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   // Compliance : injecte le guard vocabulaire à la source (au début du
   // system prompt) sauf opt-out explicite. Plus fiable que de tout
@@ -104,11 +113,19 @@ export async function callClaude({
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['x-fallback-key'] = apiKey;
 
+  // V97.25 (audit HIGH-7 fix) — AbortController interne pour timeout +
+  // honneur le signal externe si fourni.
+  const internalAbort = new AbortController();
+  const timeoutHandle = setTimeout(() => internalAbort.abort('timeout'), timeoutMs);
+  const externalAbortHandler = () => internalAbort.abort('external');
+  if (signal) signal.addEventListener('abort', externalAbortHandler, { once: true });
+
   let response;
   try {
     response = await fetch('/api/claude', {
       method: 'POST',
       headers,
+      signal: internalAbort.signal,
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
@@ -117,7 +134,17 @@ export async function callClaude({
       }),
     });
   } catch (err) {
+    clearTimeout(timeoutHandle);
+    if (signal) signal.removeEventListener('abort', externalAbortHandler);
+    const isAbort = err?.name === 'AbortError' || internalAbort.signal.aborted;
+    if (isAbort) {
+      const reason = internalAbort.signal.reason || 'aborted';
+      throw new ClaudeApiError(`Appel Claude annule : ${reason}`, 0, { aborted: true, reason });
+    }
     throw new ClaudeApiError(`Erreur reseau : ${err?.message || err}`, 0, null);
+  } finally {
+    clearTimeout(timeoutHandle);
+    if (signal) signal.removeEventListener('abort', externalAbortHandler);
   }
 
   if (!response.ok) {

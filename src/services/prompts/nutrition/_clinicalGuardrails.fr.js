@@ -553,7 +553,11 @@ export function auditPlanForGuardrails(planText, guardrails) {
 
   for (const guardrail of guardrails) {
     for (const phrase of guardrail.forbidden_phrases || []) {
+      // V97.25 (audit HIGH fix) — skip phrase vide qui ferait boucle infinie
+      // (indexOf('', 0) === 0, searchFrom += 0, loop forever).
+      if (!phrase || typeof phrase !== 'string') continue;
       const lowercasePhrase = phrase.toLowerCase();
+      if (lowercasePhrase.length === 0) continue;
       let searchFrom = 0;
       while (searchFrom < lowercasePlan.length) {
         const idx = lowercasePlan.indexOf(lowercasePhrase, searchFrom);
@@ -601,10 +605,19 @@ export function auditPlanCompleteness(planText, guardrails) {
 
   for (const guardrail of guardrails) {
     for (const micro of guardrail.micronutrients || []) {
-      // Match : si le nom du micro (ou son alias court) apparait dans le plan
-      const micros = micro.toLowerCase().split(/[\s/]+/).filter((w) => w.length > 2);
-      // Au moins un mot significatif du nom doit être dans le plan
-      const found = micros.some((w) => lowercasePlan.includes(w));
+      // V97.25 (audit HIGH-10 fix) — match plus strict pour eviter faux
+      // negatifs sur micros multi-mots. Ex 'acide folique' :
+      //   AVANT (.some) : 'acide gras' matchait 'acide' → considere
+      //     'acide folique' present → ZERO flag (BUG).
+      //   APRES : on tente d'abord la phrase entiere (case insensitive).
+      //   Si pas trouve, on exige TOUS les mots significatifs presents.
+      const lc = micro.toLowerCase();
+      if (lowercasePlan.includes(lc)) continue; // match exact OK
+      const words = lc.split(/[\s/]+/).filter((w) => w.length > 2);
+      // Au moins 2 mots OU le seul mot present
+      const minMatchCount = Math.min(words.length, 2);
+      const matchedCount = words.filter((w) => lowercasePlan.includes(w)).length;
+      const found = words.length > 0 && matchedCount >= minMatchCount;
       if (!found) {
         result.missing_micronutrients.push({
           profile_key: guardrail.profile_key,

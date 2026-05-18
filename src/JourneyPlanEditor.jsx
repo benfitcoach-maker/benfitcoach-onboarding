@@ -721,6 +721,11 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
   // V97.x Phase 2 — Garde-fous cliniques détectés + audit post-génération.
   // Forme : { guardrails: [...], violations: [...], completeness: {...} }
   const [guardrailsState, setGuardrailsState] = useState(null);
+  // V97.25 (audit HIGH-2 fix) — ref mirroring guardrailsState pour lecture
+  // synchrone dans handleGenerate (evite race condition setState callback
+  // microtask vs recordPlanGeneration synchrone).
+  const guardrailsStateRef = useRef(null);
+  useEffect(() => { guardrailsStateRef.current = guardrailsState; }, [guardrailsState]);
   // V97.x Phase 3 — Anti-slop : flags détectés par heuristiques regex.
   // null = pas encore lancé, [] = audit lancé sans flags, [...] = flags.
   const [slopFlags, setSlopFlags] = useState(null);
@@ -861,24 +866,27 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
 
       // V97.x Phase 2 — Audit clinique post-génération : phrases interdites
       // détectées + complétude (micronutriments + évictions). Best-effort.
+      // V97.25 (audit HIGH-2 fix) — Calcul SYNCHRONE avant le setState pour
+      // garantir que les variables locales sont remplies avant
+      // recordPlanGeneration les lise (setState callback est microtask et
+      // peut s'executer apres l'appel observability sinon).
       let auditViolations = [];
       let auditCompleteness = null;
       let activeGuardrails = [];
-      setGuardrailsState((prev) => {
-        if (!prev?.guardrails?.length) return prev;
-        try {
-          const violations = auditPlanForGuardrails(responseText, prev.guardrails);
-          const completeness = auditPlanCompleteness(responseText, prev.guardrails);
-          auditViolations = violations;
-          auditCompleteness = completeness;
-          activeGuardrails = prev.guardrails;
-          return { ...prev, violations, completeness };
-        } catch (auditErr) {
-          // eslint-disable-next-line no-console
-          console.warn('[guardrails-audit] post-generation failed (non-bloquant):', auditErr?.message);
-          return prev;
+      try {
+        const currentGuardrails = guardrailsStateRef.current?.guardrails || [];
+        if (currentGuardrails.length > 0) {
+          activeGuardrails = currentGuardrails;
+          auditViolations = auditPlanForGuardrails(responseText, currentGuardrails);
+          auditCompleteness = auditPlanCompleteness(responseText, currentGuardrails);
+          setGuardrailsState((prev) => prev?.guardrails?.length
+            ? { ...prev, violations: auditViolations, completeness: auditCompleteness }
+            : prev);
         }
-      });
+      } catch (auditErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[guardrails-audit] post-generation failed (non-bloquant):', auditErr?.message);
+      }
 
       // V97.20 (OBS-1) — Record generation observability (best-effort, non-bloquant)
       recordPlanGeneration({

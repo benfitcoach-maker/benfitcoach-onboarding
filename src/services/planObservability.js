@@ -242,11 +242,16 @@ export async function recordPlanGeneration(args = {}) {
 }
 
 /**
- * Increment un compteur d'action slop sur une row existante.
+ * Increment ATOMIQUE d'un compteur d'action slop sur une row.
+ *
+ * V97.25 (audit HIGH fix) — remplace l'ancien read-modify-write JS qui
+ * perdait des increments en cas d'accept Haiku quasi-simultanes. La RPC
+ * obs_increment_field (cf migrations/V97.25_obs_increment_rpc.sql) fait
+ * UPDATE inline col = col + 1.
  *
  * @param {string} observabilityId - id retourne par recordPlanGeneration
  * @param {'requested'|'accepted'|'refused'} action
- * @returns {Promise<{ ok: boolean, error?: string }>}
+ * @returns {Promise<{ ok: boolean, newCount?: number, error?: string }>}
  */
 export async function recordSlopAction(observabilityId, action) {
   if (!observabilityId) return { ok: false, error: 'id requis' };
@@ -259,7 +264,30 @@ export async function recordSlopAction(observabilityId, action) {
   if (!field) return { ok: false, error: `action invalide: ${action}` };
 
   try {
-    // Read-modify-write (Supabase JS pas de RPC increment natif simple)
+    const { data, error } = await supabase.rpc('obs_increment_field', {
+      p_id: observabilityId,
+      p_field: field,
+    });
+    if (error) {
+      // Fallback : si la RPC n'est pas encore appliquee en DB (migration
+      // V97.25 pas runee), on tombe sur l'ancien comportement read-modify-write
+      // pour ne pas casser la prod. Log warn pour signaler.
+      // eslint-disable-next-line no-console
+      console.warn('[obs-increment-rpc] failed, fallback read-modify-write:', error.message);
+      return await _recordSlopActionFallback(observabilityId, field);
+    }
+    return { ok: true, newCount: data?.new_count };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
+ * Fallback non-atomique (pre V97.25 migration). Identique a l'ancien code,
+ * conserve uniquement le temps que la migration soit appliquee en prod.
+ */
+async function _recordSlopActionFallback(observabilityId, field) {
+  try {
     const { data: current, error: readErr } = await supabase
       .from('plan_generation_observability')
       .select(field)
@@ -272,7 +300,7 @@ export async function recordSlopAction(observabilityId, action) {
       .update({ [field]: currentVal + 1 })
       .eq('id', observabilityId);
     if (writeErr) return { ok: false, error: writeErr.message };
-    return { ok: true };
+    return { ok: true, newCount: currentVal + 1, fallback: true };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
   }

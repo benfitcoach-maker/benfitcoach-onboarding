@@ -200,7 +200,8 @@ export default function PendingDraftsPanel({ onClose, clientsById }) {
           )}
           {!loading && !error && !selectedDraft && Object.entries(grouped).map(([clientId, list]) => {
             const c = clientsById?.[clientId];
-            const clientLabel = c?.prenom || c?.form?.prenom || `client ${clientId.slice(0, 8)}…`;
+            // V97.25 (audit HIGH fix) — null safety sur clientId
+            const clientLabel = c?.prenom || c?.form?.prenom || `client ${(clientId || '').slice(0, 8)}…`;
             return (
               <div key={clientId} style={{ marginBottom: 18 }}>
                 <h3 style={{
@@ -299,16 +300,18 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish,
         // Trie par date desc et prend la premiere publiee (statut 'publie')
         // Ignore le draft accepted en cours s'il a deja cree une consult
         const published = list
-          .filter((c) => c.id !== draft.sourceConsultationId && (c.status === 'publie' || c.status === 'a_valider'))
+          // V97.25 (audit MEDIUM fix) — la colonne DB est snake_case
+          .filter((c) => c.id !== draft.source_consultation_id && (c.status === 'publie' || c.status === 'a_valider'))
           .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         setCurrentV(published[0] || null);
       } catch { /* noop */ }
     })();
     return () => { alive = false; };
-  }, [draft.client_id, draft.sourceConsultationId]);
+  }, [draft.client_id, draft.source_consultation_id]);
   const meta = draft.trigger_metadata || {};
   const c = clientsById?.[draft.client_id];
-  const clientLabel = c?.prenom || c?.form?.prenom || `client ${draft.client_id.slice(0, 8)}…`;
+  // V97.25 (audit HIGH fix) — null safety sur draft.client_id
+  const clientLabel = c?.prenom || c?.form?.prenom || `client ${(draft.client_id || '').slice(0, 8)}…`;
 
   const dirty = editedText !== draft.draft_text;
 
