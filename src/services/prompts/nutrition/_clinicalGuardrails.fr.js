@@ -26,60 +26,265 @@
  * @property {Record<string, string>} precaution_vocab - Vocabulaire de précaution {forbidden: replacement}
  */
 
+// ─── PHRASES INTERDITES TRANSVERSES ──────────────────────────────────────
+// Verbes médicaux et formulations à risque applicables à TOUS les profils
+// (scope nutritionniste strict). Factorisés pour éviter duplication par profil.
+
+const FORBIDDEN_MEDICAL_VERBS = [
+  'guérir',
+  'guérit',
+  'soigner ta',
+  'soigner ton',
+  'traiter ta',
+  'traiter ton',
+  'diagnostiquer',
+];
+
+const FORBIDDEN_REPLACE_MEDIC = [
+  'à la place du médecin',
+  'à la place de ton médecin',
+  'remplacer le médecin',
+  'remplace ton médecin',
+  'tu n\'as pas besoin de médecin',
+  'sans avis médical',
+  'arrête ton traitement',
+  'arrête tes médicaments',
+];
+
+const FORBIDDEN_REPLACE_SUPPLEMENTATION = [
+  'plus efficace que les comprimés',
+  'plus efficace que tes comprimés',
+  'plus efficace que ta supplémentation',
+  'remplace tes comprimés',
+  'remplacer tes comprimés',
+  'à la place de tes comprimés',
+  'à la place de ta supplémentation',
+];
+
+const FORBIDDEN_AVOID_INJECTION = [
+  'éviter tes injections',
+  'éviter les injections',
+  'éviter ton injection',
+  'évite tes injections',
+  'éviter les injections annuelles',
+  'remplacer tes injections',
+  'remplace tes injections',
+  'à la place du fer prescrit',
+];
+
+const PRECAUTION_VOCAB_BASE = {
+  'à la place de': 'en complément de',
+  'remplace': 'complète',
+  'au lieu de prendre': 'en plus de prendre',
+};
+
 /**
- * Garde-fous PHASE 1 — hardcode JS, focalisé phrases interdites grossesse.
- * Phase 2 = migration table Supabase + matrice complète 7 profils.
+ * Garde-fous PHASE 2 — matrice complète 7 profils en JS hardcode.
+ * Migration vers table Supabase `clinical_guardrails` à venir quand
+ * Anissa aura validé les règles métier en pratique.
  *
  * @type {Record<string, Guardrail>}
  */
 export const GUARDRAILS_FR = {
+  // ─── GROSSESSE (tous trimestres confondus pour V1) ────────────────────
   grossesse: {
     profile_key: 'grossesse',
     display_name: 'Grossesse',
     forbidden_phrases: [
-      // Phrases promettant d'éviter une intervention médicale
-      'éviter tes injections',
-      'éviter les injections',
-      'éviter ton injection',
-      'évite tes injections',
-      'éviter les injections annuelles',
-      'remplacer tes injections',
-      'remplace tes injections',
-      // Phrases contredisant la supplémentation médicale
-      'plus efficace que les comprimés',
-      'plus efficace que tes comprimés',
-      'plus efficace que ta supplémentation',
-      'remplace tes comprimés',
-      'remplacer tes comprimés',
-      'à la place de tes comprimés',
-      'à la place de ta supplémentation',
-      'à la place du fer prescrit',
-      // Phrases qui empiètent sur le rôle médical
-      'à la place du médecin',
-      'à la place de ton médecin',
-      'remplacer le médecin',
-      'remplace ton médecin',
-      'tu n\'as pas besoin de médecin',
-      'sans avis médical',
-      'arrête ton traitement',
-      'arrête tes médicaments',
-      // Verbes médicaux interdits (scope nutritionniste strict)
-      'guérir',
-      'guérit',
-      'soigner ta',
-      'soigner ton',
-      'traiter ta',
-      'traiter ton',
-      'diagnostiquer',
+      ...FORBIDDEN_AVOID_INJECTION,
+      ...FORBIDDEN_REPLACE_SUPPLEMENTATION,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      ...FORBIDDEN_MEDICAL_VERBS,
+      'régime restrictif',
+      'perte de poids',
+      'déficit calorique',
     ],
-    required_phrases: [], // Phase 2 : exigences ex "éviter listeria"
-    micronutrients: [], // Phase 2 : iode / B9 / fer / etc.
-    evictions: [], // Phase 2 : listeria / toxoplasmose / mercure / alcool
+    required_phrases: [
+      'éviter listeria',
+      'éviter toxoplasmose',
+      'éviter mercure',
+      'éviter alcool',
+    ],
+    micronutrients: [
+      'acide folique',
+      'B9',
+      'iode',
+      'B12',
+      'vitamine D',
+      'fer',
+      'oméga-3',
+    ],
+    evictions: [
+      'listeria',
+      'toxoplasmose',
+      'alcool',
+      'mercure (gros poissons)',
+      'foie',
+      'fromages au lait cru',
+      'charcuterie crue',
+      'sushi crus',
+    ],
+    precaution_vocab: { ...PRECAUTION_VOCAB_BASE },
+  },
+
+  // ─── ALLAITEMENT ──────────────────────────────────────────────────────
+  allaitement: {
+    profile_key: 'allaitement',
+    display_name: 'Allaitement',
+    forbidden_phrases: [
+      ...FORBIDDEN_MEDICAL_VERBS,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      'régime restrictif',
+      'perte de poids rapide',
+      'déficit calorique',
+      'jeûne intermittent',
+      'cure détox',
+    ],
+    required_phrases: [
+      'hydratation suffisante',
+      'éviter alcool',
+    ],
+    micronutrients: [
+      'iode',
+      'B12',
+      'vitamine D',
+      'oméga-3',
+      'fer',
+      'calcium',
+    ],
+    evictions: [
+      'alcool',
+      'caféine en excès (>200mg/j)',
+      'sauge (inhibe lactation)',
+      'menthe poivrée à forte dose',
+      'persil à forte dose',
+    ],
+    precaution_vocab: { ...PRECAUTION_VOCAB_BASE },
+  },
+
+  // ─── POST-PARTUM ──────────────────────────────────────────────────────
+  postPartum: {
+    profile_key: 'postPartum',
+    display_name: 'Post-partum',
+    forbidden_phrases: [
+      ...FORBIDDEN_MEDICAL_VERBS,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      'retrouver ta ligne',
+      'perdre les kilos de la grossesse',
+      'régime restrictif',
+      'avant la grossesse',
+    ],
+    required_phrases: [
+      'récupération progressive',
+    ],
+    micronutrients: [
+      'fer',
+      'vitamine D',
+      'B12',
+      'oméga-3',
+    ],
+    evictions: [],
+    precaution_vocab: { ...PRECAUTION_VOCAB_BASE },
+  },
+
+  // ─── ADOLESCENTE (<18 ans, warning trouble alimentaire) ───────────────
+  adolescente: {
+    profile_key: 'adolescente',
+    display_name: 'Adolescente (<18 ans)',
+    forbidden_phrases: [
+      ...FORBIDDEN_MEDICAL_VERBS,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      'déficit calorique',
+      'compter les calories',
+      'restriction',
+      'régime',
+      'perdre du poids',
+      'mincir',
+      'sauter un repas',
+      'jeûne',
+    ],
+    required_phrases: [],
+    micronutrients: [
+      'calcium',
+      'fer',
+      'zinc',
+      'vitamine D',
+    ],
+    evictions: [],
     precaution_vocab: {
-      'à la place de': 'en complément de',
-      'remplace': 'complète',
-      'au lieu de prendre': 'en plus de prendre',
+      ...PRECAUTION_VOCAB_BASE,
+      'régime': 'rééquilibrage alimentaire',
+      'restriction': 'choix conscient',
     },
+  },
+
+  // ─── MÉNOPAUSE (peri / post) ──────────────────────────────────────────
+  menopause: {
+    profile_key: 'menopause',
+    display_name: 'Ménopause',
+    forbidden_phrases: [
+      ...FORBIDDEN_MEDICAL_VERBS,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      ...FORBIDDEN_REPLACE_SUPPLEMENTATION,
+      'œstrogènes naturels',
+      'remplace ton traitement hormonal',
+      'guérir les bouffées',
+    ],
+    required_phrases: [],
+    micronutrients: [
+      'calcium',
+      'vitamine D',
+      'magnésium',
+      'oméga-3',
+    ],
+    evictions: [],
+    precaution_vocab: { ...PRECAUTION_VOCAB_BASE },
+  },
+
+  // ─── DIABÈTE (type 1 et 2 — vigilance medic) ──────────────────────────
+  diabete: {
+    profile_key: 'diabete',
+    display_name: 'Diabète',
+    forbidden_phrases: [
+      ...FORBIDDEN_MEDICAL_VERBS,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      ...FORBIDDEN_REPLACE_SUPPLEMENTATION,
+      'éviter tes injections',
+      'remplace ton insuline',
+      'arrête ta metformine',
+      'guérir le diabète',
+      'inverser le diabète sans suivi médical',
+    ],
+    required_phrases: [
+      'en coordination avec ton médecin',
+    ],
+    micronutrients: [
+      'magnésium',
+      'chrome',
+      'vitamine D',
+      'oméga-3',
+    ],
+    evictions: [
+      'sucres rapides en excès',
+    ],
+    precaution_vocab: { ...PRECAUTION_VOCAB_BASE },
+  },
+
+  // ─── PATHOLOGIES CRITIQUES — fallback générique ───────────────────────
+  pathologieCritique: {
+    profile_key: 'pathologieCritique',
+    display_name: 'Pathologie chronique critique',
+    forbidden_phrases: [
+      ...FORBIDDEN_MEDICAL_VERBS,
+      ...FORBIDDEN_REPLACE_MEDIC,
+      ...FORBIDDEN_REPLACE_SUPPLEMENTATION,
+    ],
+    required_phrases: [
+      'en complément du suivi médical',
+    ],
+    micronutrients: [],
+    evictions: [],
+    precaution_vocab: { ...PRECAUTION_VOCAB_BASE },
   },
 };
 
@@ -93,18 +298,51 @@ export const GUARDRAILS_FR = {
  * @param {object} form - L'anamnèse client (clients.form)
  * @returns {Guardrail[]} Tableau des garde-fous matchés (peut être vide)
  */
-export function detectClinicalGuardrails(profile, _form) {
+export function detectClinicalGuardrails(profile, form) {
   if (!profile) return [];
   const matched = [];
   const allTags = [profile.tag, ...(profile.all || [])].filter(Boolean);
+  const f = form || {};
 
   // Grossesse : tag primaire OU dans la liste all (cumul avec pathologie)
   if (allTags.includes('grossesse')) {
     matched.push(GUARDRAILS_FR.grossesse);
   }
 
-  // Phase 2 : ajouter ici allaitement, postPartum, adolescente, ménopause,
-  // pathologies critiques (diabete T1, IR sévère, etc.)
+  // Allaitement
+  if (allTags.includes('allaitement')) {
+    matched.push(GUARDRAILS_FR.allaitement);
+  }
+
+  // Post-partum
+  if (allTags.includes('postPartum')) {
+    matched.push(GUARDRAILS_FR.postPartum);
+  }
+
+  // Adolescente <18 ans (depuis le form, pas le profile)
+  const age = Number.parseInt(f.age || f.ageActuel || '', 10);
+  if (Number.isFinite(age) && age > 0 && age < 18) {
+    matched.push(GUARDRAILS_FR.adolescente);
+  }
+
+  // Ménopause (peri ou post)
+  if (allTags.includes('menopause') || allTags.includes('perimenopause')) {
+    matched.push(GUARDRAILS_FR.menopause);
+  }
+
+  // Diabète (T1 et T2)
+  if (allTags.includes('diabete') || allTags.includes('complicationsDiabete')) {
+    matched.push(GUARDRAILS_FR.diabete);
+  }
+
+  // Pathologies critiques (fallback générique) — si tags spécifiques
+  const criticalTags = ['clostridiumDifficile', 'nephropathie', 'saos'];
+  if (criticalTags.some((t) => allTags.includes(t))) {
+    // Ne pas dupliquer si déjà couvert par un guardrail spécifique
+    if (!matched.some((g) => g.profile_key === 'pathologieCritique')) {
+      matched.push(GUARDRAILS_FR.pathologieCritique);
+    }
+  }
 
   return matched;
 }
@@ -139,6 +377,45 @@ export function buildGuardrailsBlockFr(guardrails) {
     lines.push('À NE JAMAIS DIRE OU IMPLIQUER (formulations interdites, risque médico-légal) :');
     for (const phrase of allForbidden) {
       lines.push(`  - "${phrase}"`);
+    }
+    lines.push('');
+  }
+
+  // V97.x Phase 2 — Micronutriments obligatoirement nommés.
+  const allMicros = new Set();
+  for (const g of guardrails) {
+    for (const m of g.micronutrients || []) allMicros.add(m);
+  }
+  if (allMicros.size > 0) {
+    lines.push('À NOMMER OBLIGATOIREMENT (sources alimentaires + supplémentation si pertinent) :');
+    for (const micro of allMicros) {
+      lines.push(`  - ${micro}`);
+    }
+    lines.push('');
+  }
+
+  // V97.x Phase 2 — Évictions à mentionner.
+  const allEvictions = new Set();
+  for (const g of guardrails) {
+    for (const e of g.evictions || []) allEvictions.add(e);
+  }
+  if (allEvictions.size > 0) {
+    lines.push('À MENTIONNER dans la section éviction / risques :');
+    for (const ev of allEvictions) {
+      lines.push(`  - ${ev}`);
+    }
+    lines.push('');
+  }
+
+  // V97.x Phase 2 — Required phrases (formulations attendues).
+  const allRequired = new Set();
+  for (const g of guardrails) {
+    for (const r of g.required_phrases || []) allRequired.add(r);
+  }
+  if (allRequired.size > 0) {
+    lines.push('FORMULATIONS ATTENDUES (au moins une occurrence sémantique) :');
+    for (const req of allRequired) {
+      lines.push(`  - "${req}"`);
     }
     lines.push('');
   }
@@ -203,4 +480,70 @@ export function auditPlanForGuardrails(planText, guardrails) {
   }
 
   return violations;
+}
+
+/**
+ * V97.x Phase 2 — Audit complétude : vérifie que les micronutriments
+ * obligatoires + évictions sont bien mentionnés dans le plan généré.
+ *
+ * Logique : pour chaque guardrail, lister les items micronutrients + evictions
+ * qui n'apparaissent PAS dans le planText (case-insensitive, match substring).
+ *
+ * @param {string} planText
+ * @param {Guardrail[]} guardrails
+ * @returns {{ missing_micronutrients: Array<{profile_key, item}>,
+ *             missing_evictions: Array<{profile_key, item}>,
+ *             missing_required_phrases: Array<{profile_key, phrase}> }}
+ */
+export function auditPlanCompleteness(planText, guardrails) {
+  const result = {
+    missing_micronutrients: [],
+    missing_evictions: [],
+    missing_required_phrases: [],
+  };
+  if (!planText || !Array.isArray(guardrails) || guardrails.length === 0) {
+    return result;
+  }
+  const lowercasePlan = planText.toLowerCase();
+
+  for (const guardrail of guardrails) {
+    for (const micro of guardrail.micronutrients || []) {
+      // Match : si le nom du micro (ou son alias court) apparait dans le plan
+      const micros = micro.toLowerCase().split(/[\s/]+/).filter((w) => w.length > 2);
+      // Au moins un mot significatif du nom doit être dans le plan
+      const found = micros.some((w) => lowercasePlan.includes(w));
+      if (!found) {
+        result.missing_micronutrients.push({
+          profile_key: guardrail.profile_key,
+          item: micro,
+        });
+      }
+    }
+
+    for (const eviction of guardrail.evictions || []) {
+      // Match : nom court de l'éviction dans le plan
+      const keyWord = eviction.toLowerCase().split(/[\s(]+/)[0];
+      if (keyWord.length < 3) continue;
+      if (!lowercasePlan.includes(keyWord)) {
+        result.missing_evictions.push({
+          profile_key: guardrail.profile_key,
+          item: eviction,
+        });
+      }
+    }
+
+    for (const phrase of guardrail.required_phrases || []) {
+      // Match sémantique simple : au moins 2 mots significatifs présents
+      const words = phrase.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      const foundCount = words.filter((w) => lowercasePlan.includes(w)).length;
+      if (foundCount < Math.min(2, words.length)) {
+        result.missing_required_phrases.push({
+          profile_key: guardrail.profile_key,
+          phrase,
+        });
+      }
+    }
+  }
+
+  return result;
 }

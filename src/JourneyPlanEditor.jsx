@@ -22,6 +22,11 @@ import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
 import { trackPlanGenerated, trackPlanGenerationFailed, trackPlanModification } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
+// V97.x Phase 2 — Audit clinique post-génération (phrases interdites + complétude).
+import {
+  auditPlanForGuardrails,
+  auditPlanCompleteness,
+} from './services/prompts/nutrition/_clinicalGuardrails.fr';
 // V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
 // Utilisé uniquement quand composerBeta === true (path composer opt-in).
 import { buildClinicalContext } from './services/clinical/buildClinicalContext';
@@ -699,6 +704,9 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     try { localStorage.setItem(`jpe_composer_beta_${client?.id}`, composerBeta ? 'true' : 'false'); } catch { /* */ }
   }, [composerBeta, client?.id]);
   const [detectedProfile, setDetectedProfile] = useState(null);
+  // V97.x Phase 2 — Garde-fous cliniques détectés + audit post-génération.
+  // Forme : { guardrails: [...], violations: [...], completeness: {...} }
+  const [guardrailsState, setGuardrailsState] = useState(null);
 
   // Barre de progression estimee : asymptote vers 92% sur ~60s, puis 100% a l'arrivee.
   // L'API Claude ne stream pas la progression reelle ; on simule pour donner du feedback.
@@ -721,6 +729,7 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     setError(null);
     setResult(null);
     setDetectedProfile(null);
+    setGuardrailsState(null);
     // V97.3 Phase B : timer + capture system prompt pour observabilité
     const startedAt = Date.now();
     const MODEL = 'claude-sonnet-4-20250514';
@@ -769,6 +778,10 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
         }
         system = v2.prompt;
         setDetectedProfile(v2.profile || null);
+        // V97.x Phase 2 — Stocker les guardrails actifs pour audit post-génération
+        if (Array.isArray(v2.guardrails) && v2.guardrails.length > 0) {
+          setGuardrailsState({ guardrails: v2.guardrails, violations: [], completeness: null });
+        }
       } else {
         system = buildSystemPromptFr(form, opts);
       }
@@ -786,6 +799,21 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
       const responseText = typeof res === 'string' ? res : res?.text || JSON.stringify(res);
       setResult(responseText);
       onDirectivesChange?.(draftDirectives);
+
+      // V97.x Phase 2 — Audit clinique post-génération : phrases interdites
+      // détectées + complétude (micronutriments + évictions). Best-effort.
+      setGuardrailsState((prev) => {
+        if (!prev?.guardrails?.length) return prev;
+        try {
+          const violations = auditPlanForGuardrails(responseText, prev.guardrails);
+          const completeness = auditPlanCompleteness(responseText, prev.guardrails);
+          return { ...prev, violations, completeness };
+        } catch (auditErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[guardrails-audit] post-generation failed (non-bloquant):', auditErr?.message);
+          return prev;
+        }
+      });
 
       // V97.3 Phase B : tracking succès (best-effort, non bloquant)
       trackPlanGenerated({
@@ -922,6 +950,12 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
 
         {result && (
           <div className="jpe-modal__body">
+            {/* V97.x Phase 2 — Audit clinique post-génération.
+                Affiche violations (phrases interdites) + complétude (micro
+                manquants, évictions manquantes) si guardrails actifs. */}
+            {guardrailsState?.guardrails?.length > 0 && (
+              <GuardrailsAuditBanner state={guardrailsState} />
+            )}
             <div className="jpe-preview">
               <RenderedMarkdown text={result} />
             </div>
@@ -1328,4 +1362,143 @@ function buildMinimalUserMessage(client, form, directives) {
 
   lines.push(`\nGénère le plan nutritionnel personnalisé complet (sections 1 à 7) avec menus variés, listes de courses par semaine, et alternatives naturelles. Tiens compte des résultats analyses ci-dessus pour cibler les déficits et axes prioritaires.`);
   return lines.join('\n');
+}
+
+// ─── V97.x Phase 2 — Banner audit clinique post-génération ───────────────
+//
+// Affiche en tête du résultat un récap visuel :
+//  - Profils détectés (chip violet)
+//  - Violations (rouge doux) si phrases interdites détectées
+//  - Manques (ocre) si micronutriments / évictions absents
+//  - Tout vert si plan clean
+//
+// Permet à Anissa de voir en 5 sec si le draft est cliniquement OK avant
+// de l'adopter. Si violations → "Régénérer" recommandé.
+
+function GuardrailsAuditBanner({ state }) {
+  if (!state?.guardrails?.length) return null;
+
+  const profileNames = state.guardrails.map((g) => g.display_name);
+  const violations = state.violations || [];
+  const completeness = state.completeness || null;
+  const missingMicros = completeness?.missing_micronutrients || [];
+  const missingEvictions = completeness?.missing_evictions || [];
+  const missingRequired = completeness?.missing_required_phrases || [];
+
+  const hasIssues =
+    violations.length > 0 ||
+    missingMicros.length > 0 ||
+    missingEvictions.length > 0 ||
+    missingRequired.length > 0;
+
+  const tone = violations.length > 0 ? 'warn' : (hasIssues ? 'info' : 'ok');
+  const palette = tone === 'warn'
+    ? { bg: 'rgba(184, 64, 64, 0.06)', border: 'rgba(184, 64, 64, 0.35)', fg: '#a04040' }
+    : tone === 'info'
+    ? { bg: 'rgba(184, 134, 38, 0.06)', border: 'rgba(184, 134, 38, 0.3)', fg: '#785a1a' }
+    : { bg: 'rgba(46, 94, 62, 0.06)', border: 'rgba(46, 94, 62, 0.25)', fg: '#2E5E3E' };
+
+  return (
+    <div style={{
+      background: palette.bg,
+      border: `1px solid ${palette.border}`,
+      borderRadius: 8,
+      padding: '12px 14px',
+      marginBottom: 16,
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+        flexWrap: 'wrap',
+      }}>
+        <span style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: '.12em',
+          textTransform: 'uppercase',
+          color: palette.fg,
+        }}>
+          {tone === 'warn' ? '⚠ Audit clinique' : tone === 'info' ? 'ℹ Audit clinique' : '✓ Audit clinique OK'}
+        </span>
+        {profileNames.map((name) => (
+          <span key={name} style={{
+            fontSize: 10.5,
+            fontWeight: 600,
+            padding: '3px 8px',
+            borderRadius: 999,
+            background: 'white',
+            color: palette.fg,
+            border: `1px solid ${palette.border}`,
+          }}>
+            {name}
+          </span>
+        ))}
+      </div>
+
+      {violations.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#a04040', marginBottom: 4 }}>
+            {violations.length} phrase{violations.length > 1 ? 's' : ''} interdite{violations.length > 1 ? 's' : ''} détectée{violations.length > 1 ? 's' : ''} :
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: '#a04040', lineHeight: 1.5 }}>
+            {violations.slice(0, 5).map((v, i) => (
+              <li key={i}>
+                <strong>{v.phrase}</strong> — <em>{v.snippet}</em>
+              </li>
+            ))}
+            {violations.length > 5 && (
+              <li><em>… et {violations.length - 5} autre{violations.length - 5 > 1 ? 's' : ''}</em></li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {(missingMicros.length > 0 || missingEvictions.length > 0 || missingRequired.length > 0) && (
+        <div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: palette.fg, marginBottom: 4 }}>
+            Compléments à ajouter manuellement :
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: palette.fg, lineHeight: 1.5 }}>
+            {missingMicros.length > 0 && (
+              <li>
+                <strong>Micronutriments manquants :</strong>{' '}
+                {missingMicros.map((m) => m.item).join(', ')}
+              </li>
+            )}
+            {missingEvictions.length > 0 && (
+              <li>
+                <strong>Évictions à mentionner :</strong>{' '}
+                {missingEvictions.map((e) => e.item).join(', ')}
+              </li>
+            )}
+            {missingRequired.length > 0 && (
+              <li>
+                <strong>Formulations attendues :</strong>{' '}
+                {missingRequired.map((r) => `"${r.phrase}"`).join(', ')}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {!hasIssues && (
+        <div style={{ fontSize: 11.5, color: palette.fg }}>
+          Tous les garde-fous cliniques sont respectés. Plan prêt à adopter.
+        </div>
+      )}
+
+      {violations.length > 0 && (
+        <div style={{
+          marginTop: 10,
+          fontSize: 11,
+          color: '#a04040',
+          fontStyle: 'italic',
+        }}>
+          → Régénération recommandée. Si le problème persiste, édite manuellement avant adoption.
+        </div>
+      )}
+    </div>
+  );
 }

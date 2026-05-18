@@ -15,6 +15,7 @@ import {
   detectClinicalGuardrails,
   buildGuardrailsBlockFr,
   auditPlanForGuardrails,
+  auditPlanCompleteness,
 } from '../_clinicalGuardrails.fr';
 
 // ─── detectClinicalGuardrails ────────────────────────────────────────────
@@ -24,9 +25,11 @@ describe('detectClinicalGuardrails', () => {
     expect(detectClinicalGuardrails(null, {})).toEqual([]);
   });
 
-  it('Retourne [] si pas de profil grossesse', () => {
-    const profile = { tag: 'menopause', all: ['menopause'] };
-    expect(detectClinicalGuardrails(profile, {})).toEqual([]);
+  it('Retourne [] si aucun profil ne matche un guardrail', () => {
+    // V97.x Phase 2 : femmeCycle simple (sans pathologie/grossesse/ado/menopause)
+    // ne déclenche aucun garde-fou.
+    const profile = { tag: 'femmeCycle', all: ['femmeCycle'] };
+    expect(detectClinicalGuardrails(profile, { age: '30' })).toEqual([]);
   });
 
   it('Matche grossesse via profile.tag', () => {
@@ -141,5 +144,136 @@ describe('auditPlanForGuardrails', () => {
     const plan = 'Ce regime peut guérir tes symptômes en 6 semaines.';
     const violations = auditPlanForGuardrails(plan, grossesseGuardrails);
     expect(violations.some((v) => v.phrase === 'guérir')).toBe(true);
+  });
+});
+
+// ─── V97.x Phase 2 — Tests 7 profils + complétude ────────────────────────
+
+describe('detectClinicalGuardrails — 7 profils Phase 2', () => {
+  it('Matche allaitement', () => {
+    const profile = { tag: 'allaitement', all: ['allaitement'] };
+    const matched = detectClinicalGuardrails(profile, {});
+    expect(matched.some((g) => g.profile_key === 'allaitement')).toBe(true);
+  });
+
+  it('Matche postPartum', () => {
+    const profile = { tag: 'postPartum', all: ['postPartum'] };
+    const matched = detectClinicalGuardrails(profile, {});
+    expect(matched.some((g) => g.profile_key === 'postPartum')).toBe(true);
+  });
+
+  it('Matche adolescente quand age < 18', () => {
+    const profile = { tag: 'femmeCycle', all: ['femmeCycle'] };
+    const matched = detectClinicalGuardrails(profile, { age: '16' });
+    expect(matched.some((g) => g.profile_key === 'adolescente')).toBe(true);
+  });
+
+  it('Matche menopause (peri ou post)', () => {
+    const p1 = { tag: 'menopause', all: ['menopause'] };
+    const p2 = { tag: 'perimenopause', all: ['perimenopause'] };
+    expect(detectClinicalGuardrails(p1, {}).some((g) => g.profile_key === 'menopause')).toBe(true);
+    expect(detectClinicalGuardrails(p2, {}).some((g) => g.profile_key === 'menopause')).toBe(true);
+  });
+
+  it('Matche diabete (T1 ou T2)', () => {
+    const profile = { tag: 'diabete', all: ['diabete'] };
+    const matched = detectClinicalGuardrails(profile, {});
+    expect(matched.some((g) => g.profile_key === 'diabete')).toBe(true);
+  });
+
+  it('Matche pathologieCritique (fallback) pour tags spécifiques', () => {
+    const profile = { tag: 'clostridiumDifficile', all: ['clostridiumDifficile'] };
+    const matched = detectClinicalGuardrails(profile, {});
+    expect(matched.some((g) => g.profile_key === 'pathologieCritique')).toBe(true);
+  });
+
+  it('Cumule plusieurs guardrails (grossesse + diabete gestationnel)', () => {
+    const profile = { tag: 'grossesse', all: ['grossesse', 'diabete'] };
+    const matched = detectClinicalGuardrails(profile, {});
+    const keys = matched.map((g) => g.profile_key);
+    expect(keys).toContain('grossesse');
+    expect(keys).toContain('diabete');
+  });
+});
+
+describe('buildGuardrailsBlockFr — sections Phase 2', () => {
+  it('Liste les micronutriments quand profil grossesse', () => {
+    const block = buildGuardrailsBlockFr([GUARDRAILS_FR.grossesse]);
+    expect(block).toContain('À NOMMER OBLIGATOIREMENT');
+    expect(block).toContain('iode');
+    expect(block).toContain('acide folique');
+  });
+
+  it('Liste les évictions quand profil grossesse', () => {
+    const block = buildGuardrailsBlockFr([GUARDRAILS_FR.grossesse]);
+    expect(block).toContain('À MENTIONNER dans la section éviction');
+    expect(block).toContain('listeria');
+    expect(block).toContain('toxoplasmose');
+  });
+
+  it('Liste les formulations attendues quand profil allaitement', () => {
+    const block = buildGuardrailsBlockFr([GUARDRAILS_FR.allaitement]);
+    expect(block).toContain('FORMULATIONS ATTENDUES');
+    expect(block).toContain('éviter alcool');
+  });
+
+  it('Cumul grossesse + diabete — toutes phrases interdites fusionnees', () => {
+    const block = buildGuardrailsBlockFr([
+      GUARDRAILS_FR.grossesse,
+      GUARDRAILS_FR.diabete,
+    ]);
+    expect(block).toContain('Grossesse + Diabète');
+    expect(block).toContain('éviter tes injections'); // grossesse
+    expect(block).toContain('arrête ta metformine'); // diabete
+  });
+});
+
+describe('auditPlanCompleteness — completude Phase 2', () => {
+  const grossesseGuardrails = [GUARDRAILS_FR.grossesse];
+
+  it('Retourne tous les manques si plan vide', () => {
+    const result = auditPlanCompleteness('Plan minimaliste', grossesseGuardrails);
+    expect(result.missing_micronutrients.length).toBeGreaterThan(0);
+    expect(result.missing_evictions.length).toBeGreaterThan(0);
+  });
+
+  it('Detecte les micronutriments mentionnes', () => {
+    const plan = `
+      Iode : sels iodés au quotidien.
+      Acide folique : légumes verts à feuilles.
+      Fer héminique : viandes maigres.
+      Oméga-3 : poissons gras 2x/semaine.
+    `;
+    const result = auditPlanCompleteness(plan, grossesseGuardrails);
+    // Iode + folique + fer + oméga ne doivent PAS etre missing
+    const missing = result.missing_micronutrients.map((m) => m.item);
+    expect(missing).not.toContain('iode');
+    expect(missing).not.toContain('acide folique');
+    expect(missing).not.toContain('fer');
+    expect(missing).not.toContain('oméga-3');
+  });
+
+  it('Detecte les evictions mentionnees', () => {
+    const plan = `
+      Précautions : éviter la listeria (fromages au lait cru),
+      la toxoplasmose (viande peu cuite), l'alcool en totalité,
+      le mercure des gros poissons (thon, espadon).
+    `;
+    const result = auditPlanCompleteness(plan, grossesseGuardrails);
+    const missing = result.missing_evictions.map((e) => e.item);
+    expect(missing.some((m) => m.includes('listeria'))).toBe(false);
+    expect(missing.some((m) => m.includes('toxoplasmose'))).toBe(false);
+    expect(missing.some((m) => m.includes('alcool'))).toBe(false);
+  });
+
+  it('Regression Hawazen : plan original n\'avait pas iode → flag', () => {
+    const hawazenPlan = `
+      Stratégie : stabilité glycémique, gestion du stress et soutien grossesse.
+      Acide folique présent dans légumes verts.
+      Fer dans viandes rouges maigres.
+    `;
+    const result = auditPlanCompleteness(hawazenPlan, grossesseGuardrails);
+    const missingMicros = result.missing_micronutrients.map((m) => m.item);
+    expect(missingMicros).toContain('iode');
   });
 });
