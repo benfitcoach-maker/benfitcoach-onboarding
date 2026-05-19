@@ -22,23 +22,21 @@ import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
 import { trackPlanGenerated, trackPlanGenerationFailed, trackPlanModification } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
-// V97.x Phase 2 — Audit clinique post-génération (phrases interdites + complétude).
-// V97.18.2 — preloadGuardrailsFromSupabase : précharge depuis DB (fallback hardcode).
+// V97.27 (refacto) — auditPlanForGuardrails / auditPlanCompleteness /
+// preloadGuardrailsFromSupabase / detectSlopHeuristics / rewriteSlopSection /
+// replaceLineInPlan deplaces dans les hooks useGuardrailsAudit + useSlopAudit.
+// summarizeSlopFlags + CATEGORY_LABELS restent : utilises par AntiSlopSection
+// inline component qui rend les flags detectes par le hook.
 import {
-  auditPlanForGuardrails,
-  auditPlanCompleteness,
-  preloadGuardrailsFromSupabase,
-} from './services/prompts/nutrition/_clinicalGuardrails.fr';
-// V97.x Phase 3 — Anti-slop heuristiques (détection patterns AI visibles).
-import {
-  detectSlopHeuristics,
   summarizeSlopFlags,
   CATEGORY_LABELS as SLOP_CATEGORY_LABELS,
 } from './services/prompts/nutrition/_antiSlop.fr';
-// V97.x Phase 4 — Reformulation LLM Haiku ciblée par flag anti-slop.
-import { rewriteSlopSection, replaceLineInPlan } from './services/rewriteSlopSection';
 // V97.20 (OBS-1) — Tracking des generations de plans.
-import { recordPlanGeneration, recordSlopAction, updateSlopFlagsCount } from './services/planObservability';
+// V97.27 — recordSlopAction + updateSlopFlagsCount deplaces dans useSlopAudit.
+import { recordPlanGeneration } from './services/planObservability';
+// V97.27 (refacto) — Hooks extraits.
+import { useSlopAudit } from './hooks/useSlopAudit';
+import { useGuardrailsAudit } from './hooks/useGuardrailsAudit';
 // V97.22.3 (V97.18 Phase D) — Phase active du parcours injectee dans le composer.
 import { getActivePhase, getActivePhaseWeek } from './services/protocolPhases';
 // V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
@@ -718,38 +716,17 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     try { localStorage.setItem(`jpe_composer_beta_${client?.id}`, composerBeta ? 'true' : 'false'); } catch { /* */ }
   }, [composerBeta, client?.id]);
   const [detectedProfile, setDetectedProfile] = useState(null);
-  // V97.x Phase 2 — Garde-fous cliniques détectés + audit post-génération.
-  // Forme : { guardrails: [...], violations: [...], completeness: {...} }
-  const [guardrailsState, setGuardrailsState] = useState(null);
-  // V97.25 (audit HIGH-2 fix) — ref mirroring guardrailsState pour lecture
-  // synchrone dans handleGenerate (evite race condition setState callback
-  // microtask vs recordPlanGeneration synchrone).
-  const guardrailsStateRef = useRef(null);
-  useEffect(() => { guardrailsStateRef.current = guardrailsState; }, [guardrailsState]);
-  // V97.x Phase 3 — Anti-slop : flags détectés par heuristiques regex.
-  // null = pas encore lancé, [] = audit lancé sans flags, [...] = flags.
-  const [slopFlags, setSlopFlags] = useState(null);
-  const [slopRunning, setSlopRunning] = useState(false);
-  // V97.x Phase 4 — Cache des reformulations LLM par flag.id.
-  // Shape : { [flagId]: { status: 'loading'|'ready'|'error'|'accepted'|'refused', text?: string, error?: string } }
-  const [slopRewrites, setSlopRewrites] = useState({});
+  // V97.27 (refacto) — Hook guardrails : state + preload DB + ref synchrone
+  // pour audit post-gen (preserve fix race condition V97.25 HIGH-2).
+  const guardrails = useGuardrailsAudit({ supabase });
   // V97.20 (OBS-1) — id de la row d'observability associee a la generation courante.
   // null tant que pas encore enregistree. Utilise pour increment compteurs slop.
   const [observabilityId, setObservabilityId] = useState(null);
+  // V97.27 (refacto) — Hook anti-slop : remplace 4 useState + 4 handlers
+  // inline qui faisaient ~120 lignes.
+  const slop = useSlopAudit({ observabilityId });
 
-  // V97.18.2 — Précharge les guardrails depuis Supabase au mount.
-  // Fallback silencieux sur hardcode JS si DB down. Idempotent (TTL 5 min).
-  useEffect(() => {
-    preloadGuardrailsFromSupabase(supabase).then((res) => {
-      if (res.ok) {
-        // eslint-disable-next-line no-console
-        console.log(`[guardrails] preload OK from ${res.source} (${res.count} profils)`);
-      } else {
-        // eslint-disable-next-line no-console
-        console.warn(`[guardrails] preload fallback to hardcode: ${res.error}`);
-      }
-    });
-  }, []);
+  // V97.27 — Preload guardrails DB gere par useGuardrailsAudit hook.
 
   // Barre de progression estimee : asymptote vers 92% sur ~60s, puis 100% a l'arrivee.
   // L'API Claude ne stream pas la progression reelle ; on simule pour donner du feedback.
@@ -772,9 +749,8 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
     setError(null);
     setResult(null);
     setDetectedProfile(null);
-    setGuardrailsState(null);
-    setSlopFlags(null);
-    setSlopRewrites({});
+    guardrails.reset();
+    slop.reset();
     setObservabilityId(null);
     // V97.3 Phase B : timer + capture system prompt pour observabilité
     const startedAt = Date.now();
@@ -842,10 +818,8 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
         system = v2.prompt;
         setDetectedProfile(v2.profile || null);
         profileForObs = v2.profile || null;
-        // V97.x Phase 2 — Stocker les guardrails actifs pour audit post-génération
-        if (Array.isArray(v2.guardrails) && v2.guardrails.length > 0) {
-          setGuardrailsState({ guardrails: v2.guardrails, violations: [], completeness: null });
-        }
+        // V97.27 — Stocker les guardrails actifs via le hook (audit post-gen).
+        guardrails.setActiveGuardrails(v2.guardrails);
       } else {
         system = buildSystemPromptFr(form, opts);
       }
@@ -864,29 +838,10 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
       setResult(responseText);
       onDirectivesChange?.(draftDirectives);
 
-      // V97.x Phase 2 — Audit clinique post-génération : phrases interdites
-      // détectées + complétude (micronutriments + évictions). Best-effort.
-      // V97.25 (audit HIGH-2 fix) — Calcul SYNCHRONE avant le setState pour
-      // garantir que les variables locales sont remplies avant
-      // recordPlanGeneration les lise (setState callback est microtask et
-      // peut s'executer apres l'appel observability sinon).
-      let auditViolations = [];
-      let auditCompleteness = null;
-      let activeGuardrails = [];
-      try {
-        const currentGuardrails = guardrailsStateRef.current?.guardrails || [];
-        if (currentGuardrails.length > 0) {
-          activeGuardrails = currentGuardrails;
-          auditViolations = auditPlanForGuardrails(responseText, currentGuardrails);
-          auditCompleteness = auditPlanCompleteness(responseText, currentGuardrails);
-          setGuardrailsState((prev) => prev?.guardrails?.length
-            ? { ...prev, violations: auditViolations, completeness: auditCompleteness }
-            : prev);
-        }
-      } catch (auditErr) {
-        // eslint-disable-next-line no-console
-        console.warn('[guardrails-audit] post-generation failed (non-bloquant):', auditErr?.message);
-      }
+      // V97.27 — Audit clinique post-generation via hook (preserve fix
+      // race condition V97.25 HIGH-2 grace au ref interne au hook).
+      const { violations: auditViolations, completeness: auditCompleteness, guardrails: activeGuardrails }
+        = guardrails.runAudit(responseText);
 
       // V97.20 (OBS-1) — Record generation observability (best-effort, non-bloquant)
       recordPlanGeneration({
@@ -1042,93 +997,19 @@ function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, o
             {/* V97.x Phase 2 — Audit clinique post-génération.
                 Affiche violations (phrases interdites) + complétude (micro
                 manquants, évictions manquantes) si guardrails actifs. */}
-            {guardrailsState?.guardrails?.length > 0 && (
-              <GuardrailsAuditBanner state={guardrailsState} />
+            {guardrails.guardrailsState?.guardrails?.length > 0 && (
+              <GuardrailsAuditBanner state={guardrails.guardrailsState} />
             )}
-            {/* V97.x Phase 3 — Anti-slop : bouton + banner flags si lancé. */}
+            {/* V97.x Phase 3-4 — Anti-slop via hook useSlopAudit (V97.27 refacto). */}
             <AntiSlopSection
-              flags={slopFlags}
-              running={slopRunning}
-              rewrites={slopRewrites}
+              flags={slop.slopFlags}
+              running={slop.slopRunning}
+              rewrites={slop.slopRewrites}
               planText={result}
-              onRun={() => {
-                setSlopRunning(true);
-                // Synchrone mais wrap async pour permettre re-render avec spinner
-                setTimeout(() => {
-                  try {
-                    const flags = detectSlopHeuristics(result);
-                    setSlopFlags(flags);
-                    // V97.20 (OBS-1) — Sync compteurs slop avec la row d'obs
-                    if (observabilityId) updateSlopFlagsCount(observabilityId, flags);
-                  } catch (e) {
-                    // eslint-disable-next-line no-console
-                    console.warn('[anti-slop] failed:', e?.message);
-                    setSlopFlags([]);
-                  } finally {
-                    setSlopRunning(false);
-                  }
-                }, 30);
-              }}
-              onRewrite={async (flag) => {
-                // Extrait la ligne complète depuis result via lineIndex
-                const lines = (result || '').split('\n');
-                const passage = lines[flag.lineIndex] || flag.snippet || '';
-                if (!passage.trim()) return;
-                // V97.20 (OBS-1) — Track demande de reformulation
-                if (observabilityId) recordSlopAction(observabilityId, 'requested');
-                setSlopRewrites((prev) => ({
-                  ...prev,
-                  [flag.id]: { status: 'loading' },
-                }));
-                try {
-                  const res = await rewriteSlopSection({
-                    passage,
-                    flags: [flag],
-                  });
-                  if (res.ok && res.rewritten) {
-                    setSlopRewrites((prev) => ({
-                      ...prev,
-                      [flag.id]: { status: 'ready', text: res.rewritten, original: passage },
-                    }));
-                  } else {
-                    setSlopRewrites((prev) => ({
-                      ...prev,
-                      [flag.id]: { status: 'error', error: res.error || 'reformulation impossible' },
-                    }));
-                  }
-                } catch (e) {
-                  setSlopRewrites((prev) => ({
-                    ...prev,
-                    [flag.id]: { status: 'error', error: e?.message || 'erreur' },
-                  }));
-                }
-              }}
-              onAcceptRewrite={(flag) => {
-                const entry = slopRewrites[flag.id];
-                if (!entry || entry.status !== 'ready' || !entry.text) return;
-                const newPlan = replaceLineInPlan(result, flag.lineIndex, entry.text);
-                setResult(newPlan);
-                setSlopRewrites((prev) => ({
-                  ...prev,
-                  [flag.id]: { ...entry, status: 'accepted' },
-                }));
-                // V97.20 (OBS-1) — Track accept + sync compteurs
-                if (observabilityId) recordSlopAction(observabilityId, 'accepted');
-                // Re-détecte les flags sur le plan modifié (la ligne flaggée peut être clean maintenant)
-                try {
-                  const refreshed = detectSlopHeuristics(newPlan);
-                  setSlopFlags(refreshed);
-                  if (observabilityId) updateSlopFlagsCount(observabilityId, refreshed);
-                } catch { /* noop */ }
-              }}
-              onRefuseRewrite={(flag) => {
-                setSlopRewrites((prev) => ({
-                  ...prev,
-                  [flag.id]: { ...(prev[flag.id] || {}), status: 'refused' },
-                }));
-                // V97.20 (OBS-1) — Track refus
-                if (observabilityId) recordSlopAction(observabilityId, 'refused');
-              }}
+              onRun={() => slop.runAudit(result)}
+              onRewrite={(flag) => slop.requestRewrite(flag, result)}
+              onAcceptRewrite={(flag) => slop.acceptRewrite(flag, result, setResult)}
+              onRefuseRewrite={(flag) => slop.refuseRewrite(flag)}
             />
             <div className="jpe-preview">
               <RenderedMarkdown text={result} />
