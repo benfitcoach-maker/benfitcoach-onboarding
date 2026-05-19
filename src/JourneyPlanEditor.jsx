@@ -22,21 +22,19 @@ import { saveNutritionConsultation, getNutritionConsultations } from './store';
 import { callClaude } from './services/anthropic';
 import { trackPlanGenerated, trackPlanGenerationFailed, trackPlanModification } from './services/observability';
 import { buildSystemPromptFr, buildSystemPromptFrV2 } from './services/prompts/nutrition/fr';
-// V97.27 (refacto) — auditPlanForGuardrails / auditPlanCompleteness /
-// preloadGuardrailsFromSupabase / detectSlopHeuristics / rewriteSlopSection /
-// replaceLineInPlan deplaces dans les hooks useGuardrailsAudit + useSlopAudit.
-// summarizeSlopFlags + CATEGORY_LABELS restent : utilises par AntiSlopSection
-// inline component qui rend les flags detectes par le hook.
-import {
-  summarizeSlopFlags,
-  CATEGORY_LABELS as SLOP_CATEGORY_LABELS,
-} from './services/prompts/nutrition/_antiSlop.fr';
+// V97.27 — Services anti-slop / guardrails entierement deplaces dans
+// les hooks (useSlopAudit, useGuardrailsAudit) et les composants extraits
+// (AntiSlopSection, GuardrailsAuditBanner). JourneyPlanEditor n'importe
+// plus rien de ces services directement.
 // V97.20 (OBS-1) — Tracking des generations de plans.
 // V97.27 — recordSlopAction + updateSlopFlagsCount deplaces dans useSlopAudit.
 import { recordPlanGeneration } from './services/planObservability';
-// V97.27 (refacto) — Hooks extraits.
+// V97.27 (refacto) — Hooks et components extraits.
 import { useSlopAudit } from './hooks/useSlopAudit';
 import { useGuardrailsAudit } from './hooks/useGuardrailsAudit';
+import { usePlanAutosave } from './hooks/usePlanAutosave';
+import { GuardrailsAuditBanner } from './components/GuardrailsAuditBanner';
+import { AntiSlopSection } from './components/AntiSlopSection';
 // V97.22.3 (V97.18 Phase D) — Phase active du parcours injectee dans le composer.
 import { getActivePhase, getActivePhaseWeek } from './services/protocolPhases';
 // V97.4 Phase V2.B : constructeur clinicalContext depuis journey_state.
@@ -82,9 +80,9 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
   const [auditResult, setAuditResult] = useState(null);
   const [auditError, setAuditError] = useState(null);
   // Phase AM : auto-save debouncé (état : idle | dirty | saving | saved | error)
-  const [autosaveState, setAutosaveState] = useState('idle');
-  const autosaveTimerRef = useRef(null);
-  const lastSavedTextRef = useRef('');
+  // V97.27 (refacto) — Autosave debounce extrait dans usePlanAutosave.
+  // Hook initialise plus bas car onSave depend de handleSave (lui-meme
+  // depend des states qui sont declares apres).
   // savedToast supprimé Phase AM (remplacé par AutosaveIndicator persistant)
 
   // Phase Q : split en sections + IA par section
@@ -207,9 +205,14 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
   };
 
   // ─── Sauvegarde ──────────────────────────────────────────────
+  // V97.27 : autosave + indicateur state extraits dans usePlanAutosave.
+  // handleSave reste ici (logique metier specifique). Le hook gere :
+  //  - debounce 1.5s sur changement planText
+  //  - flash 'saved' 1.8s puis retour 'idle'
+  //  - markInitial pour seed lastSavedTextRef au premier load
   const handleSave = useCallback(async () => {
     setSaving(true);
-    setAutosaveState('saving');
+    autosaveControl.markSaving();
     setError(null);
     try {
       const next = {
@@ -223,38 +226,27 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
       };
       await saveNutritionConsultation(next);
       setConsultation(next);
-      lastSavedTextRef.current = planText;
+      autosaveControl.markSaved(planText);
       onPlanSaved?.();
-      setAutosaveState('saved');
-      setTimeout(() => setAutosaveState((s) => (s === 'saved' ? 'idle' : s)), 1800);
     } catch (e) {
       setError(e?.message || 'Erreur sauvegarde');
-      setAutosaveState('error');
+      autosaveControl.markError();
     } finally {
       setSaving(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client?.id, consultation, planText, aiDirectives, onPlanSaved]);
 
-  // Phase AM : autosave debouncé sur changement du planText (1.5s)
-  useEffect(() => {
-    if (loadingInitial) return;
-    if (planText === lastSavedTextRef.current) return;
-    setAutosaveState('dirty');
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(() => {
-      handleSave();
-    }, 1500);
-    return () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    };
-  }, [planText, loadingInitial, handleSave]);
+  const autosaveControl = usePlanAutosave({ planText, loadingInitial, onSave: handleSave });
+  const autosaveState = autosaveControl.autosaveState;
 
-  // Initialise lastSavedTextRef au premier load (évite un autosave inutile)
+  // Initialise lastSavedTextRef au premier load via hook
   useEffect(() => {
-    if (!loadingInitial && lastSavedTextRef.current === '' && planText) {
-      lastSavedTextRef.current = planText;
+    if (!loadingInitial && planText) {
+      autosaveControl.markInitial(planText);
     }
-  }, [loadingInitial, planText]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingInitial]);
 
   // ─── Export Word ─────────────────────────────────────────────
   const handleExportPlan = async () => {
@@ -1419,468 +1411,3 @@ function buildMinimalUserMessage(client, form, directives) {
   return lines.join('\n');
 }
 
-// ─── V97.x Phase 2 — Banner audit clinique post-génération ───────────────
-//
-// Affiche en tête du résultat un récap visuel :
-//  - Profils détectés (chip violet)
-//  - Violations (rouge doux) si phrases interdites détectées
-//  - Manques (ocre) si micronutriments / évictions absents
-//  - Tout vert si plan clean
-//
-// Permet à Anissa de voir en 5 sec si le draft est cliniquement OK avant
-// de l'adopter. Si violations → "Régénérer" recommandé.
-
-function GuardrailsAuditBanner({ state }) {
-  if (!state?.guardrails?.length) return null;
-
-  const profileNames = state.guardrails.map((g) => g.display_name);
-  const violations = state.violations || [];
-  const completeness = state.completeness || null;
-  const missingMicros = completeness?.missing_micronutrients || [];
-  const missingEvictions = completeness?.missing_evictions || [];
-  const missingRequired = completeness?.missing_required_phrases || [];
-
-  const hasIssues =
-    violations.length > 0 ||
-    missingMicros.length > 0 ||
-    missingEvictions.length > 0 ||
-    missingRequired.length > 0;
-
-  const tone = violations.length > 0 ? 'warn' : (hasIssues ? 'info' : 'ok');
-  const palette = tone === 'warn'
-    ? { bg: 'rgba(184, 64, 64, 0.06)', border: 'rgba(184, 64, 64, 0.35)', fg: '#a04040' }
-    : tone === 'info'
-    ? { bg: 'rgba(184, 134, 38, 0.06)', border: 'rgba(184, 134, 38, 0.3)', fg: '#785a1a' }
-    : { bg: 'rgba(46, 94, 62, 0.06)', border: 'rgba(46, 94, 62, 0.25)', fg: '#2E5E3E' };
-
-  return (
-    <div style={{
-      background: palette.bg,
-      border: `1px solid ${palette.border}`,
-      borderRadius: 8,
-      padding: '12px 14px',
-      marginBottom: 16,
-    }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 8,
-        flexWrap: 'wrap',
-      }}>
-        <span style={{
-          fontSize: 10.5,
-          fontWeight: 700,
-          letterSpacing: '.12em',
-          textTransform: 'uppercase',
-          color: palette.fg,
-        }}>
-          {tone === 'warn' ? '⚠ Audit clinique' : tone === 'info' ? 'ℹ Audit clinique' : '✓ Audit clinique OK'}
-        </span>
-        {profileNames.map((name) => (
-          <span key={name} style={{
-            fontSize: 10.5,
-            fontWeight: 600,
-            padding: '3px 8px',
-            borderRadius: 999,
-            background: 'white',
-            color: palette.fg,
-            border: `1px solid ${palette.border}`,
-          }}>
-            {name}
-          </span>
-        ))}
-      </div>
-
-      {violations.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#a04040', marginBottom: 4 }}>
-            {violations.length} phrase{violations.length > 1 ? 's' : ''} interdite{violations.length > 1 ? 's' : ''} détectée{violations.length > 1 ? 's' : ''} :
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: '#a04040', lineHeight: 1.5 }}>
-            {violations.slice(0, 5).map((v, i) => (
-              <li key={i}>
-                <strong>{v.phrase}</strong> — <em>{v.snippet}</em>
-              </li>
-            ))}
-            {violations.length > 5 && (
-              <li><em>… et {violations.length - 5} autre{violations.length - 5 > 1 ? 's' : ''}</em></li>
-            )}
-          </ul>
-        </div>
-      )}
-
-      {(missingMicros.length > 0 || missingEvictions.length > 0 || missingRequired.length > 0) && (
-        <div>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: palette.fg, marginBottom: 4 }}>
-            Compléments à ajouter manuellement :
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: palette.fg, lineHeight: 1.5 }}>
-            {missingMicros.length > 0 && (
-              <li>
-                <strong>Micronutriments manquants :</strong>{' '}
-                {missingMicros.map((m) => m.item).join(', ')}
-              </li>
-            )}
-            {missingEvictions.length > 0 && (
-              <li>
-                <strong>Évictions à mentionner :</strong>{' '}
-                {missingEvictions.map((e) => e.item).join(', ')}
-              </li>
-            )}
-            {missingRequired.length > 0 && (
-              <li>
-                <strong>Formulations attendues :</strong>{' '}
-                {missingRequired.map((r) => `"${r.phrase}"`).join(', ')}
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
-
-      {!hasIssues && (
-        <div style={{ fontSize: 11.5, color: palette.fg }}>
-          Tous les garde-fous cliniques sont respectés. Plan prêt à adopter.
-        </div>
-      )}
-
-      {violations.length > 0 && (
-        <div style={{
-          marginTop: 10,
-          fontSize: 11,
-          color: '#a04040',
-          fontStyle: 'italic',
-        }}>
-          → Régénération recommandée. Si le problème persiste, édite manuellement avant adoption.
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── V97.x Phase 3 — Section anti-slop ────────────────────────────────────
-//
-// Bouton "⚡ Audit anti-slop" + banner contextuel des flags détectés.
-// 7 catégories : rule_of_three, ai_vocab, cliche, symmetric_sections,
-// parallel_bullets, title_chevron, excess_caps.
-//
-// Phase 3 = heuristiques uniquement (déterministe, gratuit, instantané).
-// Phase 4 ajoutera reformulation LLM ciblée des sections flaggées.
-
-function AntiSlopSection({ flags, running, onRun, rewrites = {}, planText, onRewrite, onAcceptRewrite, onRefuseRewrite }) {
-  // Pas encore lancé
-  if (flags === null && !running) {
-    return (
-      <div style={{
-        marginBottom: 12,
-        padding: '10px 14px',
-        background: 'rgba(167, 139, 250, 0.06)',
-        border: '1px dashed rgba(167, 139, 250, 0.3)',
-        borderRadius: 8,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 10,
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ fontSize: 12, color: 'var(--jrn-text-soft, #6b6f6b)', flex: 1, minWidth: 200 }}>
-          <strong style={{ color: '#7e5ec7' }}>Audit anti-slop disponible.</strong>
-          {' '}Détecte les patterns AI visibles (rule-of-three, vocab AI, clichés, symétrie de sections, etc.) avant l&apos;export Word.
-        </div>
-        <button
-          type="button"
-          onClick={onRun}
-          style={{
-            background: '#7e5ec7',
-            border: '1px solid #7e5ec7',
-            borderRadius: 6,
-            padding: '7px 14px',
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'white',
-            cursor: 'pointer',
-          }}
-        >
-          ⚡ Lancer l&apos;audit
-        </button>
-      </div>
-    );
-  }
-
-  if (running) {
-    return (
-      <div style={{
-        marginBottom: 12,
-        padding: '10px 14px',
-        background: 'rgba(167, 139, 250, 0.08)',
-        border: '1px solid rgba(167, 139, 250, 0.3)',
-        borderRadius: 8,
-        fontSize: 12,
-        color: '#7e5ec7',
-      }}>
-        Audit anti-slop en cours...
-      </div>
-    );
-  }
-
-  // flags est un tableau (peut être vide)
-  if (!flags || flags.length === 0) {
-    return (
-      <div style={{
-        marginBottom: 12,
-        padding: '10px 14px',
-        background: 'rgba(46, 94, 62, 0.06)',
-        border: '1px solid rgba(46, 94, 62, 0.25)',
-        borderRadius: 8,
-        fontSize: 12,
-        color: '#2E5E3E',
-      }}>
-        <strong>✓ Audit anti-slop : 0 pattern détecté.</strong>
-        {' '}Le plan a un ton naturel. Prêt à adopter.
-      </div>
-    );
-  }
-
-  // Group flags by severity
-  const severityOrder = ['high', 'medium', 'low'];
-  const summary = summarizeSlopFlags(flags);
-  summary.sort((a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity));
-  const highCount = flags.filter((f) => f.severity === 'high').length;
-  const tone = highCount > 0 ? 'high' : (flags.length >= 4 ? 'medium' : 'low');
-  const palette = tone === 'high'
-    ? { bg: 'rgba(184, 64, 64, 0.06)', border: 'rgba(184, 64, 64, 0.35)', fg: '#a04040' }
-    : tone === 'medium'
-    ? { bg: 'rgba(184, 134, 38, 0.06)', border: 'rgba(184, 134, 38, 0.3)', fg: '#785a1a' }
-    : { bg: 'rgba(167, 139, 250, 0.06)', border: 'rgba(167, 139, 250, 0.3)', fg: '#7e5ec7' };
-
-  return (
-    <div style={{
-      marginBottom: 12,
-      padding: '12px 14px',
-      background: palette.bg,
-      border: `1px solid ${palette.border}`,
-      borderRadius: 8,
-    }}>
-      <div style={{
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: '.12em',
-        textTransform: 'uppercase',
-        color: palette.fg,
-        marginBottom: 8,
-      }}>
-        ⚡ Audit anti-slop : {flags.length} pattern{flags.length > 1 ? 's' : ''} détecté{flags.length > 1 ? 's' : ''}
-        {highCount > 0 && (
-          <span style={{ marginLeft: 8, fontSize: 10 }}>
-            ({highCount} high{highCount > 1 ? 's' : ''})
-          </span>
-        )}
-      </div>
-
-      {/* Summary par catégorie */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-        {summary.map((s) => (
-          <span
-            key={s.category}
-            style={{
-              fontSize: 10.5,
-              padding: '3px 9px',
-              borderRadius: 999,
-              background: 'white',
-              color: palette.fg,
-              border: `1px solid ${palette.border}`,
-              fontWeight: 600,
-            }}
-            title={`severity max : ${s.severity}`}
-          >
-            {SLOP_CATEGORY_LABELS[s.category] || s.category} × {s.count}
-          </span>
-        ))}
-      </div>
-
-      {/* Top 5 flags détaillés avec reformulation Haiku par flag (Phase 4) */}
-      <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', fontSize: 11.5, color: palette.fg, lineHeight: 1.5 }}>
-        {flags.slice(0, 5).map((f) => {
-          const rewrite = rewrites[f.id];
-          // On peut reformuler uniquement si la ligne du plan est extractible
-          const lines = (planText || '').split('\n');
-          const lineText = typeof f.lineIndex === 'number' ? lines[f.lineIndex] : '';
-          const canRewrite = !!(lineText && lineText.trim().length > 0 && typeof onRewrite === 'function');
-          return (
-            <li key={f.id} style={{ marginBottom: 10, paddingLeft: 16, position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 0, top: 0 }}>
-                {f.severity === 'high' ? '●' : f.severity === 'medium' ? '◐' : '○'}
-              </span>
-              <div>
-                <strong>{SLOP_CATEGORY_LABELS[f.category] || f.category}</strong>
-                {' — '}
-                <em style={{ fontWeight: 400 }}>{f.snippet}</em>
-              </div>
-              {f.suggestion && (
-                <div style={{ marginTop: 2, fontSize: 10.5, fontStyle: 'italic', opacity: 0.8 }}>
-                  → {f.suggestion}
-                </div>
-              )}
-
-              {/* Bouton "Reformuler (Haiku)" si pas encore lancé sur ce flag */}
-              {canRewrite && !rewrite && (
-                <button
-                  type="button"
-                  onClick={() => onRewrite(f)}
-                  style={{
-                    marginTop: 4,
-                    background: 'white',
-                    border: `1px solid ${palette.border}`,
-                    borderRadius: 6,
-                    padding: '3px 9px',
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    color: palette.fg,
-                    cursor: 'pointer',
-                  }}
-                  title="Reformule ce passage via Claude Haiku, voix Anissa"
-                >
-                  ✎ Reformuler ce passage
-                </button>
-              )}
-
-              {/* Loading */}
-              {rewrite?.status === 'loading' && (
-                <div style={{ marginTop: 4, fontSize: 10.5, fontStyle: 'italic', color: palette.fg, opacity: 0.8 }}>
-                  Reformulation en cours…
-                </div>
-              )}
-
-              {/* Erreur */}
-              {rewrite?.status === 'error' && (
-                <div style={{ marginTop: 4, fontSize: 10.5, color: '#a04040' }}>
-                  Erreur reformulation : {rewrite.error}
-                  <button
-                    type="button"
-                    onClick={() => onRewrite(f)}
-                    style={{
-                      marginLeft: 8,
-                      background: 'transparent',
-                      border: `1px solid ${palette.border}`,
-                      borderRadius: 5,
-                      padding: '1px 7px',
-                      fontSize: 10,
-                      color: palette.fg,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Réessayer
-                  </button>
-                </div>
-              )}
-
-              {/* Reformulation prête — affiche original vs reformulé + Accept/Refuse */}
-              {rewrite?.status === 'ready' && (
-                <div style={{
-                  marginTop: 6,
-                  padding: '8px 10px',
-                  background: 'white',
-                  border: `1px solid ${palette.border}`,
-                  borderRadius: 6,
-                  fontSize: 11,
-                  color: '#2a2d2a',
-                }}>
-                  <div style={{ marginBottom: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: palette.fg, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                      Original
-                    </span>
-                    <div style={{ marginTop: 2, fontStyle: 'italic', opacity: 0.7 }}>
-                      {rewrite.original}
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#2E5E3E', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                      Reformulé
-                    </span>
-                    <div style={{ marginTop: 2 }}>
-                      {rewrite.text}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      type="button"
-                      onClick={() => onAcceptRewrite(f)}
-                      style={{
-                        background: '#2E5E3E',
-                        border: '1px solid #2E5E3E',
-                        borderRadius: 5,
-                        padding: '4px 11px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: 'white',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ✓ Accepter
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRefuseRewrite(f)}
-                      style={{
-                        background: 'transparent',
-                        border: `1px solid ${palette.border}`,
-                        borderRadius: 5,
-                        padding: '4px 11px',
-                        fontSize: 11,
-                        color: palette.fg,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Refuser
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Accepted */}
-              {rewrite?.status === 'accepted' && (
-                <div style={{ marginTop: 4, fontSize: 10.5, color: '#2E5E3E', fontWeight: 600 }}>
-                  ✓ Reformulation appliquée au plan.
-                </div>
-              )}
-
-              {/* Refused */}
-              {rewrite?.status === 'refused' && (
-                <div style={{ marginTop: 4, fontSize: 10.5, fontStyle: 'italic', opacity: 0.7 }}>
-                  Reformulation refusée.
-                  <button
-                    type="button"
-                    onClick={() => onRewrite(f)}
-                    style={{
-                      marginLeft: 8,
-                      background: 'transparent',
-                      border: `1px solid ${palette.border}`,
-                      borderRadius: 5,
-                      padding: '1px 7px',
-                      fontSize: 10,
-                      color: palette.fg,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Refaire
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-        {flags.length > 5 && (
-          <li style={{ fontSize: 10.5, fontStyle: 'italic', opacity: 0.7, paddingLeft: 16 }}>
-            … et {flags.length - 5} autre{flags.length - 5 > 1 ? 's' : ''} pattern{flags.length - 5 > 1 ? 's' : ''}.
-          </li>
-        )}
-      </ul>
-
-      {tone === 'high' && (
-        <div style={{ marginTop: 10, fontSize: 11, color: palette.fg, fontStyle: 'italic' }}>
-          → Patterns forts détectés. Considère de regénérer ou éditer manuellement avant export Word.
-        </div>
-      )}
-    </div>
-  );
-}
