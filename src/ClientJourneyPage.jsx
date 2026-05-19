@@ -58,6 +58,11 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const [showMessages, setShowMessages] = useState(false);
   // Phase AE : panel latéral notes internes Anissa
   const [showNotes, setShowNotes] = useState(false);
+  // V97.28 — Navigation libre dans la timeline une fois le parcours terminé.
+  // viewedStepOverride permet à Anissa de cliquer sur une étape passée pour la
+  // consulter (sans repasser par les validations). null = on suit current_step.
+  // Reset automatiquement quand current_step change côté DB.
+  const [viewedStepOverride, setViewedStepOverride] = useState(null);
 
   const openAppPreview = useCallback(async (options = {}) => {
     if (!clientId) return;
@@ -126,6 +131,13 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
 
   useEffect(() => { loadClient(); }, [loadClient]);
 
+  // V97.28 — Reset override quand current_step change côté DB (ex : Anissa
+  // a validé une étape via flèche retour pendant qu'elle consultait, ou un
+  // refresh a ramené un nouveau current_step). On suit la DB par défaut.
+  useEffect(() => {
+    setViewedStepOverride(null);
+  }, [client?.journey_state?.current_step]);
+
   if (loading) {
     return (
       <div className="jrn-page">
@@ -159,6 +171,11 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
   const prenom = client.prenom || client.form?.prenom || 'Cliente';
   const nom = client.nom || client.form?.nom || '';
   const currentStep = journey.current_step || 'anamnesis';
+  // V97.28 — viewedStep = ce qu'Anissa regarde. Par défaut = currentStep, mais
+  // si elle a cliqué sur une étape passée dans la timeline (parcours fini),
+  // l'override prend la main. La DB n'est jamais modifiée par cette navigation.
+  const viewedStep = viewedStepOverride || currentStep;
+  const isViewingPast = viewedStepOverride !== null && viewedStepOverride !== currentStep;
 
   const stepStatuses = JOURNEY_STEPS.map((s) => ({ step: s, status: getStepStatus(journey, s) }));
   const completedCount = stepStatuses.filter((s) => s.status === 'validated' || s.status === 'skipped').length;
@@ -339,11 +356,22 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
             {JOURNEY_STEPS.map((step) => {
               const status = getStepStatus(journey, step);
               const meta = STEP_META[step];
-              const active = step === currentStep;
+              // V97.28 — "active" reflète maintenant ce que regarde Anissa,
+              // pas l'état DB. La step réellement courante (currentStep) garde
+              // un style visuel distinct via la classe --current.
+              const isViewed = step === viewedStep;
+              const isCurrent = step === currentStep;
+              // Cliquable uniquement quand parcours complet (mode followup
+              // démarré) ET sur une étape déjà passée différente de la courante.
+              const isClickable = isParcoursComplete
+                && step !== currentStep
+                && (status === 'validated' || status === 'skipped');
               const cls = ['jrn-step'];
-              if (active) cls.push('jrn-step--active');
+              if (isViewed) cls.push('jrn-step--active');
               else if (status === 'validated') cls.push('jrn-step--validated');
               else if (status === 'skipped') cls.push('jrn-step--skipped');
+              if (isCurrent && !isViewed) cls.push('jrn-step--current-hint');
+              if (isClickable) cls.push('jrn-step--clickable');
               // V97.8.1 (2026-05-12) : pastille notification sur l'étape
               // Onboarding si la cliente a soumis son pré-questionnaire mais
               // que l'anamnèse n'est pas encore validée. Anissa voit ainsi
@@ -353,8 +381,21 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
               const showPreQDot = step === 'anamnesis'
                 && preQReceived
                 && !journey.anamnesis_validated;
+              const handleClick = isClickable ? () => setViewedStepOverride(step) : undefined;
+              const title = isClickable
+                ? `Consulter cette étape (lecture seule — n'altère pas le suivi)`
+                : isCurrent ? 'Étape actuelle' : undefined;
               return (
-                <div key={step} className={cls.join(' ')}>
+                <div
+                  key={step}
+                  className={cls.join(' ')}
+                  onClick={handleClick}
+                  role={isClickable ? 'button' : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewedStepOverride(step); } } : undefined}
+                  title={title}
+                  style={isClickable ? { cursor: 'pointer' } : undefined}
+                >
                   <span className="jrn-step__num">
                     {status === 'validated' ? '✓' : status === 'skipped' ? '↷' : meta.index}
                   </span>
@@ -370,6 +411,24 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
                           boxShadow: '0 0 0 3px rgba(46, 78, 56, 0.15)',
                         }}
                       />
+                    )}
+                    {isCurrent && !isViewed && (
+                      <span
+                        title="Étape actuelle"
+                        style={{
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          letterSpacing: '.08em',
+                          textTransform: 'uppercase',
+                          color: 'var(--jrn-accent)',
+                          padding: '1px 6px',
+                          border: '1px solid var(--jrn-accent)',
+                          borderRadius: 999,
+                          marginLeft: 2,
+                        }}
+                      >
+                        ici
+                      </span>
                     )}
                   </span>
                 </div>
@@ -480,14 +539,46 @@ export default function ClientJourneyPage({ clientId, onExit, onEditProfile, onR
         )}
 
         <main className="jrn-main">
-          {currentStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} onEditProfile={onEditProfile} />}
-          {currentStep === 'analyses' && <StepAnalyses client={client} journey={journey} onChange={refresh} />}
-          {currentStep === 'waiting_results' && <StepWaitingResults client={client} onChange={refresh} />}
-          {currentStep === 'results' && <StepResults client={client} onChange={refresh} />}
-          {currentStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
-          {currentStep === 'plan_editing' && <StepPlanEditing client={client} journey={journey} onChange={refresh} />}
-          {currentStep === 'delivery' && <StepDelivery client={client} onChange={refresh} onOpenAppPreview={openAppPreview} />}
-          {currentStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} onOpenAppPreview={openAppPreview} />}
+          {/* V97.28 — Bandeau divergence : Anissa consulte une étape passée
+              pendant que le suivi continue. Évite toute confusion sur l'état
+              réel + bouton de retour rapide à l'étape courante. */}
+          {isViewingPast && (
+            <div style={{
+              marginBottom: 16,
+              padding: '10px 14px',
+              background: 'rgba(167, 139, 250, 0.08)',
+              border: '1px solid rgba(167, 139, 250, 0.35)',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}>
+              <div style={{ fontSize: 12.5, color: '#5a4290', flex: 1, minWidth: 240 }}>
+                <strong>Mode consultation.</strong>{' '}
+                Vous regardez <em>{STEP_META[viewedStep]?.label || viewedStep}</em>.
+                {' '}L'étape actuelle reste <strong>{STEP_META[currentStep]?.label || currentStep}</strong>{' '}
+                — aucune modification ici n'altère le suivi en cours.
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewedStepOverride(null)}
+                className="jrn-btn jrn-btn--soft"
+                style={{ background: 'white', borderColor: 'rgba(167, 139, 250, 0.4)', color: '#5a4290' }}
+              >
+                ← Revenir à l'étape actuelle
+              </button>
+            </div>
+          )}
+          {viewedStep === 'anamnesis' && <StepAnamnesis client={client} onChange={refresh} onEditProfile={onEditProfile} />}
+          {viewedStep === 'analyses' && <StepAnalyses client={client} journey={journey} onChange={refresh} />}
+          {viewedStep === 'waiting_results' && <StepWaitingResults client={client} onChange={refresh} />}
+          {viewedStep === 'results' && <StepResults client={client} onChange={refresh} />}
+          {viewedStep === 'plan_generation' && <StepPlanGeneration client={client} journey={journey} onChange={refresh} />}
+          {viewedStep === 'plan_editing' && <StepPlanEditing client={client} journey={journey} onChange={refresh} />}
+          {viewedStep === 'delivery' && <StepDelivery client={client} onChange={refresh} onOpenAppPreview={openAppPreview} />}
+          {viewedStep === 'followup' && <StepFollowup client={client} journey={journey} onChange={refresh} onExit={onExit} onReturnPlan={onReturnPlan} onSendPackReview={onSendPackReview} onViewHistory={onViewHistory} onOpenAppPreview={openAppPreview} />}
         </main>
       </div>
     </div>
@@ -3725,6 +3816,10 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   const [adapting, setAdapting] = useState(false);
   const [versions, setVersions] = useState([]);
   const [previewVersion, setPreviewVersion] = useState(null);
+  // V97.28 — Modal éditeur inline pour cycle de suivi. Anissa peut éditer
+  // la V courante (ou créer une suite) sans repasser par l'étape 6 du parcours.
+  // current_step reste sur 'followup'.
+  const [showInlineEditor, setShowInlineEditor] = useState(false);
   const started = !!journey?.followup_started;
 
   // V97.13.16 — variables d'identité partagées avec étape 7
@@ -3985,12 +4080,24 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     finally { setBusy(false); }
   };
 
-  const handleRestartEditing = async () => {
-    setBusy(true); setErr(null);
+  // V97.28 — Ouverture modal inline (ne change PLUS current_step).
+  // Avant : restartPlanEditing rebasculait l'étape sur 'plan_editing' et
+  // forçait Anissa à re-traverser tout le parcours pour revalider.
+  // Maintenant : la modale ouvre l'éditeur direct sur la V courante,
+  // current_step reste 'followup'. Anissa édite, sauvegarde une nouvelle
+  // version, ferme la modale, et continue le suivi.
+  const handleRestartEditing = () => {
+    setShowInlineEditor(true);
+  };
+
+  // Refresh versions après save dans la modal inline
+  const handleInlineEditorPlanSaved = async () => {
     try {
-      await transitions.restartPlanEditing(client.id);
-      onChange();
-    } catch (e) { setErr(e?.message || 'Erreur'); setBusy(false); }
+      const { getNutritionConsultations } = await import('./store');
+      const list = getNutritionConsultations(client.id) || [];
+      setVersions(list);
+      setActiveConsult(list[0] || null);
+    } catch { /* silencieux */ }
   };
 
   const handleAdaptFromFeedback = async () => {
@@ -4622,7 +4729,96 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
           recentFeedbacks={feedbacks?.slice(0, 7) || []}
         />
       )}
+
+      {/* V97.28 — Modal éditeur inline (Cycle de suivi → Éditer manuellement).
+          Ne change pas current_step. Permet d'éditer la V courante ou de créer
+          une nouvelle version directement depuis l'étape Suivi. */}
+      {showInlineEditor && (
+        <InlineEditorModal
+          client={client}
+          onClose={() => setShowInlineEditor(false)}
+          onPlanSaved={handleInlineEditorPlanSaved}
+        />
+      )}
     </section>
+  );
+}
+
+// V97.28 — Modal plein écran qui héberge JourneyPlanEditor sans changer
+// current_step. Sépare l'édition technique du protocole de la timeline parcours.
+function InlineEditorModal({ client, onClose, onPlanSaved }) {
+  const prenom = (client?.form?.prenom || client?.prenom || 'la cliente').trim();
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Édition manuelle du protocole — ${prenom}`}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(20, 24, 22, 0.55)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 9000,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '4vh 4vw',
+      }}
+    >
+      <div style={{
+        background: 'var(--jrn-bg, #FAF9F6)',
+        borderRadius: 12,
+        boxShadow: '0 24px 60px rgba(0,0,0,.25)',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '14px 20px',
+          borderBottom: '1px solid var(--jrn-border, #EFEDE5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          background: 'white',
+        }}>
+          <div>
+            <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--jrn-text-soft, #6b6f6b)' }}>
+              Cycle de suivi · Édition manuelle
+            </p>
+            <h2 style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 700, color: 'var(--jrn-ink, #1A2E1F)' }}>
+              Protocole — {prenom}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="jrn-btn jrn-btn--ghost"
+            title="Fermer (l'étape de suivi reste active)"
+          >
+            ✕ Fermer
+          </button>
+        </div>
+        {/* Body : JourneyPlanEditor scrollable */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+          <JourneyPlanEditor
+            client={client}
+            onPlanSaved={onPlanSaved}
+          />
+        </div>
+        {/* Footer info */}
+        <div style={{
+          padding: '10px 20px',
+          borderTop: '1px solid var(--jrn-border, #EFEDE5)',
+          background: 'rgba(46, 78, 56, 0.04)',
+          fontSize: 11.5,
+          color: 'var(--jrn-text-soft, #6b6f6b)',
+        }}>
+          Chaque sauvegarde crée une nouvelle version dans l'historique. L'étape de suivi reste active — vous restez dans le cycle, vous ne repassez pas par le parcours initial.
+        </div>
+      </div>
+    </div>
   );
 }
 
