@@ -131,14 +131,17 @@ export default function AnalysisSuggestionModal({
       }
     }
 
+    // V97.28.1 — arrondi 2 décimales pour neutraliser le bruit floating-point
+    // (548.9 - 400 = 148.89999...). Les montants Ortho ont au max 1 décimale.
+    const round2 = (n) => Math.round(n * 100) / 100;
     return {
-      totalCost: total,
+      totalCost: round2(total),
       selectedTests: allSelected,
-      creditApplied: applied,
-      costForClient: Math.max(0, total - creditChf),
+      creditApplied: round2(applied),
+      costForClient: round2(Math.max(0, total - creditChf)),
       coveredCodes: covered,
       // V97.12.1 : champ deprecate mais conserve pour compat schema BDD.
-      totalMargin: packPrice - total,
+      totalMargin: round2(packPrice - total),
     };
   }, [selected, enrichedSuggestions, extraTests, creditChf, packPrice]);
 
