@@ -125,13 +125,15 @@ function extractSupplementsFromCardSection(sections) {
         buckets.add("breakfast");
         continue;
       }
-      // 4. Midi / dejeuner (lookbehind pour exclure petit-dejeuner)
-      if (/(?<!petit[- ]?)d[eé]jeuner|midi|au\s+repas\s+du\s+midi/i.test(t)) {
+      // 4. Midi / dejeuner / diner (midi) — V97.31 vocabulaire CH romand
+      // (lookbehind pour exclure petit-dejeuner)
+      if (/(?<!petit[- ]?)d[eé]jeuner|midi|au\s+repas\s+du\s+midi|d[iî]ner\s*\(?\s*midi/i.test(t)) {
         buckets.add("lunch");
         continue;
       }
-      // 5. Diner / soir (exclure soir au coucher deja capte plus haut)
-      if (/d[iî]ner|en\s+soir[eé]e|le\s+soir|au\s+soir/i.test(t)) {
+      // 5. Souper / diner / soir — V97.31 ajout "souper" (vocab CH)
+      // (exclure soir au coucher deja capte plus haut)
+      if (/souper|d[iî]ner|en\s+soir[eé]e|le\s+soir|au\s+soir/i.test(t)) {
         buckets.add("dinner");
         continue;
       }

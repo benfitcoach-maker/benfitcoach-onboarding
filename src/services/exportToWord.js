@@ -578,9 +578,10 @@ function buildFridgePage(fridgeData, prenom) {
         new TableRow({
           tableHeader: true,
           children: [
+            // V97.31 — Vocabulaire suisse romand : Dîner = midi, Souper = soir
             frigoMealHeaderCell("Petit-déjeuner", 33),
-            frigoMealHeaderCell("Déjeuner", 34),
-            frigoMealHeaderCell("Dîner", 33),
+            frigoMealHeaderCell("Dîner", 34),
+            frigoMealHeaderCell("Souper", 33),
           ],
         }),
         new TableRow({
@@ -659,11 +660,12 @@ function buildFridgePage(fridgeData, prenom) {
       })
     );
 
+    // V97.31 — Vocabulaire suisse romand : Dîner = midi, Souper = soir
     const moments = [
       { label: "Matin à jeun", items: supp.morningFasting || [] },
       { label: "Petit-déjeuner", items: supp.breakfast || [] },
-      { label: "Midi", items: supp.lunch || [] },
-      { label: "Soir", items: supp.dinner || [] },
+      { label: "Dîner", items: supp.lunch || [] },
+      { label: "Souper", items: supp.dinner || [] },
       { label: "Coucher", items: supp.bedtime || [] },
     ];
 
@@ -942,13 +944,13 @@ function buildFridgeMagazinePage(fridgeData, prenom, dateStr) {
             })],
           })],
         }),
-        // Sous-headers
+        // Sous-headers — V97.31 vocabulaire suisse romand
         new TableRow({
           children: [
             magSuppSubHeaderCell("Matin à jeun", 20),
             magSuppSubHeaderCell("Petit-déjeuner", 20),
-            magSuppSubHeaderCell("Midi", 20),
-            magSuppSubHeaderCell("Soir", 20),
+            magSuppSubHeaderCell("Dîner", 20),
+            magSuppSubHeaderCell("Souper", 20),
             magSuppSubHeaderCell("Coucher", 20),
           ],
         }),

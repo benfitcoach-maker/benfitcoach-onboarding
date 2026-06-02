@@ -62,11 +62,18 @@ Adapter selon genre, age, symptomes, pathologies reels du client.
 - Hommes : optimiser energie, composition corporelle, recuperation, selon stress/sommeil/activite. Si >40 ans, vigilance specifique.
 - Dans tous les cas : ne mentionner QUE ce qui est reellement utile pour CE client. Pas de surcharge, pas de regles generiques.
 
+VOCABULAIRE REPAS SUISSE ROMAND (OBLIGATOIRE) :
+Anissa exerce en Suisse romande. Toujours utiliser le vocabulaire suisse pour les repas :
+- Matin : "Petit-déjeuner" (identique au français standard)
+- Midi : "Dîner" (et NON "Déjeuner")
+- Soir : "Souper" (et NON "Dîner")
+Ne JAMAIS écrire "Déjeuner" pour le repas de midi ni "Dîner" pour le repas du soir.
+
 TIMING NUTRITIONNEL :
-- Matin : stabilisation glycemique et cortisol (proteines + lipides)
-- Midi : repas metabolique principal (densite, glucides complexes si besoin)
-- Soir : digestion facile, charge reduite, plus simple et plus digestible que le dejeuner
-- Adapter le soir au probleme principal (digestion fragile → tres leger ; cortisol eleve + insomnie → petits glucides complexes)
+- Petit-déjeuner : stabilisation glycemique et cortisol (proteines + lipides)
+- Dîner (midi) : repas metabolique principal (densite, glucides complexes si besoin)
+- Souper (soir) : digestion facile, charge reduite, plus simple et plus digestible que le diner
+- Adapter le souper au probleme principal (digestion fragile → tres leger ; cortisol eleve + insomnie → petits glucides complexes)
 
 ADAPTATION INDIVIDUELLE :
 - Respecter strictement allergies, intolerances, aliments problematiques, rythme de vie
@@ -263,7 +270,7 @@ Pour chaque supplement (5-6 max), utiliser EXACTEMENT ce format :
 
 NOM DU SUPPLEMENT (en majuscules, sur sa propre ligne)
 
-Moment : [matin a jeun / petit-dejeuner / midi / soir / coucher]
+Moment : [matin a jeun / petit-dejeuner / diner (midi) / souper (soir) / coucher]
 Dose : [dosage clair, forme biodisponible, marque suisse si pertinent]
 Pourquoi : [UNE SEULE phrase personnalisee, liee au probleme du client]
 Duree : [ex : 3 mois puis controle — uniquement si pertinent]
@@ -341,11 +348,11 @@ INTERDIT : "- Axe principal", "**Axe principal** :", listes a puces. UNE paire =
 
 ## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
 Une journee type complete, calibree selon poids/sexe/objectif du client.
-Format obligatoire :
+Format obligatoire (VOCABULAIRE SUISSE ROMAND — ne PAS ecrire "Dejeuner" pour le midi) :
 Petit-dejeuner : [contenu + portions en grammes/ml]
-Dejeuner : [idem]
+Diner (midi) : [idem — le qualificatif (midi) est OBLIGATOIRE pour disambiguation]
 Collation : [idem, seulement si pertinent]
-Diner : [idem]
+Souper (soir) : [idem — le qualificatif (soir) est OBLIGATOIRE pour disambiguation]
 
 PORTIONS PRECISES OBLIGATOIRES (grammages ou mesures).
 Pas de "selon appetit", pas de "quantite raisonnable".
@@ -355,14 +362,14 @@ Pour chaque slot de la SEMAINE 1, donne 3 a 5 RECETTES COMPLETES alternatives,
 autosuffisantes et adaptees au profil. La cliente pourra swap entre ces options
 selon ce qu'elle a sous la main, depuis l'app cliente.
 
-Format strict (subheader puis bullets) :
+Format strict (subheader puis bullets — VOCABULAIRE SUISSE avec qualificatifs OBLIGATOIRES) :
 
 ### Petit-dejeuner
 - Titre court de la recette — hint avec aliments cles + portions
 - Titre — hint
 - Titre — hint
 
-### Dejeuner
+### Diner (midi)
 - Titre — hint
 - Titre — hint
 - Titre — hint
@@ -371,7 +378,7 @@ Format strict (subheader puis bullets) :
 - Titre — hint
 - Titre — hint
 
-### Diner
+### Souper (soir)
 - Titre — hint
 - Titre — hint
 - Titre — hint
@@ -508,16 +515,17 @@ INTERDIT : "- Axe principal", "**Axe principal** :", listes a puces. UNE paire =
 
 ## 3. SEMAINE 1 — STRUCTURE ALIMENTAIRE
 
-- Donner UNE journee complete structuree (petit-dejeuner, dejeuner, collation, diner)
+- Donner UNE journee complete structuree (petit-dejeuner, diner [midi], collation, souper [soir])
+- VOCABULAIRE SUISSE ROMAND obligatoire : Diner = MIDI, Souper = SOIR. Ne PAS ecrire "Dejeuner"
 - Chaque repas : aliments concrets + portions (grammes ou unites familieres)
 - Format simple, lisible, directement applicable
 - NE PAS donner plusieurs jours complets — une seule journee type
 
-Format attendu :
+Format attendu (qualificatifs (midi) et (soir) OBLIGATOIRES) :
 Petit-dejeuner : 2 oeufs brouilles + 1 tranche pain complet (40g) + 1/2 avocat + tisane
-Dejeuner : 120g saumon + 80g quinoa cuit + legumes vapeur + 1 c.s. huile olive
+Diner (midi) : 120g saumon + 80g quinoa cuit + legumes vapeur + 1 c.s. huile olive
 Collation : 1 yaourt grec + 30g amandes
-Diner : 100g blanc de poulet + 150g courgettes + 1 petite patate douce
+Souper (soir) : 100g blanc de poulet + 150g courgettes + 1 petite patate douce
 
 Regles portions :
 - Proteines : grammage obligatoire (ex : 120g saumon, 2 oeufs, 100g poulet)
@@ -539,14 +547,14 @@ COMPLETES substituables, repas par repas.
 Pour chaque slot de la SEMAINE 1, donne 3 a 5 RECETTES COMPLETES alternatives,
 autosuffisantes et adaptees au profil.
 
-Format strict (subheader puis bullets) :
+Format strict (subheader puis bullets — qualificatifs (midi) / (soir) OBLIGATOIRES) :
 
 ### Petit-dejeuner
 - Titre court de la recette — hint avec aliments cles + portions
 - Titre — hint
 - Titre — hint
 
-### Dejeuner
+### Diner (midi)
 - Titre — hint
 - Titre — hint
 - Titre — hint
@@ -555,7 +563,7 @@ Format strict (subheader puis bullets) :
 - Titre — hint
 - Titre — hint
 
-### Diner
+### Souper (soir)
 - Titre — hint
 - Titre — hint
 - Titre — hint
@@ -565,7 +573,7 @@ Exemple petit-dejeuner :
 - Smoothie banane & beurre amande — 1 banane, 200ml lait vegetal, 1 c.s. beurre amande
 - Yaourt grec & granola — 150g yaourt, 30g granola maison, 1 c.c. miel
 
-Exemple dejeuner :
+Exemple diner (midi) :
 - Saumon vapeur & quinoa — 120g saumon, 80g quinoa, brocolis vapeur
 - Bowl tofu & sarrasin — 130g tofu ferme, 80g sarrasin, ratatouille
 - Cabillaud & legumes rotis — 150g cabillaud, courgettes, poivrons rotis
@@ -672,7 +680,7 @@ Tu dors 6h fragmentees. Decale le diner a 19h max et coupe les ecrans une
 heure avant le coucher pour laisser la melatonine remonter.
 
 Cote stress, 10/10 aujourd'hui. On integre 3 minutes de respiration carree
-avant le petit-dejeuner et apres le diner — c'est court mais ca casse
+avant le petit-dejeuner et apres le souper — c'est court mais ca casse
 vraiment le cortisol du matin."
 
 INTERDIT :

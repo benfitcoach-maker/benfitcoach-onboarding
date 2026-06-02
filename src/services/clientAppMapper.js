@@ -479,17 +479,24 @@ function buildStrategyData(client, consultation, sections) {
 // L'override par jour (mode hybride choisi par le user) viendra après
 // migration : on lira consultation.week_overrides JSONB.
 
+// V97.31 — Vocabulaire SUISSE ROMAND pour les labels affichés cliente.
+// En Suisse romande : Dîner = MIDI, Souper = SOIR. "Déjeuner" en Suisse
+// peut désigner le petit-déj (vocab confus). On force le vocabulaire CH
+// pour aligner avec le contexte d'Anissa et éviter ambiguïté.
+// Les regex captent les anciens labels FR (Déjeuner, Dîner pour soir)
+// pour backward compat : un ancien plan généré avant V97.31 sera mappé
+// correctement vers les slots lunch/dinner et affiché avec le bon label CH.
 const SLOT_PATTERNS = [
   { slot: "breakfast",       label_fr: "Petit-déjeuner",  label_en: "Breakfast",
     re: /(petit\s*[\-\s]?d[ée]j(?:euner)?|breakfast|matin(?!e)|wake|morning\s*meal)/i },
   { slot: "morning_snack",   label_fr: "Collation matin", label_en: "Morning snack",
     re: /(collation\s*(?:matin|10h?))|morning\s*snack|mid\s*morning/i },
-  { slot: "lunch",           label_fr: "Déjeuner",         label_en: "Lunch",
-    re: /(d[ée]jeuner|midi|lunch|noon)/i },
+  { slot: "lunch",           label_fr: "Dîner",            label_en: "Lunch",
+    re: /(d[ée]jeuner|midi|lunch|noon|d[îi]ner\s*\(?\s*midi)/i },
   { slot: "afternoon_snack", label_fr: "Collation après-midi", label_en: "Afternoon snack",
     re: /(collation\s*(?:apr[èe]s[\-\s]?midi|16h?))|afternoon\s*snack|tea\s*time/i },
-  { slot: "dinner",          label_fr: "Dîner",            label_en: "Dinner",
-    re: /(d[îi]ner|soir(?!ee)|dinner|evening\s*meal)/i },
+  { slot: "dinner",          label_fr: "Souper",           label_en: "Dinner",
+    re: /(souper|d[îi]ner|soir(?!ee)|dinner|evening\s*meal)/i },
   { slot: "evening_snack",   label_fr: "Collation soir",   label_en: "Evening snack",
     re: /(collation\s*soir|evening\s*snack|before\s*bed|nighttime)/i },
 ];
