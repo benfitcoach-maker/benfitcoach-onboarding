@@ -468,8 +468,11 @@ function buildStrategyData(client, consultation, sections) {
 
 // ─── 3. week_meals ────────────────────────────────────────────────────────
 //
-// V1 : on construit une "semaine type" (7 jours identiques) à partir de la
-// section "meals". Format attendu (parseLabeledLines) :
+// V1 → V94.71 → V97.33 : on construit une "semaine type" puis on varie
+// le menu jour apres jour via les alternatives (section 4 du markdown IA).
+// Pattern : pool [meal_principal, ...alts] par slot, pioche modulo par jour.
+// Le repas principal reste l'ancrage (apparait plusieurs fois sur 7 jours)
+// et les alternatives nourissent la variation. Format attendu :
 //   Petit-déjeuner : œuf brouillé + toast + fruit
 //   Collation 10h : yaourt nature
 //   Déjeuner : poulet + riz + légumes
@@ -782,17 +785,57 @@ function buildWeekMeals(client, consultation, sections) {
 
   // Rotation : Lun/Mer/Ven/Dim = variant 0, Mar/Jeu/Sam = variant 1, etc.
   // Modulo permet d'absorber 1, 2 ou N variantes uniformement.
+  //
+  // V97.33 — Si une seule variante existe (cas standard : prompt section 3
+  // produit UNE journee type), on enrichit la rotation en utilisant les
+  // alternatives par slot (section 4 ALTERNATIVES PAR REPAS) pour
+  // varier le menu jour apres jour. Sinon la cliente voit 7x les memes
+  // repas, ce qui est peu credible vs le positionnement premium (1990 CHF).
+  //
+  // Pattern : pour chaque slot, on construit un pool [meal_principal,
+  // ...alts]. Au jour i, on pioche pool[i % pool.length]. Le repas
+  // principal reapparait regulierement comme ancrage. Les alternatives
+  // restent disponibles cote app cliente (attachAlternatives reste
+  // applique → la cliente peut toujours swap manuellement).
+  const hasMultipleVariants = variants.length > 1;
   const days = dayLabels.map((label, i) => {
     const variant = variants[i % variants.length];
+
+    const dayMeals = variant.map((m, j) => {
+      // V97.33 — Rotation slot-by-slot uniquement quand on n'a qu'une
+      // variante journee type (sinon les meals_alt font deja la variation).
+      let chosenMeal = m;
+      if (!hasMultipleVariants) {
+        const slotAlts = altsBySlot.get(m.slot) || [];
+        if (slotAlts.length > 0) {
+          // Pool des candidats pour ce slot : repas principal + alternatives
+          const slotPool = [m, ...slotAlts];
+          const altPick = slotPool[i % slotPool.length];
+          if (altPick) {
+            // On garde le canal du slot (label affiche, slot key) et on
+            // substitue le contenu (title, hint, recipe). Si altPick a sa
+            // propre recette injectee via mealRecipes, attachRecipe la pose.
+            chosenMeal = {
+              ...altPick,
+              slot: m.slot,
+              slot_label: m.slot_label || altPick.slot_label,
+            };
+          }
+        }
+      }
+
+      return {
+        ...attachAlternatives(attachRecipe(chosenMeal)),
+        id: `day-${i + 1}-meal-${j + 1}`,
+      };
+    });
+
     return {
       id: uniqueId(`day-${i + 1}`, usedDayIds),
       index: i + 1,
       label,
       short_label: dayShort[i],
-      meals: variant.map((m, j) => ({
-        ...attachAlternatives(attachRecipe(m)),
-        id: `day-${i + 1}-meal-${j + 1}`,
-      })),
+      meals: dayMeals,
     };
   });
 
