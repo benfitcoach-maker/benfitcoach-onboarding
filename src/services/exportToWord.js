@@ -52,6 +52,9 @@ import { buildForbiddenList } from "./foodRestrictionsParser";
 // V94.64 : builder canonique partage (coherence E2E avec modal SaaS + app cliente)
 import { buildCanonicalFridgeData } from "./fridgeDataBuilder";
 
+// P1.2 — garde de clairance clinique au niveau service (couvre tous les call sites).
+import { assertExportCleared } from "./clinicalClearance";
+
 // ─── Palette brand Anissa (cohérente avec PDF actuel) ────────────────
 const COLORS = {
   green:    "1A2E1F",
@@ -1088,7 +1091,12 @@ export async function exportFridgeToWord(client, consultation, fridgeData) {
  * @param {object} consultation - { date, objective?, ... }
  * @param {string} finalText - markdown du plan édité
  */
-export async function exportPlanToWord(client, consultation, finalText) {
+export async function exportPlanToWord(client, consultation, finalText, options = {}) {
+  // P1.2 — Clairance clinique (fail-closed). Le gate vit ICI, pas sur le bouton,
+  // pour couvrir tous les call sites (JourneyPlanEditor, ClientJourneyPage,
+  // NutritionConsultation). Throw ExportClinicalError sauf override conscient.
+  assertExportCleared(finalText, { form: client?.form }, options);
+
   const prenom = (client?.prenom || 'Cliente').trim();
   const date = formatFrDate(consultation?.date);
   const objectif = (consultation?.objective || client?.form?.objectifPrincipalNutrition || '').trim();

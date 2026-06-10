@@ -41,6 +41,8 @@ import { exportConsultationPDF, exportFicheFrigoPDF, exportClientPackPDF, buildC
 import { detectSectionType } from './services/nutritionParsers';
 // V92.0 : export Word natif (Anissa peaufine dans Word puis exporte PDF)
 import { exportPlanToWord } from './services/exportToWord';
+// P1.2 — gate de clairance clinique (service) + override conscient.
+import { ExportClinicalError, formatClearanceForConfirm } from './services/clinicalClearance';
 // V97.0 : centralisation des appels Claude (anciennement 5 fetches inline)
 import { callClaude } from './services/anthropic';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
@@ -3738,10 +3740,20 @@ ${suppText}`;
                         style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: 0, border: 'none' }}
                         onClick={async () => {
                           setShowExportMenu(false);
+                          const planSource = planDraft || consultation.nutrition_plan || '';
                           try {
-                            const planSource = planDraft || consultation.nutrition_plan || '';
+                            // P1.2 — le gate vit dans exportPlanToWord (service).
                             await exportPlanToWord(client, consultation, planSource);
                           } catch (e) {
+                            if (e instanceof ExportClinicalError) {
+                              if (!window.confirm(formatClearanceForConfirm(e.verdict))) return;
+                              try {
+                                await exportPlanToWord(client, consultation, planSource, { clinicalOverride: true });
+                              } catch (e2) {
+                                alert("Erreur lors de l'export Word : " + (e2?.message || e2));
+                              }
+                              return;
+                            }
                             // eslint-disable-next-line no-console
                             console.error('[exportPlanToWord]', e);
                             alert("Erreur lors de l'export Word : " + (e?.message || e));

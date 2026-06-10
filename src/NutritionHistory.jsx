@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { getNutritionConsultations, getClient, softDeleteConsultation } from './store';
 import { exportConsultationPDF, exportFicheFrigoPDF } from './nutritionPdf';
+// P1.2 — gate de clairance clinique (service) + override conscient.
+import { ExportClinicalError, formatClearanceForConfirm } from './services/clinicalClearance';
 import ProgressionCharts from './ProgressionCharts';
 import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import { EmptyState } from './App';
@@ -48,7 +50,17 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
 
   const handleExportFrigo = async (consultation, e) => {
     e.stopPropagation();
-    await exportFicheFrigoPDF(consultation, client);
+    // P1.2 — le gate vit dans exportFicheFrigoPDF (service). Override conscient.
+    try {
+      await exportFicheFrigoPDF(consultation, client);
+    } catch (err) {
+      if (err instanceof ExportClinicalError) {
+        if (!window.confirm(formatClearanceForConfirm(err.verdict))) return;
+        await exportFicheFrigoPDF(consultation, client, undefined, { clinicalOverride: true });
+      } else {
+        throw err;
+      }
+    }
   };
 
   const renderFollowupSummary = (c) => {

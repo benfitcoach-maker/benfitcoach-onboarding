@@ -3200,14 +3200,28 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
     setExporting(true);
     setErr(null);
     try {
-      const [{ exportPlanToWord }, { getNutritionConsultations }] = await Promise.all([
+      const [{ exportPlanToWord }, { getNutritionConsultations }, { ExportClinicalError, formatClearanceForConfirm }] = await Promise.all([
         import('./services/exportToWord'),
         import('./store'),
+        import('./services/clinicalClearance'),
       ]);
       const consultations = getNutritionConsultations(client.id) || [];
       const last = consultations[0];
       if (!last) throw new Error('Aucune consultation à exporter');
-      await exportPlanToWord(client, last, last.nutritionPlan || '');
+      // P1.2 — le gate vit dans exportPlanToWord (service). Override conscient.
+      try {
+        await exportPlanToWord(client, last, last.nutritionPlan || '');
+      } catch (ce) {
+        if (ce instanceof ExportClinicalError) {
+          if (!window.confirm(formatClearanceForConfirm(ce.verdict))) {
+            setExporting(false);
+            return;
+          }
+          await exportPlanToWord(client, last, last.nutritionPlan || '', { clinicalOverride: true });
+        } else {
+          throw ce;
+        }
+      }
       setPaperExported(true);
     } catch (e) {
       setErr(e?.message || 'Erreur export Word');

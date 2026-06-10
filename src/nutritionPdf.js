@@ -8,6 +8,8 @@ import {
   parseSupplementEntriesStructured,
 } from './services/nutritionParsers';
 import { COACH_IDENTITY, COMPANY_IDENTITY, pdfFooterClosingFr, pdfFooterClosingEn } from './services/coachIdentity';
+// P1.2 — garde de clairance clinique au niveau service (couvre tous les call sites).
+import { assertExportCleared } from './services/clinicalClearance';
 
 const LOGO_URL = 'https://cdn.prod.website-files.com/69c276fd79d460813b99867a/69d411dfafbbe967e3d992c4_Design_sans_titre_1_-removebg-preview.png';
 
@@ -2684,11 +2686,20 @@ export function extractSupplements(supplementsText) {
 // PDF 2: FICHE FRIGO
 // ─────────────────────────────────────────────────────
 
-export async function exportFicheFrigoPDF(consultation, client, editedMeals) {
+export async function exportFicheFrigoPDF(consultation, client, editedMeals, options = {}) {
   if (!consultation.nutritionPlan) {
     alert('Generez d\'abord le plan nutrition avant d\'exporter la fiche frigo.');
     return;
   }
+
+  // P1.2 — Clairance clinique (fail-closed). Le gate vit ICI, pas sur le bouton,
+  // pour couvrir tous les call sites (FicheFrigoPreview, NutritionHistory). On
+  // confronte le contenu réellement imprimé (repas/compléments édités si fournis,
+  // sinon le plan brut). Throw ExportClinicalError sauf override conscient.
+  const clearanceText = editedMeals
+    ? JSON.stringify(editedMeals)
+    : (consultation.nutritionPlan || '');
+  assertExportCleared(clearanceText, { form: client?.form }, options);
 
   // ─── Premium Anissa Deroubaix design ───
   // Palette : crème chaud + vert très foncé + vert pâle + rose pâle

@@ -42,7 +42,7 @@ import { getActivePhase, getActivePhaseWeek } from './services/protocolPhases';
 import { buildClinicalContext } from './services/clinical/buildClinicalContext';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
-import { assertPlanClinicallyCleared, formatClearanceForConfirm } from './services/clinicalClearance';
+import { assertPlanClinicallyCleared, formatClearanceForConfirm, ExportClinicalError } from './services/clinicalClearance';
 import { structurePlanSections } from './services/planFormatters';
 import { analyzeFullPlan } from './services/aiClient';
 import FicheFrigoPreview from './FicheFrigoPreview';
@@ -253,15 +253,24 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
   const handleExportPlan = async () => {
     setExporting('plan');
     setError(null);
+    // P1.2 — le gate de clairance vit dans exportPlanToWord (service). On capte
+    // ExportClinicalError pour proposer un override conscient, puis on relance
+    // avec clinicalOverride. Plus de gate sur le bouton (sinon backdoor).
+    const cons = consultation || { clientId: client.id, date: new Date().toISOString() };
     try {
-      // P1.2 — clairance clinique (porte export Word). Override conscient sur HIGH.
-      const verdict = assertPlanClinicallyCleared(planText, { form: client?.form });
-      if (!verdict.cleared && !window.confirm(formatClearanceForConfirm(verdict))) {
-        return;
-      }
-      await exportPlanToWord(client, consultation || { clientId: client.id, date: new Date().toISOString() }, planText);
+      await exportPlanToWord(client, cons, planText);
     } catch (e) {
-      setError(e?.message || 'Erreur export Word');
+      if (e instanceof ExportClinicalError) {
+        if (window.confirm(formatClearanceForConfirm(e.verdict))) {
+          try {
+            await exportPlanToWord(client, cons, planText, { clinicalOverride: true });
+          } catch (e2) {
+            setError(e2?.message || 'Erreur export Word');
+          }
+        }
+      } else {
+        setError(e?.message || 'Erreur export Word');
+      }
     } finally {
       setExporting(null);
     }

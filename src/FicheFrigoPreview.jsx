@@ -4,7 +4,7 @@ import { exportFicheFrigoPDF } from './nutritionPdf';
 // Avant, la logique etait dupliquee ici, dans exportToWord.js et clientAppMapper.js.
 // Risque de divergence elimine : une seule source de verite.
 import { buildCanonicalFridgeData } from './services/fridgeDataBuilder';
-import { assertPlanClinicallyCleared, formatClearanceForConfirm } from './services/clinicalClearance';
+import { formatClearanceForConfirm, ExportClinicalError } from './services/clinicalClearance';
 
 // ─── CLEAN ITEM: strip parentheses, explanations, leading dashes/bullets ───
 function cleanItem(text) {
@@ -171,14 +171,19 @@ export default function FicheFrigoPreview({ consultation, sections, client, onCl
   // pas pour la Fiche Frigo qui est imprimée puis plastifiée telle quelle.
   const handleExport = async () => {
     const editedMeals = getEditedData();
-    // P1.2 — clairance clinique (porte Fiche frigo PDF). Override conscient sur HIGH.
-    // On sérialise le contenu de la fiche (repas + compléments + listes) pour le
-    // confronter aux allergènes / interactions / phrases interdites.
-    const verdict = assertPlanClinicallyCleared(JSON.stringify(editedMeals), { form });
-    if (!verdict.cleared && !window.confirm(formatClearanceForConfirm(verdict))) {
-      return;
+    // P1.2 — le gate de clairance vit dans exportFicheFrigoPDF (service), qui
+    // confronte le contenu réellement imprimé aux allergènes / interactions /
+    // phrases interdites. On capte ExportClinicalError pour un override conscient.
+    try {
+      await exportFicheFrigoPDF(consultation, client, editedMeals);
+    } catch (e) {
+      if (e instanceof ExportClinicalError) {
+        if (!window.confirm(formatClearanceForConfirm(e.verdict))) return;
+        await exportFicheFrigoPDF(consultation, client, editedMeals, { clinicalOverride: true });
+      } else {
+        throw e;
+      }
     }
-    await exportFicheFrigoPDF(consultation, client, editedMeals);
     onClose();
   };
 

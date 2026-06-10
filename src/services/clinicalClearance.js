@@ -129,6 +129,41 @@ export function assertPlanClinicallyCleared(planText, clinicalContext = {}) {
   }
 }
 
+// P1.2 (colmatage backdoors, 2026-06-10) — erreur jetée par la garde d'export.
+// Même rôle que PublishClinicalError côté publication : porte le verdict pour
+// que l'UI puisse présenter un override conscient. Le gate vit dans le SERVICE
+// d'export (assertExportCleared), pas sur les boutons — sinon chaque nouveau
+// bouton qui appelle exportPlanToWord/exportFicheFrigoPDF rouvre une backdoor.
+export class ExportClinicalError extends Error {
+  constructor(verdict) {
+    super('Clairance clinique refusée — export bloqué.');
+    this.name = 'ExportClinicalError';
+    this.verdict = verdict;
+  }
+}
+
+/**
+ * P1.2 — Garde de clairance pour les services d'export (Word, Fiche frigo PDF).
+ * À appeler en TÊTE de chaque fonction d'export pour que tous les call sites
+ * soient couverts par une seule barrière. Throw ExportClinicalError si le plan
+ * n'est pas clairé, sauf override conscient explicite (options.clinicalOverride
+ * positionné par l'UI après un window.confirm).
+ *
+ * Renvoie TOUJOURS le verdict (même en override) pour traçabilité.
+ *
+ * @param {string} planText
+ * @param {{ form?: object, guardrails?: Array }} [clinicalContext]
+ * @param {{ clinicalOverride?: boolean }} [options]
+ * @returns {ClearanceVerdict}
+ */
+export function assertExportCleared(planText, clinicalContext = {}, options = {}) {
+  const verdict = assertPlanClinicallyCleared(planText, clinicalContext);
+  if (!verdict.cleared && !options.clinicalOverride) {
+    throw new ExportClinicalError(verdict);
+  }
+  return verdict;
+}
+
 /**
  * Formate un verdict pour un override conscient (window.confirm aux portes
  * manuelles). Pure — testable. Renvoie le message à présenter à Anissa.
