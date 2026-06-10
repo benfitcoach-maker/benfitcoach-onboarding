@@ -75,7 +75,7 @@ export default function SuiviCockpitTimeline({
   weightEntries,
   onSavePhases,
   onOpenAppPreview,
-  phasesDisabledReason = null,
+  pendingPhases = null,
 }) {
   const durationMonths = useMemo(
     () => extractDurationMonths(packLabel),
@@ -91,7 +91,9 @@ export default function SuiviCockpitTimeline({
   }, [daysSincePack, totalDays]);
 
   // Pill template dynamique (V97.17.4 fix)
-  const protocolPhases = consultation?.protocol_phases || null;
+  // V97.39.8 (roadmap 1.1) — fallback sur les phases en attente (parcours
+  // accepte avant qu'une consultation hote n'existe, cf. pack Bilan melissa).
+  const protocolPhases = consultation?.protocol_phases || pendingPhases || null;
   const templatePillLabel = useMemo(() => {
     if (!protocolPhases) return "—";
     if (protocolPhases.skipped) return "Aucun parcours";
@@ -382,7 +384,7 @@ export default function SuiviCockpitTimeline({
           consultation={consultation}
           onSavePhases={onSavePhases}
           hasRecentPositivePattern={hasRecentPositivePattern(feedbacks)}
-          disabledReason={phasesDisabledReason}
+          pendingPhases={pendingPhases}
         />
 
         {/* V97.17.7.2 — Bouton publier contextuel.

@@ -33,19 +33,22 @@ import {
   startParcours,
 } from "../services/protocolPhases";
 
-export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false, disabledReason = null }) {
-  // V97.39.7 (roadmap 1.1) — Si aucune consultation n'existe encore, le parent
-  // ne peut pas persister les phases (handleSavePhases fait `if (!activeConsult)
-  // return`). On verrouille donc les boutons d'init et on explique pourquoi,
-  // au lieu du no-op silencieux "Initialisation…" qui ne se passait rien.
-  const initLocked = !!disabledReason;
+export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false, pendingPhases = null }) {
   const [saving, setSaving] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [pendingTemplateId, setPendingTemplateId] = useState(null);
   const [pendingForceTransition, setPendingForceTransition] = useState(false);
 
-  const protocolPhases = consultation?.protocol_phases || null;
+  // V97.39.8 (roadmap 1.1) — Supersede le verrou V97.39.7. Quand aucune
+  // consultation n'existe encore (cas pack Bilan : page Suivi sans plan, cf.
+  // melissa), "Accepter" n'est plus desactive : le parent persiste les phases
+  // dans journey_state.pending_protocol_phases (sans creer de consultation,
+  // sans consommer le compteur de pack). On affiche donc ici ces phases en
+  // attente comme si elles etaient deja portees : la carte reflete le parcours
+  // accepte et l'effet de greffe parent les transferera sur la 1ere
+  // consultation creee.
+  const protocolPhases = consultation?.protocol_phases || pendingPhases || null;
 
   const suggestion = useMemo(
     () => suggestTemplateFromAnalyses(client || {}),
@@ -246,12 +249,6 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           La cliente verra où elle en est, ce qui se passe, et ce qui vient ensuite.
         </p>
 
-        {/* V97.39.7 (roadmap 1.1) — Verrou explicite si pas de consultation.
-            Remplace le no-op silencieux du bouton "Accepter". */}
-        {initLocked && (
-          <div style={lockNoticeStyle}>{disabledReason}</div>
-        )}
-
         {/* Banner suggestion */}
         <div style={suggestionBannerStyle}>
           <div style={suggestionEyebrowStyle}>✨ SUGGESTION</div>
@@ -262,19 +259,17 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           <div style={btnRowStyle}>
             <button
               type="button"
-              disabled={saving || initLocked}
+              disabled={saving}
               onClick={() => handleInitFromTemplate(suggestion.templateId)}
-              style={primaryBtnStyle(saving || initLocked)}
-              title={initLocked ? disabledReason : undefined}
+              style={primaryBtnStyle(saving)}
             >
               {saving ? "Initialisation…" : "Accepter"}
             </button>
             <button
               type="button"
-              disabled={saving || initLocked}
+              disabled={saving}
               onClick={() => setShowTemplatePicker(true)}
-              style={ghostBtnStyle(saving || initLocked)}
-              title={initLocked ? disabledReason : undefined}
+              style={ghostBtnStyle(saving)}
             >
               Choisir un autre
             </button>
@@ -282,10 +277,9 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
                 cliente nutrition simple sans test. */}
             <button
               type="button"
-              disabled={saving || initLocked}
+              disabled={saving}
               onClick={handleSkipParcours}
-              style={skipBtnStyle(saving || initLocked)}
-              title={initLocked ? disabledReason : undefined}
+              style={skipBtnStyle(saving)}
             >
               Pas de parcours
             </button>
@@ -297,7 +291,7 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           <div style={pickerStyle}>
             {Object.values(ALL_TEMPLATES).map((tpl) => {
               const isCustom = tpl.id === 'custom';
-              const itemLocked = saving || isCustom || initLocked;
+              const itemLocked = saving || isCustom;
               return (
                 <button
                   key={tpl.id}
@@ -306,10 +300,10 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
                   onClick={() => handleInitFromTemplate(tpl.id)}
                   style={{
                     ...pickerItemStyle,
-                    opacity: isCustom || initLocked ? 0.4 : 1,
+                    opacity: isCustom ? 0.4 : 1,
                     cursor: itemLocked ? 'not-allowed' : 'pointer',
                   }}
-                  title={isCustom ? 'Pas encore configurable — disponible en V97.17.6' : (initLocked ? disabledReason : '')}
+                  title={isCustom ? 'Pas encore configurable — disponible en V97.17.6' : ''}
                 >
                   <div style={pickerLabelStyle}>
                     {tpl.label}
@@ -820,18 +814,6 @@ const suggestionBannerStyle = {
   borderRadius: 8,
   padding: "12px 14px",
   marginBottom: 8,
-};
-
-// V97.39.7 (roadmap 1.1) — Notice de verrou (pas de consultation)
-const lockNoticeStyle = {
-  background: "rgba(184, 134, 38, 0.08)",
-  border: "1px solid rgba(184, 134, 38, 0.3)",
-  borderRadius: 7,
-  padding: "10px 12px",
-  marginBottom: 10,
-  fontSize: 12,
-  color: "#785a1a",
-  lineHeight: 1.45,
 };
 
 const suggestionEyebrowStyle = {

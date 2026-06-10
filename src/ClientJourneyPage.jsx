@@ -20,6 +20,8 @@ import {
   DEFAULT_JOURNEY_STATE,
   getStepStatus,
   transitions,
+  setPendingProtocolPhases,
+  clearPendingProtocolPhases,
 } from './services/journeyState';
 import AnalysisSuggestionModal from './AnalysisSuggestionModal';
 import AnalysisPlanCard from './AnalysisPlanCard';
@@ -34,7 +36,7 @@ import ConsultationClinicalSummary from './components/ConsultationClinicalSummar
 import ClientPulseSummary from './components/ClientPulseSummary';
 import ClinicalAlertBanner from './components/ClinicalAlertBanner';
 import FeedbacksTrendChart from './components/FeedbacksTrendChart';
-import { transitionToNextPhase, getActivePhase } from './services/protocolPhases';
+import { transitionToNextPhase, getActivePhase, bakePendingProtocolPhases } from './services/protocolPhases';
 // V97.23 (V97.18 Phase E) — Auto-generation brouillon IA apres transition phase.
 import { autoGeneratePlanForPhaseTransition } from './services/autoGeneratePlanForPhaseTransition';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
@@ -3839,10 +3841,26 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     setActiveConsult((getNutritionConsultations(client.id) || [])[0] || null);
   }, [client?.id]);
 
+  // V97.39.8 (roadmap 1.1) — phases acceptees mais en attente d'une
+  // consultation hote (journey_state.pending_protocol_phases).
+  const pendingPhases = journey?.pending_protocol_phases || null;
+
   // Handler save phases — passe par store + reflete local optimiste
   const handleSavePhases = useCallback(
     async (newProtocolPhases) => {
-      if (!activeConsult) return;
+      // V97.39.8 (roadmap 1.1) — Cas "sans consultation hote" (pack Bilan :
+      // page Suivi atteinte sans plan, cf. melissa). Anissa accepte le parcours
+      // alors qu'aucune consultation n'existe pour le porter. On NE cree PAS de
+      // consultation (ca consommerait le compteur de pack) : on range les
+      // phases dans journey_state.pending_protocol_phases. Elles seront
+      // greffees sur la 1ere consultation creee (effet de greffe ci-dessous).
+      // Pas de push : il n'y a pas encore de transition de phase cote cliente.
+      if (!activeConsult) {
+        if (!client?.id) return;
+        await setPendingProtocolPhases(client.id, newProtocolPhases);
+        onChange?.();
+        return;
+      }
       const newActivePhaseId =
         newProtocolPhases?.phases?.find((p) => p.status === 'active')?.id || null;
       const prevActivePhaseId = activeConsult.active_phase_id || null;
@@ -3891,8 +3909,36 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         }
       }
     },
-    [activeConsult, client]
+    [activeConsult, client, onChange]
   );
+
+  // V97.39.8 (roadmap 1.1) — Greffe des phases en attente sur la 1ere
+  // consultation qui apparait. CENTRALISE le transfert : peu importe le
+  // chemin de creation de la consultation (editeur de plan, "Creer la suite",
+  // import…), des qu'une consultation existe et qu'il y a des phases en
+  // attente, on les greffe via bakePendingProtocolPhases + on nettoie le
+  // champ pending. Pas de push : c'est une INITIALISATION du parcours, pas une
+  // transition de phase (aucune phase precedente cote cliente).
+  useEffect(() => {
+    if (!activeConsult || activeConsult.protocol_phases) return;
+    if (!pendingPhases || !client?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { consultation: next, baked } = bakePendingProtocolPhases(activeConsult, pendingPhases);
+      if (!baked) return;
+      await saveNutritionConsultation(next);
+      if (cancelled) return;
+      setActiveConsult(next);
+      try {
+        await clearPendingProtocolPhases(client.id);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[pending-phases] clear failed (non-bloquant):', e?.message || e);
+      }
+      onChange?.();
+    })();
+    return () => { cancelled = true; };
+  }, [activeConsult, pendingPhases, client, onChange]);
 
   // Phase AJ : log des consultations effectuees
   const pack = PACK_DEFINITIONS[client.packType] || null;
@@ -4379,11 +4425,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               weightEntries={weightEntries}
               onSavePhases={handleSavePhases}
               onOpenAppPreview={onOpenAppPreview}
-              phasesDisabledReason={
-                activeConsult
-                  ? null
-                  : "Enregistre d'abord la 1ère consultation pour activer le parcours."
-              }
+              pendingPhases={pendingPhases}
             />
           </CockpitErrorBoundary>
 

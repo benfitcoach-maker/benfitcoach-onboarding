@@ -20,6 +20,7 @@ import {
   transitionToNextPhase,
   startParcours,
   isValidProtocolPhases,
+  bakePendingProtocolPhases,
   preloadPhaseRecommendationsFromSupabase,
   getLivePhaseRecommendations,
   getPhaseRecoSource,
@@ -222,6 +223,60 @@ describe('isValidProtocolPhases', () => {
     expect(isValidProtocolPhases(undefined)).toBe(false);
     expect(isValidProtocolPhases({})).toBe(false);
     expect(isValidProtocolPhases({ template: 'x' })).toBe(false);
+  });
+});
+
+// ─── V97.39.8 (roadmap 1.1) — bakePendingProtocolPhases ──────────────────
+// Point de centralisation UNIQUE du transfert "phases en attente → 1ere
+// consultation". Tous les chemins de creation de consultation (editeur de
+// plan, "Creer la suite", import…) passent par cette fonction pure via l'effet
+// de greffe de StepFollowup. La tester = couvrir chaque chemin de creation.
+describe('bakePendingProtocolPhases (transfert pending → consultation)', () => {
+  it('greffe les phases + active_phase_id sur une consultation sans phases', () => {
+    const pending = startParcours(instanceFromTemplate('microbiote_3_phases'));
+    const consultation = { id: 'c1', clientId: 'cl1', nutritionPlan: 'plan' };
+    const { consultation: next, baked } = bakePendingProtocolPhases(consultation, pending);
+    expect(baked).toBe(true);
+    expect(next.protocol_phases).toBe(pending);
+    // startParcours a active la phase 1 → active_phase_id = p1
+    expect(next.active_phase_id).toBe('p1');
+    // immutabilite : l'original n'est pas mute
+    expect(consultation.protocol_phases).toBeUndefined();
+  });
+
+  it('active_phase_id = null si aucune phase active dans le pending (non demarre)', () => {
+    const pending = instanceFromTemplate('microbiote_3_phases'); // toutes upcoming
+    const { consultation: next, baked } = bakePendingProtocolPhases({ id: 'c1' }, pending);
+    expect(baked).toBe(true);
+    expect(next.active_phase_id).toBeNull();
+  });
+
+  it('NE greffe PAS si la consultation porte deja des phases (elle gagne)', () => {
+    const existing = startParcours(instanceFromTemplate('nutrition_simple_2_phases'));
+    const pending = startParcours(instanceFromTemplate('microbiote_5_phases'));
+    const consultation = { id: 'c1', protocol_phases: existing, active_phase_id: 'p1' };
+    const { consultation: next, baked } = bakePendingProtocolPhases(consultation, pending);
+    expect(baked).toBe(false);
+    expect(next).toBe(consultation);
+    expect(next.protocol_phases).toBe(existing);
+  });
+
+  it('no-op si pas de phases en attente', () => {
+    const consultation = { id: 'c1' };
+    expect(bakePendingProtocolPhases(consultation, null)).toEqual({ consultation, baked: false });
+    expect(bakePendingProtocolPhases(consultation, undefined)).toEqual({ consultation, baked: false });
+  });
+
+  it('no-op si pas de consultation hote', () => {
+    const pending = startParcours(instanceFromTemplate('microbiote_3_phases'));
+    expect(bakePendingProtocolPhases(null, pending)).toEqual({ consultation: null, baked: false });
+  });
+
+  it('greffe un pending { skipped: true } sans casser (active_phase_id null)', () => {
+    const { consultation: next, baked } = bakePendingProtocolPhases({ id: 'c1' }, { skipped: true });
+    expect(baked).toBe(true);
+    expect(next.protocol_phases).toEqual({ skipped: true });
+    expect(next.active_phase_id).toBeNull();
   });
 });
 

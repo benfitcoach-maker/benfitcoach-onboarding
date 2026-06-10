@@ -245,6 +245,26 @@ export async function updateJourneyState(clientId, patch) {
 }
 
 /**
+ * V97.39.8 (roadmap 1.1) — Parcours therapeutique accepte AVANT qu'une
+ * consultation hote n'existe (cas pack Bilan : page Suivi atteinte sans plan,
+ * cf. melissa). On range les phases dans journey_state.pending_protocol_phases
+ * au lieu de creer une consultation (qui consommerait le compteur de pack).
+ * Elles seront greffees sur la 1ere consultation creee (cf.
+ * bakePendingProtocolPhases dans protocolPhases.js).
+ *
+ * updateJourneyState preserve les cles arbitraires (merge {...DEFAULT,
+ * ...current, ...patch}) → pending_protocol_phases ne necessite AUCUNE
+ * migration SQL.
+ */
+export async function setPendingProtocolPhases(clientId, protocolPhases) {
+  return updateJourneyState(clientId, { pending_protocol_phases: protocolPhases || null });
+}
+
+export async function clearPendingProtocolPhases(clientId) {
+  return updateJourneyState(clientId, { pending_protocol_phases: null });
+}
+
+/**
  * Transitions metier pour les 8 etapes.
  * Chaque transition emet un event step_transition (best-effort, ne bloque jamais)
  * pour la couche observabilite — captures temps reel d'utilisation Anissa.

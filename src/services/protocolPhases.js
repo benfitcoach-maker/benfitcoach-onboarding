@@ -797,3 +797,40 @@ export function isValidProtocolPhases(value) {
   if (activeCount > 1) return false;
   return true;
 }
+
+/**
+ * V97.39.8 (roadmap 1.1) — Greffe des phases "en attente" sur une consultation.
+ *
+ * Contexte : quand Anissa accepte un parcours AVANT qu'une consultation existe
+ * (cas pack Bilan : page Suivi atteinte sans plan, cf. melissa), on stocke les
+ * phases dans journey_state.pending_protocol_phases — on NE cree PAS de
+ * consultation (ca consommerait le compteur de pack). Des qu'une consultation
+ * existe, on greffe ces phases dessus.
+ *
+ * Point de centralisation unique : peu importe le chemin de creation de la
+ * consultation (editeur de plan, "Creer la suite", import…), le transfert
+ * passe par cette fonction. store.js ne peut pas l'heberger (synchrone,
+ * localStorage-only, aucun acces a journey_state qui est Supabase-only).
+ *
+ * Pure : ne touche ni Supabase ni localStorage. Retourne un nouveau brouillon
+ * de consultation pret pour saveNutritionConsultation. Ne greffe PAS si :
+ *   - pas de phases en attente, OU
+ *   - pas de consultation hote, OU
+ *   - la consultation porte deja des phases (elle gagne — pas d'ecrasement).
+ *
+ * @returns {{ consultation: object, baked: boolean }}
+ */
+export function bakePendingProtocolPhases(consultation, pendingPhases) {
+  if (!consultation || !pendingPhases || consultation.protocol_phases) {
+    return { consultation, baked: false };
+  }
+  const activePhaseId = getActivePhase(pendingPhases)?.id || null;
+  return {
+    consultation: {
+      ...consultation,
+      protocol_phases: pendingPhases,
+      active_phase_id: activePhaseId,
+    },
+    baked: true,
+  };
+}
