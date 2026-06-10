@@ -161,6 +161,23 @@ export async function callClaude({
     throw new ClaudeApiError(`Reponse non-JSON : ${err?.message || err}`, response.status, null);
   }
 
+  // P0.3 (remède sécurité clinique, 2026-06-10) — détection de troncature.
+  // Une réponse coupée à `stop_reason: 'max_tokens'` est incomplète : la coupure
+  // tombe souvent en fin de plan, précisément là où arrivent les évictions
+  // allergènes et les précautions médicamenteuses. On lève une erreur honnête
+  // (fail-closed) plutôt que de retourner un plan amputé comme un succès, et ce
+  // dans TOUS les modes (texte, parseJson, raw) — un JSON partiel ou un raw
+  // tronqué sont tout aussi dangereux. Les appelants (JourneyPlanEditor,
+  // autoGeneratePlanForPhaseTransition) catchent déjà et refusent d'afficher /
+  // de stocker le brouillon coupé.
+  if (data?.stop_reason === 'max_tokens') {
+    throw new ClaudeApiError(
+      "Génération tronquée : la réponse de l'IA a atteint la limite de tokens (max_tokens) et est incomplète. Relancez la génération.",
+      response.status,
+      { truncated: true, stop_reason: 'max_tokens' },
+    );
+  }
+
   let text = data?.content?.[0]?.text || '';
   if (trim) text = text.trim();
 
