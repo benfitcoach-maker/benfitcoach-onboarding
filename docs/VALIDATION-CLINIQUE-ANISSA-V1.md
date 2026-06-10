@@ -41,6 +41,21 @@ générale, bloquante uniquement si un traitement précis est actif).
 > par une **donnée déclarative** (liste de clés de traitement), pas par du code
 > de décision.
 
+> **Note de portée (validée Anissa le 2026-06-10) :** Décision partiellement
+> implémentée en V1 : la sécurité critique est active via blocage conditionnel
+> chez les clientes sous traitement à risque. L'avertissement population
+> générale sans traitement déclencheur n'est pas implémenté dans le chemin
+> *treatment-driven* actuel et est reporté en V2/D2. Report accepté pour la V1
+> par Anissa.
+>
+> En clair :
+> - **Blocage conditionnel ACTIF** quand le traitement à risque est détecté
+>   (AVK/AOD pour l'oméga-3, insuline/antidiabétique pour la berbérine).
+> - **Avertissement population générale** (sans traitement détecté) **NON actif
+>   en V1**.
+> - Reporté au **backlog V2** via le scan population-générale / D2.
+> - **Report accepté pour la V1.**
+
 ### Avertissement (inconditionnel)
 
 | Substance | Raison |
