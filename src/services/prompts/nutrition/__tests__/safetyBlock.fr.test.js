@@ -52,6 +52,15 @@ describe('buildSafetyBlockFr — source unique du bloc sécurité', () => {
     expect(buildSafetyBlockFr(null)).toBe('');
     expect(buildSafetyBlockFr(undefined)).toBe('');
   });
+
+  // Micro-correctif P0.1 (révélé par la traduction EN de P0.5) : le titre de
+  // la ligne allergènes doit porter l'injonction « À EXCLURE STRICTEMENT »,
+  // pas seulement le corps. Sinon la force de la consigne est moindre que
+  // côté EN (« STRICTLY EXCLUDE »).
+  it('Le titre allergènes porte la force impérative (À EXCLURE STRICTEMENT)', () => {
+    const block = buildSafetyBlockFr(safetyForm());
+    expect(block).toMatch(/à exclure strictement/i);
+  });
 });
 
 // ─── Chemin 1 : COMPOSER ──────────────────────────────────────────

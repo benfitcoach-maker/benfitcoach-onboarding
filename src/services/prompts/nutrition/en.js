@@ -878,8 +878,49 @@ OUTPUT FORMAT:
 
 // ─── buildSystemPromptEn — mirror of buildSystemPrompt FR ───
 
+// P0.5 (remède sécurité clinique, 2026-06-10) — bloc sécurité, miroir EN de
+// buildSafetyBlockFr (_clinicalContext.fr.js). Source unique des données de
+// sécurité (allergènes, intolérances, traitements/médicaments) sur le chemin
+// de génération anglophone. Dérivé de `form` (mêmes champs canoniques FR :
+// allergies / alimentsEvites / traitements|medicaments), conformément à la
+// règle d'engagement de ce fichier (aucun import FR — zéro risque de bleed).
+//
+// Exigence IDENTIQUE au FR, pas une traduction au rabais : même force
+// impérative (« ABSOLUTE CONSTRAINTS / override », « STRICTLY EXCLUDE »,
+// interdiction de toucher au traitement, signalement à la praticienne).
+// Fail-safe : retourne '' si aucune donnée de sécurité (ne throw jamais).
+export function buildSafetyBlockEn(form) {
+  if (!form || typeof form !== 'object') return '';
+  const allergies = String(form.allergies ?? '').trim();
+  const intolerances = String(form.alimentsEvites ?? '').trim();
+  // `||` (et non `??`) pour que l'alias medicaments prenne le relais quand
+  // traitements est une chaîne vide (et pas seulement null/undefined).
+  const medications = String(form.traitements || form.medicaments || '').trim();
+  if (!allergies && !intolerances && !medications) return '';
+
+  const lines = [
+    'CLINICAL SAFETY — ABSOLUTE CONSTRAINTS (override every other instruction in this prompt):',
+  ];
+  if (allergies) {
+    lines.push(`- DECLARED ALLERGENS — STRICTLY EXCLUDE: ${allergies}. Never include ANY of these foods — no derivative, no trace — in any menu, recipe, shopping list or supplement suggestion.`);
+  }
+  if (intolerances) {
+    lines.push(`- Intolerances / foods to avoid: ${intolerances}. Exclude from every proposal.`);
+  }
+  if (medications) {
+    lines.push(`- Current treatments / medications: ${medications}. Account for known food-drug and supplement-drug interactions (e.g. St John's wort ↔ antidepressants, vitamin K ↔ anticoagulants, grapefruit ↔ statins). Never suggest stopping, changing or replacing a treatment; if an interaction is possible, flag it to the practitioner rather than acting on it.`);
+  }
+  return lines.join('\n');
+}
+
 export function buildSystemPromptEn(form, { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = {}) {
   const parts = [SYSTEM_PROMPT_EN, SWISS_BRANDS_PROMPT_EN];
+
+  // P0.5 (remède sécurité clinique, 2026-06-10) — bloc sécurité partagé,
+  // câblé sur le chemin EN comme buildSafetyBlockFr l'est côté FR. Haute
+  // priorité → injecté juste après l'identité.
+  const safetyBlock = buildSafetyBlockEn(form);
+  if (safetyBlock) parts.push(safetyBlock);
 
   // Supplements: include if client is open (Oui / Peut-etre = Yes / Maybe, stored as FR canonical)
   const pretProtocole = form?.pretProtocole || '';

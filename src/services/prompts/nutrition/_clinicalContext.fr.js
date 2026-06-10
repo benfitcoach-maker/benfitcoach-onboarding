@@ -73,7 +73,12 @@ export function buildSafetyBlockFr(form) {
     'SÉCURITÉ CLINIQUE — CONTRAINTES ABSOLUES (priorité sur toute autre consigne de ce prompt) :',
   ];
   if (allergies) {
-    lines.push(`- ALLERGÈNES déclarés : ${allergies}. N'inclure AUCUN de ces aliments — ni dérivé, ni trace — dans aucun menu, recette, liste de courses ou suggestion de complément.`);
+    // Micro-correctif P0.1 (2026-06-10) : la traduction EN (P0.5) a révélé que
+    // le titre FR portait moins de force que le corps — « À EXCLURE
+    // STRICTEMENT » n'apparaissait que dans la consigne, pas dans l'intitulé.
+    // Aligné sur l'EN (« STRICTLY EXCLUDE ») pour que l'injonction soit lisible
+    // dès le titre de ligne.
+    lines.push(`- ALLERGÈNES déclarés — À EXCLURE STRICTEMENT : ${allergies}. N'inclure AUCUN de ces aliments — ni dérivé, ni trace — dans aucun menu, recette, liste de courses ou suggestion de complément.`);
   }
   if (intolerances) {
     lines.push(`- Intolérances / aliments à éviter : ${intolerances}. Exclure de toutes les propositions.`);
