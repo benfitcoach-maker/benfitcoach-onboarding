@@ -3317,7 +3317,9 @@ function ClientPhoneMockup({ client, plan }) {
         <div className="jrn-phone-mockup__chart">
           <div className="jrn-phone-mockup__chart-head">
             <span className="jrn-phone-mockup__chart-label">Énergie · 7 jours</span>
-            <span className="jrn-phone-mockup__chart-trend">+18%</span>
+            {/* P3.1 — aucun chiffre clinique inventé, même en décoration :
+                le mockup est un exemple, pas un vrai résultat cliente. */}
+            <span className="jrn-phone-mockup__chart-trend">exemple</span>
           </div>
           <svg className="jrn-phone-mockup__chart-svg" viewBox="0 0 200 44" preserveAspectRatio="none">
             <defs>
