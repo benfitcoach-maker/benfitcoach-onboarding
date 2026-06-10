@@ -90,13 +90,16 @@ describe('suggestTemplateFromAnalyses', () => {
     expect(s.templateId).toBe('microbiote_5_phases');
   });
 
-  it('Aucune analyse → microbiote_5_phases (fallback V97.17.5.1)', () => {
-    // V97.17.5.1 : custom etait suggere mais avait phases: [] → crashait
-    // la timeline a l'init. Fallback sur microbiote 5 phases comme template
-    // le plus complet par defaut. Anissa peut toujours choisir custom
-    // manuellement via "Choisir un autre" (a debloquer V97.17.6).
+  it('Aucune analyse → nutrition_simple_2_phases (fallback V97.39.5)', () => {
+    // V97.17.5.1 : custom etait suggere mais avait phases: [] → crashait.
+    // V97.39.5 : le microbiote 5 phases ne doit etre propose QUE si le test
+    // microbiote est detecte. Sans analyse identifiable, on propose un parcours
+    // nutrition 2 phases (coherent avec un pack Bilan Nutritionnel). Non
+    // auto-applique : Anissa valide et peut basculer via "Choisir un autre".
     const s = suggestTemplateFromAnalyses({});
-    expect(s.templateId).toBe('microbiote_5_phases');
+    expect(s.templateId).toBe('nutrition_simple_2_phases');
+    expect(s.autoApply).toBe(false);
+    expect(s.confidence).toBe('low');
   });
 
   it('Mot clef "sequencage" detecte aussi le microbiome', () => {

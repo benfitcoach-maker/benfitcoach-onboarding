@@ -604,13 +604,16 @@ export function suggestTemplateFromAnalyses(client) {
       reason: 'Bilan sanguin detecte (sans microbiome).',
     };
   }
-  // Aucune analyse identifiable → fallback non auto-applique.
-  // Anissa valide via le banner suggestion + bouton Accepter.
+  // Aucune analyse identifiable → fallback nutrition simple (non auto-applique).
+  // Le microbiote 5 phases ne doit etre propose QUE si le test microbiote est
+  // detecte : proposer un parcours nutrition 2 phases est coherent avec un pack
+  // sans analyse (ex: Bilan Nutritionnel). Anissa valide via le banner + Accepter,
+  // et peut toujours basculer sur le microbiote via "Choisir un autre".
   return {
-    templateId: 'microbiote_5_phases',
+    templateId: 'nutrition_simple_2_phases',
     confidence: 'low',
     autoApply: false,
-    reason: 'Pas d\'analyse identifiable - parcours 5 phases propose par defaut (a valider).',
+    reason: 'Pas d\'analyse identifiable - parcours nutrition 2 phases propose par defaut (a valider).',
   };
 }
 
