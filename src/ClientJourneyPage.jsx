@@ -3908,9 +3908,14 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     ? consultationsLog[consultationsLog.length - 1]?.date
     : null;
 
-  // Phase AK : extraction des pesees depuis les feedbacks deja charges
+  // Phase AK : extraction des pesees depuis les feedbacks deja charges.
   // Une pesee = un feedback avec weight_kg non null (cf. migration weight_tracking).
-  // On etend la fenetre a 90 jours pour avoir une vraie courbe d'evolution.
+  //
+  // V97.39.8 (roadmap 1.5) — Mutualisation du double-fetch. Avant : 2 appels
+  // reseau au chargement (90 j pour le poids + 14 j pour les ressentis). Ce
+  // seul effet fait UN appel 90 j, derive le poids (90 j) ET les ressentis
+  // (fenetre 14 j filtree localement). Comportement identique, moitie moins de
+  // requetes.
   const [weightEntries, setWeightEntries] = useState([]);
   const [loadingWeight, setLoadingWeight] = useState(true);
   useEffect(() => {
@@ -3922,15 +3927,32 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         const list = await fetchClientFeedbacks(client, 90);
         if (cancelled) return;
         const fbs = Array.isArray(list) ? list : (list?.feedbacks || []);
+
+        // Pesees : fenetre 90 j, weight_kg numerique, tri decroissant.
         const entries = fbs
           .filter((f) => typeof f.weight_kg === 'number')
           .map((f) => ({ date: f.date || f.created_at, weight_kg: Number(f.weight_kg) }))
           .sort((a, b) => new Date(b.date) - new Date(a.date));
         setWeightEntries(entries);
+
+        // Ressentis : meme source, fenetre 14 j (preserve la semantique
+        // d'avant pour adherence / tendances / alertes cliniques).
+        const cutoff14 = Date.now() - 14 * 86400000;
+        const recent = fbs.filter((f) => {
+          const ts = new Date(f.date || f.created_at).getTime();
+          return Number.isFinite(ts) && ts >= cutoff14;
+        });
+        setFeedbacks(recent);
       } catch {
-        if (!cancelled) setWeightEntries([]);
+        if (!cancelled) {
+          setWeightEntries([]);
+          setFeedbacks([]);
+        }
       } finally {
-        if (!cancelled) setLoadingWeight(false);
+        if (!cancelled) {
+          setLoadingWeight(false);
+          setLoadingFb(false);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -4052,24 +4074,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     return () => { cancelled = true; };
   }, [client?.id, journey]);
 
-  // Charge les ressentis recents (14 jours)
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const { fetchClientFeedbacks } = await import('./services/fetchClientFeedbacks');
-        const res = await fetchClientFeedbacks(client, 14);
-        if (cancelled) return;
-        setFeedbacks(Array.isArray(res) ? res : (res?.feedbacks || []));
-      } catch {
-        if (!cancelled) setFeedbacks([]);
-      } finally {
-        if (!cancelled) setLoadingFb(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [client]);
+  // Ressentis 14 j : derives de l'effet 90 j unifie ci-dessus (plus de double fetch).
 
   const handleStart = async () => {
     setBusy(true); setErr(null);

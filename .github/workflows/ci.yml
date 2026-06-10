@@ -1,0 +1,32 @@
+name: CI
+
+# Garde-fou minimal (roadmap 1.5) : a chaque push / PR, on bloque sur les
+# deux regles lint qui ont casse la prod (no-undef + rules-of-hooks) puis on
+# joue la suite vitest. Objectif : qu'aucune regression de ce type ne reparte
+# en prod via le deploy Vercel auto.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (no-undef + rules-of-hooks bloquants)
+        run: npm run lint:ci
+
+      - name: Tests (vitest)
+        run: npm test
