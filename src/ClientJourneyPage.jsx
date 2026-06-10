@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { PACK_DEFINITIONS } from './services/packSystem';
+import { isAnamneseFilled } from './services/anamneseAnalyzer';
 import {
   JOURNEY_STEPS,
   STEP_META,
@@ -692,21 +693,11 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
   // Avant ce fix, on cherchait des champs legacy SaaS (`objectifs` avec s,
   // `symptomes`, `activite`) qui ne sont pas remplis par le pre-q in-app.
   // Maintenant on accepte aussi les champs réellement remplis par Camille.
-  const minimallyFilled = !!(
-    // Pre-q V97.8.1 — champs essentiels remplis = pre-q soumis
-    form.objectif_primaire
-    || form.dureeProbleme
-    || form.ressentiDigestion
-    || form.energieJournee
-    || form.traitements
-    || form.allergies
-    || form.contraception
-    // Legacy SaaS — Anissa peut avoir saisi manuellement
-    || form.objectifs
-    || form.symptomes
-    || form.pathologies
-    || form.activite
-  );
+  // P1.1 (remède sécurité clinique, 2026-06-10) — délègue à la source unique
+  // isAnamneseFilled (anamneseAnalyzer). Même prédicat qu'avant (champs pré-q
+  // V97.8.1 + legacy SaaS), désormais partagé avec le gate de génération IA
+  // pour qu'aucun chemin ne juge la complétude différemment.
+  const minimallyFilled = isAnamneseFilled(form);
   const questionnaireSentAt = journey.questionnaire_sent_at || null;
   const questionnaireMode = journey.questionnaire_mode || null; // 'app' | 'link'
   const questionnaireReceived = minimallyFilled;

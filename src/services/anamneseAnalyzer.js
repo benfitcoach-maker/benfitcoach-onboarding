@@ -516,6 +516,48 @@ function buildRedFlags(ctx) {
   return flags;
 }
 
+// ─── COMPLÉTUDE — SOURCE UNIQUE (P1.1) ─────────────────────────────
+
+// P1.1 (remède sécurité clinique, 2026-06-10) — source unique de vérité de la
+// complétude de l'anamnèse. Avant, la détection vivait inline dans
+// ClientJourneyPage (`minimallyFilled`, V97.8.1) et nulle part ailleurs : la
+// génération du résumé médecin / du plan ne la consultait pas, donc un form
+// vide produisait un document d'apparence sérieuse bâti sur rien (mensonge
+// d'interface). Cette fonction centralise le prédicat pour que TOUT point où
+// la complétude est jugée (statut parcours + gate de génération) parte du même
+// constat. Trim volontaire : une chaîne blanche n'est pas une donnée — sens
+// sûr (gate reste armé), pas une régression.
+//
+// Champs essentiels = pré-questionnaire app cliente (V97.8.1) + champs legacy
+// SaaS (saisie manuelle Anissa). Au moins un rempli = anamnèse exploitable.
+const ANAMNESE_KEY_FIELDS = [
+  // Pré-questionnaire V97.8.1
+  'objectif_primaire',
+  'dureeProbleme',
+  'ressentiDigestion',
+  'energieJournee',
+  'traitements',
+  'allergies',
+  'contraception',
+  // Legacy SaaS
+  'objectifs',
+  'symptomes',
+  'pathologies',
+  'activite',
+];
+
+/**
+ * Détermine si l'anamnèse contient au moins un champ essentiel réellement
+ * rempli. Source unique consommée par le statut parcours et le gate de
+ * génération IA.
+ * @param {object} form - Formulaire client
+ * @returns {boolean}
+ */
+export function isAnamneseFilled(form) {
+  if (!form || typeof form !== 'object') return false;
+  return ANAMNESE_KEY_FIELDS.some((k) => String(form[k] ?? '').trim() !== '');
+}
+
 // ─── ENTRY POINT ───────────────────────────────────────────────────
 
 /**

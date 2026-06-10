@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { jsPDF } from 'jspdf';
 import { generateMedicalSummary } from './services/aiMedicalSummary';
+import { isAnamneseFilled } from './services/anamneseAnalyzer';
 import { CharCounter } from './App';
 import { COACH_IDENTITY, COMPANY_IDENTITY } from './services/coachIdentity';
 
@@ -394,6 +395,13 @@ export default function MedicalSummary({ form, consultation, onClose, savedData,
   // V94.5 : generation IA pour pre-remplir antecedents, approche, suppl. raisons, etc.
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
+  // P1.1 (remède sécurité clinique, 2026-06-10) — gate anamnèse vide. Générer
+  // un résumé médecin sur un form vide produit un document d'apparence sérieuse
+  // bâti sur rien. On bloque le bouton par défaut quand l'anamnèse n'est pas
+  // remplie, avec porte de sortie CONSCIENTE (case à cocher), pas un confirm()
+  // doux. Source unique de complétude : isAnamneseFilled.
+  const anamneseFilled = isAnamneseFilled(form);
+  const [forceGenerate, setForceGenerate] = useState(false);
   // V94.22 : indicateur de sauvegarde (pour le badge sauvegarde sur le bouton)
   const [savedAt, setSavedAt] = useState(savedData ? new Date() : null);
   const [isDirty, setIsDirty] = useState(false);
@@ -495,6 +503,22 @@ export default function MedicalSummary({ form, consultation, onClose, savedData,
           <button className="ffp-close" onClick={onClose}>&times;</button>
         </div>
         <div className="ffp-body">
+          {/* P1.1 : gate anamnèse vide — bannière rouge + override conscient */}
+          {!anamneseFilled && (
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(212,92,76,.1)', border: '1px solid rgba(212,92,76,.35)', borderRadius: 10, fontSize: '.78rem', color: '#d4806c', lineHeight: 1.45 }}>
+              <strong>Anamnèse non remplie.</strong> Le pré-questionnaire n&apos;a pas été reçu :
+              une génération IA produirait un résumé d&apos;apparence sérieuse bâti sur des données
+              absentes. Vérifie l&apos;anamnèse avant de générer.
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer', color: '#b86a58' }}>
+                <input
+                  type="checkbox"
+                  checked={forceGenerate}
+                  onChange={(e) => setForceGenerate(e.target.checked)}
+                />
+                Je génère quand même, volontairement
+              </label>
+            </div>
+          )}
           {/* V94.5 : bouton de generation IA en haut de la modal */}
           <div style={{ marginBottom: 14, padding: '10px 12px', background: 'rgba(106,191,138,.06)', border: '1px solid rgba(106,191,138,.18)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ fontSize: '.78rem', color: '#8abf9a', lineHeight: 1.4 }}>
@@ -506,7 +530,7 @@ export default function MedicalSummary({ form, consultation, onClose, savedData,
               type="button"
               className="btn btn-anissa-primary"
               onClick={handleAIGenerate}
-              disabled={generating || exporting}
+              disabled={generating || exporting || (!anamneseFilled && !forceGenerate)}
               style={{ padding: '6px 14px', fontSize: '.78rem', whiteSpace: 'nowrap' }}
             >
               {generating ? 'Generation...' : '✨ Generer avec IA'}
