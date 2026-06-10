@@ -32,8 +32,11 @@ import {
   transitionToNextPhase,
   startParcours,
 } from "../services/protocolPhases";
+// P2.3 (remède sécurité clinique) — rendre visible la base chiffrée derrière la
+// suggestion de transition (« sur la base de N ressentis positifs cette semaine »).
+import { formatPositiveSampleBasis } from "../services/feedbackSampleDepth";
 
-export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false, pendingPhases = null }) {
+export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false, positiveFeedbackCount = 0, pendingPhases = null }) {
   const [saving, setSaving] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -415,6 +418,9 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
               {hasRecentPositivePattern && (
                 <div style={transitionDetailStyle}>
                   Durée minimale de phase atteinte + amélioration soutenue dans les ressentis.
+                  {positiveFeedbackCount > 0 && (
+                    <> Suggéré {formatPositiveSampleBasis(positiveFeedbackCount)}.</>
+                  )}
                 </div>
               )}
               <button

@@ -120,11 +120,22 @@ function SparklineRow({ label, color, data }) {
     <div style={rowStyle}>
       <div style={rowHeadStyle}>
         <span style={rowLabelStyle}>{label}</span>
-        {trend && (
-          <span style={{ ...trendStyle, color: trendColor(trend, color) }}>
-            {trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→'}
+        <span style={trendGroupStyle}>
+          {/* P2.3 — profondeur d'échantillon visible : la flèche ne compare que
+              les 2 derniers points ; on affiche le nombre total de points pour
+              qu'Anissa juge la solidité de la tendance. */}
+          <span
+            style={trendCountStyle}
+            title="La flèche compare les 2 derniers ressentis. Profondeur de la courbe ci-contre."
+          >
+            {data.length} pt{data.length > 1 ? 's' : ''}
           </span>
-        )}
+          {trend && (
+            <span style={{ ...trendStyle, color: trendColor(trend, color) }}>
+              {trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→'}
+            </span>
+          )}
+        </span>
       </div>
       <svg
         width="100%"
@@ -250,6 +261,19 @@ const rowEmptyTextStyle = {
 const trendStyle = {
   fontSize: 13,
   fontWeight: 700,
+};
+
+// P2.3 — groupe « N pts + flèche » aligné à droite du label.
+const trendGroupStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+};
+
+const trendCountStyle = {
+  fontSize: 10,
+  color: 'var(--jrn-text-muted, #6b6f6b)',
+  fontVariantNumeric: 'tabular-nums',
 };
 
 const svgStyle = {

@@ -22,21 +22,15 @@
 import { useMemo } from "react";
 import JourneyPhasesCard from "./JourneyPhasesCard";
 import { ALL_TEMPLATES } from "../services/protocolPhases";
+// P2.3 (remède sécurité clinique) — profondeur d'échantillon visible : on
+// compte les ressentis positifs récents (au lieu d'un booléen opaque) pour
+// qu'Anissa voie SUR QUOI repose la suggestion de transition. Seuil inchangé.
+import { countRecentPositiveFeedbacks } from "../services/feedbackSampleDepth";
 
-// V97.17.26 — Detection pattern positif recent pour renforcer la suggestion
-// de transition (>= 2 ressentis better/good sur 7 derniers jours).
-function hasRecentPositivePattern(feedbacks) {
-  if (!Array.isArray(feedbacks) || feedbacks.length < 2) return false;
-  const cutoff = Date.now() - 7 * 86400000;
-  const recent = feedbacks.filter((f) => {
-    const ts = f.created_at ? new Date(f.created_at).getTime() : 0;
-    return ts >= cutoff;
-  });
-  const positives = recent.filter(
-    (f) => f.digestion === 'better' || f.fatigue === 'better' || f.energie === 'good'
-  ).length;
-  return positives >= 2;
-}
+// V97.17.26 — Seuil de renforcement de la suggestion de transition : >= 2
+// ressentis positifs sur 7 jours. Décision clinique (à valider Anissa) — on ne
+// la remonte pas, on rend juste la base chiffrée visible côté carte.
+const POSITIVE_PATTERN_THRESHOLD = 2;
 
 /**
  * Parse "Suivi 6 mois" → 6, "Suivi 3 mois" → 3, default 6.
@@ -82,6 +76,13 @@ export default function SuiviCockpitTimeline({
     [packLabel]
   );
   const totalDays = durationMonths * 30;
+
+  // P2.3 — base chiffrée de la suggestion de transition (rendue visible côté
+  // carte). On compte ici, la carte affiche « sur la base de N ressentis ».
+  const positiveFeedbackCount = useMemo(
+    () => countRecentPositiveFeedbacks(feedbacks),
+    [feedbacks]
+  );
 
   // Position du curseur "Vous etes ici"
   const cursorPct = useMemo(() => {
@@ -383,7 +384,8 @@ export default function SuiviCockpitTimeline({
           client={client}
           consultation={consultation}
           onSavePhases={onSavePhases}
-          hasRecentPositivePattern={hasRecentPositivePattern(feedbacks)}
+          positiveFeedbackCount={positiveFeedbackCount}
+          hasRecentPositivePattern={positiveFeedbackCount >= POSITIVE_PATTERN_THRESHOLD}
           pendingPhases={pendingPhases}
         />
 
