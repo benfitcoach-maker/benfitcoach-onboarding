@@ -27,10 +27,11 @@ import { ALL_TEMPLATES } from "../services/protocolPhases";
 // qu'Anissa voie SUR QUOI repose la suggestion de transition. Seuil inchangé.
 import { countRecentPositiveFeedbacks } from "../services/feedbackSampleDepth";
 
-// V97.17.26 — Seuil de renforcement de la suggestion de transition : >= 2
-// ressentis positifs sur 7 jours. Décision clinique (à valider Anissa) — on ne
-// la remonte pas, on rend juste la base chiffrée visible côté carte.
-const POSITIVE_PATTERN_THRESHOLD = 2;
+// Seuil de renforcement de la suggestion de transition : >= 3 ressentis
+// positifs sur 7 jours. Décision clinique FIGÉE — validé Anissa le 2026-06-10
+// (réf. docs/VALIDATION-CLINIQUE-ANISSA-V1.md). Suggestion uniquement, jamais
+// de progression automatique. La fenêtre 7 jours vit dans feedbackSampleDepth.
+const POSITIVE_PATTERN_THRESHOLD = 3;
 
 /**
  * Parse "Suivi 6 mois" → 6, "Suivi 3 mois" → 3, default 6.
