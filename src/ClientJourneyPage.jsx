@@ -3812,12 +3812,47 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
 // ÉTAPE 8 — SUIVI
 // ═══════════════════════════════════════════════════════════════════
 
+// V97.41 (roadmap 1.4) — styles du badge de synchro app cliente (page Suivi).
+const syncBadgeRowStyle = {
+  marginTop: 6,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  fontSize: 11,
+};
+const syncBadgeMutedStyle = {
+  color: 'var(--jrn-text-muted, #6b6f6b)',
+  letterSpacing: '.01em',
+};
+const syncBadgeErrorStyle = {
+  color: '#e08a8a',
+  letterSpacing: '.01em',
+};
+const syncRetryBtnStyle = {
+  background: 'rgba(255,255,255,.04)',
+  border: '1px solid rgba(255,255,255,.12)',
+  borderRadius: 6,
+  color: 'var(--jrn-text-muted, #8a8f8a)',
+  fontSize: 10.5,
+  fontFamily: 'inherit',
+  padding: '2px 8px',
+  cursor: 'pointer',
+};
+
 function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendPackReview, onViewHistory, onOpenAppPreview }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [feedbacks, setFeedbacks] = useState([]);
   const [loadingFb, setLoadingFb] = useState(true);
   const [adapting, setAdapting] = useState(false);
+  // V97.41 (roadmap 1.4) — badge de synchro app cliente + retry.
+  // lastSyncAt = horodatage du dernier fetch reussi des ressentis/pesees.
+  // syncError = true si le dernier fetch a echoue (reseau/proxy/app cliente).
+  // syncReloadKey = bump pour re-declencher l'effet de fetch (bouton Reessayer).
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [syncError, setSyncError] = useState(false);
+  const [syncReloadKey, setSyncReloadKey] = useState(0);
+  const handleRetrySync = useCallback(() => setSyncReloadKey((k) => k + 1), []);
   const [versions, setVersions] = useState([]);
   const [previewVersion, setPreviewVersion] = useState(null);
   // V97.28 — Modal éditeur inline pour cycle de suivi. Anissa peut éditer
@@ -3969,11 +4004,20 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   useEffect(() => {
     if (!client?.id) return;
     let cancelled = false;
+    setLoadingWeight(true);
+    setLoadingFb(true);
+    setSyncError(false);
     (async () => {
       try {
         const { fetchClientFeedbacks } = await import('./services/fetchClientFeedbacks');
         const list = await fetchClientFeedbacks(client, 90);
         if (cancelled) return;
+        // fetchClientFeedbacks renvoie { ok, error } : un ok:false (reseau /
+        // proxy / app cliente) doit lever le badge "echec", pas passer pour
+        // une synchro vide reussie.
+        if (list && typeof list === 'object' && list.ok === false) {
+          throw new Error(list.error || 'Synchro app cliente echouee');
+        }
         const fbs = Array.isArray(list) ? list : (list?.feedbacks || []);
 
         // Pesees : fenetre 90 j, weight_kg numerique, tri decroissant.
@@ -3991,10 +4035,13 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
           return Number.isFinite(ts) && ts >= cutoff14;
         });
         setFeedbacks(recent);
+        setLastSyncAt(new Date());
+        setSyncError(false);
       } catch {
         if (!cancelled) {
           setWeightEntries([]);
           setFeedbacks([]);
+          setSyncError(true);
         }
       } finally {
         if (!cancelled) {
@@ -4004,7 +4051,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
       }
     })();
     return () => { cancelled = true; };
-  }, [client?.id]);
+  }, [client?.id, syncReloadKey]);
   const [showLogModal, setShowLogModal] = useState(false);
   const [logNote, setLogNote] = useState('');
   const [savingLog, setSavingLog] = useState(false);
@@ -4339,6 +4386,38 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             {started ? ` · cycle actif` : ' · à démarrer'}
             {started && lastVersion ? ` · protocole V${versions.length} active` : ''}
           </p>
+          {/* V97.41 (roadmap 1.4) — badge synchro app cliente + retry.
+              Donne a Anissa la confiance que les ressentis/pesees affiches sont
+              a jour (ou signale une synchro echouee avec moyen de relancer). */}
+          <div style={syncBadgeRowStyle}>
+            {(loadingFb || loadingWeight) ? (
+              <span style={syncBadgeMutedStyle}>Synchro app cliente…</span>
+            ) : syncError ? (
+              <>
+                <span style={syncBadgeErrorStyle}>⚠ Synchro app cliente échouée</span>
+                <button type="button" onClick={handleRetrySync} style={syncRetryBtnStyle}>
+                  Réessayer
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={syncBadgeMutedStyle}>
+                  Synchronisé
+                  {lastSyncAt
+                    ? ` à ${lastSyncAt.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}`
+                    : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRetrySync}
+                  style={syncRetryBtnStyle}
+                  title="Rafraîchir les ressentis & pesées depuis l'app cliente"
+                >
+                  ↻ Rafraîchir
+                </button>
+              </>
+            )}
+          </div>
           {started && (
             <p
               style={{
