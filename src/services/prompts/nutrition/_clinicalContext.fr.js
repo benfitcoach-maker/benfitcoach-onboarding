@@ -39,6 +39,51 @@ export function isEmptyClinicalContext(ctx) {
   return !(hasTests || hasMarkers || hasResults || hasSignals || hasStage || hasModules || hasSafety);
 }
 
+// ─── BLOC SÉCURITÉ CLINIQUE (P0.1 + P0.2, remède 2026-06-10) ────────
+
+/**
+ * Construit le bloc « SÉCURITÉ CLINIQUE » injecté dans le system prompt de
+ * génération de plan. SOURCE UNIQUE des données de sécurité (allergènes,
+ * intolérances, traitements/médicaments).
+ *
+ * Dérivé directement de `form` — et non de `clinicalContext` — parce que les
+ * trois builders de prompt (composer / classique `buildSystemPromptFr` / legacy
+ * `NutritionConsultation`) reçoivent tous `form`, mais un seul consomme
+ * `clinicalContext`. En dérivant de form et en appelant cette fonction depuis
+ * chaque builder, on garantit la présence du bloc sur TOUS les chemins
+ * (cf. correction d'architecture du remède, 2026-06-10).
+ *
+ * Additif strict : n'enlève aucun canal user-message existant (le retrait des
+ * doublons est P1, fait une fois ce canal prouvé sur les trois chemins).
+ * Fail-safe : retourne '' si aucune donnée de sécurité (ne throw jamais).
+ *
+ * @param {object|null|undefined} form - anamnèse cliente
+ * @returns {string} bloc texte prêt à concaténer, ou '' si rien.
+ */
+export function buildSafetyBlockFr(form) {
+  if (!form || typeof form !== 'object') return '';
+  const allergies = String(form.allergies ?? '').trim();
+  const intolerances = String(form.alimentsEvites ?? '').trim();
+  // `||` (et non `??`) pour que l'alias medicaments prenne le relais quand
+  // traitements est une chaîne vide (et pas seulement null/undefined).
+  const medications = String(form.traitements || form.medicaments || '').trim();
+  if (!allergies && !intolerances && !medications) return '';
+
+  const lines = [
+    'SÉCURITÉ CLINIQUE — CONTRAINTES ABSOLUES (priorité sur toute autre consigne de ce prompt) :',
+  ];
+  if (allergies) {
+    lines.push(`- ALLERGÈNES déclarés : ${allergies}. N'inclure AUCUN de ces aliments — ni dérivé, ni trace — dans aucun menu, recette, liste de courses ou suggestion de complément.`);
+  }
+  if (intolerances) {
+    lines.push(`- Intolérances / aliments à éviter : ${intolerances}. Exclure de toutes les propositions.`);
+  }
+  if (medications) {
+    lines.push(`- Traitements / médicaments en cours : ${medications}. Tenir compte des interactions aliment-/complément-médicament connues (ex. millepertuis ↔ antidépresseurs, vitamine K ↔ anticoagulants, pamplemousse ↔ statines). Ne jamais suggérer d'arrêter, de modifier ni de remplacer un traitement ; en cas d'interaction possible, le signaler à la praticienne plutôt que d'agir dessus.`);
+  }
+  return lines.join('\n');
+}
+
 // ─── Helpers de formatting (tolérants aux conventions de noms) ──────
 
 /**

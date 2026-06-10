@@ -16,6 +16,8 @@
 //  - Called only when getClientNutritionLocale(client) !== 'EN'.
 
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './identity.fr';
+// P0.1+P0.2 (remède sécurité 2026-06-10) — source unique du bloc sécurité.
+import { buildSafetyBlockFr } from './_clinicalContext.fr';
 
 // ─── SYSTEM PROMPT (identite + regles cliniques + style) ───
 
@@ -870,6 +872,13 @@ export const FOLLOWUP_WEEK_INSTRUCTIONS_FR = {
 export function buildSystemPromptFr(form, opts = {}) {
   const { isFollowup = false, clientFormule = '', followupWeek = 0, planMode = 'followup' } = opts;
   const parts = [SYSTEM_PROMPT_FR, SWISS_BRANDS_PROMPT_FR];
+
+  // P0.1 + P0.2 (remède sécurité clinique, 2026-06-10) — bloc sécurité partagé.
+  // Source unique buildSafetyBlockFr(form), câblée ici sur le chemin CLASSIQUE
+  // (qui ne consomme pas clinicalContext) pour que allergènes + traitements y
+  // soient présents. Haute priorité → injecté juste après l'identité.
+  const safetyBlock = buildSafetyBlockFr(form);
+  if (safetyBlock) parts.push(safetyBlock);
 
   // Supplements: include if client is open to them (Oui or Peut-etre)
   const pretProtocole = form?.pretProtocole || '';

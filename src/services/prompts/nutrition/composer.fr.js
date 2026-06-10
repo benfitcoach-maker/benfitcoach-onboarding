@@ -28,7 +28,7 @@ import { detectClientProfile } from './profiles/_detector.fr';
 import { getProfileModuleFr } from './profiles/index.fr';
 // V97.4 (Phase V1) : couche clinicalContext — tests / markers / signals /
 // microbiomeStage / modules / safety rules. Voir ./_clinicalContext.fr.js.
-import { buildClinicalContextBlockFr } from './_clinicalContext.fr';
+import { buildClinicalContextBlockFr, buildSafetyBlockFr } from './_clinicalContext.fr';
 // V97.4 V3.H Gap #3 : objectifs priorisés pour focaliser le plan IA.
 import { formatPrioritizedObjectivesFr } from './_objectives.fr';
 // V97.x Phase 1 (urgent risque légal) : couche garde-fous cliniques.
@@ -80,6 +80,14 @@ export function composeSystemPromptFr(form, opts = {}, clinicalContext = null) {
     activePhase = null,
   } = opts;
   const parts = [SYSTEM_PROMPT_FR, SWISS_BRANDS_PROMPT_FR];
+
+  // P0.1 + P0.2 (remède sécurité clinique, 2026-06-10) — bloc sécurité partagé.
+  // Source unique buildSafetyBlockFr(form), dérivée de form (pas de
+  // clinicalContext) pour être présente même quand clinicalContext est null
+  // (cas NutritionConsultation.jsx:104). Injecté juste après l'identité, avant
+  // les guardrails, pour priorité LLM maximale.
+  const safetyBlock = buildSafetyBlockFr(form);
+  if (safetyBlock) parts.push(safetyBlock);
 
   // V97.x Phase 1 — Garde-fous cliniques (urgent risque légal).
   // Injectés IMMÉDIATEMENT après l'identité pour priorité LLM maximale.
