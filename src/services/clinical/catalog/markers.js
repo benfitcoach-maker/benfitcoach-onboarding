@@ -365,6 +365,80 @@ export const MARKERS_CATALOG = {
   // - néopterine
 };
 
+// ─── P1.4 — Plafonds de plausibilité de saisie ────────────────────────────
+// (remède sécurité clinique, 2026-06-10)
+//
+// ⚠️ DÉFAUTS CONSERVATEURS À VALIDER PAR ANISSA. Ce sont des plafonds, pas des
+// plages de référence : ils servent à repérer une FAUTE DE FRAPPE (zéro en
+// trop, mauvaise unité), PAS une valeur anormale. Volontairement TRÈS larges
+// — bien au-delà du pathologique extrême — pour ne se déclencher que sur
+// l'invraisemblable. La validation est NON BLOQUANTE : un simple avertissement
+// de saisie. Anissa peut confirmer une vraie valeur extrême.
+//
+// Un marqueur absent de cette table n'est pas évalué (aucun avertissement) :
+// on préfère ne rien dire plutôt que de gêner Anissa avec un seuil deviné.
+export const MARKER_PLAUSIBLE_MAX = {
+  crp_us: 1000,
+  ferritine: 5000,
+  fibrinogene: 50,
+  homocysteine: 500,
+  cortisol_matin: 5000,
+  tsh: 300,
+  t3_libre: 100,
+  t4_libre: 200,
+  insuline: 2000,
+  vit_d_25oh: 1000,
+  vit_b12: 20000,
+  transferrine_saturation: 150,
+  omega_3_index: 100,
+  glycemie_jeun: 100,
+  hba1c: 25,
+  calprotectine: 100000,
+};
+
+/** Extrait le premier nombre d'une saisie libre (gère la décimale française). */
+function parseNumericValue(raw) {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s) return null;
+  const m = s.replace(',', '.').match(/-?\d+(\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * P1.4 — Valide la PLAUSIBILITÉ d'une valeur labo saisie. Pure, fail-soft.
+ * Retourne `assessed:false` quand on ne peut pas se prononcer (non numérique,
+ * pas de plafond défini, code inconnu) — jamais un avertissement par défaut.
+ *
+ * @param {string} code - code marqueur du catalogue.
+ * @param {string|number} rawValue - valeur saisie (texte libre toléré).
+ * @returns {{ plausible: boolean, assessed: boolean, message?: string }}
+ */
+export function validateMarkerValue(code, rawValue) {
+  const n = parseNumericValue(rawValue);
+  if (n === null) return { plausible: true, assessed: false };
+
+  if (n < 0) {
+    return { plausible: false, assessed: true, message: 'Valeur négative — vérifie la saisie.' };
+  }
+
+  const max = MARKER_PLAUSIBLE_MAX[code];
+  if (typeof max !== 'number') return { plausible: true, assessed: false };
+
+  if (n > max) {
+    const unit = MARKERS_CATALOG[code]?.unit ? ` ${MARKERS_CATALOG[code].unit}` : '';
+    return {
+      plausible: false,
+      assessed: true,
+      message: `Valeur inhabituellement élevée (${n}${unit}) — vérifie la saisie (unité, zéro en trop ?).`,
+    };
+  }
+  return { plausible: true, assessed: true };
+}
+
 /**
  * Récupère un marqueur par code. Tolère les codes inconnus (retourne null).
  */

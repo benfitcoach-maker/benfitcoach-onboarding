@@ -45,6 +45,8 @@ import { autoGeneratePlanForPhaseTransition } from './services/autoGeneratePlanF
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
 // Lecture seule du catalogue : la source de vérité reste journey_state.results_data.
 import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
+// P1.4 (remède sécurité clinique) — validation plausibilité saisie labo.
+import { validateMarkerValue } from './services/clinical/catalog/markers';
 import { getNutritionConsultations, saveNutritionConsultation } from './store';
 import { trackPlanValidated, trackPlanModification } from './services/observability';
 import './styles/journey.css';
@@ -2483,6 +2485,8 @@ export function ResultCard({
               const mValue = saved?.value || '';
               const mNote = saved?.synthesis || '';
               const mStatus = saved?.status || '';
+              // P1.4 — avertissement DOUX de plausibilité (non bloquant).
+              const plausibility = validateMarkerValue(em.code, mValue);
               return (
                 <div key={em.code} className={`jrn-marker-row${mStatus ? ` jrn-marker-row--${mStatus}` : ''}`}>
                   <div className="jrn-marker-row__head">
@@ -2495,7 +2499,16 @@ export function ResultCard({
                     onChange={(e) => onMarkerChange(em.code, 'value', e.target.value)}
                     placeholder="Valeur (non renseigné si vide)"
                     className="jrn-marker-row__value"
+                    style={!plausibility.plausible ? { borderColor: '#b8860b' } : undefined}
                   />
+                  {!plausibility.plausible && (
+                    <div
+                      className="jrn-marker-row__warning"
+                      style={{ gridColumn: '1 / -1', fontSize: 11, color: '#8a6508', marginTop: 2 }}
+                    >
+                      {plausibility.message}
+                    </div>
+                  )}
                   <input
                     type="text"
                     value={mNote}
