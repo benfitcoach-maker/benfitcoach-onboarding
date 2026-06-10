@@ -14,6 +14,8 @@
 //   doc.text(COACH_IDENTITY.brand, ...);
 //   const subject = emailSubjectQuestionnaire('fr');
 
+import { PRACTITIONER_LEGAL_PROFILE } from './practitionerProfile';
+
 /** Identité du coach principal de l'app (Anissa). */
 export const COACH_IDENTITY = {
   /** Nom complet : "Anissa Deroubaix" */
@@ -24,8 +26,11 @@ export const COACH_IDENTITY = {
   brand: 'Anissa Nutrition',
   /** Marque longue : "Anissa Deroubaix Nutrition" — pied PDF, marketing */
   brandFull: 'Anissa Deroubaix Nutrition',
-  /** Sous-titre / spécialisation pour signatures */
-  subtitle: 'Nutritionniste spécialisée en longévité et génétique',
+  /** Sous-titre / spécialisation pour signatures.
+   *  P3.2 sécurité clinique — consomme le titre légal SoT (practitionerProfile)
+   *  au lieu d'une sur-revendication "longévité et génétique". Toute mention
+   *  affichée à la cliente doit refléter le titre défendable juridiquement. */
+  subtitle: PRACTITIONER_LEGAL_PROFILE.title,
   /** Ville du cabinet de consultation (V97.15+ : a confirmer) */
   city: 'Nyon',
   /** Email de contact officiel pour la cliente */
@@ -84,12 +89,14 @@ export function emailSubjectFollowupReview(locale = 'fr') {
   return `Ton bilan 4 semaines — ${COACH_IDENTITY.name}`;
 }
 
-/** Signature pied de page PDF (line 2 du footer FR). */
+/** Signature pied de page PDF (line 2 du footer FR).
+ *  P3.2 — titre légal SoT au lieu de "nutritionniste specialisee". */
 export function pdfFooterClosingFr() {
-  return `par ${COACH_IDENTITY.name}, nutritionniste specialisee`;
+  return `par ${COACH_IDENTITY.name}, ${COACH_IDENTITY.subtitle}`;
 }
 
-/** Signature pied de page PDF (line 2 du footer EN). */
+/** Signature pied de page PDF (line 2 du footer EN).
+ *  P3.2 — formulation neutre parallèle (pas de sur-revendication). */
 export function pdfFooterClosingEn() {
-  return `by ${COACH_IDENTITY.name}, nutritionist specialized`;
+  return `by ${COACH_IDENTITY.name}, practitioner in nutrition`;
 }

@@ -77,8 +77,10 @@ const PDF_LABELS = {
     SUPP_SOURCES: 'Sources',
     CONFIDENTIAL: 'Document confidentiel \u2014 usage personnel uniquement',
     FOOTER_CLOSING_LINE_1: 'Ce plan a ete elabore specifiquement pour vous',
-    FOOTER_CLOSING_LINE_2: pdfFooterClosingFr(),
-    FOOTER_CLOSING_LINE_3: 'en longevite et genetique.',
+    FOOTER_CLOSING_LINE_2: `${pdfFooterClosingFr()}.`,
+    // P3.2 — ligne de continuation "en longevite et genetique" retiree
+    // (sur-revendication). LINE_2 porte desormais le titre legal complet.
+    FOOTER_CLOSING_LINE_3: '',
     FOOTER_RECOMMENDED_LINE_1: 'Il est recommande de suivre ce plan pendant 4 semaines',
     FOOTER_RECOMMENDED_LINE_2: "avant d'envisager des ajustements.",
     FOOTER_BRAND: COACH_IDENTITY.brandFull,
@@ -121,8 +123,9 @@ const PDF_LABELS = {
     SUPP_SOURCES: 'Sources',
     CONFIDENTIAL: 'Confidential document \u2014 personal use only',
     FOOTER_CLOSING_LINE_1: 'This plan has been specifically prepared for you',
-    FOOTER_CLOSING_LINE_2: pdfFooterClosingEn(),
-    FOOTER_CLOSING_LINE_3: 'in longevity and genetics.',
+    FOOTER_CLOSING_LINE_2: `${pdfFooterClosingEn()}.`,
+    // P3.2 — "in longevity and genetics" continuation removed (over-claim).
+    FOOTER_CLOSING_LINE_3: '',
     FOOTER_RECOMMENDED_LINE_1: 'It is recommended to follow this plan for 4 weeks',
     FOOTER_RECOMMENDED_LINE_2: 'before considering adjustments.',
     FOOTER_BRAND: COACH_IDENTITY.brandFull,
@@ -1881,7 +1884,7 @@ export async function exportConsultationPDF(consultation, client, { output = 'sa
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...GREY_TEXT);
-      doc.text('Nutritionniste spécialisée en longévité et génétique', pw / 2, sigY + 14, { align: 'center' });
+      doc.text(COACH_IDENTITY.subtitle, pw / 2, sigY + 14, { align: 'center' });
 
       doc.setFontSize(7.5);
       doc.setTextColor(...MUTED_TEXT);
@@ -2016,6 +2019,7 @@ export async function exportConsultationPDF(consultation, client, { output = 'sa
     L('FOOTER_CLOSING_LINE_3', locale),
   ];
   for (const cl of closingLines) {
+    if (!cl) continue; // P3.2 — saute les lignes vides (pas de trou visuel)
     doc.text(cl, pw / 2, y, { align: 'center' });
     y += 5.5;
   }
@@ -3259,14 +3263,14 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  doc.text('Nutritionniste — Optimisation métabolique & longévité', margin, headerY + 5);
+  doc.text(COACH_IDENTITY.subtitle, margin, headerY + 5);
 
   // Ligne 3 : sous-titre secondaire en gris
   doc.setCharSpace(0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GREY);
-  doc.text('Approche basée sur données biologiques & physiologie appliquée', margin, headerY + 9.5);
+  doc.text(COACH_IDENTITY.website, margin, headerY + 9.5);
 
   // Coin haut-droit : localisation
   doc.setCharSpace(0);
@@ -3274,7 +3278,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFontSize(8);
   doc.setTextColor(...GREY);
   doc.text(
-    'Nutritionniste · Longévité & Biomarqueurs · Nyon',
+    `${COACH_IDENTITY.brand} · ${COACH_IDENTITY.city}`,
     pw - margin,
     headerY,
     { align: 'right' }
@@ -3320,7 +3324,7 @@ export async function exportCoverPDF(consultation, client) {
   doc.setFont('times', 'italic');
   doc.setFontSize(11);
   doc.setTextColor(...INK);
-  const intro = "Ce protocole a été élaboré à partir de votre profil biologique, de vos objectifs de longévité et des recommandations nutritionnelles adaptées à votre physiologie. Chaque choix alimentaire est guidé par la science et votre singularité.";
+  const intro = "Ce programme a été élaboré à partir de votre profil, de vos objectifs et de recommandations nutritionnelles personnalisées. Chaque choix alimentaire tient compte de vos besoins et de votre singularité.";
   const introLines = doc.splitTextToSize(intro, pw - margin * 2 - 20);
   let py = paragraphY;
   introLines.forEach(line => {
