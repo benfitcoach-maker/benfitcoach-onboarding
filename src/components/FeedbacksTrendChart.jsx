@@ -39,7 +39,7 @@ const DIMS = [
 const WINDOW_DAYS = 30;
 const MIN_DATA_POINTS = 3;
 
-export default function FeedbacksTrendChart({ feedbacks }) {
+export default function FeedbacksTrendChart({ feedbacks, syncError = false }) {
   // Trie chronologique ascendant (vieux a gauche, recent a droite)
   const sortedFeedbacks = useMemo(() => {
     if (!Array.isArray(feedbacks) || feedbacks.length === 0) return [];
@@ -48,6 +48,21 @@ export default function FeedbacksTrendChart({ feedbacks }) {
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .slice(-WINDOW_DAYS);
   }, [feedbacks]);
+
+  // P2.1 — sous panne synchro, ne pas disparaître en silence (« pas de
+  // tendance » alors qu'on ne sait pas) : afficher un état distinct.
+  if (syncError) {
+    return (
+      <div style={containerStyle}>
+        <div style={headerStyle}>
+          <span style={eyebrowStyle}>Tendances ressentis</span>
+        </div>
+        <p style={{ ...rowEmptyTextStyle, color: '#785a1a', margin: 0 }}>
+          Tendances indisponibles — synchro app cliente échouée.
+        </p>
+      </div>
+    );
+  }
 
   if (sortedFeedbacks.length < MIN_DATA_POINTS) return null;
 

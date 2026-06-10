@@ -47,6 +47,8 @@ import { autoGeneratePlanForPhaseTransition } from './services/autoGeneratePlanF
 import { getExpectedMarkersForTest } from './services/clinical/catalog/orthoAnalyticTests';
 // P1.4 (remède sécurité clinique) — validation plausibilité saisie labo.
 import { validateMarkerValue } from './services/clinical/catalog/markers';
+// P2.1 (remède sécurité clinique) — état réel (panne vs vide) propagé aux signaux.
+import { signalDisplayState } from './services/signalDisplayState';
 import { getNutritionConsultations, saveNutritionConsultation } from './store';
 import { trackPlanValidated, trackPlanModification } from './services/observability';
 import './styles/journey.css';
@@ -4586,11 +4588,11 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
           {/* V97.17.20 — Detection de patterns preoccupants dans les ressentis
               cliente (digestion degradee, fatigue persistante, etc.). Banner
               contextuel au-dessus du Pouls clinique. */}
-          <ClinicalAlertBanner feedbacks={feedbacks} />
+          <ClinicalAlertBanner feedbacks={feedbacks} syncError={syncError} />
 
           {/* V97.17.21 — Mini sparklines des ressentis sur 30 jours.
               Complete les patterns avec une vision graphique des tendances. */}
-          <FeedbacksTrendChart feedbacks={feedbacks} />
+          <FeedbacksTrendChart feedbacks={feedbacks} syncError={syncError} />
 
           {/* V97.17.12 — Pouls clinique : agregation chips 3 dernieres consults.
               S'affiche au-dessus de Consultations si au moins 1 consult avec
@@ -4700,6 +4702,7 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               client={client}
               entries={weightEntries}
               loading={loadingWeight}
+              syncError={syncError}
             />
           </div>
 
@@ -4715,13 +4718,23 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             <p className="jrn-block__intro">
               Les ressentis quotidiens de la cliente nourrissent l'adaptation IA du plan (bloc 4 ci-dessous).
             </p>
-            {loadingFb && <p className="jrn-cockpit-empty-row">Chargement…</p>}
-            {!loadingFb && feedbacks.length === 0 && (
+            {/* P2.1 — état réel propagé : on ne dit « vient de démarrer » que si
+                la synchro a réussi et qu'il n'y a réellement rien. Sous panne,
+                on affiche un état distinct au lieu d'une assertion fausse. */}
+            {signalDisplayState({ loading: loadingFb, syncError, count: feedbacks.length }) === 'loading' && (
+              <p className="jrn-cockpit-empty-row">Chargement…</p>
+            )}
+            {signalDisplayState({ loading: loadingFb, syncError, count: feedbacks.length }) === 'sync_error' && (
+              <p className="jrn-cockpit-empty-row">
+                Ressentis indisponibles — synchro app cliente échouée. Donnée non récupérée (≠ absence de ressenti).
+              </p>
+            )}
+            {signalDisplayState({ loading: loadingFb, syncError, count: feedbacks.length }) === 'empty' && (
               <p className="jrn-cockpit-empty-row">
                 Aucun ressenti reçu sur 14 jours — cliente vient de démarrer.
               </p>
             )}
-            {!loadingFb && feedbacks.length > 0 && (
+            {signalDisplayState({ loading: loadingFb, syncError, count: feedbacks.length }) === 'data' && (
               <div className="jrn-surface" style={{ padding: 0, overflow: 'hidden' }}>
                 {feedbacks.slice(0, 5).map((f, i) => (
                   <div key={f.id || i} style={{ padding: '12px 16px', borderBottom: i < Math.min(4, feedbacks.length - 1) ? '1px solid var(--jrn-border)' : 'none' }}>
@@ -5111,7 +5124,7 @@ function WeightTogglesInline({ client, compact = false }) {
   );
 }
 
-function WeightTrackingSection({ client, entries, loading }) {
+function WeightTrackingSection({ client, entries, loading, syncError }) {
   // Hook factorisé pour la section étape 8 cockpit
   const { config, loadingCfg } = useClientWeightConfig(client);
   const trackingEnabled = !!config?.weight_tracking_enabled;
@@ -5197,10 +5210,20 @@ function WeightTrackingSection({ client, entries, loading }) {
         <p className="jrn-cockpit-empty-row">Chargement…</p>
       )}
 
+      {/* P2.1 — sous panne synchro, on n'affirme pas « en attente des pesées »
+          (on ne sait pas) : état distinct de l'absence réelle. */}
+      {!loading && !loadingCfg && syncError && trackingEnabled && (
+        <div className="jrn-surface" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 12, color: '#785a1a', fontStyle: 'italic' }}>
+            Pesées indisponibles — synchro app cliente échouée. Donnée non récupérée (≠ absence de pesée).
+          </p>
+        </div>
+      )}
+
       {/* V97.17.2 — placeholder graphique si activé sans data (au lieu d'une
           ligne de texte sobre). Permet a Anissa de visualiser l'absence de
           courbe en plus du badge etat ci-dessus. */}
-      {!loading && !loadingCfg && entries.length === 0 && trackingEnabled && (
+      {!loading && !loadingCfg && !syncError && entries.length === 0 && trackingEnabled && (
         <div className="jrn-surface" style={{ padding: 'var(--jrn-5)', textAlign: 'center' }}>
           <svg
             width="100%"

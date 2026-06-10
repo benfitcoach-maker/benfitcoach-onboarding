@@ -113,9 +113,32 @@ function buildPatterns(feedbacks) {
   return patterns;
 }
 
-export default function ClinicalAlertBanner({ feedbacks }) {
+export default function ClinicalAlertBanner({ feedbacks, syncError = false }) {
   const patterns = useMemo(() => buildPatterns(feedbacks), [feedbacks]);
 
+  // P2.1 — le silence n'est un mensonge QUE sous panne. Si la synchro a échoué,
+  // on ne peut PAS conclure « aucun signal préoccupant » (on a reçu un tableau
+  // vidé, pas une absence réelle de pattern) → on l'avoue au lieu de disparaître.
+  if (syncError) {
+    return (
+      <div style={containerStyle}>
+        <div style={headerStyle}>
+          <span style={eyebrowStyle}>Signaux cliniques</span>
+        </div>
+        <div style={{ ...patternStyle, ...syncErrorBoxStyle }}>
+          <div style={{ ...patternLabelStyle, color: '#785a1a' }}>
+            ⚠ Évaluation impossible — synchro app cliente échouée
+          </div>
+          <div style={{ ...patternDetailStyle, color: 'rgba(120, 90, 26, 0.85)' }}>
+            Les ressentis n'ont pas pu être récupérés. L'absence d'alerte ci-dessous
+            n'est pas vérifiée — relancer la synchro pour évaluer les patterns.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Synchro OK + aucun pattern = vérité : la cliente n'a pas d'alerte → silence.
   if (patterns.length === 0) return null;
 
   return (
@@ -232,6 +255,12 @@ const patternStyle = {
   padding: '10px 12px',
   borderRadius: 8,
   border: '1px solid',
+};
+
+// P2.1 — encart "synchro échouée" (ton ambre, distinct des patterns cliniques).
+const syncErrorBoxStyle = {
+  background: 'rgba(184, 134, 38, 0.06)',
+  borderColor: 'rgba(184, 134, 38, 0.3)',
 };
 
 const patternLabelStyle = {
