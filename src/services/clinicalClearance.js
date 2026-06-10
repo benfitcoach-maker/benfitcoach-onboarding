@@ -100,11 +100,14 @@ export function assertPlanClinicallyCleared(planText, clinicalContext = {}) {
 
     // 4. Interactions complément↔traitement présentes dans le plan.
     //    'blocking' → HIGH ; 'needs_review' → warning ; 'advisory' → ignoré.
+    //    `treatments` est passé à classifyInteraction pour l'escalade
+    //    conditionnelle (oméga-3 forte dose sous AVK/AOD, berbérine sous
+    //    insuline/metformine) — réf. docs/VALIDATION-CLINIQUE-ANISSA-V1.md.
     const treatments = analyzeAnamnese(form).traitements || {};
     for (const t of Object.values(treatments)) {
       if (!t || !t.active || !Array.isArray(t.interactions)) continue;
       for (const raw of t.interactions) {
-        const cls = classifyInteraction(raw);
+        const cls = classifyInteraction(raw, treatments);
         if (cls === 'advisory') continue;
         const keyword = normalizeForMatch(String(raw).split('(')[0]);
         if (keyword.length < 3 || !normPlan.includes(keyword)) continue;

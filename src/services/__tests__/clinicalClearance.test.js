@@ -83,6 +83,35 @@ describe('assertPlanClinicallyCleared — clairance clinique unique (P1.2)', () 
     expect(v.violations.some((x) => x.type === 'interaction')).toBe(false);
   });
 
+  // ─── Escalade conditionnelle (D1-A, réf. VALIDATION-CLINIQUE-ANISSA-V1) ──
+  it('berbérine dans le plan + insuline active → HIGH (escalade bloquante)', () => {
+    const v = assertPlanClinicallyCleared(
+      'Cure de berberine matin et soir pour la glycémie.',
+      { form: { traitements: 'insuline lantus' } },
+    );
+    expect(v.cleared).toBe(false);
+    expect(v.violations.some((x) => x.type === 'interaction')).toBe(true);
+  });
+
+  it('chrome dans le plan + insuline active → advisory (ni bloquant ni warning)', () => {
+    const v = assertPlanClinicallyCleared(
+      'Complément chrome pour soutenir le métabolisme.',
+      { form: { traitements: 'insuline lantus' } },
+    );
+    expect(v.cleared).toBe(true);
+    expect(v.violations.some((x) => x.type === 'interaction')).toBe(false);
+    expect(v.warnings.some((x) => x.type === 'interaction_review')).toBe(false);
+  });
+
+  it('oméga-3 forte dose dans le plan + AVK actif → HIGH (escalade bloquante)', () => {
+    const v = assertPlanClinicallyCleared(
+      'Ajout omega-3 forte dose quotidien.',
+      { form: { traitements: 'sintrom' } },
+    );
+    expect(v.cleared).toBe(false);
+    expect(v.violations.some((x) => x.type === 'interaction')).toBe(true);
+  });
+
   // ─── Plan propre : les quatre passent ──────────────────────────────
   it('plan propre + contexte sécurité → cleared, severity none', () => {
     const v = assertPlanClinicallyCleared(cleanPlan, {
