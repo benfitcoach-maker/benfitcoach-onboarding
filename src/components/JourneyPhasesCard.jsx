@@ -33,7 +33,12 @@ import {
   startParcours,
 } from "../services/protocolPhases";
 
-export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false }) {
+export default function JourneyPhasesCard({ consultation, client, onSavePhases, hasRecentPositivePattern = false, disabledReason = null }) {
+  // V97.39.7 (roadmap 1.1) — Si aucune consultation n'existe encore, le parent
+  // ne peut pas persister les phases (handleSavePhases fait `if (!activeConsult)
+  // return`). On verrouille donc les boutons d'init et on explique pourquoi,
+  // au lieu du no-op silencieux "Initialisation…" qui ne se passait rien.
+  const initLocked = !!disabledReason;
   const [saving, setSaving] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -241,6 +246,12 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           La cliente verra où elle en est, ce qui se passe, et ce qui vient ensuite.
         </p>
 
+        {/* V97.39.7 (roadmap 1.1) — Verrou explicite si pas de consultation.
+            Remplace le no-op silencieux du bouton "Accepter". */}
+        {initLocked && (
+          <div style={lockNoticeStyle}>{disabledReason}</div>
+        )}
+
         {/* Banner suggestion */}
         <div style={suggestionBannerStyle}>
           <div style={suggestionEyebrowStyle}>✨ SUGGESTION</div>
@@ -251,17 +262,19 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           <div style={btnRowStyle}>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || initLocked}
               onClick={() => handleInitFromTemplate(suggestion.templateId)}
-              style={primaryBtnStyle(saving)}
+              style={primaryBtnStyle(saving || initLocked)}
+              title={initLocked ? disabledReason : undefined}
             >
               {saving ? "Initialisation…" : "Accepter"}
             </button>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || initLocked}
               onClick={() => setShowTemplatePicker(true)}
-              style={ghostBtnStyle(saving)}
+              style={ghostBtnStyle(saving || initLocked)}
+              title={initLocked ? disabledReason : undefined}
             >
               Choisir un autre
             </button>
@@ -269,9 +282,10 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
                 cliente nutrition simple sans test. */}
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || initLocked}
               onClick={handleSkipParcours}
-              style={skipBtnStyle(saving)}
+              style={skipBtnStyle(saving || initLocked)}
+              title={initLocked ? disabledReason : undefined}
             >
               Pas de parcours
             </button>
@@ -283,18 +297,19 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           <div style={pickerStyle}>
             {Object.values(ALL_TEMPLATES).map((tpl) => {
               const isCustom = tpl.id === 'custom';
+              const itemLocked = saving || isCustom || initLocked;
               return (
                 <button
                   key={tpl.id}
                   type="button"
-                  disabled={saving || isCustom}
+                  disabled={itemLocked}
                   onClick={() => handleInitFromTemplate(tpl.id)}
                   style={{
                     ...pickerItemStyle,
-                    opacity: isCustom ? 0.4 : 1,
-                    cursor: isCustom ? 'not-allowed' : 'pointer',
+                    opacity: isCustom || initLocked ? 0.4 : 1,
+                    cursor: itemLocked ? 'not-allowed' : 'pointer',
                   }}
-                  title={isCustom ? 'Pas encore configurable — disponible en V97.17.6' : ''}
+                  title={isCustom ? 'Pas encore configurable — disponible en V97.17.6' : (initLocked ? disabledReason : '')}
                 >
                   <div style={pickerLabelStyle}>
                     {tpl.label}
@@ -805,6 +820,18 @@ const suggestionBannerStyle = {
   borderRadius: 8,
   padding: "12px 14px",
   marginBottom: 8,
+};
+
+// V97.39.7 (roadmap 1.1) — Notice de verrou (pas de consultation)
+const lockNoticeStyle = {
+  background: "rgba(184, 134, 38, 0.08)",
+  border: "1px solid rgba(184, 134, 38, 0.3)",
+  borderRadius: 7,
+  padding: "10px 12px",
+  marginBottom: 10,
+  fontSize: 12,
+  color: "#785a1a",
+  lineHeight: 1.45,
 };
 
 const suggestionEyebrowStyle = {

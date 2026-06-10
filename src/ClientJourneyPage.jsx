@@ -4374,6 +4374,11 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               weightEntries={weightEntries}
               onSavePhases={handleSavePhases}
               onOpenAppPreview={onOpenAppPreview}
+              phasesDisabledReason={
+                activeConsult
+                  ? null
+                  : "Enregistre d'abord la 1ère consultation pour activer le parcours."
+              }
             />
           </CockpitErrorBoundary>
 

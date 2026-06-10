@@ -75,6 +75,7 @@ export default function SuiviCockpitTimeline({
   weightEntries,
   onSavePhases,
   onOpenAppPreview,
+  phasesDisabledReason = null,
 }) {
   const durationMonths = useMemo(
     () => extractDurationMonths(packLabel),
@@ -381,6 +382,7 @@ export default function SuiviCockpitTimeline({
           consultation={consultation}
           onSavePhases={onSavePhases}
           hasRecentPositivePattern={hasRecentPositivePattern(feedbacks)}
+          disabledReason={phasesDisabledReason}
         />
 
         {/* V97.17.7.2 — Bouton publier contextuel.
