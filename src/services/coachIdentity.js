@@ -41,17 +41,48 @@ export const COACH_IDENTITY = {
   website: 'www.anissanutrition.ch',
 };
 
-/** Identité légale de la société (siège social AB Coaching Sàrl). */
+/**
+ * Adresse du SIÈGE SOCIAL de la société (registre du commerce).
+ *
+ * ⚠️ Réservé aux documents LÉGAUX / FACTURES uniquement. Ce n'est PAS
+ * l'adresse à afficher sur les documents cliente (plan, fiche médecin,
+ * couverture, pack) : utiliser PRACTICE_IDENTITY (cabinet) pour ceux-là.
+ * (Décision Benoit 2026-06-10 : siège St-Cergue ≠ cabinet Nyon.)
+ * Aucune facture PDF n'existe encore → cette constante est en réserve.
+ */
 export const COMPANY_IDENTITY = {
   /** Raison sociale : "AB Coaching Sàrl" */
   name: 'AB Coaching Sàrl',
-  /** Rue + numero du siege */
+  /** Rue + numero du siege social */
   street: 'Chemin du Vieux-Château 2a',
-  /** Code postal */
+  /** Code postal du siege */
   postalCode: '1264',
   /** Ville du siege social */
   city: 'St-Cergue',
-  /** Adresse complete sur une ligne (signatures PDF, footer) */
+  /** Adresse complete sur une ligne (documents légaux / factures) */
+  get addressLine() {
+    return `${this.name} · ${this.street}, ${this.postalCode} ${this.city}`;
+  },
+};
+
+/**
+ * Adresse du CABINET (lieu d'exploitation / accueil clientes).
+ *
+ * C'est l'adresse pertinente pour la cliente → à afficher sur TOUS les
+ * documents cliente et la fiche médecin (plan, couverture, pack,
+ * MedicalSummary). Données dérivées du profil légal SoT (pas de
+ * duplication) : Rue de Rive 28, 1260 Nyon.
+ */
+export const PRACTICE_IDENTITY = {
+  /** Entité d'exploitation (même Sàrl que le siège) */
+  name: PRACTITIONER_LEGAL_PROFILE.company,
+  /** Rue + numero du cabinet */
+  street: PRACTITIONER_LEGAL_PROFILE.address.street,
+  /** Code postal du cabinet */
+  postalCode: PRACTITIONER_LEGAL_PROFILE.address.postalCode,
+  /** Ville du cabinet */
+  city: PRACTITIONER_LEGAL_PROFILE.address.city,
+  /** Adresse complete sur une ligne (documents cliente) */
   get addressLine() {
     return `${this.name} · ${this.street}, ${this.postalCode} ${this.city}`;
   },
