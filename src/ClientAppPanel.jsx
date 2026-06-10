@@ -1280,13 +1280,14 @@ function SignalsTab({ client }) {
 
   useEffect(() => {
     let cancelled = false;
-    if (!getClientEmail(client)) {
+    const stagingClientId = client?.stagingClientId || null;
+    if (!getClientEmail(client) && !stagingClientId) {
       setSignals({ upgrade_interests: [], attachment_opens: [] });
       return;
     }
     setSignals(null);
     setError(null);
-    fetchClientSignals({ email: getClientEmail(client), limit: 50 })
+    fetchClientSignals({ email: getClientEmail(client), clientId: stagingClientId, limit: 50 })
       .then((res) => {
         if (cancelled) return;
         setSignals(res);

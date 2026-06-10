@@ -4,6 +4,55 @@
 > SaaS praticienne (`benfitcoach-onboarding`) et l'app cliente (`anissa-client-app`).
 > Roadmap v1.0 « niveau éditeur » — tâche 1.3.
 
+## Identité cliente : matching email + client_id (roadmap 1.2)
+
+### Principe
+
+Une cliente peut s'authentifier sur l'app cliente via Apple/Google avec un email
+masqué (*hide-my-email*) différent de celui saisi dans le SaaS. L'email seul est
+donc un matcher fragile. Le matcher robuste est **`client_id`** = l'id de la
+ligne `clients` côté app cliente (stocké SaaS-side dans `staging_client_id`,
+exposé en JS sous `client.stagingClientId`), connu une fois l'app activée.
+
+Helper unique : `src/services/clientIdentity.js`
+- `resolveClientIdentity(client)` → `{ email, clientId }`
+- `clientIdentityFields(client)` → `{ email?, client_id? }` (n'ajoute que les
+  clés connues, jamais de null) — à étaler dans chaque payload/query admin
+- `hasClientIdentity(client)` → bool
+
+### Contrat de déploiement (rétrocompatibilité)
+
+Les deux repos ne sont jamais déployés à la même seconde. Le contrat rend
+l'ordre des déploiements **indolore** :
+
+1. **Le SaaS envoie TOUJOURS `email` ET `client_id`** quand les deux sont connus
+   (jamais l'un *à la place* de l'autre).
+2. **L'app cliente matche `client_id` en priorité, fallback `email`** — exactement
+   le pattern déjà en place sur `/api/admin/clients-status`.
+3. Tant que l'app cliente n'est **pas encore** mise à jour, elle ignore le champ
+   `client_id` supplémentaire et continue de matcher par `email` → rien ne casse.
+4. Une fois l'app cliente mise à jour, les clientes hide-my-email (email SaaS ≠
+   email compte) deviennent matchables via `client_id`.
+
+### Endpoints app cliente à adapter (repo `anissa-client-app`)
+
+Tous suivent le même pattern que `clients-status` : **`client_id` prioritaire,
+fallback `email`**. Le SaaS envoie déjà les deux champs depuis V97.40.
+
+| Endpoint | Méthode | Champs identité reçus | Matching attendu |
+| --- | --- | --- | --- |
+| `/api/admin/client-feedbacks` | GET (query) | `email`, `client_id` | `client_id` → `clients.id`, sinon `email` |
+| `/api/admin/client-config` | GET (query) | `email`, `client_id` | idem |
+| `/api/admin/client-config` | POST (body) | `email`, `client_id` | idem |
+| `/api/admin/client-signals` | POST (body) | `email`, `client_id` | idem |
+| `/api/admin/client-journey-status` | POST (body) | `email`, `client_id` | idem |
+| `/api/admin/push/send` | POST (body) | `email`, `client_id` | déjà supporté (V94.66) — vérifier que `email` reste un fallback valide |
+
+Note : `/api/admin/clients-status` est **déjà** au bon pattern (référence), ne
+rien y changer.
+
+---
+
 ## Pipeline `pending_protocol_phases` (roadmap 1.1)
 
 ### Principe

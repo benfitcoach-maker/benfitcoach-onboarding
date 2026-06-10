@@ -37,6 +37,8 @@ import ClientPulseSummary from './components/ClientPulseSummary';
 import ClinicalAlertBanner from './components/ClinicalAlertBanner';
 import FeedbacksTrendChart from './components/FeedbacksTrendChart';
 import { transitionToNextPhase, getActivePhase, bakePendingProtocolPhases } from './services/protocolPhases';
+// V97.40 (roadmap 1.2) — propage email + client_id sur les appels app cliente.
+import { clientIdentityFields } from './services/clientIdentity';
 // V97.23 (V97.18 Phase E) — Auto-generation brouillon IA apres transition phase.
 import { autoGeneratePlanForPhaseTransition } from './services/autoGeneratePlanForPhaseTransition';
 // V97.4 V3.C — saisie dynamique des marqueurs attendus depuis le catalogue.
@@ -786,7 +788,7 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
         await clientAppFetch('/api/admin/client-journey-status', {
           method: 'POST',
           payload: {
-            email,
+            ...clientIdentityFields(client),
             rdv_scheduled_at: isoAt,
           },
         });
@@ -796,7 +798,7 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
           await clientAppFetch('/api/admin/push/send', {
             method: 'POST',
             payload: {
-              email,
+              ...clientIdentityFields(client),
               title: 'Votre RDV avec Anissa est fixé',
               body: `Rendez-vous d'anamnèse : ${formatRdv(isoAt)}.`,
               url: '/parcours',
@@ -3885,14 +3887,14 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
         const newPhase = newProtocolPhases?.phases?.find(
           (p) => p.id === newActivePhaseId
         );
-        const email = client?.form?.email || client?.email;
-        if (newPhase && email) {
+        const identity = clientIdentityFields(client);
+        if (newPhase && (identity.email || identity.client_id)) {
           try {
             const { clientAppFetch } = await import('./services/clientAppFetch');
             await clientAppFetch('/api/admin/push/send', {
               method: 'POST',
               payload: {
-                email,
+                ...identity,
                 title: 'Votre parcours évolue',
                 body: `Vous êtes maintenant en Phase ${newPhase.order} : ${newPhase.client_name}.`,
                 url: '/plan#strategie',

@@ -43,9 +43,11 @@ export default function PushNotifSender({ clientEmail, clientId, clientPrenom })
         url: url.trim() || "/",
         tag: `anissa-custom-${Date.now()}`,
       };
-      // Préfère client_id (mapping V94.66 robuste), fallback email
+      // V97.40 (roadmap 1.2) : envoie email ET client_id quand connus.
+      // L'app cliente matche client_id en priorite (robuste hide-my-email),
+      // fallback email — donc retrocompat avant/apres sa mise a jour.
+      if (clientEmail) payload.email = clientEmail;
       if (clientId) payload.client_id = clientId;
-      else payload.email = clientEmail;
 
       const res = await clientAppFetch("/api/admin/push/send", {
         method: "POST",

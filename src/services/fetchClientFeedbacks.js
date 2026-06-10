@@ -8,10 +8,8 @@
 
 // V96.35 : passe par le proxy server-side `/api/client-app-proxy`
 import { clientAppFetch } from "./clientAppFetch";
-
-function resolveClientEmail(client) {
-  return client?.form?.email || client?.email || null;
-}
+// V97.40 (roadmap 1.2) : envoie email ET client_id (matching robuste hide-my-email)
+import { clientIdentityFields, hasClientIdentity } from "./clientIdentity";
 
 /**
  * @param {object} client - ligne `clients` du SaaS
@@ -19,14 +17,13 @@ function resolveClientEmail(client) {
  * @returns {Promise<{ ok: boolean, feedbacks: array, found?: boolean, error?: string }>}
  */
 export async function fetchClientFeedbacks(client, days = 7) {
-  const email = resolveClientEmail(client);
-  if (!email) {
-    return { ok: false, feedbacks: [], error: "Cliente sans email" };
+  if (!hasClientIdentity(client)) {
+    return { ok: false, feedbacks: [], error: "Cliente sans email ni client_id" };
   }
 
   let body;
   try {
-    body = await clientAppFetch("/api/admin/client-feedbacks", { method: "GET", query: { email, days } });
+    body = await clientAppFetch("/api/admin/client-feedbacks", { method: "GET", query: { ...clientIdentityFields(client), days } });
   } catch (e) {
     return { ok: false, feedbacks: [], error: e?.message || "Erreur reseau" };
   }

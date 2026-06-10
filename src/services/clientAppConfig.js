@@ -6,10 +6,8 @@
 
 // V96.35 : passe par le proxy server-side `/api/client-app-proxy`
 import { clientAppFetch, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
-
-function resolveClientEmail(client) {
-  return client?.form?.email || client?.email || null;
-}
+// V97.40 (roadmap 1.2) : envoie email ET client_id (matching robuste hide-my-email)
+import { clientIdentityFields, hasClientIdentity } from "./clientIdentity";
 
 export class ClientConfigError extends Error {
   constructor(message, status) {
@@ -27,12 +25,11 @@ function wrapErr(err) {
 
 /** GET la config actuelle de la cliente (côté staging). */
 export async function fetchClientAppConfig(client) {
-  const email = resolveClientEmail(client);
-  if (!email) throw new ClientConfigError("Cliente sans email", 0);
+  if (!hasClientIdentity(client)) throw new ClientConfigError("Cliente sans email ni client_id", 0);
 
   let body;
   try {
-    body = await clientAppFetch("/api/admin/client-config", { method: "GET", query: { email } });
+    body = await clientAppFetch("/api/admin/client-config", { method: "GET", query: clientIdentityFields(client) });
   } catch (e) { throw wrapErr(e); }
   if (!body?.ok) throw new ClientConfigError(body?.error || "Reponse invalide", 0);
   return {
@@ -43,12 +40,11 @@ export async function fetchClientAppConfig(client) {
 
 /** POST une mise à jour partielle de la config (1+ flags). */
 export async function updateClientAppConfig(client, updates) {
-  const email = resolveClientEmail(client);
-  if (!email) throw new ClientConfigError("Cliente sans email", 0);
+  if (!hasClientIdentity(client)) throw new ClientConfigError("Cliente sans email ni client_id", 0);
 
   let body;
   try {
-    body = await clientAppFetch("/api/admin/client-config", { method: "POST", payload: { email, ...updates } });
+    body = await clientAppFetch("/api/admin/client-config", { method: "POST", payload: { ...clientIdentityFields(client), ...updates } });
   } catch (e) { throw wrapErr(e); }
   if (!body?.ok) throw new ClientConfigError(body?.error || "Reponse invalide", 0);
   return body.config;

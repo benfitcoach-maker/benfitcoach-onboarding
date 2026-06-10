@@ -23,17 +23,25 @@ function wrapErr(err) {
 }
 
 /**
+ * V97.40 (roadmap 1.2) : accepte clientId (= staging_client_id) en plus de
+ * l'email et envoie les deux quand connus, pour le matching robuste cote app
+ * cliente (hide-my-email). Email seul reste accepte (retrocompat appelants).
  * @param {object} params
- * @param {string} params.email
+ * @param {string} [params.email]
+ * @param {string} [params.clientId]
  * @param {number} [params.limit=50]
  * @returns {Promise<{ upgrade_interests: object[], attachment_opens: object[] }>}
  */
-export async function fetchClientSignals({ email, limit = 50 }) {
-  if (!email) throw new ClientSignalsError("Cliente sans email", 0);
+export async function fetchClientSignals({ email, clientId = null, limit = 50 }) {
+  if (!email && !clientId) throw new ClientSignalsError("Cliente sans email ni client_id", 0);
+
+  const reqPayload = { limit };
+  if (email) reqPayload.email = email;
+  if (clientId) reqPayload.client_id = clientId;
 
   let payload;
   try {
-    payload = await clientAppFetch("/api/admin/client-signals", { method: "POST", payload: { email, limit } });
+    payload = await clientAppFetch("/api/admin/client-signals", { method: "POST", payload: reqPayload });
   } catch (e) { throw wrapErr(e); }
   if (!payload?.ok) throw new ClientSignalsError(payload?.error || payload?.message || "Reponse invalide", 0);
 
