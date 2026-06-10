@@ -2954,7 +2954,11 @@ ${suppText}`;
                           setAnalysesError('Export bloque : ' + val.errors.join(' | '));
                           return;
                         }
-                        exportAnalysesPDF(recs, symp, clientName, formatDate(today));
+                        // V97.34 fix no-undef : clientName/today n'existaient pas dans ce scope
+                        // (pattern identique a celui de l'etape plan, L~3167).
+                        const pdfClientName = form.prenom || client?.prenom || 'Client';
+                        const pdfToday = new Date().toISOString();
+                        exportAnalysesPDF(recs, symp, pdfClientName, formatDate(pdfToday));
                       }}
                       style={{
                         padding: '3px 10px', borderRadius: 6,

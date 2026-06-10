@@ -431,6 +431,7 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
       {showGenModal && (
         <GenerationModal
           client={client}
+          consultation={consultation}
           aiDirectives={aiDirectives}
           onDirectivesChange={setAiDirectives}
           onCancel={() => setShowGenModal(false)}
@@ -637,7 +638,7 @@ function AutosaveIndicator({ state }) {
   );
 }
 
-function GenerationModal({ client, aiDirectives, onDirectivesChange, onCancel, onAdopt }) {
+function GenerationModal({ client, consultation, aiDirectives, onDirectivesChange, onCancel, onAdopt }) {
   // BC.5G.6 : la directive est éditée dans la sidebar atelier (source unique).
   // À l'ouverture, on refetch la dernière directive en BDD pour être à jour
   // (la sidebar peut avoir été modifiée après le mount de JourneyPlanEditor).

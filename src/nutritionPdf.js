@@ -3486,6 +3486,15 @@ export async function exportClientPackPDF(consultation, client, { sections: unif
   const objectif = (coverFields?.objectif || form.objectifPrincipalNutrition || form.objectifSport || '').trim();
   const sousTitre = coverFields?.sousTitre || (locale === 'EN' ? 'Personalized nutrition plan' : 'Plan nutrition personnalise');
 
+  // V97.34 fix no-undef : mgdRec etait utilise plus bas (section RECOMMANDATIONS
+  // BIOLOGIQUES MGD) sans jamais etre declare dans cette fonction → ReferenceError
+  // a la generation du pack PDF. Derivation identique a exportCoverPDF (L~3174).
+  const mgdBlood = !!consultation?.blood_test_done || !!consultation?.bloodTestDone;
+  const mgdDna   = !!consultation?.dna_test_done   || !!consultation?.dnaTestDone;
+  const mgdRec = consultation?.mgdRecommendation
+    || consultation?.mgd_recommendation
+    || (mgdBlood && mgdDna ? 'advanced' : mgdBlood ? 'blood' : 'none');
+
   // ═══════════ PAGE 1: COVER ═══════════
   doc.setFillColor(...BG_PAGE);
   doc.rect(0, 0, pw, ph, 'F');

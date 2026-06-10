@@ -282,6 +282,16 @@ function App() {
     return <Decouverte />;
   }
 
+  return <MainApp />;
+}
+
+// V97.34 fix react-hooks/rules-of-hooks : les early returns des routes
+// publiques ci-dessus vivaient dans le meme composant que ~40 hooks →
+// hooks appeles conditionnellement (fonctionnait par chance car la
+// condition est stable au montage, mais fragile avec React 19 / compiler).
+// Les hooks vivent desormais dans MainApp, monte uniquement hors routes
+// publiques. Strictement additif : aucun comportement modifie.
+function MainApp() {
   // Auth state
   const [authenticated, setAuthenticated] = useState(() => {
     if (!isCloudEnabled) return true;

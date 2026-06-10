@@ -37,7 +37,6 @@ export default function LoginScreen({ onLogin }) {
   const handleBack = () => {
     setStep('select');
     setPassword('');
-    setConfirmPassword('');
     setError('');
   };
 
