@@ -3258,6 +3258,7 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
           publishConsultationToClientApp,
           markPublishedLocally,
           checkClientReadyForPublish,
+          PublishClinicalError,
         } = await import('./services/publishToClientApp');
 
         // V97.13.26 — normalise les 2 conventions de nommage pour que
@@ -3274,7 +3275,21 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
           throw new Error(`Impossible de publier : ${ready.issues.join(' · ')}`);
         }
 
-        await publishConsultationToClientApp(client, consultForPublish);
+        // P1.2 — clairance clinique (fail-closed côté service). Override conscient
+        // si une violation HIGH bloque la publication.
+        try {
+          await publishConsultationToClientApp(client, consultForPublish);
+        } catch (pubErr) {
+          if (pubErr instanceof PublishClinicalError) {
+            const { formatClearanceForConfirm } = await import('./services/clinicalClearance');
+            if (!window.confirm(formatClearanceForConfirm(pubErr.verdict))) {
+              return;
+            }
+            await publishConsultationToClientApp(client, consultForPublish, null, { clinicalOverride: true });
+          } else {
+            throw pubErr;
+          }
+        }
         markPublishedLocally(client.id);
       }
 

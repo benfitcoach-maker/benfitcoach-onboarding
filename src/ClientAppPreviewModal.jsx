@@ -26,7 +26,9 @@ import {
   checkPublishConfig,
   PublishConfigError,
   PublishHttpError,
+  PublishClinicalError,
 } from './services/publishToClientApp';
+import { formatClearanceForConfirm } from './services/clinicalClearance';
 import {
   enrichClientAppPlan,
   applyEnrichmentToPlan,
@@ -118,12 +120,21 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
       // V97.13.38 : utilise localConsultation pour inclure les edits inline
       // (greeting, signature) qui auraient ete sauves mais pas encore propages
       // a la prop consultation par le parent.
-      const res = await publishConsultationToClientApp(
-        client,
-        localConsultation,
-        enrichmentApplied,
-        options,
-      );
+      let res;
+      try {
+        res = await publishConsultationToClientApp(client, localConsultation, enrichmentApplied, options);
+      } catch (err) {
+        // P1.2 — clairance clinique : override conscient avant de forcer la sortie.
+        if (err instanceof PublishClinicalError && !options.clinicalOverride) {
+          if (!window.confirm(formatClearanceForConfirm(err.verdict))) {
+            setConfirmingPublish(false);
+            return;
+          }
+          res = await publishConsultationToClientApp(client, localConsultation, enrichmentApplied, { ...options, clinicalOverride: true });
+        } else {
+          throw err;
+        }
+      }
       setPublishResult(res);
     } catch (err) {
       if (err instanceof PublishConfigError) {

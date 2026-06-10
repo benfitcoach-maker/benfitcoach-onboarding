@@ -13,6 +13,7 @@ import { buildClientAppPlanFromConsultation } from "./clientAppMapper";
 import { applyEnrichmentToPlan } from "./aiEnrichClientPlan";
 import { saveClient } from "../store";
 import { clientAppFetch, checkClientAppConfig, ClientAppConfigError, ClientAppHttpError } from "./clientAppFetch";
+import { assertPlanClinicallyCleared } from "./clinicalClearance";
 
 /** Récupère l'email de la cliente depuis ses données SaaS. */
 function resolveClientEmail(client) {
@@ -36,6 +37,19 @@ export class PublishHttpError extends Error {
     this.name = "PublishHttpError";
     this.status = status;
     this.payload = payload;
+  }
+}
+
+// P1.2 (remède sécurité clinique) — la publication est l'une des 4 portes de
+// sortie du plan. Le gate vit ICI (service), pas seulement dans l'UI, pour que
+// les 3 call sites (ClientAppPreviewModal, ClientJourneyPage, PendingDraftsPanel)
+// soient couverts par une seule barrière — défense en profondeur. Override
+// conscient via options.clinicalOverride (l'UI le positionne après un confirm).
+export class PublishClinicalError extends Error {
+  constructor(verdict) {
+    super("Clairance clinique refusée — plan bloqué à la publication.");
+    this.name = "PublishClinicalError";
+    this.verdict = verdict;
   }
 }
 
@@ -85,6 +99,18 @@ export async function publishConsultationToClientApp(client, consultation, enric
   const ready = checkClientReadyForPublish(client, consultation);
   if (!ready.ok) {
     throw new PublishConfigError(ready.issues.join(" • "));
+  }
+
+  // 2bis. P1.2 — Clairance clinique (fail-closed). Bloque la publication d'un
+  // plan présentant une violation HIGH (allergène, phrase interdite, interaction
+  // contre-indiquée) sauf override conscient explicite de l'UI.
+  const planTextForClearance = consultation?.nutrition_plan
+    || consultation?.nutritionPlan
+    || consultation?.plan_text
+    || '';
+  const clearance = assertPlanClinicallyCleared(planTextForClearance, { form: client?.form });
+  if (!clearance.cleared && !options?.clinicalOverride) {
+    throw new PublishClinicalError(clearance);
   }
 
   // 3. Construit le plan via le mapper local + applique l'enrichissement IA

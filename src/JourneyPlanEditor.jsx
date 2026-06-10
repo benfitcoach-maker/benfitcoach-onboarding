@@ -42,6 +42,7 @@ import { getActivePhase, getActivePhaseWeek } from './services/protocolPhases';
 import { buildClinicalContext } from './services/clinical/buildClinicalContext';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
+import { assertPlanClinicallyCleared, formatClearanceForConfirm } from './services/clinicalClearance';
 import { structurePlanSections } from './services/planFormatters';
 import { analyzeFullPlan } from './services/aiClient';
 import FicheFrigoPreview from './FicheFrigoPreview';
@@ -253,6 +254,11 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
     setExporting('plan');
     setError(null);
     try {
+      // P1.2 — clairance clinique (porte export Word). Override conscient sur HIGH.
+      const verdict = assertPlanClinicallyCleared(planText, { form: client?.form });
+      if (!verdict.cleared && !window.confirm(formatClearanceForConfirm(verdict))) {
+        return;
+      }
       await exportPlanToWord(client, consultation || { clientId: client.id, date: new Date().toISOString() }, planText);
     } catch (e) {
       setError(e?.message || 'Erreur export Word');
@@ -1008,7 +1014,12 @@ function GenerationModal({ client, consultation, aiDirectives, onDirectivesChang
               <RenderedMarkdown text={result} />
             </div>
             <div className="jrn-actions">
-              <button onClick={() => onAdopt(result, draftDirectives)} className="jrn-btn jrn-btn--primary">
+              <button onClick={() => {
+                // P1.2 — clairance clinique (porte Adopter). Override conscient sur HIGH.
+                const verdict = assertPlanClinicallyCleared(result, { form: client?.form });
+                if (!verdict.cleared && !window.confirm(formatClearanceForConfirm(verdict))) return;
+                onAdopt(result, draftDirectives);
+              }} className="jrn-btn jrn-btn--primary">
                 Adopter ce plan
               </button>
               <button onClick={() => { setResult(null); }} className="jrn-btn jrn-btn--soft">

@@ -4,6 +4,7 @@ import { exportFicheFrigoPDF } from './nutritionPdf';
 // Avant, la logique etait dupliquee ici, dans exportToWord.js et clientAppMapper.js.
 // Risque de divergence elimine : une seule source de verite.
 import { buildCanonicalFridgeData } from './services/fridgeDataBuilder';
+import { assertPlanClinicallyCleared, formatClearanceForConfirm } from './services/clinicalClearance';
 
 // ─── CLEAN ITEM: strip parentheses, explanations, leading dashes/bullets ───
 function cleanItem(text) {
@@ -170,6 +171,13 @@ export default function FicheFrigoPreview({ consultation, sections, client, onCl
   // pas pour la Fiche Frigo qui est imprimée puis plastifiée telle quelle.
   const handleExport = async () => {
     const editedMeals = getEditedData();
+    // P1.2 — clairance clinique (porte Fiche frigo PDF). Override conscient sur HIGH.
+    // On sérialise le contenu de la fiche (repas + compléments + listes) pour le
+    // confronter aux allergènes / interactions / phrases interdites.
+    const verdict = assertPlanClinicallyCleared(JSON.stringify(editedMeals), { form });
+    if (!verdict.cleared && !window.confirm(formatClearanceForConfirm(verdict))) {
+      return;
+    }
     await exportFicheFrigoPDF(consultation, client, editedMeals);
     onClose();
   };
