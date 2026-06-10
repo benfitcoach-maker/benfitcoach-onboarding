@@ -9,7 +9,12 @@
 
 import { ANISSA_IDENTITY_CORE } from './prompts/nutrition/identity.fr';
 // V97.0 : centralisation des appels Claude
-import { callClaude } from './anthropic';
+// P0.4 (remède sécurité 2026-06-10) — safeParseJson unifié dans anthropic.js
+// (contrat fail-closed). On le ré-exporte pour ne pas casser les imports
+// existants (tests + appelants) qui le prennent depuis ce module.
+import { callClaude, safeParseJson } from './anthropic';
+
+export { safeParseJson };
 import { analyzeAnamnese, formatAnamneseForPrompt } from './anamneseAnalyzer';
 
 const SYSTEM_PROMPT = `${ANISSA_IDENTITY_CORE}
@@ -417,25 +422,6 @@ function buildUserMessage(form, consultation, destinataire) {
   lines.push('La raison doit lier le supplement a un element factuel du profil du patient.');
 
   return lines.join('\n');
-}
-
-// V94.24 : exporté pour les tests unitaires
-export function safeParseJson(text) {
-  if (!text) throw new Error('Reponse IA vide');
-  // Strip markdown fences si presentes
-  let t = text.trim();
-  t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-  // Tenter extraction du premier { ... } englobant
-  const firstBrace = t.indexOf('{');
-  const lastBrace = t.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    t = t.substring(firstBrace, lastBrace + 1);
-  }
-  try {
-    return JSON.parse(t);
-  } catch (e) {
-    throw new Error(`JSON IA invalide : ${e.message}`);
-  }
 }
 
 /**

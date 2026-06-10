@@ -43,17 +43,38 @@ export class ClaudeApiError extends Error {
 
 /**
  * Extrait un objet JSON tolerant depuis du texte (gere markdown ```json,
- * texte autour, etc). Retourne null si parse impossible.
+ * texte autour, etc).
+ *
+ * P0.4 (remède sécurité clinique, 2026-06-10) — contrat FAIL-CLOSED unifié.
+ * Avant, deux fonctions homonymes aux contrats opposés coexistaient : celle-ci
+ * renvoyait `null` en silence (fail-open), celle d'aiMedicalSummary throw
+ * (fail-closed). Le fail-open faisait crasher le générateur de recettes avec un
+ * TypeError opaque (`parsed.recipes` sur null). Désormais une seule fonction,
+ * fail-closed : elle THROW une erreur claire plutôt que de renvoyer null. Les
+ * appelants catchent et affichent une erreur honnête (ou, pour les features non
+ * critiques type suggestions, dégradent gracieusement en catchant `parseError`).
+ *
+ * @param {string} text
+ * @returns {object} l'objet parsé
+ * @throws {ClaudeApiError} si vide / non-textuel / JSON invalide
  */
 export function safeParseJson(text) {
-  if (!text || typeof text !== 'string') return null;
-  let clean = text.replace(/```json|```/g, '').trim();
-  const match = clean.match(/\{[\s\S]*\}/);
-  if (match) clean = match[0];
+  if (!text || typeof text !== 'string') {
+    throw new ClaudeApiError('Réponse IA vide ou non textuelle', 0, { parseError: true });
+  }
+  // Strip markdown fences si présentes
+  let t = text.trim();
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  // Extraction du premier { ... } englobant
+  const firstBrace = t.indexOf('{');
+  const lastBrace = t.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    t = t.substring(firstBrace, lastBrace + 1);
+  }
   try {
-    return JSON.parse(clean);
-  } catch {
-    return null;
+    return JSON.parse(t);
+  } catch (e) {
+    throw new ClaudeApiError(`JSON IA invalide : ${e.message}`, 0, { parseError: true });
   }
 }
 

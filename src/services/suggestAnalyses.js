@@ -16,7 +16,7 @@
 //   50% du budget pack en analyses sauf justifie cliniquement
 // ─────────────────────────────────────────────────────────────────
 
-import { callClaude, safeParseJson, ClaudeApiError } from './anthropic';
+import { callClaude, ClaudeApiError } from './anthropic';
 import { PACK_DEFINITIONS } from './packSystem';
 
 const MODEL = 'claude-sonnet-4-6';  // Sonnet pour qualite raisonnement clinique
@@ -243,13 +243,28 @@ export async function suggestAnalyses({ client, packType, catalog }) {
   const system = buildSystemPrompt();
   const user = buildUserPrompt({ anamnesisPseudo, packType, catalog });
 
-  const result = await callClaude({
-    system,
-    user,
-    model: MODEL,
-    maxTokens: MAX_TOKENS,
-    parseJson: true,
-  });
+  // P0.4 (remède sécurité clinique, 2026-06-10) — depuis l'unification
+  // fail-closed de safeParseJson, callClaude({ parseJson }) THROW sur réponse
+  // IA vide / tronquée / JSON invalide (au lieu de renvoyer null en silence).
+  // La suggestion d'analyses est une feature non critique : « pas de
+  // suggestion / réessayez » EST la dégradation honnête. On rattrape donc les
+  // erreurs de parsing (taguées parseError) pour préserver le contrat null,
+  // tout en laissant remonter les erreurs réseau / HTTP comme avant.
+  let result;
+  try {
+    result = await callClaude({
+      system,
+      user,
+      model: MODEL,
+      maxTokens: MAX_TOKENS,
+      parseJson: true,
+    });
+  } catch (err) {
+    if (err instanceof ClaudeApiError && err.payload?.parseError) {
+      return null;
+    }
+    throw err;
+  }
 
   // Validation minimale du shape
   if (!result || !Array.isArray(result.suggestions)) {
