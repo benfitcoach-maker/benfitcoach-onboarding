@@ -16,9 +16,11 @@ import { listPlanDrafts, acceptPlanDraft, refusePlanDraft } from '../services/pl
 import { saveNutritionConsultation, getNutritionConsultations } from '../store';
 import { COACH_IDENTITY } from '../services/coachIdentity';
 // V97.23.2 — Accept+Publish atomic workflow (push notif cliente automatique)
-import { publishConsultationToClientApp } from '../services/publishToClientApp';
+import { publishConsultationToClientApp, PublishClinicalError } from '../services/publishToClientApp';
 // V97.23.4 — Diff visualization entre V actuelle et draft propose.
 import { diffLines, diffStats } from '../services/textDiff';
+// P1.3 (remède sécurité clinique) — affichage verdict clairance + override conscient.
+import { clearanceBadge, formatClearanceForConfirm } from '../services/clinicalClearance';
 
 export default function PendingDraftsPanel({ onClose, clientsById }) {
   const [loading, setLoading] = useState(true);
@@ -111,7 +113,24 @@ export default function PendingDraftsPanel({ onClose, clientsById }) {
         await publishConsultationToClientApp(client, consultation);
         publishedOk = true;
       } catch (pe) {
-        publishError = pe?.message || 'erreur publication';
+        // P1.3 — clic non aveugle : si la clairance clinique refuse le plan,
+        // on présente le verdict à Anissa (elle est là) pour un override
+        // conscient. Le gate dur (P1.2) vit dans le service ; on ne s'appuie
+        // pas sur le seul affichage du panel.
+        if (pe instanceof PublishClinicalError) {
+          if (window.confirm(formatClearanceForConfirm(pe.verdict))) {
+            try {
+              await publishConsultationToClientApp(client, consultation, null, { clinicalOverride: true });
+              publishedOk = true;
+            } catch (pe2) {
+              publishError = pe2?.message || 'erreur publication';
+            }
+          } else {
+            publishError = 'Publication annulée — clairance clinique refusée.';
+          }
+        } else {
+          publishError = pe?.message || 'erreur publication';
+        }
       }
       const accRes = await acceptPlanDraft(draft.id, note);
       if (publishedOk) {
@@ -229,6 +248,29 @@ export default function PendingDraftsPanel({ onClose, clientsById }) {
   );
 }
 
+// ─── ClearanceBadgePill (P1.3) — verdict clairance clinique ─────────────
+
+const BADGE_TONES = {
+  block: { bg: '#a04040', fg: 'white' },
+  warn: { bg: '#b8860b', fg: 'white' },
+  ok: { bg: 'rgba(46,94,62,.12)', fg: '#2E5E3E' },
+  unknown: { bg: 'rgba(0,0,0,.06)', fg: '#6b6f6b' },
+};
+
+function ClearanceBadgePill({ clearance }) {
+  const badge = clearanceBadge(clearance);
+  const tone = BADGE_TONES[badge.tone] || BADGE_TONES.unknown;
+  return (
+    <span style={{
+      padding: '3px 8px', borderRadius: 4,
+      background: tone.bg, color: tone.fg,
+      fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
+    }}>
+      {badge.label}
+    </span>
+  );
+}
+
 // ─── DraftRow (liste compacte) ──────────────────────────────────────────
 
 function DraftRow({ draft, onClick }) {
@@ -273,6 +315,7 @@ function DraftRow({ draft, onClick }) {
           {' · généré le '}{fmtDate}
         </div>
       </div>
+      <ClearanceBadgePill clearance={meta.clinical_clearance} />
       <div style={{ fontSize: 11, color: '#7e5ec7', fontWeight: 600 }}>
         Voir →
       </div>
@@ -351,6 +394,9 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish,
           )}
         </div>
       </div>
+
+      {/* P1.3 — Verdict clairance clinique (plan plus jamais validé en aveugle) */}
+      <ClearanceVerdictBlock clearance={meta.clinical_clearance} />
 
       {/* V97.23.4 — Toggle vue plein texte / diff */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 8, alignItems: 'center' }}>
@@ -542,6 +588,59 @@ function DraftDetail({ draft, clientsById, onBack, onAccept, onAcceptAndPublish,
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── ClearanceVerdictBlock (P1.3) — détail verdict dans le draft detail ──
+
+function ClearanceVerdictBlock({ clearance }) {
+  const badge = clearanceBadge(clearance);
+  const violations = Array.isArray(clearance?.violations) ? clearance.violations : [];
+  const warnings = Array.isArray(clearance?.warnings) ? clearance.warnings : [];
+
+  if (badge.tone === 'unknown') {
+    return (
+      <div style={{
+        padding: '8px 12px', marginBottom: 12, borderRadius: 8,
+        background: 'rgba(0,0,0,.04)', border: '1px solid rgba(0,0,0,.08)',
+        fontSize: 12, color: '#6b6f6b',
+      }}>
+        Clairance clinique non évaluée pour ce brouillon (généré avant la mise en place
+        du contrôle). La vérification de sécurité s&apos;exécutera quand même à la publication.
+      </div>
+    );
+  }
+
+  const palette = badge.tone === 'block'
+    ? { bg: 'rgba(184,64,64,.08)', border: 'rgba(184,64,64,.35)', fg: '#a04040' }
+    : badge.tone === 'warn'
+      ? { bg: 'rgba(184,134,11,.08)', border: 'rgba(184,134,11,.35)', fg: '#8a6508' }
+      : { bg: 'rgba(46,94,62,.08)', border: 'rgba(46,94,62,.3)', fg: '#2E5E3E' };
+
+  return (
+    <div style={{
+      padding: '10px 14px', marginBottom: 12, borderRadius: 8,
+      background: palette.bg, border: `1px solid ${palette.border}`, fontSize: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: violations.length || warnings.length ? 6 : 0 }}>
+        <ClearanceBadgePill clearance={clearance} />
+        {badge.tone === 'block' && (
+          <span style={{ color: palette.fg, fontWeight: 600 }}>
+            Publication bloquée — override conscient requis (Anissa).
+          </span>
+        )}
+      </div>
+      {violations.length > 0 && (
+        <ul style={{ margin: '4px 0 0', paddingLeft: 18, color: palette.fg }}>
+          {violations.map((v, i) => <li key={`v${i}`} style={{ marginBottom: 2 }}>{v.label}</li>)}
+        </ul>
+      )}
+      {warnings.length > 0 && (
+        <ul style={{ margin: '4px 0 0', paddingLeft: 18, color: '#8a6508' }}>
+          {warnings.map((w, i) => <li key={`w${i}`} style={{ marginBottom: 2 }}>{w.label}</li>)}
+        </ul>
+      )}
     </div>
   );
 }

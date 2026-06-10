@@ -24,6 +24,7 @@ import { callClaude } from './anthropic';
 import { buildSystemPromptFrV2 } from './prompts/nutrition/fr';
 import { buildClinicalContext } from './clinical/buildClinicalContext';
 import { createPlanDraft } from './planDraftsService';
+import { assertPlanClinicallyCleared } from './clinicalClearance';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 
@@ -90,6 +91,35 @@ export async function autoGeneratePlanForPhaseTransition(args) {
     const draftText = typeof res === 'string' ? res : (res?.text || '');
     if (!draftText) return { ok: false, error: 'reponse Claude vide' };
 
+    // P1.3 (remède sécurité clinique) — clairance clinique IMMÉDIATEMENT après
+    // génération. Le verdict est stocké dans trigger_metadata (JSONB, pas de
+    // migration : la table V97.23 prévoit déjà cette extensibilité) pour que
+    // PendingDraftsPanel l'affiche → Anissa ne valide plus sur texte aveugle.
+    // Le gate dur reste la re-vérification live à la publication (P1.2).
+    let clinicalClearance = null;
+    try {
+      const verdict = assertPlanClinicallyCleared(draftText, {
+        form,
+        guardrails: v2.guardrails,
+      });
+      clinicalClearance = {
+        cleared: verdict.cleared,
+        severity: verdict.severity,
+        violations: verdict.violations,
+        warnings: verdict.warnings,
+        evaluated_at: new Date().toISOString(),
+      };
+    } catch {
+      // FAIL-CLOSED : clairance impossible = marquée bloquante, jamais omise.
+      clinicalClearance = {
+        cleared: false,
+        severity: 'high',
+        violations: [{ type: 'clearance_error', severity: 'high', label: 'Clairance impossible à la génération — à revoir cliniquement.' }],
+        warnings: [],
+        evaluated_at: new Date().toISOString(),
+      };
+    }
+
     const generationDurationMs = Date.now() - startedAt;
     const saveRes = await createPlanDraft({
       clientId: client.id,
@@ -106,6 +136,7 @@ export async function autoGeneratePlanForPhaseTransition(args) {
         profile_tag: v2.profile?.tag || null,
         guardrails_applied: (v2.guardrails || []).map((g) => g.profile_key),
         phase_recommendations_source: v2.phaseRecommendations?.source || null,
+        clinical_clearance: clinicalClearance,
       },
     });
     if (!saveRes.ok) {

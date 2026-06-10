@@ -147,3 +147,36 @@ export function formatClearanceForConfirm(verdict) {
   lines.push('', 'Sortir ce plan malgré cet avertissement ? (override conscient)');
   return lines.join('\n');
 }
+
+/**
+ * P1.3 — Traduit un verdict (frais OU relu depuis trigger_metadata, parfois
+ * absent sur d'anciens brouillons pré-P1.3) en descripteur d'affichage pour le
+ * panel de validation. Le badge est INFORMATIF : le gate dur reste la
+ * re-vérification live à la publication (assertPlanClinicallyCleared dans
+ * publishConsultationToClientApp).
+ *
+ * @param {ClearanceVerdict|null|undefined} verdict
+ * @returns {{ tone: 'block'|'warn'|'ok'|'unknown', label: string, blocking: boolean }}
+ */
+export function clearanceBadge(verdict) {
+  if (!verdict || typeof verdict !== 'object') {
+    return { tone: 'unknown', label: 'Clairance non évaluée', blocking: false };
+  }
+  const violations = Array.isArray(verdict.violations) ? verdict.violations : [];
+  const warnings = Array.isArray(verdict.warnings) ? verdict.warnings : [];
+  if (verdict.cleared === false || verdict.severity === 'high' || violations.length > 0) {
+    const n = violations.length;
+    return {
+      tone: 'block',
+      label: n > 0
+        ? `Clairance refusée — ${n} alerte${n > 1 ? 's' : ''} bloquante${n > 1 ? 's' : ''}`
+        : 'Clairance refusée',
+      blocking: true,
+    };
+  }
+  if (warnings.length > 0) {
+    const n = warnings.length;
+    return { tone: 'warn', label: `À vérifier — ${n} avertissement${n > 1 ? 's' : ''}`, blocking: false };
+  }
+  return { tone: 'ok', label: 'Clairance clinique OK', blocking: false };
+}

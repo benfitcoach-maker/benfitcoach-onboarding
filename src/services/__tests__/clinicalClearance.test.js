@@ -20,7 +20,7 @@
 // Test ROUGE avant remède (assertPlanClinicallyCleared n'existe pas) → VERT après.
 
 import { describe, it, expect } from 'vitest';
-import { assertPlanClinicallyCleared, formatClearanceForConfirm } from '../clinicalClearance';
+import { assertPlanClinicallyCleared, formatClearanceForConfirm, clearanceBadge } from '../clinicalClearance';
 import { GUARDRAILS_FR } from '../prompts/nutrition/_clinicalGuardrails.fr';
 
 const cleanPlan = 'Petit-déjeuner : flocons avoine, fruits rouges. Déjeuner : poulet, quinoa, légumes.';
@@ -119,5 +119,39 @@ describe('formatClearanceForConfirm — message override conscient (P1.2)', () =
 
   it('robuste sur verdict null', () => {
     expect(() => formatClearanceForConfirm(null)).not.toThrow();
+  });
+});
+
+// P1.3 — la porte automatique (transition de phase) stocke le verdict dans le
+// brouillon ; le panel l'affiche. `clearanceBadge` traduit un verdict (frais OU
+// relu depuis trigger_metadata, potentiellement absent sur vieux drafts) en un
+// descripteur d'affichage. Le vrai gate dur reste la re-vérification live à la
+// publication (P1.2) — ce badge est informatif.
+describe('clearanceBadge — descripteur affichage panel brouillons (P1.3)', () => {
+  it('verdict bloquant (cleared:false) → tone block, blocking true', () => {
+    const v = assertPlanClinicallyCleared('Snack arachide.', { form: { allergies: 'arachide' } });
+    const b = clearanceBadge(v);
+    expect(b.tone).toBe('block');
+    expect(b.blocking).toBe(true);
+  });
+
+  it('verdict avec warnings seuls → tone warn, non bloquant', () => {
+    const v = assertPlanClinicallyCleared('Dessert : yaourt au lait entier.', { form: { alimentsEvites: 'lait' } });
+    const b = clearanceBadge(v);
+    expect(b.tone).toBe('warn');
+    expect(b.blocking).toBe(false);
+  });
+
+  it('verdict propre → tone ok, non bloquant', () => {
+    const v = assertPlanClinicallyCleared(cleanPlan, { form: {} });
+    const b = clearanceBadge(v);
+    expect(b.tone).toBe('ok');
+    expect(b.blocking).toBe(false);
+  });
+
+  it('verdict absent (vieux draft sans clairance stockée) → tone unknown, non bloquant', () => {
+    expect(clearanceBadge(null).tone).toBe('unknown');
+    expect(clearanceBadge(undefined).tone).toBe('unknown');
+    expect(clearanceBadge(null).blocking).toBe(false);
   });
 });
