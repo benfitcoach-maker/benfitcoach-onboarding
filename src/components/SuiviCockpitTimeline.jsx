@@ -93,6 +93,7 @@ export default function SuiviCockpitTimeline({
   const protocolPhases = consultation?.protocol_phases || null;
   const templatePillLabel = useMemo(() => {
     if (!protocolPhases) return "—";
+    if (protocolPhases.skipped) return "Aucun parcours";
     const tpl = ALL_TEMPLATES[protocolPhases.template];
     if (!tpl) return protocolPhases.template;
     const count = protocolPhases.phases?.length || 0;

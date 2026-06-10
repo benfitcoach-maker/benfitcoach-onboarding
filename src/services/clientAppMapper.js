@@ -1266,7 +1266,12 @@ export function buildClientAppPlanFromConsultation(client, consultation) {
   // a l'app cliente pour /parcours V2. Pas de transformation cote SaaS :
   // le format DB est le format consomme cote app. Null/undefined si pas
   // encore configure pour cette consultation (backward compatible).
-  const journey_phases = consultation?.protocol_phases || null;
+  // V97.39.6 — { skipped: true } = Anissa a explicitement choisi "pas de
+  // parcours" pour cette cliente. On n'expose rien a l'app cliente (pas de
+  // timeline therapeutique vide).
+  const journey_phases = consultation?.protocol_phases?.skipped
+    ? null
+    : (consultation?.protocol_phases || null);
 
   return {
     client_id: client.id,

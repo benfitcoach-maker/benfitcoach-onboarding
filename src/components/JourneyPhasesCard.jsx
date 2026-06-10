@@ -164,10 +164,58 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
     }
   }
 
+  // V97.39.6 — Option A : marquer "pas de parcours" pour cette cliente.
+  // Range la carte en une ligne (au lieu de pousser un parcours non pertinent
+  // pour une cliente nutrition simple). Stocke { skipped: true } : inoffensif
+  // en aval (getActivePhase retourne null, le mapper app cliente envoie null).
+  async function handleSkipParcours() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSavePhases({ skipped: true });
+      setShowTemplatePicker(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // V97.39.6 — Reactiver depuis l'etat "pas de parcours" : revient a null,
+  // ce qui re-affiche la banniere suggestion.
+  async function handleReactivateParcours() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSavePhases(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // ─── État 1 : pas configuré OU configuré avec 0 phase (cas custom buggy) ──
   // V97.17.5.1 : guard contre `{ template: 'custom', phases: [] }` qui causait
   // une page noire (rendu de la frise sur tableau vide). Fallback sur l'etat
   // "non configure" + permet de re-choisir un template valide.
+  // V97.39.6 — Etat "pas de parcours" (Anissa a explicitement ignore).
+  // Carte repliee en une ligne discrete + lien pour reactiver. Doit etre
+  // teste AVANT isEmptyPhases (sinon le warning "phases manquantes" s'affiche).
+  if (protocolPhases?.skipped) {
+    return (
+      <div style={skippedRowStyle}>
+        <span style={skippedTextStyle}>
+          Pas de parcours thérapeutique pour cette cliente.
+        </span>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={handleReactivateParcours}
+          style={skippedLinkStyle(saving)}
+        >
+          {saving ? "…" : "Activer un parcours"}
+        </button>
+      </div>
+    );
+  }
+
   const isEmptyPhases =
     protocolPhases && (!Array.isArray(protocolPhases.phases) || protocolPhases.phases.length === 0);
 
@@ -216,6 +264,16 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
               style={ghostBtnStyle(saving)}
             >
               Choisir un autre
+            </button>
+            {/* V97.39.6 — Option A : 3e choix, le plus honnete pour une
+                cliente nutrition simple sans test. */}
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSkipParcours}
+              style={skipBtnStyle(saving)}
+            >
+              Pas de parcours
             </button>
           </div>
         </div>
@@ -843,6 +901,56 @@ function ghostBtnStyle(disabled) {
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
     transition: "all 120ms ease",
+  };
+}
+
+// V97.39.6 — Bouton "Pas de parcours" : volontairement discret (texte simple,
+// pas de bordure) pour ne pas concurrencer Accepter, mais rester accessible.
+function skipBtnStyle(disabled) {
+  return {
+    background: "transparent",
+    border: "none",
+    padding: "8px 6px",
+    fontSize: 12.5,
+    color: disabled ? "#9b9f9b" : "var(--jrn-text-muted, #6b6f6b)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.6 : 1,
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
+    transition: "all 120ms ease",
+  };
+}
+
+// V97.39.6 — Etat replie "pas de parcours"
+const skippedRowStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "12px 14px",
+  background: "rgba(26, 46, 31, 0.03)",
+  border: "1px dashed rgba(26, 46, 31, 0.15)",
+  borderRadius: 8,
+  flexWrap: "wrap",
+};
+
+const skippedTextStyle = {
+  fontSize: 12.5,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  fontStyle: "italic",
+};
+
+function skippedLinkStyle(disabled) {
+  return {
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: disabled ? "#9b9f9b" : "#1A2E1F",
+    cursor: disabled ? "not-allowed" : "pointer",
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
   };
 }
 
