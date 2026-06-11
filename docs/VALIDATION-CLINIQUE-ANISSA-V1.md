@@ -79,8 +79,8 @@ jamais en advisory silencieux. Dans le doute, on sur-signale.
 
 ## Liste 2 — Plafonds de plausibilité des biomarqueurs
 
-**Statut : 15 plafonds sanguins FIGÉS (validé Anissa le 2026-06-11, unités SI).
-EXCEPTION HbA1c NON figée — plafond mmol/mol en attente d'Anissa.**
+**Statut : 16 plafonds sanguins FIGÉS (validé Anissa le 2026-06-11, unités SI).
+HbA1c basculée en mmol/mol (IFCC) et FIGÉE — cf. §2 ci-dessous.**
 Fichier : `src/services/clinical/catalog/markers.js` (`MARKER_PLAUSIBLE_MAX`).
 
 Les 15 plafonds validés tels qu'ils figurent dans le fichier : crp_us 1000,
@@ -108,24 +108,31 @@ mélange d'unités, pas de double support, pas de sélecteur.
    chiffres du fichier et omettait fibrinogène, homocystéine, cortisol, insuline,
    calprotectine). La validation portait sur ce tableau périmé, pas sur le
    fichier réel.
-2. **HbA1c — unité tranchée : mmol/mol (IFCC), source Ortho-Analytic.**
-   Décision : unité unique, pas de double support. Le code actuel suppose des %
-   à 9 endroits qui doivent basculer **ensemble** (sinon incohérence) :
-   - `markers.js:238` `unit: '%'` → `'mmol/mol'`
-   - `markers.js:240` `ref_range { low:'4', high:'5.6' }` → ~`{ low:20, high:42 }`
-   - `markers.js:395` `MARKER_PLAUSIBLE_MAX.hba1c: 25` → ~`200` (⚠ 25 = valeur
-     normale-basse en mmol/mol : le plafond actuel bloquerait des saisies réelles)
-   - `labInterpretationEngine.js:60` `unit: '%'` → `'mmol/mol'`
-   - `labInterpretationEngine.js:61` `ranges` (toutes bornes en %) → reconverties
-   - `labInterpretationEngine.js:387` caution `'HbA1c >6.4%'` → seuil mmol/mol
-   - `NutritionConsultation.jsx:766` label de saisie `unit: '%'` → `'mmol/mol'`
-   - `aiIntroLetter.js:162` exemple IA « HbA1c à 8% » → exemple en mmol/mol
-   - `aiMedicalSummary.js:174` exemple IA « HbA1c 8% » → exemple en mmol/mol
 
-   Cibles à **confirmer par Anissa** avec les autres plafonds : normale ~20–42,
-   pré-diabète ~42–47, diabète ≥48, plafond plausibilité ~200 (valeur exacte à
-   trancher). Idéalement réaligner sur **une seule** table (markers.js et
-   labInterpretationEngine divergent déjà aujourd'hui : 4 vs 4.8 en borne basse).
+**Ce qui est FIGÉ (validé Anissa le 2026-06-11) :**
+2. **HbA1c — basculée % (DCCT) → mmol/mol (IFCC), source Ortho-Analytic.**
+   Unité unique, pas de double support. Bornes validées par Anissa, alignées ADA :
+   - **Normale : 20–38 mmol/mol** (< 39 ; ≈ 4,0–5,6 %)
+   - **Prédiabète : 39–47 mmol/mol** (≈ 5,7–6,45 %)
+   - **Diabète : ≥ 48 mmol/mol** (≈ ≥ 6,5 % = seuil ADA)
+   - **Plafond de plausibilité : 200 mmol/mol**
+
+   Conversion : `mmol/mol = (% − 2,15) × 10,929`. Ancre diabète : 6,5 % → ≈ 47,5
+   → arrondi ≥ 48 (ADA exact). Choix clinique de la frontière 39 (et non 42) :
+   repérer le prédiabète précoce 39–47 où la nutrition peut encore inverser la
+   trajectoire (longévité).
+
+   **Source de vérité unique :** `src/services/clinical/catalog/hba1cReference.js`
+   (`HBA1C_REF`). `markers.js` (`unit`, `ref_range`, `MARKER_PLAUSIBLE_MAX`) ET
+   `labInterpretationEngine.js` (bandes d'interprétation) **dérivent** de ce
+   module — ne jamais redéfinir les bornes HbA1c ailleurs. Les divergences
+   historiques (markers 4 % vs moteur 4,8 %) sont supprimées : une seule table.
+
+   Convention moteur `[min, max)` : 39 (`prediabete.min`) et 48 (`diabete.min`)
+   sont des bornes hautes **exclues** → une valeur de 39 tombe en prédiabète, 48
+   en diabète. Vérifié runtime : 38→normale, 39→prédiabète, 47→prédiabète,
+   48→diabète, 200→diabète. Les sous-bandes descriptives basses (low/
+   low_borderline) restent locales au moteur (aucun signal clinique).
 
 **Étanchéité sang ↔ ADN — confirmée par construction (2026-06-11).**
 `MARKER_PLAUSIBLE_MAX` / `validateMarkerValue` / `labInterpretationEngine`
@@ -172,8 +179,8 @@ validation humaine préalable.
   traitements actifs). Signaler une substance à risque même en l'absence de
   traitement déclaré nécessiterait un nouveau parcours de scan des substances —
   reporté en V2.
-- **Liste 2 :** intégrer les 16 plafonds relus par Anissa + basculer l'HbA1c en
-  mmol/mol (9 emplacements, cf. Liste 2 §2), puis figer.
+- **Liste 2 :** ✅ HbA1c basculée en mmol/mol et figée (cf. Liste 2 §2). Reste à
+  intégrer la relecture des 16 plafonds par Anissa sur le fichier réel, puis figer.
 - **Héritage « MGD » post-bascule (non bloquant lancement) :** l'étiquette MGD
   survit dans `mgdAnalysisMatrix.js` (en-tête « analyses biologiques *et*
   génétiques » — mélange sang + ADN) et `geneticInterpretation.js` (provenance

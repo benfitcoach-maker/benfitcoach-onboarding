@@ -37,6 +37,10 @@
  * Catalogue des marqueurs. Clé = code stable.
  * @type {Record<string, Marker>}
  */
+// HbA1c : bornes + plafond DÉRIVÉS de la source de vérité unique.
+// Ne JAMAIS redéfinir les valeurs HbA1c ici — éditer hba1cReference.js.
+import { HBA1C_REF } from './hba1cReference.js';
+
 export const MARKERS_CATALOG = {
   // ─── INFLAMMATION ─────────────────────────────────────────────
   crp_us: {
@@ -235,9 +239,10 @@ export const MARKERS_CATALOG = {
   hba1c: {
     code: 'hba1c',
     label: 'HbA1c (hémoglobine glyquée)',
-    unit: '%',
+    unit: HBA1C_REF.unit,                       // 'mmol/mol' (IFCC) — dérivé
     axis: 'metabolique',
-    ref_range: { low: '4', high: '5.6' },
+    // Plage normale dérivée de la source unique (bornes entières inclusives).
+    ref_range: { low: HBA1C_REF.tranches.normale.min, high: HBA1C_REF.tranches.normale.max },
     notes: 'Reflet glycémique des 3 derniers mois.',
   },
   cholesterol_total: {
@@ -381,13 +386,9 @@ export const MARKERS_CATALOG = {
 //    — réf. docs/VALIDATION-CLINIQUE-ANISSA-V1.md (Liste 2). Les valeurs sont
 //    figées telles quelles ; ne pas modifier sans nouvelle validation clinique.
 //
-// ⚠️ EXCEPTION HbA1c — NON validée (en attente d'Anissa). La valeur définitive
-//    du plafond en mmol/mol (IFCC) n'a pas encore été communiquée. Le 25
-//    ci-dessous est l'ANCIEN plafond exprimé en % (DCCT) : il reste cohérent
-//    tant que TOUT le code HbA1c est en % (catalogue, moteur, label de saisie).
-//    NE PAS basculer l'unité HbA1c en mmol/mol sans remplacer aussi ce 25
-//    (25 mmol/mol = valeur normale-basse → bloquerait des saisies réelles).
-//    Bascule = 9 emplacements solidaires, cf. VALIDATION-CLINIQUE-ANISSA-V1.md.
+// ✅ HbA1c VALIDÉE Anissa 2026-06-11 — bascule % (DCCT) → mmol/mol (IFCC) faite.
+//    Le plafond (200) est DÉRIVÉ de hba1cReference.js (HBA1C_REF.plausible_max),
+//    seule source de vérité. Ne pas redéfinir la valeur ici.
 export const MARKER_PLAUSIBLE_MAX = {
   // — 15 plafonds validés Anissa 2026-06-11 (unités SI) —
   crp_us: 1000,
@@ -405,8 +406,8 @@ export const MARKER_PLAUSIBLE_MAX = {
   omega_3_index: 100,
   glycemie_jeun: 100,
   calprotectine: 100000,
-  // — NON validé : plafond mmol/mol en attente d'Anissa (25 = ancien seuil %) —
-  hba1c: 25,
+  // — HbA1c mmol/mol (IFCC) — dérivé de la source de vérité unique —
+  hba1c: HBA1C_REF.plausible_max,
 };
 
 /** Extrait le premier nombre d'une saisie libre (gère la décimale française). */

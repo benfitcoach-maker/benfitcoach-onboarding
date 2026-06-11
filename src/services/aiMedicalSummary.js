@@ -171,7 +171,7 @@ PREFERER les chiffres concrets aux adjectifs vagues :
   Allergies / Famille). Max 4 lignes total. Pas de phrases.
 
 - Bilans : 2-3 lignes. Bilan sanguin Oui/Non. ADN Oui/Non. 1 observation clinique
-  saillante si pertinente (ex: HbA1c 8%, T4 basse, ferritine 18).
+  saillante si pertinente (ex: HbA1c 64 mmol/mol, T4 basse, ferritine 18).
 
 - Examens proposes (analysesProposees) : LISTE de 4 a 6 examens biologiques pertinents
   a PROPOSER au medecin pour affiner l accompagnement nutritionnel. Anissa NE PRESCRIT

@@ -763,7 +763,7 @@ const LAB_MARKERS_UI = [
   { key: 'folates', label: 'Folates (B9)', unit: 'nmol/L', group: 'vitamines' },
   { key: 'glucose_jeun', label: 'Glucose a jeun', unit: 'mmol/L', group: 'glycemie' },
   { key: 'insuline_jeun', label: 'Insuline a jeun', unit: 'mU/L', group: 'glycemie' },
-  { key: 'hba1c', label: 'HbA1c', unit: '%', group: 'glycemie' },
+  { key: 'hba1c', label: 'HbA1c', unit: 'mmol/mol', group: 'glycemie' },
   { key: 'tsh', label: 'TSH', unit: 'mUI/L', group: 'thyroide' },
   { key: 't3_libre', label: 'T3 libre', unit: 'pmol/L', group: 'thyroide' },
   { key: 't4_libre', label: 'T4 libre', unit: 'pmol/L', group: 'thyroide' },

@@ -6,6 +6,11 @@
 // V47 : Unités SI suisses (mmol/L, µmol/L, nmol/L, pmol/L)
 // Conversions appliquées depuis les ranges US originaux pour matcher les labos CH
 
+// HbA1c : bornes cliniques DÉRIVÉES de la source de vérité unique.
+// Les sous-bandes basses (low/low_borderline) restent locales au moteur
+// (descriptives, aucun signal clinique). Ne JAMAIS redéfinir 39/48 ici.
+import { HBA1C_REF } from './services/clinical/catalog/hba1cReference.js';
+
 const LAB_MARKERS = {
   ferritine: {
     unit: 'µg/L',  // = ng/mL (valeurs numeriques identiques)
@@ -57,8 +62,17 @@ const LAB_MARKERS = {
     label: 'Insuline a jeun',
   },
   hba1c: {
-    unit: '%',
-    ranges: { low: [0, 4.5], low_borderline: [4.5, 4.8], normal: [4.8, 5.6], high_borderline: [5.6, 6.4], high: [6.4, Infinity] },
+    unit: HBA1C_REF.unit,                       // 'mmol/mol' (IFCC) — dérivé
+    // Bandes en [min, max) : 39 (prediabete.min) et 48 (diabete.min) = bornes
+    // hautes EXCLUES → une valeur de 39 tombe en high_borderline (prédiabète),
+    // 48 en high (diabète). Frontières dérivées de la source de vérité unique.
+    ranges: {
+      low: [0, 26],
+      low_borderline: [26, 29],
+      normal: [29, HBA1C_REF.tranches.prediabete.min],
+      high_borderline: [HBA1C_REF.tranches.prediabete.min, HBA1C_REF.tranches.diabete.min],
+      high: [HBA1C_REF.tranches.diabete.min, Infinity],
+    },
     signal_low: null,
     signal_high: 'glycemic_dysregulation',
     label: 'HbA1c',
@@ -384,7 +398,7 @@ const SIGNAL_TO_ADJUSTMENTS = {
       'Marche 10-15 min apres les repas',
     ],
     supplement: 'Chrome 200 µg midi avec glucides, magnesium au coucher',
-    caution: 'HbA1c >6.4% ou glucose >126 mg/dL — avis medical requis',
+    caution: `HbA1c ≥${HBA1C_REF.tranches.diabete.min} mmol/mol ou glucose >126 mg/dL — avis medical requis`,
   },
   hypoglycemia_tendency: {
     label: 'Tendance hypoglycemique',

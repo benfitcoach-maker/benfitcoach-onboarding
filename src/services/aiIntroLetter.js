@@ -159,8 +159,8 @@ aient l'impression que c'est ELLE qui a redige la lettre.
 9. SPECIFICITE > GENERALITE
 
    INTERDIT : "Votre HbA1c montre une marge de stabilisation possible"
-   ECRIRE : "Votre HbA1c a 8% peut redescendre vers 7% en quelques mois
-              avec les bons ajustements"
+   ECRIRE : "Votre HbA1c a 64 mmol/mol peut redescendre vers 53 mmol/mol en
+              quelques mois avec les bons ajustements"
 
    Soyez concrete. Citez les chiffres reels. Utilisez les details du profil.
 
