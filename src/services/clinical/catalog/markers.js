@@ -368,16 +368,28 @@ export const MARKERS_CATALOG = {
 // ─── P1.4 — Plafonds de plausibilité de saisie ────────────────────────────
 // (remède sécurité clinique, 2026-06-10)
 //
-// ⚠️ DÉFAUTS CONSERVATEURS À VALIDER PAR ANISSA. Ce sont des plafonds, pas des
-// plages de référence : ils servent à repérer une FAUTE DE FRAPPE (zéro en
-// trop, mauvaise unité), PAS une valeur anormale. Volontairement TRÈS larges
-// — bien au-delà du pathologique extrême — pour ne se déclencher que sur
-// l'invraisemblable. La validation est NON BLOQUANTE : un simple avertissement
-// de saisie. Anissa peut confirmer une vraie valeur extrême.
+// Ce sont des plafonds, pas des plages de référence : ils servent à repérer une
+// FAUTE DE FRAPPE (zéro en trop, mauvaise unité), PAS une valeur anormale.
+// Volontairement TRÈS larges — bien au-delà du pathologique extrême — pour ne
+// se déclencher que sur l'invraisemblable. La validation est NON BLOQUANTE : un
+// simple avertissement de saisie. Anissa peut confirmer une vraie valeur extrême.
 //
 // Un marqueur absent de cette table n'est pas évalué (aucun avertissement) :
 // on préfère ne rien dire plutôt que de gêner Anissa avec un seuil deviné.
+//
+// ✅ 15 plafonds VALIDÉS Anissa le 2026-06-11 (valeurs en unités SI suisses)
+//    — réf. docs/VALIDATION-CLINIQUE-ANISSA-V1.md (Liste 2). Les valeurs sont
+//    figées telles quelles ; ne pas modifier sans nouvelle validation clinique.
+//
+// ⚠️ EXCEPTION HbA1c — NON validée (en attente d'Anissa). La valeur définitive
+//    du plafond en mmol/mol (IFCC) n'a pas encore été communiquée. Le 25
+//    ci-dessous est l'ANCIEN plafond exprimé en % (DCCT) : il reste cohérent
+//    tant que TOUT le code HbA1c est en % (catalogue, moteur, label de saisie).
+//    NE PAS basculer l'unité HbA1c en mmol/mol sans remplacer aussi ce 25
+//    (25 mmol/mol = valeur normale-basse → bloquerait des saisies réelles).
+//    Bascule = 9 emplacements solidaires, cf. VALIDATION-CLINIQUE-ANISSA-V1.md.
 export const MARKER_PLAUSIBLE_MAX = {
+  // — 15 plafonds validés Anissa 2026-06-11 (unités SI) —
   crp_us: 1000,
   ferritine: 5000,
   fibrinogene: 50,
@@ -392,8 +404,9 @@ export const MARKER_PLAUSIBLE_MAX = {
   transferrine_saturation: 150,
   omega_3_index: 100,
   glycemie_jeun: 100,
-  hba1c: 25,
   calprotectine: 100000,
+  // — NON validé : plafond mmol/mol en attente d'Anissa (25 = ancien seuil %) —
+  hba1c: 25,
 };
 
 /** Extrait le premier nombre d'une saisie libre (gère la décimale française). */

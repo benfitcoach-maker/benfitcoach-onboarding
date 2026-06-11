@@ -79,8 +79,15 @@ jamais en advisory silencieux. Dans le doute, on sur-signale.
 
 ## Liste 2 — Plafonds de plausibilité des biomarqueurs
 
-**Statut : NON FIGÉE — plafonds en relecture par Anissa sur les valeurs réelles.**
+**Statut : 15 plafonds sanguins FIGÉS (validé Anissa le 2026-06-11, unités SI).
+EXCEPTION HbA1c NON figée — plafond mmol/mol en attente d'Anissa.**
 Fichier : `src/services/clinical/catalog/markers.js` (`MARKER_PLAUSIBLE_MAX`).
+
+Les 15 plafonds validés tels qu'ils figurent dans le fichier : crp_us 1000,
+ferritine 5000, fibrinogene 50, homocysteine 500, cortisol_matin 5000, tsh 300,
+t3_libre 100, t4_libre 200, insuline 2000, vit_d_25oh 1000, vit_b12 20000,
+transferrine_saturation 150, omega_3_index 100, glycemie_jeun 100,
+calprotectine 100000. À ne pas modifier sans nouvelle validation clinique.
 
 Nature : ce sont des **garde-fous anti-faute-de-saisie** (plafond de
 plausibilité), **pas** des seuils diagnostiques. Aucune interprétation, aucune
