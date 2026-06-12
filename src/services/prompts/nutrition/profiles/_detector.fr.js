@@ -73,7 +73,7 @@ function resolveAge(form) {
  *
  * @returns {'grossesse'|'allaitement'|'postPartum'|null}
  */
-function resolveMaternalState(form) {
+export function resolveMaternalState(form) {
   const f = form || {};
   // Valeur du champ (potentiellement combiné) grossesseActuelle, normalisée
   // (minuscule, sans espaces ni tirets) pour matcher "PostPartum"/"Post-partum".

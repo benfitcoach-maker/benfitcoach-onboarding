@@ -22,6 +22,8 @@
 //   pour compatibilité avec différentes sources (catalogue Ortho/MGD, résultats
 //   saisis manuellement, etc.).
 
+import { resolveMaternalState } from './profiles/_detector.fr.js';
+
 /**
  * Détermine si un clinicalContext est vide (rien à injecter).
  * @param {object | null | undefined} ctx
@@ -40,6 +42,39 @@ export function isEmptyClinicalContext(ctx) {
 }
 
 // ─── BLOC SÉCURITÉ CLINIQUE (P0.1 + P0.2, remède 2026-06-10) ────────
+
+/**
+ * Contraintes maternelles préventives, par état résolu (P0 Module 1, 2026-06-12).
+ *
+ * Contenu clinique validé Anissa — Module 1. Formulation des phrases injectées
+ * à relire par Anissa.
+ *
+ * Donnée déclarative isolée (pattern clinicalInteractions) : éditable, et
+ * destinée à migrer plus tard vers le registre Supabase. Injectée sur le chemin
+ * TOUJOURS ACTIF (buildSafetyBlockFr), pas via le composer OPT-IN.
+ *
+ * Post-partum : état DÉTECTÉ par resolveMaternalState mais SANS bloc en V1 —
+ * contraintes non encore définies. GAP CLINIQUE à compléter par Anissa.
+ */
+const MATERNAL_SAFETY_FR = {
+  grossesse: {
+    label: 'GROSSESSE en cours',
+    rules: [
+      'Pas de jeûne (ni intermittent ni prolongé).',
+      'Pas de restriction calorique agressive.',
+      "Vigilance vitamine A (éviter les apports/compléments à forte dose et les sources concentrées comme le foie).",
+      "Vigilance iode (besoins spécifiques — ne pas sur- ni sous-doser sans avis de la praticienne).",
+    ],
+  },
+  allaitement: {
+    label: 'ALLAITEMENT en cours',
+    rules: [
+      'Pas de restriction calorique agressive.',
+      "Vigilance supplémentation (toute supplémentation à valider avec la praticienne).",
+    ],
+  },
+  // postPartum : volontairement absent en V1 (gap clinique documenté ci-dessus).
+};
 
 /**
  * Construit le bloc « SÉCURITÉ CLINIQUE » injecté dans le system prompt de
@@ -67,11 +102,22 @@ export function buildSafetyBlockFr(form) {
   // `||` (et non `??`) pour que l'alias medicaments prenne le relais quand
   // traitements est une chaîne vide (et pas seulement null/undefined).
   const medications = String(form.traitements || form.medicaments || '').trim();
-  if (!allergies && !intolerances && !medications) return '';
+
+  // P0 maternel (Module 1) — calculé AVANT la garde précoce : une cliente
+  // enceinte/allaitante SANS allergie ni médicament doit quand même recevoir
+  // ses contraintes. Source = resolveMaternalState (lit le format in-app
+  // combiné ET le legacy séparé), pas les seuls champs legacy.
+  const maternal = resolveMaternalState(form);
+  const maternalRules = MATERNAL_SAFETY_FR[maternal] || null;
+
+  if (!allergies && !intolerances && !medications && !maternalRules) return '';
 
   const lines = [
     'SÉCURITÉ CLINIQUE — CONTRAINTES ABSOLUES (priorité sur toute autre consigne de ce prompt) :',
   ];
+  if (maternalRules) {
+    lines.push(`- ${maternalRules.label} — CONTRAINTES ABSOLUES : ${maternalRules.rules.join(' ')}`);
+  }
   if (allergies) {
     // Micro-correctif P0.1 (2026-06-10) : la traduction EN (P0.5) a révélé que
     // le titre FR portait moins de force que le corps — « À EXCLURE

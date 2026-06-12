@@ -81,3 +81,42 @@ describe('Sécurité — chemin EN', () => {
     expect(prompt).toContain(MED);
   });
 });
+
+// ─── P0 MATERNEL (Module 1) — miroir EN ───────────────────────────
+
+const maternalForm = (overrides = {}) => ({
+  prenom: 'Test',
+  genre: 'F',
+  age: 30,
+  ...overrides,
+});
+
+describe('P0 maternel — buildSafetyBlockEn (miroir)', () => {
+  it('Grossesse in-app : contraintes présentes sans allergie/médicament', () => {
+    const block = buildSafetyBlockEn(maternalForm({ grossesseActuelle: 'Grossesse' }));
+    expect(block).toContain('PREGNANCY');
+    expect(block).toMatch(/fasting/i);
+    expect(block).toMatch(/caloric restriction/i);
+    expect(block).toMatch(/vitamin A/i);
+    expect(block).toMatch(/iodine/i);
+  });
+
+  it('Allaitement in-app : contraintes allaitement présentes, grossesse absentes', () => {
+    const block = buildSafetyBlockEn(maternalForm({ grossesseActuelle: 'Allaitement' }));
+    expect(block).toContain('BREASTFEEDING');
+    expect(block).toMatch(/supplementation/i);
+    expect(block).not.toMatch(/fasting/i);
+    expect(block).not.toContain('PREGNANCY');
+  });
+
+  it('Post-partum : DÉTECTÉ mais aucun bloc en V1 (gap clinique)', () => {
+    const block = buildSafetyBlockEn(maternalForm({ grossesseActuelle: 'PostPartum' }));
+    expect(block).toBe('');
+  });
+
+  it('Chemin EN actif : buildSystemPromptEn injecte les contraintes grossesse', () => {
+    const prompt = buildSystemPromptEn(maternalForm({ grossesseActuelle: 'Grossesse' }), {});
+    expect(prompt).toContain('PREGNANCY');
+    expect(prompt).toMatch(/fasting/i);
+  });
+});

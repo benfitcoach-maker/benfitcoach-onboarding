@@ -94,3 +94,87 @@ describe('Sécurité — chemin classique', () => {
     expect(prompt).toContain(MED);
   });
 });
+
+// ─── P0 MATERNEL (Module 1) : contraintes préventives sur le chemin ACTIF ──
+//
+// Le chemin réellement actif en prod = composerBeta false → buildSystemPromptFr
+// (cf. WIRING.md, NutritionConsultation.jsx). Ces tests prouvent que le CANAL
+// RÉEL est protégé, pas seulement le composer OPT-IN. Source = resolveMaternalState,
+// donc le format in-app combiné (grossesseActuelle = "Grossesse"/"Allaitement")
+// est lu directement.
+
+// Cliente in-app SANS allergie ni médicament (le cas qui aurait court-circuité
+// la garde précoce avant le P0).
+const maternalForm = (overrides = {}) => ({
+  prenom: 'Test',
+  genre: 'F',
+  age: 30,
+  ...overrides,
+});
+
+describe('P0 maternel — buildSafetyBlockFr (source unique)', () => {
+  it('Grossesse in-app : contraintes présentes même sans allergie/médicament', () => {
+    const block = buildSafetyBlockFr(maternalForm({ grossesseActuelle: 'Grossesse' }));
+    expect(block).toContain('GROSSESSE');
+    expect(block).toMatch(/jeûne/i);
+    expect(block).toMatch(/restriction calorique/i);
+    expect(block).toMatch(/vitamine A/i);
+    expect(block).toMatch(/iode/i);
+  });
+
+  it('Allaitement in-app : contraintes allaitement présentes, grossesse absentes', () => {
+    const block = buildSafetyBlockFr(maternalForm({ grossesseActuelle: 'Allaitement' }));
+    expect(block).toContain('ALLAITEMENT');
+    expect(block).toMatch(/restriction calorique/i);
+    expect(block).toMatch(/supplémentation/i);
+    // Pas de contamination grossesse.
+    expect(block).not.toMatch(/jeûne/i);
+    expect(block).not.toMatch(/vitamine A/i);
+    expect(block).not.toContain('GROSSESSE');
+  });
+
+  it('Format legacy séparé (cockpit) : allaitement = "Oui" déclenche le bloc', () => {
+    const block = buildSafetyBlockFr(maternalForm({ allaitement: 'Oui' }));
+    expect(block).toContain('ALLAITEMENT');
+    expect(block).toMatch(/supplémentation/i);
+  });
+
+  it('Post-partum : DÉTECTÉ mais AUCUN bloc maternel en V1 (gap clinique)', () => {
+    const block = buildSafetyBlockFr(maternalForm({ grossesseActuelle: 'PostPartum' }));
+    // Pas de contrainte maternelle injectée, et pas de bloc sécurité vide forcé.
+    expect(block).not.toContain('GROSSESSE');
+    expect(block).not.toContain('ALLAITEMENT');
+    expect(block).toBe('');
+  });
+
+  it('Aucun état maternel : pas de bloc maternel (non-régression)', () => {
+    const block = buildSafetyBlockFr(maternalForm({ grossesseActuelle: 'Non' }));
+    expect(block).toBe('');
+  });
+});
+
+describe('P0 maternel — chemin ACTIF réel (composerBeta=false → buildSystemPromptFr)', () => {
+  it('Grossesse in-app : contraintes grossesse dans le prompt assemblé', () => {
+    const prompt = buildSystemPromptFr(maternalForm({ grossesseActuelle: 'Grossesse' }), {});
+    expect(prompt).toContain('GROSSESSE');
+    expect(prompt).toMatch(/jeûne/i);
+    expect(prompt).toMatch(/vitamine A/i);
+    expect(prompt).toMatch(/iode/i);
+  });
+
+  it('Allaitement in-app : contraintes allaitement dans le prompt, grossesse absentes', () => {
+    const prompt = buildSystemPromptFr(maternalForm({ grossesseActuelle: 'Allaitement' }), {});
+    expect(prompt).toContain('ALLAITEMENT');
+    expect(prompt).toMatch(/supplémentation/i);
+    expect(prompt).not.toMatch(/jeûne/i);
+  });
+
+  it('Maternel + allergène cumulés sur le chemin actif', () => {
+    const prompt = buildSystemPromptFr(
+      maternalForm({ grossesseActuelle: 'Grossesse', allergies: ALLERGEN }),
+      {},
+    );
+    expect(prompt).toContain('GROSSESSE');
+    expect(prompt).toContain(ALLERGEN);
+  });
+});

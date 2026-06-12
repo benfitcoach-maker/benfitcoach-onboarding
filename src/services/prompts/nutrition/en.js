@@ -12,6 +12,14 @@
 //  - Called only when getClientNutritionLocale(client) === 'EN'.
 
 import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './identity.en';
+// Exception justifiée à la règle « aucun import FR » : resolveMaternalState est
+// un résolveur PUREMENT STRUCTUREL (lit les champs du form, renvoie un tag
+// 'grossesse'|'allaitement'|'postPartum'|null) — il NE porte AUCUN texte FR,
+// donc zéro risque de bleed. On l'importe pour garder une SOURCE UNIQUE de la
+// logique de dispatch maternel (valeur, pas « non-vide » + piège anti-faux-
+// positif), au lieu de la dupliquer ici (risque de divergence sur un chemin de
+// sécurité). Le texte injecté reste 100 % local à ce fichier (MATERNAL_SAFETY_EN).
+import { resolveMaternalState } from './profiles/_detector.fr.js';
 
 // ─── SYSTEM PROMPT (identity + clinical rules + style) ───
 
@@ -889,6 +897,31 @@ OUTPUT FORMAT:
 // impérative (« ABSOLUTE CONSTRAINTS / override », « STRICTLY EXCLUDE »,
 // interdiction de toucher au traitement, signalement à la praticienne).
 // Fail-safe : retourne '' si aucune donnée de sécurité (ne throw jamais).
+//
+// P0 maternel (Module 1, 2026-06-12) — miroir EN de MATERNAL_SAFETY_FR.
+// Contenu clinique validé Anissa — Module 1. Formulation des phrases injectées
+// à relire par Anissa. Post-partum : DÉTECTÉ mais sans bloc en V1 (gap clinique
+// à compléter par Anissa).
+const MATERNAL_SAFETY_EN = {
+  grossesse: {
+    label: 'ONGOING PREGNANCY',
+    rules: [
+      'No fasting (neither intermittent nor prolonged).',
+      'No aggressive caloric restriction.',
+      'Vitamin A caution (avoid high-dose intakes/supplements and concentrated sources such as liver).',
+      'Iodine caution (specific needs — do not over- or under-dose without the practitioner\'s advice).',
+    ],
+  },
+  allaitement: {
+    label: 'ONGOING BREASTFEEDING',
+    rules: [
+      'No aggressive caloric restriction.',
+      'Supplementation caution (any supplementation to be validated with the practitioner).',
+    ],
+  },
+  // postPartum: intentionally absent in V1 (documented clinical gap).
+};
+
 export function buildSafetyBlockEn(form) {
   if (!form || typeof form !== 'object') return '';
   const allergies = String(form.allergies ?? '').trim();
@@ -896,11 +929,21 @@ export function buildSafetyBlockEn(form) {
   // `||` (et non `??`) pour que l'alias medicaments prenne le relais quand
   // traitements est une chaîne vide (et pas seulement null/undefined).
   const medications = String(form.traitements || form.medicaments || '').trim();
-  if (!allergies && !intolerances && !medications) return '';
+
+  // P0 maternel — calculé AVANT la garde précoce (cliente enceinte/allaitante
+  // sans allergie ni médicament doit recevoir ses contraintes). Source =
+  // resolveMaternalState (in-app combiné + legacy séparé).
+  const maternal = resolveMaternalState(form);
+  const maternalRules = MATERNAL_SAFETY_EN[maternal] || null;
+
+  if (!allergies && !intolerances && !medications && !maternalRules) return '';
 
   const lines = [
     'CLINICAL SAFETY — ABSOLUTE CONSTRAINTS (override every other instruction in this prompt):',
   ];
+  if (maternalRules) {
+    lines.push(`- ${maternalRules.label} — ABSOLUTE CONSTRAINTS: ${maternalRules.rules.join(' ')}`);
+  }
   if (allergies) {
     lines.push(`- DECLARED ALLERGENS — STRICTLY EXCLUDE: ${allergies}. Never include ANY of these foods — no derivative, no trace — in any menu, recipe, shopping list or supplement suggestion.`);
   }
