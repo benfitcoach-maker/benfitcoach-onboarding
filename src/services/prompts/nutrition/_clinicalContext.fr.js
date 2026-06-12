@@ -46,15 +46,15 @@ export function isEmptyClinicalContext(ctx) {
 /**
  * Contraintes maternelles préventives, par état résolu (P0 Module 1, 2026-06-12).
  *
- * Contenu clinique validé Anissa — Module 1. Formulation des phrases injectées
- * à relire par Anissa.
+ * Contenu clinique validé Anissa — Module 1. Formulation validée Anissa —
+ * 12 juin 2026 (phrases grossesse/allaitement approuvées telles qu'écrites).
  *
  * Donnée déclarative isolée (pattern clinicalInteractions) : éditable, et
  * destinée à migrer plus tard vers le registre Supabase. Injectée sur le chemin
  * TOUJOURS ACTIF (buildSafetyBlockFr), pas via le composer OPT-IN.
  *
  * Post-partum : état DÉTECTÉ par resolveMaternalState mais SANS bloc en V1 —
- * contraintes non encore définies. GAP CLINIQUE à compléter par Anissa.
+ * traité comme cliente standard par DÉCISION Anissa (12 juin 2026), pas un gap.
  */
 const MATERNAL_SAFETY_FR = {
   grossesse: {

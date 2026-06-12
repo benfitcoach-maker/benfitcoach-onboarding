@@ -899,9 +899,9 @@ OUTPUT FORMAT:
 // Fail-safe : retourne '' si aucune donnée de sécurité (ne throw jamais).
 //
 // P0 maternel (Module 1, 2026-06-12) — miroir EN de MATERNAL_SAFETY_FR.
-// Contenu clinique validé Anissa — Module 1. Formulation des phrases injectées
-// à relire par Anissa. Post-partum : DÉTECTÉ mais sans bloc en V1 (gap clinique
-// à compléter par Anissa).
+// Contenu clinique validé Anissa — Module 1. Formulation validée Anissa —
+// 12 juin 2026. Post-partum : DÉTECTÉ mais sans bloc en V1 — traité comme
+// cliente standard par DÉCISION Anissa (12 juin 2026), pas un gap.
 const MATERNAL_SAFETY_EN = {
   grossesse: {
     label: 'ONGOING PREGNANCY',
