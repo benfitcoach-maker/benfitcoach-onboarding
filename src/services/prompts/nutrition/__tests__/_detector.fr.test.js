@@ -60,6 +60,48 @@ describe('detectClientProfile — primary female profiles', () => {
     expect(r.primary).toBe('grossesse');
   });
 
+  // V97.34 — format COMBINE de l'app cliente (pre-questionnaire in-app) :
+  // un seul champ grossesseActuelle porte "Grossesse"/"Allaitement"/"PostPartum".
+  it('In-app : grossesseActuelle = "Grossesse" -> grossesse', () => {
+    const r = detectClientProfile(baseFemme({ age: 30, grossesseActuelle: 'Grossesse' }));
+    expect(r.primary).toBe('grossesse');
+  });
+
+  it('In-app : grossesseActuelle = "Allaitement" -> allaitement', () => {
+    const r = detectClientProfile(baseFemme({ age: 32, grossesseActuelle: 'Allaitement' }));
+    expect(r.primary).toBe('allaitement');
+  });
+
+  it('In-app : grossesseActuelle = "PostPartum" -> postPartum', () => {
+    const r = detectClientProfile(baseFemme({ age: 33, grossesseActuelle: 'PostPartum' }));
+    expect(r.primary).toBe('postPartum');
+  });
+
+  // CAS PIEGE (verrou anti-faux-positif) : dans le format combine, "Allaitement"
+  // n'est PAS "Non" — un test paresseux `grossesseActuelle !== 'Non'` taguerait
+  // grossesse. Le dispatch par valeur doit l'en empecher.
+  it('In-app : "Allaitement" ne doit PAS declencher grossesse', () => {
+    const r = detectClientProfile(baseFemme({ age: 32, grossesseActuelle: 'Allaitement' }));
+    expect(r.primary).not.toBe('grossesse');
+  });
+
+  it('In-app : "PostPartum" ne doit PAS declencher grossesse', () => {
+    const r = detectClientProfile(baseFemme({ age: 33, grossesseActuelle: 'PostPartum' }));
+    expect(r.primary).not.toBe('grossesse');
+  });
+
+  it('In-app : "Non" reste sans profil maternel (femmeCycle par defaut)', () => {
+    const r = detectClientProfile(baseFemme({ age: 30, grossesseActuelle: 'Non' }));
+    expect(r.primary).toBe('femmeCycle');
+  });
+
+  // Filet objectif : "enceinte" ecrit dans objectif_primaire (nom in-app) doit
+  // etre rattrape par le scan texte libre (auparavant debranche).
+  it('In-app : "enceinte" dans objectif_primaire -> grossesse (filet texte)', () => {
+    const r = detectClientProfile(baseFemme({ age: 30, objectif_primaire: 'je suis enceinte de 3 mois' }));
+    expect(r.primary).toBe('grossesse');
+  });
+
   it('Menopause via age + cycle absent + derniere regle > 12 mois', () => {
     const r = detectClientProfile(baseFemme({
       age: 54, cycleRegulier: 'non', derniereRegle: 'plus_12_mois',

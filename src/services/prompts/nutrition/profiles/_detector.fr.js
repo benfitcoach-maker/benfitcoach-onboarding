@@ -53,6 +53,48 @@ function resolveAge(form) {
 }
 
 /**
+ * V97.34 (réconciliation schéma in-app ↔ détecteur, 2026-06-12) — résout
+ * l'état maternel depuis DEUX formats d'entrée, sans en privilégier un :
+ *   - legacy (cockpit AnissaClientForm / fallback QuestionnaireClient) :
+ *     champs SÉPARÉS grossesseActuelle / allaitement / postPartum = "Oui"/"Non".
+ *   - in-app (pré-questionnaire app cliente, lib/questionnaire-schema.ts) :
+ *     UN champ combiné grossesseActuelle = "Non" | "Grossesse" | "Allaitement"
+ *     | "PostPartum".
+ *
+ * DISPATCH PAR VALEUR, jamais "non-vide" : dans le format in-app le même champ
+ * grossesseActuelle porte aussi "Allaitement"/"PostPartum". Un test paresseux
+ * `grossesseActuelle !== 'Non'` classerait une femme ALLAITANTE comme enceinte
+ * (faux positif inverse, défaut de sécurité dans l'autre sens). On lit donc la
+ * valeur explicitement.
+ *
+ * STRICTEMENT ADDITIF : 'oui' reste mappé vers grossesse (cockpit/fallback
+ * legacy préservés) ; on n'ajoute QUE la reconnaissance des libellés combinés.
+ * Précédence : grossesse > allaitement > postPartum.
+ *
+ * @returns {'grossesse'|'allaitement'|'postPartum'|null}
+ */
+function resolveMaternalState(form) {
+  const f = form || {};
+  // Valeur du champ (potentiellement combiné) grossesseActuelle, normalisée
+  // (minuscule, sans espaces ni tirets) pour matcher "PostPartum"/"Post-partum".
+  const ga = lc(f.grossesseActuelle).replace(/[\s-]/g, '');
+
+  // grossesse — legacy "Oui" OU combiné "Grossesse" OU alias legacy f.grossesse.
+  if (ga === 'oui' || ga === 'grossesse' || lc(f.grossesse) === 'oui') {
+    return 'grossesse';
+  }
+  // allaitement — combiné "Allaitement" OU champ legacy séparé f.allaitement.
+  if (ga === 'allaitement' || lc(f.allaitement) === 'oui') {
+    return 'allaitement';
+  }
+  // post-partum — combiné "PostPartum" OU champ legacy séparé f.postPartum.
+  if (ga === 'postpartum' || lc(f.postPartum) === 'oui') {
+    return 'postPartum';
+  }
+  return null;
+}
+
+/**
  * Detect the PRIMARY hormonal/life-stage profile (max 1 per client).
  * Order of precedence : grossesse > allaitement > menopause > perimenopause >
  * femmeCycle. Returns null for men or when no primary profile applies.
@@ -74,21 +116,28 @@ function detectPrimaryFemaleProfile(form) {
   // V96.17 — Grossesse / allaitement / post-partum : modules dedies disponibles.
   // V96.18 — champs structures `grossesseActuelle`, `allaitement`, `postPartum`
   // prioritaires sur regex texte (anamnese formalisee).
+  // V97.34 — objectif_primaire / dureeProbleme (noms émis par le pré-q in-app)
+  // ajoutés au scan texte libre EN PLUS de objectifPrincipal (legacy), pas en
+  // remplacement : le filet regex (« enceinte » écrit dans l'objectif) était
+  // débranché par le décalage de nom. Additif.
   const allText = [
     f.pathologies, f.objectifPrincipalNutrition, f.objectifPrincipal,
+    f.objectif_primaire, f.dureeProbleme,
     f.commentaires, f.commentaire, f.notes, f.symptomes, f.contexteEmotionnel,
   ].filter(Boolean).map(lc).join(' | ');
 
-  if (lc(f.grossesseActuelle) === 'oui'
-    || lc(f.grossesse) === 'oui'
+  // V97.34 — état maternel résolu depuis legacy ET combiné in-app (cf.
+  // resolveMaternalState). Le second terme regex reste le filet texte libre.
+  const maternal = resolveMaternalState(f);
+  if (maternal === 'grossesse'
     || /\benceinte\b|\bgrossesse\b|trimestre\s*[123]|t[123]\s*grossesse|\bsemaine\s*amenorrh/i.test(allText)) {
     return { tag: 'grossesse', blocked: false };
   }
-  if (lc(f.allaitement) === 'oui'
+  if (maternal === 'allaitement'
     || /\ballait|\bteta?ee|\bteter\b|consultante\s*lactation|\bdiversification/i.test(allText)) {
     return { tag: 'allaitement', blocked: false };
   }
-  if (lc(f.postPartum) === 'oui'
+  if (maternal === 'postPartum'
     || /post.?partum|post.?accouch|apres\s*accouch|sevrage\s*allait|\bcouches\b/i.test(allText)) {
     return { tag: 'postPartum', blocked: false };
   }
