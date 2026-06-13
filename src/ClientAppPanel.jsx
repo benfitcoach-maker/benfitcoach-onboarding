@@ -292,19 +292,21 @@ function OverviewTab({
 
   const mode = getNutritionPlanMode(client);
   const modeLabel = planModeLabel(mode);
-  // V94.46 → V94.53 : 4 sources de verite combinees pour determiner l'acces.
+  // V94.46 → V94.53 : sources de verite combinees pour determiner l'acces.
   //   1. apiFound : l'API distante confirme (canonique, mais cache 60s)
   //   2. appEnabled : flag SaaS cote profil cliente
   //   3. publishedLocally : trace SaaS de publication reussie (V94.52)
-  //   4. presumedFromPlan : cliente avec plan redige et id → presomption
-  //      raisonnable qu'elle a ete publiee au moins une fois (resout
-  //      tous les edge cases : email mismatch staging, cache stale,
-  //      backfill manuel DB sans repasser par publish, etc.)
+  //   4. planVisible : VÉRITÉ PLAN renvoyee par clients-status (source unique
+  //      lib/plan-visibility). Remplace l'ancien `presumedFromPlan` qui
+  //      presumait l'acces a partir d'un simple plan REDIGE (faux positif :
+  //      un brouillon non publie n'est pas visible cote cliente). plan_visible
+  //      n'est vrai que si un plan published/archived existe ET le compte est
+  //      actif — donc plus de fausse presomption.
   const apiFound = !!status?.found;
   const appEnabled = !!(client?.app_enabled ?? client?.appEnabled);
   const publishedLocally = hasBeenPublishedLocally(client?.id);
-  const presumedFromPlan = !!(hasPlan && client?.id);
-  const hasAppAccess = apiFound || appEnabled || publishedLocally || presumedFromPlan;
+  const planVisible = !!status?.plan_visible;
+  const hasAppAccess = apiFound || appEnabled || publishedLocally || planVisible;
   const lastLoginAt = status?.last_login_at || null;
   const lastActivityAt = status?.last_activity_at || null;
   const feedbacks7d = status?.feedbacks_7d_count || 0;
