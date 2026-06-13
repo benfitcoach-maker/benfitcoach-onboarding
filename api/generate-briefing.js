@@ -9,9 +9,10 @@
 //   préparation clinique.
 //
 // SÉCURITÉ
-//   - Endpoint protégé : nécessite Bearer admin OU appel server-side.
-//     V1 : on accepte body { clientId, adminSecret } avec un secret partagé
-//     pour rester simple. Le SaaS UI passera adminSecret depuis env.
+//   - V97.34 : endpoint appelé par le FRONTEND SaaS (Anissa), pas par l'app
+//     cliente. Protégé par requireSaaSAdmin → valide le JWT de session
+//     Supabase d'Anissa côté serveur (GoTrue) + allowlist email admin.
+//     PAS de CLIENT_APP_ADMIN_SECRET ici (jamais exposé au navigateur, V96.35).
 //   - Output stocké dans clients.form.ia_briefing (JSONB, pas de migration).
 //   - Versioning explicite (briefing_version + prompt_version + generated_at)
 //     pour pouvoir comparer les versions et invalider les briefings périmés.
@@ -48,7 +49,7 @@ const BRIEFING_VERSION = 'v1';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 // V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
-import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
+import { setCorsHeaders, requireSaaSAdmin, devDetails } from './_security.js';
 
 // ─── System prompt (versionné — PROMPT_VERSION) ────────────────────────
 const SYSTEM_PROMPT = `Tu es un assistant clinique préparatoire pour Anissa Deroubaix, nutritionniste fonctionnelle (TCMA Genève, école de praticienne en nutrition). Tu prépares un briefing court pour aider Anissa à arriver mieux préparée à son RDV d'anamnèse de 1h avec une nouvelle cliente.
@@ -157,10 +158,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // V97.24.6 (audit critical fix CRIT-2) — Bearer admin obligatoire.
-  // Avant ce patch, n'importe qui pouvait POST avec un clientId valide pour
-  // lire le questionnaire sante + declencher un call Claude facture Anissa.
-  const auth = requireAdminAuth(req);
+  // V97.24.6 (audit critical fix CRIT-2) — auth obligatoire : sans elle,
+  // n'importe qui pouvait POST un clientId pour lire le questionnaire sante +
+  // declencher un call Claude facture Anissa.
+  // V97.34 : requireSaaSAdmin (session Anissa) remplace requireAdminAuth ici —
+  // cet endpoint est appele par le frontend SaaS, pas par l'app cliente.
+  const auth = await requireSaaSAdmin(req);
   if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
   // ── Parse body
