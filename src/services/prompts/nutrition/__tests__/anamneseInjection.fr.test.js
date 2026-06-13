@@ -20,11 +20,15 @@ describe('Restrictions FR — 3 natures distinctes', () => {
     expect(block).toMatch(/ne pas sur-restreindre/i);
   });
 
-  it('Préférence (Végan) : best-effort + exemple anti-sur-restriction végan', () => {
+  it('Préférence (Végan) : best-effort + gradation « éviter » + anti-sur-restriction végan', () => {
     const block = buildSafetyBlockFr(baseForm({ restrictionsAlimentaires: ['vegan'] }));
     expect(block).toContain('préférence');
     expect(block).toContain('Végan');
     expect(block).toMatch(/autant que possible/i);
+    // Gradation Anissa : préférence = « éviter de proposer » (souple), PAS l'absolu
+    // religieux « ne jamais proposer ».
+    expect(block).toMatch(/éviter de proposer des aliments incompatibles/i);
+    expect(block).not.toMatch(/ne jamais proposer/i);
     expect(block).toMatch(/n'exclut QUE les produits animaux/i);
     // Pas la formule religieuse impérative sur une simple préférence.
     expect(block).not.toMatch(/RESTRICTIONS RELIGIEUSES/);
@@ -33,13 +37,13 @@ describe('Restrictions FR — 3 natures distinctes', () => {
   it('Ramadan (timing, champ dédié ramadanActif) : 5 contraintes fusionnées, PAS « aliment incompatible »', () => {
     const block = buildSafetyBlockFr(baseForm({ ramadanActif: true }));
     expect(block).toContain('RAMADAN');
-    // Les 5 contraintes fusionnées (validations Anissa).
-    expect(block).toMatch(/fenêtre alimentaire/i);            // 1. fenêtre
-    expect(block).toMatch(/maintenir les apports énergétiques/i); // 2. maintien apports
-    expect(block).toMatch(/ne pas réduire automatiquement les calories/i);
+    // Les 5 contraintes fusionnées (validations Anissa, version scellée).
+    expect(block).toMatch(/fenêtre autorisée/i);              // 1. fenêtre
+    expect(block).toMatch(/redistribuer les apports sur cette fenêtre/i); // 2. redistribution active
+    expect(block).toMatch(/sans diminuer les apports énergétiques/i);
     expect(block).toMatch(/hydratation/i);                    // 3. hydratation
     expect(block).toMatch(/hypocaloriques agressives/i);      // 4. anti-hypocalorique
-    expect(block).toMatch(/jamais ajouter de protocole de jeûne supplémentaire/i); // 5. pas de jeûne en plus
+    expect(block).toMatch(/jamais ajouter de jeûne supplémentaire/i); // 5. pas de jeûne en plus
     // Ramadan ne déclenche PAS la phrase d'exclusion religieuse.
     expect(block).not.toMatch(/ne jamais proposer volontairement un aliment incompatible/i);
   });

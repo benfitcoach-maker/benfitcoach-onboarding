@@ -941,10 +941,12 @@ const MATERNAL_SAFETY_EN = {
 // manually toggled by the practitioner). Lesson: do not fuse a different nature
 // into a single treatment.
 //
-// Clinical content validated by Anissa — wording to be reviewed one last time
-// before sealing (same ritual as the P0 pregnancy phrases). Anti-over-restriction:
-// each phrase frames the constraint WITHOUT pushing the AI to drop compatible
-// foods out of excessive zeal. Same nuance as FR, not a watered-down translation.
+// Wording validated by Anissa — 13 June 2026 (sealed, same ritual as the P0
+// pregnancy phrases). Anti-over-restriction: each phrase frames the constraint
+// WITHOUT pushing the AI to drop compatible foods out of excessive zeal. Same
+// nuance as FR, not a watered-down translation. Anissa's intended gradation:
+// religious = absolute ("never voluntarily propose"); preference = strong but
+// soft ("respect as much as possible and avoid proposing").
 function buildRestrictionsLinesEn(form) {
   const r = resolveRestrictions(form);
   if (!hasRestrictions(r)) return [];
@@ -958,7 +960,7 @@ function buildRestrictionsLinesEn(form) {
   if (r.preference.length > 0 || r.autreText) {
     const labels = r.preference.map((x) => x.labelEn);
     if (r.autreText) labels.push(r.autreText);
-    lines.push(`- DIETARY RESTRICTIONS (preference) declared: ${labels.join(', ')}. Respect these choices as much as possible: do not propose any incompatible food. Stay within the normal scope of the diet, without restricting beyond it — a vegan diet excludes ONLY animal products, not compatible plant foods.`);
+    lines.push(`- DIETARY RESTRICTIONS (preference) declared: ${labels.join(', ')}. Respect these choices as much as possible and avoid proposing incompatible foods. Stay within the normal scope of the diet, without restricting beyond it. A vegan diet excludes ONLY animal products, not compatible plant foods.`);
   }
 
   return lines;
@@ -966,18 +968,18 @@ function buildRestrictionsLinesEn(form) {
 
 // Ramadan (temporary TIMING state, manually toggled via ramadanActif). Distinct
 // from permanent restrictions: not a food exclusion but a meal-structure
-// constraint. Phrase fusing Anissa's two validations (eating window + intake
-// maintenance). Clinical content validated by Anissa — wording to review before
-// sealing. EN mirror of buildRamadanLineFr (same 5 constraints, not watered down).
+// constraint. Phrase fusing Anissa's two validations (eating window + ACTIVE
+// redistribution of intake across the window, not merely "do not reduce").
+// Wording validated by Anissa — 13 June 2026. EN mirror of buildRamadanLineFr
+// (same 5 constraints, not watered down).
 function buildRamadanLineEn(form) {
   if (!isRamadanActive(form)) return '';
-  return `- RAMADAN in progress (fast observed) — TIMING CONSTRAINTS: structure meals within the allowed eating window (before dawn and after sunset); maintain energy intake across the day (do not automatically reduce calories); reinforce hydration vigilance during non-fasting hours; avoid aggressive hypocaloric strategies; never add any additional fasting protocol (intermittent or prolonged) on top of the Ramadan fast.`;
+  return `- RAMADAN in progress (fast observed) — TIMING CONSTRAINTS: structure meals within the allowed eating window (before dawn and after sunset); redistribute intake across this window without reducing daily energy intake; reinforce hydration vigilance during non-fasting hours; avoid aggressive hypocaloric strategies; never add any additional fast on top of the Ramadan fast.`;
 }
 
-// Supplements already taken (anti-duplication). Clinical content validated by
-// Anissa — wording to review before sealing. Injected into the AI context (not
-// display only): without it the AI recommends duplicates of what the client
-// already takes.
+// Supplements already taken (anti-duplication). Wording validated by Anissa —
+// 13 June 2026. Injected into the AI context (not display only): without it the
+// AI recommends duplicates of what the client already takes.
 function buildComplementsActuelsLineEn(form) {
   const liste = formatComplementsActuels(form);
   if (!liste) return '';
@@ -986,7 +988,7 @@ function buildComplementsActuelsLineEn(form) {
 
 // Openness to supplements (3-level enum). SOFT directive (preference, not a
 // safety constraint) → injected outside the safety block, in buildSystemPromptEn.
-// Content validated by Anissa (3 labels); directive wording to review before sealing.
+// Content validated by Anissa (3 labels); directive wording validated by Anissa — 13 June 2026.
 const OUVERTURE_DIRECTIVE_EN = Object.freeze({
   eviter: `OPENNESS TO SUPPLEMENTS: the client prefers to avoid supplements (FR: « ${OUVERTURE_COMPLEMENTS.eviter} »). Favour intake through food; only suggest a supplement when it is genuinely essential, and justify it.`,
   si_necessaire: `OPENNESS TO SUPPLEMENTS: the client is open if needed (FR: « ${OUVERTURE_COMPLEMENTS.si_necessaire} »). Propose supplements only when they bring a clear benefit.`,

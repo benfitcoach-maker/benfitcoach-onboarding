@@ -91,10 +91,11 @@ const MATERNAL_SAFETY_FR = {
 // ramadanActif, activé manuellement par la praticienne). Leçon : ne pas fondre
 // une nature différente dans un traitement unique.
 //
-// Contenu validé Anissa — formulation à relire une dernière fois avant
-// scellement (même rituel que le P0 grossesse). Anti-sur-restriction : chaque
-// phrase cadre la contrainte SANS pousser l'IA à éliminer des aliments
-// compatibles par excès de zèle.
+// Formulation validée Anissa — 13 juin 2026 (scellée, même rituel que le P0
+// grossesse). Anti-sur-restriction : chaque phrase cadre la contrainte SANS
+// pousser l'IA à éliminer des aliments compatibles par excès de zèle. Gradation
+// voulue par Anissa : religieux = absolu (« ne jamais proposer ») ; préférence =
+// fort mais souple (« respecter au mieux et éviter de proposer »).
 function buildRestrictionsLinesFr(form) {
   const r = resolveRestrictions(form);
   if (!hasRestrictions(r)) return [];
@@ -108,7 +109,7 @@ function buildRestrictionsLinesFr(form) {
   if (r.preference.length > 0 || r.autreText) {
     const labels = r.preference.map((x) => x.label);
     if (r.autreText) labels.push(r.autreText);
-    lines.push(`- RESTRICTIONS ALIMENTAIRES (préférence) déclarées : ${labels.join(', ')}. Respecter ces choix autant que possible : ne pas proposer d'aliment incompatible. Rester dans le périmètre normal du régime, sans restreindre au-delà — un régime végan n'exclut QUE les produits animaux, pas les aliments végétaux compatibles.`);
+    lines.push(`- RESTRICTIONS ALIMENTAIRES (préférence) déclarées : ${labels.join(', ')}. Respecter ces choix autant que possible et éviter de proposer des aliments incompatibles. Rester dans le périmètre normal du régime, sans restreindre au-delà. Un régime végan n'exclut QUE les produits animaux, pas les aliments végétaux compatibles.`);
   }
 
   return lines;
@@ -117,15 +118,15 @@ function buildRestrictionsLinesFr(form) {
 // Ramadan (état temporaire de TIMING, activé manuellement via ramadanActif).
 // Distinct des restrictions permanentes : pas une exclusion d'aliment mais une
 // contrainte de structure des repas. Phrase fusionnant les deux validations
-// Anissa (fenêtre alimentaire + maintien des apports). Contenu validé Anissa —
-// formulation à relire avant scellement.
+// Anissa (fenêtre alimentaire + REDISTRIBUTION active des apports sur la fenêtre,
+// pas seulement « ne pas réduire »). Formulation validée Anissa — 13 juin 2026.
 function buildRamadanLineFr(form) {
   if (!isRamadanActive(form)) return '';
-  return `- RAMADAN en cours (jeûne observé) — CONTRAINTES DE TIMING : structurer les repas dans la fenêtre alimentaire autorisée (avant l'aube et après le coucher du soleil) ; maintenir les apports énergétiques sur la journée (ne pas réduire automatiquement les calories) ; renforcer la vigilance sur l'hydratation pendant les heures sans jeûne ; éviter les stratégies hypocaloriques agressives ; ne jamais ajouter de protocole de jeûne supplémentaire (intermittent ou prolongé) par-dessus le jeûne du Ramadan.`;
+  return `- RAMADAN en cours (jeûne observé) — CONTRAINTES DE TIMING : structurer les repas dans la fenêtre autorisée (avant l'aube et après le coucher du soleil) ; redistribuer les apports sur cette fenêtre sans diminuer les apports énergétiques quotidiens ; renforcer la vigilance hydratation ; éviter les stratégies hypocaloriques agressives ; ne jamais ajouter de jeûne supplémentaire par-dessus le jeûne du Ramadan.`;
 }
 
-// Compléments déjà pris (anti-doublon). Contenu validé Anissa — formulation à
-// relire avant scellement. Injecté dans le contexte IA (pas affichage seul) :
+// Compléments déjà pris (anti-doublon). Formulation validée Anissa —
+// 13 juin 2026. Injecté dans le contexte IA (pas affichage seul) :
 // sans cette ligne, l'IA recommande des compléments en doublon de ce que la
 // cliente prend déjà (trou structurel constaté : form.supplements n'atteignait
 // aucun prompt avant V1).
@@ -137,8 +138,8 @@ function buildComplementsActuelsLineFr(form) {
 
 // Ouverture aux compléments (enum 3 niveaux). Directive SOUPLE (préférence, pas
 // contrainte de sécurité) → injectée hors bloc sécurité, dans buildSystemPromptFr.
-// Contenu validé Anissa sur le fond (3 libellés) ; formulation de la directive à
-// relire avant scellement.
+// Contenu validé Anissa sur le fond (3 libellés) ; formulation de la directive
+// validée Anissa — 13 juin 2026.
 const OUVERTURE_DIRECTIVE_FR = Object.freeze({
   eviter: `OUVERTURE AUX COMPLÉMENTS : la cliente préfère éviter les compléments (« ${OUVERTURE_COMPLEMENTS.eviter} »). Privilégier les apports par l'alimentation ; ne suggérer un complément que s'il est réellement essentiel, en le justifiant.`,
   si_necessaire: `OUVERTURE AUX COMPLÉMENTS : la cliente est ouverte si nécessaire (« ${OUVERTURE_COMPLEMENTS.si_necessaire} »). Proposer des compléments uniquement lorsqu'ils apportent un bénéfice clair.`,

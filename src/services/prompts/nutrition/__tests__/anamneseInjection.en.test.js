@@ -23,10 +23,14 @@ describe('Restrictions EN — 3 natures distinctes', () => {
     expect(block).not.toContain('Casher');
   });
 
-  it('Preference (Vegan) : best-effort + clause anti-over-restriction vegan', () => {
+  it('Preference (Vegan) : best-effort + gradation « avoid proposing » + anti-over-restriction', () => {
     const block = buildSafetyBlockEn(baseForm({ restrictionsAlimentaires: ['vegan'] }));
     expect(block).toContain('Vegan');
     expect(block).toMatch(/as much as possible/i);
+    // Gradation préservée à la traduction : « avoid proposing » (souple), PAS
+    // « do not propose » (qui rétablirait la fermeté religieuse).
+    expect(block).toMatch(/avoid proposing incompatible foods/i);
+    expect(block).not.toMatch(/never voluntarily propose/i);
     expect(block).toMatch(/excludes ONLY animal products/i);
     expect(block).not.toMatch(/RELIGIOUS RESTRICTIONS/);
   });
@@ -35,11 +39,11 @@ describe('Restrictions EN — 3 natures distinctes', () => {
     const block = buildSafetyBlockEn(baseForm({ ramadanActif: true }));
     expect(block).toContain('RAMADAN');
     expect(block).toMatch(/eating window/i);                  // 1. window
-    expect(block).toMatch(/maintain energy intake/i);         // 2. intake
-    expect(block).toMatch(/do not automatically reduce calories/i);
+    expect(block).toMatch(/redistribute intake across this window/i); // 2. active redistribution
+    expect(block).toMatch(/without reducing daily energy intake/i);
     expect(block).toMatch(/hydration/i);                      // 3. hydration
     expect(block).toMatch(/aggressive hypocaloric strategies/i); // 4. anti-hypocaloric
-    expect(block).toMatch(/never add any additional fasting protocol/i); // 5. no extra fast
+    expect(block).toMatch(/never add any additional fast/i);  // 5. no extra fast
     expect(block).not.toMatch(/never voluntarily propose a food incompatible/i);
   });
 
