@@ -3314,6 +3314,12 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
             if (!window.confirm(formatClearanceForConfirm(pubErr.verdict))) {
               return;
             }
+            // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+            const { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } = await import('./services/clinicalOverrideAudit');
+            void traceClinicalOverride(pubErr.verdict, CLINICAL_OVERRIDE_DOORS.PUBLISH_APP, {
+              clientId: client?.id,
+              consultationId: consultForPublish?.id,
+            });
             await publishConsultationToClientApp(client, consultForPublish, null, { clinicalOverride: true });
           } else {
             throw pubErr;

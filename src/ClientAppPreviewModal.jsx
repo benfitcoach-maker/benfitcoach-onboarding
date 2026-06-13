@@ -29,6 +29,7 @@ import {
   PublishClinicalError,
 } from './services/publishToClientApp';
 import { formatClearanceForConfirm } from './services/clinicalClearance';
+import { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } from './services/clinicalOverrideAudit';
 import {
   enrichClientAppPlan,
   applyEnrichmentToPlan,
@@ -130,6 +131,11 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
             setConfirmingPublish(false);
             return;
           }
+          // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+          void traceClinicalOverride(err.verdict, CLINICAL_OVERRIDE_DOORS.PUBLISH_APP, {
+            clientId: client?.id,
+            consultationId: localConsultation?.id,
+          });
           res = await publishConsultationToClientApp(client, localConsultation, enrichmentApplied, { ...options, clinicalOverride: true });
         } else {
           throw err;

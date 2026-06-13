@@ -21,6 +21,7 @@ import { publishConsultationToClientApp, PublishClinicalError } from '../service
 import { diffLines, diffStats } from '../services/textDiff';
 // P1.3 (remède sécurité clinique) — affichage verdict clairance + override conscient.
 import { clearanceBadge, formatClearanceForConfirm } from '../services/clinicalClearance';
+import { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } from '../services/clinicalOverrideAudit';
 
 export default function PendingDraftsPanel({ onClose, clientsById }) {
   const [loading, setLoading] = useState(true);
@@ -119,6 +120,11 @@ export default function PendingDraftsPanel({ onClose, clientsById }) {
         // pas sur le seul affichage du panel.
         if (pe instanceof PublishClinicalError) {
           if (window.confirm(formatClearanceForConfirm(pe.verdict))) {
+            // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+            void traceClinicalOverride(pe.verdict, CLINICAL_OVERRIDE_DOORS.PUBLISH_APP, {
+              clientId: client?.id,
+              consultationId: consultation?.id,
+            });
             try {
               await publishConsultationToClientApp(client, consultation, null, { clinicalOverride: true });
               publishedOk = true;
