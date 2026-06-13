@@ -30,14 +30,23 @@ describe('Restrictions FR — 3 natures distinctes', () => {
     expect(block).not.toMatch(/RESTRICTIONS RELIGIEUSES/);
   });
 
-  it('Ramadan (timing) : structure des repas + hydratation, PAS « aliment incompatible »', () => {
-    const block = buildSafetyBlockFr(baseForm({ restrictionsAlimentaires: ['ramadan'] }));
+  it('Ramadan (timing, champ dédié ramadanActif) : 5 contraintes fusionnées, PAS « aliment incompatible »', () => {
+    const block = buildSafetyBlockFr(baseForm({ ramadanActif: true }));
     expect(block).toContain('RAMADAN');
-    expect(block).toMatch(/fenêtre alimentaire/i);
-    expect(block).toMatch(/hydratation/i);
-    expect(block).toMatch(/Ne réduis pas automatiquement les apports/i);
+    // Les 5 contraintes fusionnées (validations Anissa).
+    expect(block).toMatch(/fenêtre alimentaire/i);            // 1. fenêtre
+    expect(block).toMatch(/maintenir les apports énergétiques/i); // 2. maintien apports
+    expect(block).toMatch(/ne pas réduire automatiquement les calories/i);
+    expect(block).toMatch(/hydratation/i);                    // 3. hydratation
+    expect(block).toMatch(/hypocaloriques agressives/i);      // 4. anti-hypocalorique
+    expect(block).toMatch(/jamais ajouter de protocole de jeûne supplémentaire/i); // 5. pas de jeûne en plus
     // Ramadan ne déclenche PAS la phrase d'exclusion religieuse.
     expect(block).not.toMatch(/ne jamais proposer volontairement un aliment incompatible/i);
+  });
+
+  it('Le code legacy « ramadan » dans restrictionsAlimentaires NE déclenche PAS la ligne Ramadan', () => {
+    const block = buildSafetyBlockFr(baseForm({ restrictionsAlimentaires: ['ramadan'] }));
+    expect(block).not.toContain('RAMADAN');
   });
 
   it('restrictionsAutre (texte libre) classé en préférence', () => {
@@ -46,8 +55,8 @@ describe('Restrictions FR — 3 natures distinctes', () => {
     expect(block).toContain('pas de crustacés');
   });
 
-  it('Cumul des 3 natures : 3 lignes distinctes', () => {
-    const block = buildSafetyBlockFr(baseForm({ restrictionsAlimentaires: ['casher', 'vegetarien', 'ramadan'] }));
+  it('Cumul des 3 natures (religieux + préférence + Ramadan dédié) : lignes distinctes', () => {
+    const block = buildSafetyBlockFr(baseForm({ restrictionsAlimentaires: ['casher', 'vegetarien'], ramadanActif: true }));
     expect(block).toContain('RESTRICTIONS RELIGIEUSES');
     expect(block).toContain('Casher');
     expect(block).toContain('RAMADAN');

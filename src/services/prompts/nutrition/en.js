@@ -25,7 +25,7 @@ import { resolveMaternalState } from './profiles/_detector.fr.js';
 // par priorité, libellé EN, format de liste, code d'ouverture). Aucun texte FR
 // injecté n'en sort — les PHRASES EN restent 100 % locales à ce fichier.
 import { resolveRestrictions, hasRestrictions } from './restrictions.fr.js';
-import { formatComplementsActuels, resolveOuvertureComplements, OUVERTURE_COMPLEMENTS } from './anamneseFoundation.js';
+import { formatComplementsActuels, resolveOuvertureComplements, OUVERTURE_COMPLEMENTS, isRamadanActive } from './anamneseFoundation.js';
 
 // ─── SYSTEM PROMPT (identity + clinical rules + style) ───
 
@@ -932,10 +932,14 @@ const MATERNAL_SAFETY_EN = {
 //
 // EN mirror of buildRestrictionsLinesFr. DISTINCT from the allergen gate (an
 // allergy is a blocking MEDICAL gate; a restriction is BEHAVIOURAL/preventive).
-// Three natures, three treatments (cf. restrictions.fr.js):
+// PERMANENT restrictions only (two natures, two treatments, cf. restrictions.fr.js):
 //   religieux  → never voluntarily propose an incompatible food
 //   preference → best-effort, do not over-restrict
-//   timing     → meal STRUCTURE (Ramadan), not a food exclusion
+//
+// Ramadan is NOT here: it is a TEMPORARY timing state, injected separately by
+// buildRamadanLineEn, gated on isRamadanActive (dedicated ramadanActif field,
+// manually toggled by the practitioner). Lesson: do not fuse a different nature
+// into a single treatment.
 //
 // Clinical content validated by Anissa — wording to be reviewed one last time
 // before sealing (same ritual as the P0 pregnancy phrases). Anti-over-restriction:
@@ -951,11 +955,6 @@ function buildRestrictionsLinesEn(form) {
     lines.push(`- RELIGIOUS RESTRICTIONS declared: ${labels}. Never voluntarily propose a food incompatible with these restrictions — in no menu, recipe, shopping list or supplement suggestion. These restrictions limit ONLY incompatible foods: every compatible food remains fully usable (do not over-restrict).`);
   }
 
-  // Ramadan (timing): meal structure, never treated as a food exclusion.
-  if (r.timing.length > 0) {
-    lines.push(`- RAMADAN: If the client observes Ramadan, adapt the meal structure to the allowed eating window: meals before dawn and after sunset. Do not automatically reduce energy intake. Add vigilance on hydration and avoid overly restrictive strategies during this period.`);
-  }
-
   if (r.preference.length > 0 || r.autreText) {
     const labels = r.preference.map((x) => x.labelEn);
     if (r.autreText) labels.push(r.autreText);
@@ -963,6 +962,16 @@ function buildRestrictionsLinesEn(form) {
   }
 
   return lines;
+}
+
+// Ramadan (temporary TIMING state, manually toggled via ramadanActif). Distinct
+// from permanent restrictions: not a food exclusion but a meal-structure
+// constraint. Phrase fusing Anissa's two validations (eating window + intake
+// maintenance). Clinical content validated by Anissa — wording to review before
+// sealing. EN mirror of buildRamadanLineFr (same 5 constraints, not watered down).
+function buildRamadanLineEn(form) {
+  if (!isRamadanActive(form)) return '';
+  return `- RAMADAN in progress (fast observed) — TIMING CONSTRAINTS: structure meals within the allowed eating window (before dawn and after sunset); maintain energy intake across the day (do not automatically reduce calories); reinforce hydration vigilance during non-fasting hours; avoid aggressive hypocaloric strategies; never add any additional fasting protocol (intermittent or prolonged) on top of the Ramadan fast.`;
 }
 
 // Supplements already taken (anti-duplication). Clinical content validated by
@@ -1006,10 +1015,11 @@ export function buildSafetyBlockEn(form) {
   // Anamnesis foundation V1: restrictions (behavioural, distinct from the
   // medical allergen gate) + supplements already taken (anti-duplication).
   const restrictionLines = buildRestrictionsLinesEn(form);
+  const ramadanLine = buildRamadanLineEn(form);
   const complementsLine = buildComplementsActuelsLineEn(form);
 
   if (!allergies && !intolerances && !medications && !maternalRules
-      && restrictionLines.length === 0 && !complementsLine) return '';
+      && restrictionLines.length === 0 && !ramadanLine && !complementsLine) return '';
 
   const lines = [
     'CLINICAL SAFETY — ABSOLUTE CONSTRAINTS (override every other instruction in this prompt):',
@@ -1029,6 +1039,7 @@ export function buildSafetyBlockEn(form) {
   // Restrictions + supplements at the end: AFTER the allergen gate, so the
   // strict allergen exclusion priority is not diluted.
   for (const rl of restrictionLines) lines.push(rl);
+  if (ramadanLine) lines.push(ramadanLine);
   if (complementsLine) lines.push(complementsLine);
   return lines.join('\n');
 }

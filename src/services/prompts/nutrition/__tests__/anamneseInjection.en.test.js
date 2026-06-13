@@ -31,12 +31,21 @@ describe('Restrictions EN — 3 natures distinctes', () => {
     expect(block).not.toMatch(/RELIGIOUS RESTRICTIONS/);
   });
 
-  it('Ramadan (timing) : meal structure + hydration, PAS « incompatible food »', () => {
-    const block = buildSafetyBlockEn(baseForm({ restrictionsAlimentaires: ['ramadan'] }));
+  it('Ramadan (timing, dedicated ramadanActif) : 5 fused constraints, NOT « incompatible food »', () => {
+    const block = buildSafetyBlockEn(baseForm({ ramadanActif: true }));
     expect(block).toContain('RAMADAN');
-    expect(block).toMatch(/eating window/i);
-    expect(block).toMatch(/hydration/i);
+    expect(block).toMatch(/eating window/i);                  // 1. window
+    expect(block).toMatch(/maintain energy intake/i);         // 2. intake
+    expect(block).toMatch(/do not automatically reduce calories/i);
+    expect(block).toMatch(/hydration/i);                      // 3. hydration
+    expect(block).toMatch(/aggressive hypocaloric strategies/i); // 4. anti-hypocaloric
+    expect(block).toMatch(/never add any additional fasting protocol/i); // 5. no extra fast
     expect(block).not.toMatch(/never voluntarily propose a food incompatible/i);
+  });
+
+  it('Legacy « ramadan » code in restrictionsAlimentaires does NOT trigger the Ramadan line', () => {
+    const block = buildSafetyBlockEn(baseForm({ restrictionsAlimentaires: ['ramadan'] }));
+    expect(block).not.toContain('RAMADAN');
   });
 });
 
