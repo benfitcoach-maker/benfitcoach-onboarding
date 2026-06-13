@@ -1033,7 +1033,16 @@ function GenerationModal({ client, consultation, aiDirectives, onDirectivesChang
               <button onClick={() => {
                 // P1.2 — clairance clinique (porte Adopter). Override conscient sur HIGH.
                 const verdict = assertPlanClinicallyCleared(result, { form: client?.form });
-                if (!verdict.cleared && !window.confirm(formatClearanceForConfirm(verdict))) return;
+                if (!verdict.cleared) {
+                  if (!window.confirm(formatClearanceForConfirm(verdict))) return;
+                  // V97.28 — override confirmé sur plan NON-clairé uniquement : on trace
+                  // (fire-and-forget, non bloquant). L'adoption d'un plan déjà clairé ne
+                  // passe pas ici → aucune trace (pas d'override). consultation_id null :
+                  // on adopte un brouillon pas encore persisté (choix de non-intrusion).
+                  void traceClinicalOverride(verdict, CLINICAL_OVERRIDE_DOORS.ADOPT, {
+                    clientId: client?.id,
+                  });
+                }
                 onAdopt(result, draftDirectives);
               }} className="jrn-btn jrn-btn--primary">
                 Adopter ce plan
