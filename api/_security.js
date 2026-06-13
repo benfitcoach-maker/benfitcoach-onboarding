@@ -10,6 +10,8 @@
 // Ce helper centralise les 2 patterns pour eviter la divergence future.
 // Les fichiers commencant par _ ne sont PAS routes par Vercel.
 
+import { createClient } from '@supabase/supabase-js';
+
 const ALLOWED_ORIGINS_BASE = [
   'https://app.anissanutrition.ch',
   'https://anissa-client-app.vercel.app',
@@ -96,4 +98,89 @@ export function requireAdminAuth(req) {
     return { ok: false, status: 401, error: 'Unauthorized' };
   }
   return { ok: true };
+}
+
+// ─── requireSaaSAdmin (V97.34) ────────────────────────────────────────────
+// Emails autorises a declencher une action admin SaaS depuis le FRONTEND
+// (Anissa + Benoit). Ce ne sont PAS des secrets : juste l'allowlist d'identite,
+// alignee sur USER_EMAILS cote frontend (src/supabaseClient.js). Single-tenant
+// V1 : on ne consulte pas profiles.role (evolution future si multi-praticiennes).
+const SAAS_ADMIN_EMAILS = [
+  'anissa.nutri@gmail.com',
+  'benfitcoach.geneve@gmail.com',
+];
+
+/**
+ * Resout l'utilisateur a partir d'un JWT de session Supabase en interrogeant
+ * GoTrue. Le token passe en argument est ce qui est valide cote serveur ; la
+ * cle service-role sert uniquement d'apikey de la requete.
+ *
+ * @param {string} token - access_token de session Supabase
+ * @returns {Promise<object|null>} l'user valide, ou null si token invalide
+ * @throws {Error} 'SUPABASE_NOT_CONFIGURED' si l'env serveur est absente
+ */
+async function defaultResolveUser(token) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('SUPABASE_NOT_CONFIGURED');
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+}
+
+/**
+ * V97.34 — Guard pour les endpoints SaaS-local appeles par le FRONTEND SaaS
+ * (Anissa), par opposition a requireAdminAuth qui protege les endpoints
+ * appeles par l'APP CLIENTE via le secret partage cross-repo.
+ *
+ * Verifie l'identite reelle via le JWT de session Supabase d'Anissa :
+ *  1. lit Authorization: Bearer <access_token>
+ *  2. valide le token via GoTrue (supabase.auth.getUser)
+ *  3. verifie que l'email valide appartient a l'allowlist admin SaaS
+ *
+ * Pourquoi pas requireAdminAuth ici : exposer CLIENT_APP_ADMIN_SECRET au
+ * navigateur est interdit (V96.35). Le JWT de session appartient deja a Anissa
+ * (court, expirable, revocable) -> aucun secret long-terme cote front.
+ *
+ * Async (contrairement a requireAdminAuth sync) : appel reseau GoTrue.
+ * Le parametre deps.resolveUser permet d'injecter un validateur en test sans
+ * mock reseau (meme pattern d'injection que maybeSendInvite cote app cliente).
+ *
+ * @param {object} req
+ * @param {{ resolveUser?: (token: string) => Promise<object|null> }} [deps]
+ * @returns {Promise<{ ok: true, user: object } | { ok: false, status: number, error: string }>}
+ */
+export async function requireSaaSAdmin(req, deps = {}) {
+  const resolveUser = deps.resolveUser ?? defaultResolveUser;
+
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
+
+  let user;
+  try {
+    user = await resolveUser(token);
+  } catch (e) {
+    if (e?.message === 'SUPABASE_NOT_CONFIGURED') {
+      return { ok: false, status: 500, error: 'Supabase not configured server-side' };
+    }
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
+  if (!user) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
+
+  const email = (user.email || '').toLowerCase();
+  if (!SAAS_ADMIN_EMAILS.includes(email)) {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
+
+  return { ok: true, user };
 }
