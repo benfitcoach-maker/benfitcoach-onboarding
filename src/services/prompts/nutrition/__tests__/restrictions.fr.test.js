@@ -1,5 +1,7 @@
 // Fondation anamnèse V1 (2026-06-13) — couche données restrictions.
-// Prouve la classification (3 natures distinctes) et le résolveur structurel.
+// Prouve la classification (restrictions PERMANENTES : religieux / preference) et
+// le résolveur structurel. Le Ramadan N'EST PLUS dans la map (état temporaire
+// déplacé vers ramadanActif, cf. anamneseFoundation.isRamadanActive).
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -15,9 +17,10 @@ describe('RESTRICTIONS_MAP — classification figée Anissa', () => {
     expect(RESTRICTIONS_MAP.casher.priorite).toBe(RESTRICTION_PRIORITY.RELIGIOUS);
   });
 
-  it('Ramadan = timing (PAS religieux — nature différente)', () => {
-    expect(RESTRICTIONS_MAP.ramadan.priorite).toBe(RESTRICTION_PRIORITY.TIMING);
-    expect(RESTRICTIONS_MAP.ramadan.priorite).not.toBe(RESTRICTION_PRIORITY.RELIGIOUS);
+  it('Ramadan ABSENT de la map (état temporaire déplacé vers ramadanActif)', () => {
+    expect(RESTRICTIONS_MAP.ramadan).toBeUndefined();
+    expect(RESTRICTION_PRIORITY.TIMING).toBeUndefined();
+    expect(Object.keys(RESTRICTIONS_MAP)).toHaveLength(5);
   });
 
   it('Végétarien, Végan, Autre = preference', () => {
@@ -36,10 +39,16 @@ describe('RESTRICTIONS_MAP — classification figée Anissa', () => {
 
 describe('resolveRestrictions — résolveur structurel', () => {
   it('Groupe les codes par priorité', () => {
-    const r = resolveRestrictions({ restrictionsAlimentaires: ['halal', 'vegan', 'ramadan'] });
+    const r = resolveRestrictions({ restrictionsAlimentaires: ['halal', 'vegan'] });
     expect(r.religieux.map((x) => x.code)).toEqual(['halal']);
     expect(r.preference.map((x) => x.code)).toEqual(['vegan']);
-    expect(r.timing.map((x) => x.code)).toEqual(['ramadan']);
+    expect(r.timing).toBeUndefined();
+  });
+
+  it('Le code legacy « ramadan » est ignoré (plus dans la map)', () => {
+    const r = resolveRestrictions({ restrictionsAlimentaires: ['halal', 'ramadan'] });
+    expect(r.religieux.map((x) => x.code)).toEqual(['halal']);
+    expect(r.preference).toHaveLength(0);
   });
 
   it('Tolère casse / accents / chaîne séparée par virgules', () => {

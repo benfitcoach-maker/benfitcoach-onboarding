@@ -6,17 +6,22 @@
 // libellés). Les PHRASES injectées dans le prompt vivent par langue
 // (_clinicalContext.fr.js pour le FR, en.js pour l'EN) — comme MATERNAL_SAFETY.
 //
-// Trois natures DISTINCTES (leçon Ramadan : ne pas fondre une nature différente
-// dans un traitement unique) :
+// Cette map ne contient QUE les restrictions PERMANENTES (déclarées une fois,
+// vraies tout le temps). Deux natures :
 //   - 'religieux'  (Halal, Casher)            → exclusion d'aliments, haute priorité
 //   - 'preference' (Végétarien, Végan, Autre) → exclusion best-effort
-//   - 'timing'     (Ramadan)                  → contrainte de STRUCTURE des repas,
-//                                               PAS une exclusion d'aliment
+//
+// Le RAMADAN N'EST PAS ici (décision Anissa, 2026-06-13) : c'est un état
+// TEMPORAIRE de timing (jeûne diurne sur une période), activé MANUELLEMENT par
+// la praticienne via le champ dédié `ramadanActif` (cockpit-only, pas de logique
+// calendrier). Son injection est conditionnée à ramadanActif et porte des
+// contraintes de timing, PAS une exclusion d'aliment. Cf. isRamadanActive
+// (anamneseFoundation.js) + buildRamadanLineFr/En. Leçon Ramadan : ne pas fondre
+// une nature différente dans un traitement unique.
 //
 // Validations Anissa figées (12-13 juin 2026) :
 //   religieux : Halal, Casher
 //   preference : Végétarien, Végan, Autre préférence
-//   timing : Ramadan
 //
 // Source unique structurelle : importée AUSSI par en.js (chemin anglophone) —
 // même justification que resolveMaternalState (donnée structurelle, le texte FR
@@ -25,17 +30,15 @@
 export const RESTRICTION_PRIORITY = Object.freeze({
   RELIGIOUS: 'religieux',
   PREFERENCE: 'preference',
-  TIMING: 'timing',
 });
 
 /**
- * Classification des restrictions alimentaires. Code (canonique, stocké dans
+ * Classification des restrictions PERMANENTES. Code (canonique, stocké dans
  * form.restrictionsAlimentaires) → { label FR, labelEn, priorite }.
  */
 export const RESTRICTIONS_MAP = Object.freeze({
   halal: { label: 'Halal', labelEn: 'Halal', priorite: RESTRICTION_PRIORITY.RELIGIOUS },
   casher: { label: 'Casher', labelEn: 'Kosher', priorite: RESTRICTION_PRIORITY.RELIGIOUS },
-  ramadan: { label: 'Ramadan', labelEn: 'Ramadan', priorite: RESTRICTION_PRIORITY.TIMING },
   vegetarien: { label: 'Végétarien', labelEn: 'Vegetarian', priorite: RESTRICTION_PRIORITY.PREFERENCE },
   vegan: { label: 'Végan', labelEn: 'Vegan', priorite: RESTRICTION_PRIORITY.PREFERENCE },
   autre: { label: 'Autre préférence', labelEn: 'Other preference', priorite: RESTRICTION_PRIORITY.PREFERENCE },
@@ -56,11 +59,11 @@ function normalizeCode(raw) {
  * (texte libre, classé en 'preference'). Pur, structurel, fail-safe.
  *
  * @param {object|null|undefined} form
- * @returns {{ religieux: object[], preference: object[], timing: object[], autreText: string }}
+ * @returns {{ religieux: object[], preference: object[], autreText: string }}
  *   chaque entrée = { code, label, labelEn, priorite }.
  */
 export function resolveRestrictions(form) {
-  const empty = { religieux: [], preference: [], timing: [], autreText: '' };
+  const empty = { religieux: [], preference: [], autreText: '' };
   if (!form || typeof form !== 'object') return empty;
 
   const raw = form.restrictionsAlimentaires;
@@ -70,7 +73,7 @@ export function resolveRestrictions(form) {
       ? raw.split(/[,;]/)
       : [];
 
-  const out = { religieux: [], preference: [], timing: [], autreText: '' };
+  const out = { religieux: [], preference: [], autreText: '' };
   const seen = new Set();
   for (const c of codes) {
     const code = normalizeCode(c);
@@ -93,7 +96,6 @@ export function hasRestrictions(resolved) {
   return (
     resolved.religieux.length > 0 ||
     resolved.preference.length > 0 ||
-    resolved.timing.length > 0 ||
     Boolean(resolved.autreText)
   );
 }
