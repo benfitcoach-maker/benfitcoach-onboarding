@@ -613,6 +613,22 @@ function ErrorLine({ msg }) {
   return <div className="jrn-error">⚠ {msg}</div>;
 }
 
+// V97.34 — petite liste titrée pour le rendu du briefing IA (sujets, questions,
+// pistes d'analyses). Ne rend rien si la liste est vide.
+function BriefingList({ title, items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 'var(--jrn-4)' }}>
+      <p style={{ fontSize: 'var(--jrn-text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--jrn-text-soft)', marginBottom: 6 }}>
+        {title}
+      </p>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text)', lineHeight: 1.6 }}>
+        {items.map((it, i) => <li key={i} style={{ marginBottom: 4 }}>{it}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // ÉTAPE 1 — ANAMNÈSE
 // ═══════════════════════════════════════════════════════════════════
@@ -641,6 +657,9 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
   // V97.11 — Anamnèse approfondie : Anissa marque la fin du remplissage
   // explicitement (apres ou pendant le RDV). Timestamp dans journey_state.
   const [anamneseBusy, setAnamneseBusy] = useState(false);
+  // V97.34 — Briefing IA pré-RDV (aide à l'anamnèse, jamais un diagnostic).
+  const [briefingBusy, setBriefingBusy] = useState(false);
+  const [briefingError, setBriefingError] = useState(null);
   const form = client.form || {};
   const journey = client.journey_state || {};
 
@@ -705,6 +724,28 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
   const questionnaireSentAt = journey.questionnaire_sent_at || null;
   const questionnaireMode = journey.questionnaire_mode || null; // 'app' | 'link'
   const questionnaireReceived = minimallyFilled;
+
+  // V97.34 — briefing IA déjà généré (lu depuis clients.form.ia_briefing).
+  const briefing = form.ia_briefing?.output || null;
+  const briefingGeneratedAt = form.ia_briefing?.generated_at || null;
+
+  // Déclenche la génération via l'endpoint SaaS-local protégé par session Anissa.
+  const handleGenerateBriefing = async () => {
+    setBriefingBusy(true);
+    setBriefingError(null);
+    try {
+      const { generateBriefing } = await import('./services/generateBriefing');
+      const res = await generateBriefing(client.id);
+      // Refresh pour relire clients.form.ia_briefing fraîchement persisté.
+      onChange?.();
+      // Sauvegarde DB échouée mais briefing généré : on prévient sans bloquer.
+      if (res?.warning) setBriefingError(res.warning);
+    } catch (e) {
+      setBriefingError(e?.message || 'Erreur lors de la génération du briefing');
+    } finally {
+      setBriefingBusy(false);
+    }
+  };
 
   const handleSendQuestionnaire = async (mode) => {
     setSendingQuestionnaire(mode);
@@ -1175,6 +1216,111 @@ function StepAnamnesis({ client, onChange, onEditProfile }) {
           )}
         </div>
       </div>
+
+      {/* ═══ Briefing IA — préparation du RDV (V97.34) ═════════════
+          Aide à l'anamnèse dérivée du pré-questionnaire. NON numérotée :
+          c'est un assistant de préparation, pas une étape du parcours.
+          Visible une fois les réponses reçues (le briefing dérive du form).
+          Endpoint SaaS-local /api/generate-briefing protégé par
+          requireSaaSAdmin (session Supabase Anissa) — pas de secret au front. */}
+      {questionnaireReceived && (
+        <div style={{ marginBottom: 'var(--jrn-6)' }}>
+          <p className="jrn-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span aria-hidden>✨</span> Briefing IA · préparation du RDV
+          </p>
+          <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-soft)', marginTop: 4, marginBottom: 'var(--jrn-3)', lineHeight: 1.55 }}>
+            Synthèse préparatoire générée depuis le pré-questionnaire : pistes à creuser et questions à poser. Une aide à l'anamnèse, jamais une analyse clinique définitive.
+          </p>
+          <div className="jrn-surface" style={{
+            padding: 'var(--jrn-6)',
+            ...(briefing ? {
+              borderLeft: '3px solid var(--jrn-accent)',
+              background: 'linear-gradient(90deg, rgba(46, 78, 56, 0.04) 0%, transparent 60%)',
+            } : {}),
+          }}>
+            {briefing ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', flexWrap: 'wrap', marginBottom: 'var(--jrn-3)' }}>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.04em',
+                    background: briefing.confidence === 'high' ? 'var(--jrn-accent-soft)' : 'rgba(184, 134, 38, 0.10)',
+                    color: briefing.confidence === 'high' ? 'var(--jrn-accent)' : '#8a6722',
+                  }}>
+                    Fiabilité : {briefing.confidence === 'high' ? 'élevée' : briefing.confidence === 'moderate' ? 'modérée' : 'faible'}
+                  </span>
+                  {briefingGeneratedAt && (
+                    <span style={{ fontSize: 'var(--jrn-text-xs)', color: 'var(--jrn-text-muted)' }}>
+                      généré le {new Date(briefingGeneratedAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+
+                {briefing.executive_summary && (
+                  <p style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text)', lineHeight: 1.6, marginBottom: 'var(--jrn-4)' }}>
+                    {briefing.executive_summary}
+                  </p>
+                )}
+
+                {Array.isArray(briefing.red_flags) && briefing.red_flags.length > 0 && (() => {
+                  const noFlag = briefing.red_flags.length === 1 && /aucun red flag/i.test(briefing.red_flags[0]);
+                  return (
+                    <div style={{ marginBottom: 'var(--jrn-4)' }}>
+                      <p style={{ fontSize: 'var(--jrn-text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: noFlag ? 'var(--jrn-text-soft)' : '#a33', marginBottom: 6 }}>
+                        {noFlag ? 'Vigilance' : '⚠ Points de vigilance'}
+                      </p>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--jrn-text-sm)', color: noFlag ? 'var(--jrn-text-muted)' : '#a33', lineHeight: 1.6 }}>
+                        {briefing.red_flags.map((f, i) => <li key={i} style={{ marginBottom: 4 }}>{f}</li>)}
+                      </ul>
+                    </div>
+                  );
+                })()}
+
+                <BriefingList title="Sujets prioritaires à creuser" items={briefing.priority_topics} />
+                <BriefingList title="Questions à explorer au RDV" items={briefing.questions_to_explore} />
+                <BriefingList title="Pistes d'analyses (à valider cliniquement)" items={briefing.suggested_analyses} />
+
+                <div className="jrn-actions" style={{ marginTop: 'var(--jrn-4)' }}>
+                  <button
+                    onClick={handleGenerateBriefing}
+                    disabled={briefingBusy}
+                    className="jrn-btn jrn-btn--ghost"
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                  >
+                    {briefingBusy ? '✨ Régénération…' : '✨ Régénérer'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--jrn-3)', marginBottom: 'var(--jrn-3)' }}>
+                  <span style={{ fontSize: 'var(--jrn-text-sm)', color: 'var(--jrn-text-muted)' }}>
+                    Aucun briefing généré pour l'instant.
+                  </span>
+                </div>
+                <div className="jrn-actions" style={{ marginTop: 0 }}>
+                  <button
+                    onClick={handleGenerateBriefing}
+                    disabled={briefingBusy}
+                    className="jrn-btn jrn-btn--soft"
+                  >
+                    {briefingBusy ? '✨ Génération…' : '✨ Générer le briefing IA'}
+                  </button>
+                </div>
+              </>
+            )}
+            {briefingError && (
+              <p style={{ marginTop: 'var(--jrn-3)', fontSize: 'var(--jrn-text-sm)', color: '#c25050', background: 'rgba(220, 80, 80, 0.08)', padding: '8px 12px', borderRadius: 6, lineHeight: 1.5 }}>
+                ⚠ {briefingError}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ═══ BLOC RDV anamnèse (V97.10) ════════════════════════════
           Visible une fois les réponses du pré-q reçues. Anissa fixe la
