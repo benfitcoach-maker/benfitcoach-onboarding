@@ -20,6 +20,12 @@ import { ANISSA_IDENTITY_CORE_EN, ADJUSTMENT_RULE_EN } from './identity.en';
 // positif), au lieu de la dupliquer ici (risque de divergence sur un chemin de
 // sécurité). Le texte injecté reste 100 % local à ce fichier (MATERNAL_SAFETY_EN).
 import { resolveMaternalState } from './profiles/_detector.fr.js';
+// Fondation anamnèse V1 (2026-06-13) — même exception « import FR » justifiée que
+// resolveMaternalState : ce sont des lecteurs PUREMENT STRUCTURELS (classification
+// par priorité, libellé EN, format de liste, code d'ouverture). Aucun texte FR
+// injecté n'en sort — les PHRASES EN restent 100 % locales à ce fichier.
+import { resolveRestrictions, hasRestrictions } from './restrictions.fr.js';
+import { formatComplementsActuels, resolveOuvertureComplements, OUVERTURE_COMPLEMENTS } from './anamneseFoundation.js';
 
 // ─── SYSTEM PROMPT (identity + clinical rules + style) ───
 
@@ -922,6 +928,67 @@ const MATERNAL_SAFETY_EN = {
   // postPartum: intentionally absent in V1 (documented clinical gap).
 };
 
+// ─── DIETARY RESTRICTIONS (anamnesis foundation V1, 2026-06-13) ─────────
+//
+// EN mirror of buildRestrictionsLinesFr. DISTINCT from the allergen gate (an
+// allergy is a blocking MEDICAL gate; a restriction is BEHAVIOURAL/preventive).
+// Three natures, three treatments (cf. restrictions.fr.js):
+//   religieux  → never voluntarily propose an incompatible food
+//   preference → best-effort, do not over-restrict
+//   timing     → meal STRUCTURE (Ramadan), not a food exclusion
+//
+// Clinical content validated by Anissa — wording to be reviewed one last time
+// before sealing (same ritual as the P0 pregnancy phrases). Anti-over-restriction:
+// each phrase frames the constraint WITHOUT pushing the AI to drop compatible
+// foods out of excessive zeal. Same nuance as FR, not a watered-down translation.
+function buildRestrictionsLinesEn(form) {
+  const r = resolveRestrictions(form);
+  if (!hasRestrictions(r)) return [];
+  const lines = [];
+
+  if (r.religieux.length > 0) {
+    const labels = r.religieux.map((x) => x.labelEn).join(', ');
+    lines.push(`- RELIGIOUS RESTRICTIONS declared: ${labels}. Never voluntarily propose a food incompatible with these restrictions — in no menu, recipe, shopping list or supplement suggestion. These restrictions limit ONLY incompatible foods: every compatible food remains fully usable (do not over-restrict).`);
+  }
+
+  // Ramadan (timing): meal structure, never treated as a food exclusion.
+  if (r.timing.length > 0) {
+    lines.push(`- RAMADAN: If the client observes Ramadan, adapt the meal structure to the allowed eating window: meals before dawn and after sunset. Do not automatically reduce energy intake. Add vigilance on hydration and avoid overly restrictive strategies during this period.`);
+  }
+
+  if (r.preference.length > 0 || r.autreText) {
+    const labels = r.preference.map((x) => x.labelEn);
+    if (r.autreText) labels.push(r.autreText);
+    lines.push(`- DIETARY RESTRICTIONS (preference) declared: ${labels.join(', ')}. Respect these choices as much as possible: do not propose any incompatible food. Stay within the normal scope of the diet, without restricting beyond it — a vegan diet excludes ONLY animal products, not compatible plant foods.`);
+  }
+
+  return lines;
+}
+
+// Supplements already taken (anti-duplication). Clinical content validated by
+// Anissa — wording to review before sealing. Injected into the AI context (not
+// display only): without it the AI recommends duplicates of what the client
+// already takes.
+function buildComplementsActuelsLineEn(form) {
+  const liste = formatComplementsActuels(form);
+  if (!liste) return '';
+  return `- SUPPLEMENTS the client already takes: ${liste}. Account for these: do not recommend a duplicate of what is already taken, and flag any possible interaction to the practitioner rather than acting on it.`;
+}
+
+// Openness to supplements (3-level enum). SOFT directive (preference, not a
+// safety constraint) → injected outside the safety block, in buildSystemPromptEn.
+// Content validated by Anissa (3 labels); directive wording to review before sealing.
+const OUVERTURE_DIRECTIVE_EN = Object.freeze({
+  eviter: `OPENNESS TO SUPPLEMENTS: the client prefers to avoid supplements (FR: « ${OUVERTURE_COMPLEMENTS.eviter} »). Favour intake through food; only suggest a supplement when it is genuinely essential, and justify it.`,
+  si_necessaire: `OPENNESS TO SUPPLEMENTS: the client is open if needed (FR: « ${OUVERTURE_COMPLEMENTS.si_necessaire} »). Propose supplements only when they bring a clear benefit.`,
+  a_laise: `OPENNESS TO SUPPLEMENTS: the client is comfortable with supplements (FR: « ${OUVERTURE_COMPLEMENTS.a_laise} »). Relevant supplement suggestions are welcome.`,
+});
+
+export function buildOuvertureComplementsDirectiveEn(form) {
+  const level = resolveOuvertureComplements(form);
+  return level ? OUVERTURE_DIRECTIVE_EN[level] : '';
+}
+
 export function buildSafetyBlockEn(form) {
   if (!form || typeof form !== 'object') return '';
   const allergies = String(form.allergies ?? '').trim();
@@ -936,7 +1003,13 @@ export function buildSafetyBlockEn(form) {
   const maternal = resolveMaternalState(form);
   const maternalRules = MATERNAL_SAFETY_EN[maternal] || null;
 
-  if (!allergies && !intolerances && !medications && !maternalRules) return '';
+  // Anamnesis foundation V1: restrictions (behavioural, distinct from the
+  // medical allergen gate) + supplements already taken (anti-duplication).
+  const restrictionLines = buildRestrictionsLinesEn(form);
+  const complementsLine = buildComplementsActuelsLineEn(form);
+
+  if (!allergies && !intolerances && !medications && !maternalRules
+      && restrictionLines.length === 0 && !complementsLine) return '';
 
   const lines = [
     'CLINICAL SAFETY — ABSOLUTE CONSTRAINTS (override every other instruction in this prompt):',
@@ -953,6 +1026,10 @@ export function buildSafetyBlockEn(form) {
   if (medications) {
     lines.push(`- Current treatments / medications: ${medications}. Account for known food-drug and supplement-drug interactions (e.g. St John's wort ↔ antidepressants, vitamin K ↔ anticoagulants, grapefruit ↔ statins). Never suggest stopping, changing or replacing a treatment; if an interaction is possible, flag it to the practitioner rather than acting on it.`);
   }
+  // Restrictions + supplements at the end: AFTER the allergen gate, so the
+  // strict allergen exclusion priority is not diluted.
+  for (const rl of restrictionLines) lines.push(rl);
+  if (complementsLine) lines.push(complementsLine);
   return lines.join('\n');
 }
 
@@ -964,6 +1041,11 @@ export function buildSystemPromptEn(form, { isFollowup = false, clientFormule = 
   // priorité → injecté juste après l'identité.
   const safetyBlock = buildSafetyBlockEn(form);
   if (safetyBlock) parts.push(safetyBlock);
+
+  // Anamnesis foundation V1: SOFT openness-to-supplements directive (client
+  // preference, not a safety constraint → outside the safety block).
+  const ouvertureDirective = buildOuvertureComplementsDirectiveEn(form);
+  if (ouvertureDirective) parts.push(ouvertureDirective);
 
   // Supplements: include if client is open (Oui / Peut-etre = Yes / Maybe, stored as FR canonical)
   const pretProtocole = form?.pretProtocole || '';
