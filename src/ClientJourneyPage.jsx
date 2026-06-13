@@ -3219,6 +3219,12 @@ function StepDelivery({ client, onChange, onOpenAppPreview }) {
             setExporting(false);
             return;
           }
+          // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+          const { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } = await import('./services/clinicalOverrideAudit');
+          void traceClinicalOverride(ce.verdict, CLINICAL_OVERRIDE_DOORS.EXPORT_WORD, {
+            clientId: client?.id,
+            consultationId: last?.id,
+          });
           await exportPlanToWord(client, last, last.nutritionPlan || '', { clinicalOverride: true });
         } else {
           throw ce;

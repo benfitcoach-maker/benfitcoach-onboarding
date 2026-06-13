@@ -43,6 +43,7 @@ import { buildClinicalContext } from './services/clinical/buildClinicalContext';
 import { COACH_IDENTITY } from './services/coachIdentity';
 import { exportPlanToWord } from './services/exportToWord';
 import { assertPlanClinicallyCleared, formatClearanceForConfirm, ExportClinicalError } from './services/clinicalClearance';
+import { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } from './services/clinicalOverrideAudit';
 import { structurePlanSections } from './services/planFormatters';
 import { analyzeFullPlan } from './services/aiClient';
 import FicheFrigoPreview from './FicheFrigoPreview';
@@ -262,6 +263,12 @@ export default function JourneyPlanEditor({ client, onPlanSaved, controlledAiDir
     } catch (e) {
       if (e instanceof ExportClinicalError) {
         if (window.confirm(formatClearanceForConfirm(e.verdict))) {
+          // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+          // cons peut être synthétique {clientId,date} sans id → consultation_id null (choix non-intrusion).
+          void traceClinicalOverride(e.verdict, CLINICAL_OVERRIDE_DOORS.EXPORT_WORD, {
+            clientId: client?.id,
+            consultationId: cons?.id,
+          });
           try {
             await exportPlanToWord(client, cons, planText, { clinicalOverride: true });
           } catch (e2) {

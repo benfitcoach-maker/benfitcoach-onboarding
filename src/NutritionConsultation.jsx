@@ -43,6 +43,7 @@ import { detectSectionType } from './services/nutritionParsers';
 import { exportPlanToWord } from './services/exportToWord';
 // P1.2 — gate de clairance clinique (service) + override conscient.
 import { ExportClinicalError, formatClearanceForConfirm } from './services/clinicalClearance';
+import { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } from './services/clinicalOverrideAudit';
 // V97.0 : centralisation des appels Claude (anciennement 5 fetches inline)
 import { callClaude } from './services/anthropic';
 import ClientAppPreviewModal from './ClientAppPreviewModal';
@@ -3747,6 +3748,11 @@ ${suppText}`;
                           } catch (e) {
                             if (e instanceof ExportClinicalError) {
                               if (!window.confirm(formatClearanceForConfirm(e.verdict))) return;
+                              // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+                              void traceClinicalOverride(e.verdict, CLINICAL_OVERRIDE_DOORS.EXPORT_WORD, {
+                                clientId: client?.id,
+                                consultationId: consultation?.id,
+                              });
                               try {
                                 await exportPlanToWord(client, consultation, planSource, { clinicalOverride: true });
                               } catch (e2) {
