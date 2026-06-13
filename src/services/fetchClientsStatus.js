@@ -117,6 +117,22 @@ export async function fetchClientsStatus(items) {
     ? body.statuses_by_id
     : {};
 
+  // V97.35 — defauts FAIL-CLOSED pour la visibilite plan : si le backend ne
+  // renvoie pas les champs (ancien deploiement, reseau KO, reponse partielle),
+  // on n'affiche JAMAIS "visible" a tort. plan_visible/visible_now = false par
+  // defaut. reason_if_not_visible reste null tant qu'on ne sait pas (l'UI
+  // affichera "Statut inconnu" plutot qu'une fausse certitude).
+  const PLAN_DEFAULTS = {
+    account_enabled: false,
+    account_deleted: false,
+    plan_visible: false,
+    visible_now: false,
+    plan_status: null,
+    effective_at: null,
+    published_at: null,
+    reason_if_not_visible: null,
+  };
+
   const ABSENT = {
     status: "absent",
     last_login_at: null,
@@ -125,6 +141,7 @@ export async function fetchClientsStatus(items) {
     feedbacks_7d_count: 0,
     new_feedbacks_count: 0,
     found: false,
+    ...PLAN_DEFAULTS,
   };
 
   function harden(entry) {
@@ -132,6 +149,15 @@ export async function fetchClientsStatus(items) {
     if (typeof e.feedbacks_7d_count !== "number") e.feedbacks_7d_count = 0;
     if (typeof e.new_feedbacks_count !== "number") e.new_feedbacks_count = 0;
     if (e.last_reviewed_at === undefined) e.last_reviewed_at = null;
+    // V97.35 : durcit les champs visibilite plan (booleens stricts, reste null).
+    if (typeof e.plan_visible !== "boolean") e.plan_visible = false;
+    if (typeof e.visible_now !== "boolean") e.visible_now = false;
+    if (typeof e.account_enabled !== "boolean") e.account_enabled = false;
+    if (typeof e.account_deleted !== "boolean") e.account_deleted = false;
+    if (e.plan_status === undefined) e.plan_status = null;
+    if (e.effective_at === undefined) e.effective_at = null;
+    if (e.published_at === undefined) e.published_at = null;
+    if (e.reason_if_not_visible === undefined) e.reason_if_not_visible = null;
     return e;
   }
 
