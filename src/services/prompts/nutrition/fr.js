@@ -17,7 +17,8 @@
 
 import { ANISSA_IDENTITY_CORE, ADJUSTMENT_RULE } from './identity.fr';
 // P0.1+P0.2 (remède sécurité 2026-06-10) — source unique du bloc sécurité.
-import { buildSafetyBlockFr } from './_clinicalContext.fr';
+// Fondation anamnèse V1 (2026-06-13) — directive ouverture aux compléments.
+import { buildSafetyBlockFr, buildOuvertureComplementsDirectiveFr } from './_clinicalContext.fr';
 
 // ─── SYSTEM PROMPT (identite + regles cliniques + style) ───
 
@@ -879,6 +880,11 @@ export function buildSystemPromptFr(form, opts = {}) {
   // soient présents. Haute priorité → injecté juste après l'identité.
   const safetyBlock = buildSafetyBlockFr(form);
   if (safetyBlock) parts.push(safetyBlock);
+
+  // Fondation anamnèse V1 : directive SOUPLE d'ouverture aux compléments
+  // (préférence cliente, pas contrainte de sécurité → hors bloc sécurité).
+  const ouvertureDirective = buildOuvertureComplementsDirectiveFr(form);
+  if (ouvertureDirective) parts.push(ouvertureDirective);
 
   // Supplements: include if client is open to them (Oui or Peut-etre)
   const pretProtocole = form?.pretProtocole || '';

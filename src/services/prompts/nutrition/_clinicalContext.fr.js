@@ -23,6 +23,8 @@
 //   saisis manuellement, etc.).
 
 import { resolveMaternalState } from './profiles/_detector.fr.js';
+import { resolveRestrictions, hasRestrictions } from './restrictions.fr.js';
+import { formatComplementsActuels, resolveOuvertureComplements, OUVERTURE_COMPLEMENTS } from './anamneseFoundation.js';
 
 /**
  * Détermine si un clinicalContext est vide (rien à injecter).
@@ -76,6 +78,75 @@ const MATERNAL_SAFETY_FR = {
   // postPartum : volontairement absent en V1 (gap clinique documenté ci-dessus).
 };
 
+// ─── RESTRICTIONS ALIMENTAIRES (fondation anamnèse V1, 2026-06-13) ──────
+//
+// Phrases d'injection FR. DISTINCTES du gate allergène (l'allergie est un gate
+// MÉDICAL bloquant ; la restriction est COMPORTEMENTALE/préventive). Trois
+// natures, trois traitements (cf. restrictions.fr.js) :
+//   religieux  → ne jamais proposer volontairement un aliment incompatible
+//   preference → best-effort, sans sur-restreindre
+//   timing     → structure des repas (Ramadan), pas une exclusion d'aliment
+//
+// Contenu validé Anissa — formulation à relire une dernière fois avant
+// scellement (même rituel que le P0 grossesse). Anti-sur-restriction : chaque
+// phrase cadre la contrainte SANS pousser l'IA à éliminer des aliments
+// compatibles par excès de zèle.
+function buildRestrictionsLinesFr(form) {
+  const r = resolveRestrictions(form);
+  if (!hasRestrictions(r)) return [];
+  const lines = [];
+
+  if (r.religieux.length > 0) {
+    const labels = r.religieux.map((x) => x.label).join(', ');
+    lines.push(`- RESTRICTIONS RELIGIEUSES déclarées : ${labels}. Ne jamais proposer volontairement un aliment incompatible avec ces restrictions — dans aucun menu, recette, liste de courses ou suggestion de complément. Ces restrictions ne limitent QUE les aliments incompatibles : tous les aliments compatibles restent pleinement utilisables (ne pas sur-restreindre).`);
+  }
+
+  // Ramadan (timing) : structure des repas, jamais traité comme une exclusion.
+  if (r.timing.length > 0) {
+    lines.push(`- RAMADAN : Si la cliente observe le Ramadan, adapte la structure des repas à la fenêtre alimentaire autorisée : repas avant l'aube et après le coucher du soleil. Ne réduis pas automatiquement les apports énergétiques. Ajoute une vigilance sur l'hydratation et évite les stratégies trop restrictives pendant cette période.`);
+  }
+
+  if (r.preference.length > 0 || r.autreText) {
+    const labels = r.preference.map((x) => x.label);
+    if (r.autreText) labels.push(r.autreText);
+    lines.push(`- RESTRICTIONS ALIMENTAIRES (préférence) déclarées : ${labels.join(', ')}. Respecter ces choix autant que possible : ne pas proposer d'aliment incompatible. Rester dans le périmètre normal du régime, sans restreindre au-delà — un régime végan n'exclut QUE les produits animaux, pas les aliments végétaux compatibles.`);
+  }
+
+  return lines;
+}
+
+// Compléments déjà pris (anti-doublon). Contenu validé Anissa — formulation à
+// relire avant scellement. Injecté dans le contexte IA (pas affichage seul) :
+// sans cette ligne, l'IA recommande des compléments en doublon de ce que la
+// cliente prend déjà (trou structurel constaté : form.supplements n'atteignait
+// aucun prompt avant V1).
+function buildComplementsActuelsLineFr(form) {
+  const liste = formatComplementsActuels(form);
+  if (!liste) return '';
+  return `- COMPLÉMENTS déjà pris par la cliente : ${liste}. En tenir compte : ne pas recommander de doublon de ce qui est déjà pris, et signaler à la praticienne toute interaction possible plutôt que d'agir dessus.`;
+}
+
+// Ouverture aux compléments (enum 3 niveaux). Directive SOUPLE (préférence, pas
+// contrainte de sécurité) → injectée hors bloc sécurité, dans buildSystemPromptFr.
+// Contenu validé Anissa sur le fond (3 libellés) ; formulation de la directive à
+// relire avant scellement.
+const OUVERTURE_DIRECTIVE_FR = Object.freeze({
+  eviter: `OUVERTURE AUX COMPLÉMENTS : la cliente préfère éviter les compléments (« ${OUVERTURE_COMPLEMENTS.eviter} »). Privilégier les apports par l'alimentation ; ne suggérer un complément que s'il est réellement essentiel, en le justifiant.`,
+  si_necessaire: `OUVERTURE AUX COMPLÉMENTS : la cliente est ouverte si nécessaire (« ${OUVERTURE_COMPLEMENTS.si_necessaire} »). Proposer des compléments uniquement lorsqu'ils apportent un bénéfice clair.`,
+  a_laise: `OUVERTURE AUX COMPLÉMENTS : la cliente est à l'aise avec les compléments (« ${OUVERTURE_COMPLEMENTS.a_laise} »). Les propositions de compléments pertinents sont les bienvenues.`,
+});
+
+/**
+ * Directive d'ouverture aux compléments, à injecter dans le system prompt FR.
+ * Renvoie '' si non renseignée. Pure, fail-safe.
+ * @param {object|null|undefined} form
+ * @returns {string}
+ */
+export function buildOuvertureComplementsDirectiveFr(form) {
+  const level = resolveOuvertureComplements(form);
+  return level ? OUVERTURE_DIRECTIVE_FR[level] : '';
+}
+
 /**
  * Construit le bloc « SÉCURITÉ CLINIQUE » injecté dans le system prompt de
  * génération de plan. SOURCE UNIQUE des données de sécurité (allergènes,
@@ -110,7 +181,13 @@ export function buildSafetyBlockFr(form) {
   const maternal = resolveMaternalState(form);
   const maternalRules = MATERNAL_SAFETY_FR[maternal] || null;
 
-  if (!allergies && !intolerances && !medications && !maternalRules) return '';
+  // Fondation anamnèse V1 : restrictions (comportemental, distinct du gate
+  // allergène médical) + compléments déjà pris (anti-doublon, contexte IA).
+  const restrictionLines = buildRestrictionsLinesFr(form);
+  const complementsLine = buildComplementsActuelsLineFr(form);
+
+  if (!allergies && !intolerances && !medications && !maternalRules
+      && restrictionLines.length === 0 && !complementsLine) return '';
 
   const lines = [
     'SÉCURITÉ CLINIQUE — CONTRAINTES ABSOLUES (priorité sur toute autre consigne de ce prompt) :',
@@ -132,6 +209,10 @@ export function buildSafetyBlockFr(form) {
   if (medications) {
     lines.push(`- Traitements / médicaments en cours : ${medications}. Tenir compte des interactions aliment-/complément-médicament connues (ex. millepertuis ↔ antidépresseurs, vitamine K ↔ anticoagulants, pamplemousse ↔ statines). Ne jamais suggérer d'arrêter, de modifier ni de remplacer un traitement ; en cas d'interaction possible, le signaler à la praticienne plutôt que d'agir dessus.`);
   }
+  // Restrictions + compléments en fin de bloc : APRÈS le gate allergène, pour ne
+  // pas diluer la priorité de l'exclusion stricte des allergènes.
+  for (const rl of restrictionLines) lines.push(rl);
+  if (complementsLine) lines.push(complementsLine);
   return lines.join('\n');
 }
 
