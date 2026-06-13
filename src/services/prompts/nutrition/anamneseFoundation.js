@@ -9,6 +9,25 @@
 //   - complementsActuels : ce que la cliente prend DÉJÀ (anti-doublon IA).
 //     Décision Anissa : affichage + contexte IA, AUCUN calcul de dose en V1.
 //   - ouvertureComplements : enum 3 niveaux (libellés validés Anissa).
+//   - ramadanActif : état temporaire de jeûne, activé MANUELLEMENT par la
+//     praticienne (cockpit-only, pas de calendrier). Décision Anissa 2026-06-13.
+
+// ─── Ramadan (état temporaire, activation manuelle praticienne) ─────
+
+/**
+ * True si la praticienne a activé l'état Ramadan pour la cliente. Cockpit-only :
+ * AUCUNE logique calendrier, c'est un toggle manuel. Tolère booléen et formes
+ * texte usuelles du cockpit ('Oui', 'true', 'on', '1'). Pur, fail-safe.
+ *
+ * @param {object|null|undefined} form
+ * @returns {boolean}
+ */
+export function isRamadanActive(form) {
+  if (!form || typeof form !== 'object') return false;
+  const v = form.ramadanActif;
+  if (v === true) return true;
+  return ['oui', 'true', 'on', '1'].includes(String(v ?? '').trim().toLowerCase());
+}
 
 // ─── Compléments actuels ────────────────────────────────────────────
 

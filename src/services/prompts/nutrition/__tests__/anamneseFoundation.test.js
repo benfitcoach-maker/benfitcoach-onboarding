@@ -5,6 +5,7 @@ import {
   formatComplementsActuels,
   OUVERTURE_COMPLEMENTS,
   resolveOuvertureComplements,
+  isRamadanActive,
 } from '../anamneseFoundation';
 
 describe('formatComplementsActuels', () => {
@@ -55,5 +56,26 @@ describe('resolveOuvertureComplements', () => {
     expect(resolveOuvertureComplements({ ouvertureComplements: '' })).toBeNull();
     expect(resolveOuvertureComplements({ ouvertureComplements: 'bof' })).toBeNull();
     expect(resolveOuvertureComplements(null)).toBeNull();
+  });
+});
+
+describe('isRamadanActive — toggle manuel praticienne (cockpit-only)', () => {
+  it('Vrai sur booléen true', () => {
+    expect(isRamadanActive({ ramadanActif: true })).toBe(true);
+  });
+
+  it('Vrai sur formes texte usuelles du cockpit', () => {
+    expect(isRamadanActive({ ramadanActif: 'Oui' })).toBe(true);
+    expect(isRamadanActive({ ramadanActif: 'true' })).toBe(true);
+    expect(isRamadanActive({ ramadanActif: 'on' })).toBe(true);
+    expect(isRamadanActive({ ramadanActif: '1' })).toBe(true);
+  });
+
+  it('Faux par défaut / valeurs négatives / fail-safe', () => {
+    expect(isRamadanActive({})).toBe(false);
+    expect(isRamadanActive({ ramadanActif: false })).toBe(false);
+    expect(isRamadanActive({ ramadanActif: 'non' })).toBe(false);
+    expect(isRamadanActive(null)).toBe(false);
+    expect(isRamadanActive(undefined)).toBe(false);
   });
 });
