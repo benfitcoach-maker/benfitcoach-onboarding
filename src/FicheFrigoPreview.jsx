@@ -5,6 +5,7 @@ import { exportFicheFrigoPDF } from './nutritionPdf';
 // Risque de divergence elimine : une seule source de verite.
 import { buildCanonicalFridgeData } from './services/fridgeDataBuilder';
 import { formatClearanceForConfirm, ExportClinicalError } from './services/clinicalClearance';
+import { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } from './services/clinicalOverrideAudit';
 
 // ─── CLEAN ITEM: strip parentheses, explanations, leading dashes/bullets ───
 function cleanItem(text) {
@@ -179,6 +180,11 @@ export default function FicheFrigoPreview({ consultation, sections, client, onCl
     } catch (e) {
       if (e instanceof ExportClinicalError) {
         if (!window.confirm(formatClearanceForConfirm(e.verdict))) return;
+        // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+        void traceClinicalOverride(e.verdict, CLINICAL_OVERRIDE_DOORS.FICHE_FRIGO, {
+          clientId: client?.id,
+          consultationId: consultation?.id,
+        });
         await exportFicheFrigoPDF(consultation, client, editedMeals, { clinicalOverride: true });
       } else {
         throw e;

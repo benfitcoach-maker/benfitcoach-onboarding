@@ -3,6 +3,7 @@ import { getNutritionConsultations, getClient, softDeleteConsultation } from './
 import { exportConsultationPDF, exportFicheFrigoPDF } from './nutritionPdf';
 // P1.2 — gate de clairance clinique (service) + override conscient.
 import { ExportClinicalError, formatClearanceForConfirm } from './services/clinicalClearance';
+import { traceClinicalOverride, CLINICAL_OVERRIDE_DOORS } from './services/clinicalOverrideAudit';
 import ProgressionCharts from './ProgressionCharts';
 import { useConfirmDialog, ConfirmDialog } from './components/ConfirmDialog';
 import { EmptyState } from './App';
@@ -56,6 +57,11 @@ export default function NutritionHistory({ clientId, onBack, isAnissa, onEditCon
     } catch (err) {
       if (err instanceof ExportClinicalError) {
         if (!window.confirm(formatClearanceForConfirm(err.verdict))) return;
+        // V97.28 — override confirmé : on trace (fire-and-forget, non bloquant).
+        void traceClinicalOverride(err.verdict, CLINICAL_OVERRIDE_DOORS.FICHE_FRIGO, {
+          clientId: client?.id,
+          consultationId: consultation?.id,
+        });
         await exportFicheFrigoPDF(consultation, client, undefined, { clinicalOverride: true });
       } else {
         throw err;
