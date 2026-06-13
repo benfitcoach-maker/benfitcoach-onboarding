@@ -71,6 +71,20 @@ export function setCorsHeaders(req, res, methods = 'POST, OPTIONS') {
  * @param {object} req
  * @returns {{ ok: true } | { ok: false, status: number, error: string }}
  */
+/**
+ * RGPD — n'expose les details techniques (messages d'erreur DB/exception) au
+ * front qu'en developpement. En production, on renvoie un message generique
+ * seul, jamais le detail technique (qui peut divulguer la structure interne).
+ *
+ * Usage : res.status(500).json({ error: 'X', ...devDetails(err.message) })
+ *
+ * @param {unknown} value - detail technique a exposer uniquement en dev
+ * @returns {{ details: unknown } | {}}
+ */
+export function devDetails(value) {
+  return process.env.NODE_ENV === 'production' ? {} : { details: value };
+}
+
 export function requireAdminAuth(req) {
   const expected = process.env.CLIENT_APP_ADMIN_SECRET;
   if (!expected) {

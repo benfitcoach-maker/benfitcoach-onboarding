@@ -28,7 +28,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 // V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
-import { setCorsHeaders, requireAdminAuth } from './_security.js';
+import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
 
 // Pack credits (must match src/services/packSystem.js).
 // Duplicated here car packSystem.js est ESM côté Vite et cette fonction tourne
@@ -85,7 +85,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (lookupErr) {
-      return res.status(500).json({ error: 'Lookup failed', details: lookupErr.message });
+      return res.status(500).json({ error: 'Lookup failed', ...devDetails(lookupErr.message) });
     }
     if (!client) {
       return res.status(404).json({ error: 'Client introuvable' });
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (planErr) {
-      return res.status(500).json({ error: 'Plan lookup failed', details: planErr.message });
+      return res.status(500).json({ error: 'Plan lookup failed', ...devDetails(planErr.message) });
     }
     if (!plan) {
       return res.status(200).json({ ok: true, plan: null });
@@ -137,6 +137,6 @@ export default async function handler(req, res) {
       },
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error', details: err?.message });
+    return res.status(500).json({ error: 'Unexpected error', ...devDetails(err?.message) });
   }
 }

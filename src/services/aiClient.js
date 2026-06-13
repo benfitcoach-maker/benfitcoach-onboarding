@@ -583,7 +583,9 @@ GARDE-FOUS ABSOLUS — NE JAMAIS SUGGERER ces actions dans les quickWins ou issu
     if (typeof parsed.score !== 'number' && !parsed.verdict) return null;
     return parsed;
   } catch (err) {
-    console.warn('[analyzeFullPlan] JSON parse failed:', err.message, '\nRaw text:', text?.slice(0, 200));
+    // RGPD : on ne logge PAS le texte IA brut (contenu clinique). Seul
+    // l'erreur de parsing + la longueur reçue, non sensibles.
+    console.warn('[analyzeFullPlan] JSON parse failed:', err.message, '(raw length:', text?.length ?? 0, ')');
     return null;
   }
 }

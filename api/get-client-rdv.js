@@ -23,7 +23,7 @@
 //   500 { error: "..." }
 
 import { createClient } from '@supabase/supabase-js';
-import { setCorsHeaders, requireAdminAuth } from './_security.js';
+import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res, 'GET, OPTIONS');
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (lookupErr) {
-      return res.status(500).json({ error: 'Lookup failed', details: lookupErr.message });
+      return res.status(500).json({ error: 'Lookup failed', ...devDetails(lookupErr.message) });
     }
     if (!client) {
       return res.status(404).json({ error: 'Client introuvable' });
@@ -71,6 +71,6 @@ export default async function handler(req, res) {
       rdv_note: journey.rdv_anamnesis_note || null,
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error', details: err?.message });
+    return res.status(500).json({ error: 'Unexpected error', ...devDetails(err?.message) });
   }
 }

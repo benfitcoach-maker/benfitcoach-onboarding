@@ -30,7 +30,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 // V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
-import { setCorsHeaders, requireAdminAuth } from './_security.js';
+import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res, 'POST, OPTIONS');
@@ -91,7 +91,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (lookupErr) {
-      return res.status(500).json({ error: 'Lookup failed', details: lookupErr.message });
+      return res.status(500).json({ error: 'Lookup failed', ...devDetails(lookupErr.message) });
     }
     if (!existing) {
       return res.status(404).json({ error: 'Client introuvable (email non reconnu)' });
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
       .eq('id', existing.id);
 
     if (updErr) {
-      return res.status(500).json({ error: 'Update failed', details: updErr.message });
+      return res.status(500).json({ error: 'Update failed', ...devDetails(updErr.message) });
     }
 
     // ── Notification pour Anissa (best-effort, ne bloque pas le succès)
@@ -137,6 +137,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, clientId: existing.id });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error', details: err?.message });
+    return res.status(500).json({ error: 'Unexpected error', ...devDetails(err?.message) });
   }
 }

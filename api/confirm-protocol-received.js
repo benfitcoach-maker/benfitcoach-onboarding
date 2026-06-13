@@ -23,7 +23,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 // V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
-import { setCorsHeaders, requireAdminAuth } from './_security.js';
+import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res, 'POST, OPTIONS');
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
         .limit(1)
         .maybeSingle();
       if (clientErr) {
-        return res.status(500).json({ error: 'Client lookup failed', details: clientErr.message });
+        return res.status(500).json({ error: 'Client lookup failed', ...devDetails(clientErr.message) });
       }
       if (!client) return res.status(404).json({ error: 'Client introuvable' });
       clientId = client.id;
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       .eq('id', clientId)
       .maybeSingle();
     if (loadErr) {
-      return res.status(500).json({ error: 'Load journey_state failed', details: loadErr.message });
+      return res.status(500).json({ error: 'Load journey_state failed', ...devDetails(loadErr.message) });
     }
 
     const nowIso = new Date().toISOString();
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
       .eq('id', clientId);
 
     if (updErr) {
-      return res.status(500).json({ error: 'Update journey_state failed', details: updErr.message });
+      return res.status(500).json({ error: 'Update journey_state failed', ...devDetails(updErr.message) });
     }
 
     return res.status(200).json({
@@ -107,6 +107,6 @@ export default async function handler(req, res) {
       received_at: nowIso,
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error', details: err?.message });
+    return res.status(500).json({ error: 'Unexpected error', ...devDetails(err?.message) });
   }
 }

@@ -48,7 +48,7 @@ const BRIEFING_VERSION = 'v1';
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 // V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
-import { setCorsHeaders, requireAdminAuth } from './_security.js';
+import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
 
 // ─── System prompt (versionné — PROMPT_VERSION) ────────────────────────
 const SYSTEM_PROMPT = `Tu es un assistant clinique préparatoire pour Anissa Deroubaix, nutritionniste fonctionnelle (TCMA Genève, école de praticienne en nutrition). Tu prépares un briefing court pour aider Anissa à arriver mieux préparée à son RDV d'anamnèse de 1h avec une nouvelle cliente.
@@ -193,11 +193,11 @@ export default async function handler(req, res) {
       .eq('id', clientId)
       .is('deleted_at', null)
       .maybeSingle();
-    if (error) return res.status(500).json({ error: 'Lookup failed', details: error.message });
+    if (error) return res.status(500).json({ error: 'Lookup failed', ...devDetails(error.message) });
     if (!data) return res.status(404).json({ error: 'Client introuvable' });
     client = data;
   } catch (err) {
-    return res.status(500).json({ error: 'Lookup exception', details: err?.message });
+    return res.status(500).json({ error: 'Lookup exception', ...devDetails(err?.message) });
   }
 
   const sanitizedForm = sanitizeForm(client.form);
@@ -212,14 +212,15 @@ export default async function handler(req, res) {
   try {
     claudeResult = await callClaude(sanitizedForm);
   } catch (err) {
-    return res.status(502).json({ error: 'IA briefing failed', details: err?.message });
+    return res.status(502).json({ error: 'IA briefing failed', ...devDetails(err?.message) });
   }
 
   if (!claudeResult.parsed) {
     return res.status(502).json({
       error: 'IA response not valid JSON',
-      details: claudeResult.parseError,
-      raw: claudeResult.raw,
+      ...devDetails(claudeResult.parseError),
+      // RGPD : la sortie IA brute (contenu clinique) ne sort jamais en prod.
+      ...(process.env.NODE_ENV === 'production' ? {} : { raw: claudeResult.raw }),
     });
   }
 

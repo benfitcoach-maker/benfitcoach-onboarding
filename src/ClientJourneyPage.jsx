@@ -4168,10 +4168,10 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
             }).then((res) => {
               if (res.ok) {
                 // eslint-disable-next-line no-console
-                console.log(`[auto-gen-phase] brouillon ${res.draftId} pret a valider pour ${prenom}`);
+                console.log(`[auto-gen-phase] brouillon ${res.draftId} pret a valider (client ${client?.id})`);
               } else {
                 // eslint-disable-next-line no-console
-                console.warn(`[auto-gen-phase] echec pour ${prenom}:`, res.error);
+                console.warn(`[auto-gen-phase] echec (client ${client?.id}):`, res.error);
               }
             });
           } catch (e) {

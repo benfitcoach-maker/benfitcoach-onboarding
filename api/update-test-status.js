@@ -22,7 +22,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 // V97.24.6 — CORS + auth via helper partage (cf api/_security.js).
-import { setCorsHeaders, requireAdminAuth } from './_security.js';
+import { setCorsHeaders, requireAdminAuth, devDetails } from './_security.js';
 
 const VALID_STATUSES = new Set(['recommended', 'sent_by_client', 'sample_taken', 'received_by_anissa']);
 
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (clientErr) {
-      return res.status(500).json({ error: 'Client lookup failed', details: clientErr.message });
+      return res.status(500).json({ error: 'Client lookup failed', ...devDetails(clientErr.message) });
     }
     if (!client) {
       return res.status(404).json({ error: 'Client introuvable' });
@@ -90,7 +90,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (planErr) {
-      return res.status(500).json({ error: 'Plan lookup failed', details: planErr.message });
+      return res.status(500).json({ error: 'Plan lookup failed', ...devDetails(planErr.message) });
     }
     if (!plan) {
       return res.status(404).json({ error: 'Plan introuvable (status sent/in_progress/completed)' });
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
       .eq('id', plan.id);
 
     if (updErr) {
-      return res.status(500).json({ error: 'Update failed', details: updErr.message });
+      return res.status(500).json({ error: 'Update failed', ...devDetails(updErr.message) });
     }
 
     return res.status(200).json({
@@ -133,6 +133,6 @@ export default async function handler(req, res) {
       status_at: nowIso,
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Unexpected error', details: err?.message });
+    return res.status(500).json({ error: 'Unexpected error', ...devDetails(err?.message) });
   }
 }

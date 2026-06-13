@@ -21,10 +21,44 @@ const dsn = import.meta.env.VITE_SENTRY_DSN;
 
 export const sentryEnabled = !!(import.meta.env.PROD && dsn);
 
+// RGPD — borne de troncature des messages d'erreur envoyés à Sentry.
+// Filet : même si un message d'erreur embarquait par accident un fragment de
+// donnée cliente (anamnèse, plan, sortie IA), on n'en laisse partir qu'un
+// extrait court côté Sentry. Le vrai blocage reste la suppression des
+// breadcrumbs console ci-dessous.
+const SENTRY_MSG_MAX = 300;
+
+function truncate(value) {
+  if (typeof value !== 'string') return value;
+  return value.length > SENTRY_MSG_MAX
+    ? `${value.slice(0, SENTRY_MSG_MAX)}… [tronqué RGPD]`
+    : value;
+}
+
 if (sentryEnabled) {
   Sentry.init({
     dsn,
     tracesSampleRate: 0,
+    // RGPD : ne jamais attacher d'IP, cookies, headers ou body de requête.
+    sendDefaultPii: false,
+    beforeSend(event) {
+      // 1. Couper TOUS les breadcrumbs console : c'est le canal par lequel un
+      //    console.log de donnée santé partirait chez Sentry. On le ferme.
+      if (Array.isArray(event.breadcrumbs)) {
+        event.breadcrumbs = event.breadcrumbs.filter(
+          (b) => b?.category !== 'console',
+        );
+      }
+      // 2. Tronquer le message top-level et les valeurs d'exception.
+      if (event.message) event.message = truncate(event.message);
+      if (event.exception?.values) {
+        event.exception.values = event.exception.values.map((v) => ({
+          ...v,
+          value: truncate(v.value),
+        }));
+      }
+      return event;
+    },
   });
 }
 
