@@ -7,6 +7,7 @@ import CycleReviewPanel from './CycleReviewPanel';
 import ClientStatusBadge from './ClientStatusBadge';
 import ClientEngagementBadge from './ClientEngagementBadge';
 import ClientNewFeedbacksBadge from './ClientNewFeedbacksBadge';
+import JourneyNextActionBadge from './JourneyNextActionBadge';
 import { isReturnClient, daysSinceLastConsultation } from './services/returnDiagnostic';
 import { buildPackFollowupSchedule, getNextPendingStep, getPackCompletion, PACK_DEFINITIONS, canSendPackReview } from './services/packSystem';
 import { getClientNutritionLocale } from './services/nutritionLocale';
@@ -308,6 +309,10 @@ function ClientCard({ client, i, onConsultation, onEditConsultation, onViewHisto
           <ClientStatusBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
           <ClientEngagementBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
           <ClientNewFeedbacksBadge email={client.form?.email} stagingClientId={client.stagingClientId} />
+          {/* V97.36 (2026-06-16) : 4e pastille "prochaine action" (Journey
+              Resolver V1). Lecture seule, dérivée des faits déjà chargés
+              (form + journey_state + clients-status). Ne remplace aucun badge. */}
+          <JourneyNextActionBadge client={client} email={client.form?.email} stagingClientId={client.stagingClientId} />
           {/* V97.8.1 (2026-05-12) : badge "Pré-q reçu" pour signaler à Anissa
               qu'une cliente a soumis son pré-questionnaire. Disparaît une
               fois l'anamnèse validée par Anissa au RDV. Inline pour rester
