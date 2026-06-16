@@ -4705,12 +4705,25 @@
 .jrn-cockpit-card__tone--ok { color: var(--jrn-text-muted); }
 .jrn-cockpit-card__priority-label {
   /* V97.13.20 : weight 600 -> 700, taille 15 -> 15.5px (lisibilité signal) */
-  margin: 0 0 12px;
+  /* V97.42 : marge basse réduite quand une raison suit (gérée par la raison). */
+  margin: 0 0 6px;
   font-size: 15.5px;
   font-weight: 700;
   color: var(--jrn-text);
   line-height: 1.4;
   letter-spacing: -0.005em;
+}
+/* V97.42 — sous-ligne « Pourquoi ? » : contexte clinique court sous le label. */
+.jrn-cockpit-card__priority-reason {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--jrn-text-muted);
+  line-height: 1.45;
+}
+.jrn-cockpit-card__priority-reason-eyebrow {
+  font-weight: 700;
+  color: var(--jrn-text);
 }
 .jrn-cockpit-card__priority-btn {
   margin-top: 4px;

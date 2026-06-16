@@ -4489,40 +4489,109 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   // V97.13.21 — moteur d'attention clinique multi-priorités.
   // Ordre = priorité décroissante. Premier match gagne.
   // tone: 'go' = action data-prête / 'warn' = signal manquant / 'ok' = RAS.
-  let nextAction = { label: `Suivi en cours — rien d'urgent`, tone: 'ok' };
+  //
+  // V97.42 — forme enrichie { key, label, reason, tone, actionLabel,
+  //   actionHandler }. Les conditions métier P1–P7 sont INCHANGÉES : on
+  //   expose seulement (a) une raison lisible dérivée des variables déjà
+  //   calculées, (b) un bouton attaché à l'issue (et non au tone), pris
+  //   parmi les handlers existants. Aucun fetch, aucune nouvelle règle.
+  let nextAction = {
+    key: 'default',
+    label: `Suivi en cours — rien d'urgent`,
+    reason: `Aucune alerte clinique. Derniers ressentis stables.`,
+    tone: 'ok',
+    actionLabel: null,
+    actionHandler: null,
+  };
   if (started) {
     // V97.13.24 — cliente fraîchement activée (premier jour du pack, rien à signaler)
     if (daysSincePack !== null && daysSincePack < 3 && feedbacks.length === 0 && consultationsUsed === 0) {
-      nextAction = { label: `Suivi tout juste lancé — attendre les premiers ressentis`, tone: 'ok' };
+      nextAction = {
+        key: 'fresh',
+        label: `Suivi tout juste lancé — attendre les premiers ressentis`,
+        reason: `Pack démarré il y a ${daysSincePack}j. Premiers ressentis pas encore arrivés.`,
+        tone: 'ok',
+        actionLabel: null,
+        actionHandler: null,
+      };
     }
     // P1 — adaptation IA en attente de validation (V2+, exclut le plan initial V1)
     else if (lastVersion && lastVersion.status === 'a_valider' && versions.length >= 2) {
-      nextAction = { label: `Version V${versions.length} du protocole prête à valider`, tone: 'go' };
+      nextAction = {
+        key: 'p1',
+        label: `Version V${versions.length} du protocole prête à valider`,
+        reason: `La V${versions.length} générée par l'IA attend ta validation.`,
+        tone: 'go',
+        actionLabel: `Relire / valider la V${versions.length}`,
+        actionHandler: () => setShowInlineEditor(true),
+      };
     }
     // P2 — poids décroche (delta absolu > 3kg sur ≥ 3 pesées)
     else if (weightDelta !== null && Math.abs(weightDelta) >= 3 && weightEntries.length >= 3) {
       const dir = weightDelta > 0 ? '+' : '';
-      nextAction = { label: `Poids ${dir}${weightDelta}kg sur ${weightEntries.length} pesées — analyser`, tone: 'warn' };
+      nextAction = {
+        key: 'p2',
+        label: `Poids ${dir}${weightDelta}kg sur ${weightEntries.length} pesées — analyser`,
+        reason: `Variation de ${dir}${weightDelta}kg cumulée sur ${weightEntries.length} pesées.`,
+        tone: 'warn',
+        actionLabel: null,
+        actionHandler: null,
+      };
     }
     // P3 — première consultation pas planifiée après J+7 pack
     else if (consultationsTotal > 0 && consultationsUsed === 0 && daysSincePack !== null && daysSincePack >= 7) {
-      nextAction = { label: `Première consultation à planifier (jour ${daysSincePack})`, tone: 'warn' };
+      nextAction = {
+        key: 'p3',
+        label: `Première consultation à planifier (jour ${daysSincePack})`,
+        reason: `Pack démarré depuis ${daysSincePack}j, 0/${consultationsTotal} consultation utilisée.`,
+        tone: 'warn',
+        actionLabel: `Planifier la consultation`,
+        actionHandler: () => setShowLogModal(true),
+      };
     }
     // P4 — silence ressentis ≥ 7j (cliente active qui décroche)
     else if (daysSinceLastFeedback !== null && daysSinceLastFeedback >= 7) {
-      nextAction = { label: `Silence ressentis depuis ${daysSinceLastFeedback}j — relancer`, tone: 'warn' };
+      nextAction = {
+        key: 'p4',
+        label: `Silence ressentis depuis ${daysSinceLastFeedback}j — relancer`,
+        reason: `Dernier ressenti reçu il y a ${daysSinceLastFeedback}j.`,
+        tone: 'warn',
+        actionLabel: null,
+        actionHandler: null,
+      };
     }
     // P5 — aucun ressenti reçu après J+3 d'activation
     else if (feedbacks.length === 0 && daysSincePack !== null && daysSincePack >= 3) {
-      nextAction = { label: `Pas de ressenti reçu — relancer ${prenom}`, tone: 'warn' };
+      nextAction = {
+        key: 'p5',
+        label: `Pas de ressenti reçu — relancer ${prenom}`,
+        reason: `Aucun ressenti depuis l'activation il y a ${daysSincePack}j.`,
+        tone: 'warn',
+        actionLabel: null,
+        actionHandler: null,
+      };
     }
     // P6 — première suite du protocole possible (data accumulée)
     else if (feedbacks.length >= 5 && versions.length <= 1) {
-      nextAction = { label: 'Suite du protocole possible — V2 à créer', tone: 'go' };
+      nextAction = {
+        key: 'p6',
+        label: 'Suite du protocole possible — V2 à créer',
+        reason: `${feedbacks.length} ressentis accumulés, aucune suite encore créée.`,
+        tone: 'go',
+        actionLabel: `Créer la V${(versions?.length || 0) + 1}`,
+        actionHandler: handleAdaptFromFeedback,
+      };
     }
     // P7 — nouvelle suite à envisager (cycle long depuis dernière)
     else if (versions.length >= 2 && daysSinceLastVersion !== null && daysSinceLastVersion >= 14) {
-      nextAction = { label: `Suite du protocole à envisager — V${versions.length + 1} (${daysSinceLastVersion}j depuis V${versions.length})`, tone: 'go' };
+      nextAction = {
+        key: 'p7',
+        label: `Suite du protocole à envisager — V${versions.length + 1} (${daysSinceLastVersion}j depuis V${versions.length})`,
+        reason: `${daysSinceLastVersion}j depuis la V${versions.length}.`,
+        tone: 'go',
+        actionLabel: `Créer la V${versions.length + 1}`,
+        actionHandler: handleAdaptFromFeedback,
+      };
     }
   }
 
@@ -4721,22 +4790,23 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               </span>
             </div>
             <p className="jrn-cockpit-card__priority-label">{nextAction.label}</p>
-            {nextAction.tone === 'go' && feedbacks.length > 0 && (
-              <button
-                onClick={handleAdaptFromFeedback}
-                disabled={adapting}
-                className="jrn-btn jrn-btn--primary jrn-cockpit-card__priority-btn"
-              >
-                {adapting ? 'Création V…' : `Créer la V${(versions?.length || 0) + 1} du protocole →`}
-              </button>
+            {nextAction.reason && (
+              <p className="jrn-cockpit-card__priority-reason">
+                <span className="jrn-cockpit-card__priority-reason-eyebrow">Pourquoi&nbsp;?</span>
+                {' '}{nextAction.reason}
+              </p>
             )}
-            {nextAction.tone === 'warn' && consultationsUsed === 0 && (
+            {/* V97.42 — bouton attaché à l'issue (et non au tone) : n'apparaît
+                que si l'action correspond réellement à l'issue détectée. */}
+            {nextAction.actionHandler && nextAction.actionLabel && (
               <button
-                onClick={() => setShowLogModal(true)}
-                disabled={consultationsTotal > 0 && consultationsUsed >= consultationsTotal}
-                className="jrn-btn jrn-btn--soft jrn-cockpit-card__priority-btn"
+                onClick={nextAction.actionHandler}
+                disabled={adapting && (nextAction.key === 'p6' || nextAction.key === 'p7')}
+                className={`jrn-btn ${nextAction.tone === 'go' ? 'jrn-btn--primary' : 'jrn-btn--soft'} jrn-cockpit-card__priority-btn`}
               >
-                + Planifier consultation
+                {adapting && (nextAction.key === 'p6' || nextAction.key === 'p7')
+                  ? 'Création V…'
+                  : nextAction.actionLabel}
               </button>
             )}
           </div>
