@@ -4755,6 +4755,45 @@
 .jrn-pilot-line--muted .jrn-pilot-line__check {
   color: var(--jrn-text-faint);
 }
+/* V97.56.2 B — rangée de statuts admin espacée (plus d'air, moins "phrase grise") */
+.jrn-pilot-admin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--jrn-5);
+  margin: 0 0 var(--jrn-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--jrn-text-soft);
+}
+/* V97.56.2 A — sous-bloc "Prochaine action" mis en valeur (fond selon le tone) */
+.jrn-pilot-next {
+  margin-top: var(--jrn-3);
+  padding: var(--jrn-2) var(--jrn-3);
+  border-radius: 10px;
+  background: var(--jrn-accent-soft);
+}
+.jrn-pilot-next__label {
+  display: block;
+  font-family: var(--jrn-font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jrn-accent);
+  margin-bottom: 2px;
+}
+.jrn-pilot-next__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--jrn-text);
+}
+/* tone "warn" : fond et label ambre (ok/go gardent le vert pâle par défaut) */
+.jrn-pilot-next--warn {
+  background: var(--jrn-warn-bg);
+}
+.jrn-pilot-next--warn .jrn-pilot-next__label {
+  color: var(--jrn-warn);
+}
 
 /* ─── EMPTY ROW (V97.13.20 — densité progressive cockpit) ──────
    Quand 0 data dans une card, on remplace le verbiage "Aucun X dans la zone…"

@@ -4777,20 +4777,18 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
               <span className="jrn-cockpit-card__eyebrow">Pilotage — {prenom}</span>
             </div>
 
-            {/* L1 — Administratif */}
-            <p className="jrn-pilot-line">
+            {/* L1 — Administratif (V97.56.2 B : rangée de statuts espacée) */}
+            <div className="jrn-pilot-admin">
               <span className={pilotQuestionnaire ? undefined : 'jrn-pilot-line--muted'}>
-                <span className="jrn-pilot-line__check">{pilotQuestionnaire ? '✓' : '○'}</span>Questionnaire reçu
+                <span className="jrn-pilot-line__check">{pilotQuestionnaire ? '✓' : '○'}</span>Questionnaire
               </span>
-              {' · '}
               <span className={pilotConsultation ? undefined : 'jrn-pilot-line--muted'}>
-                <span className="jrn-pilot-line__check">{pilotConsultation ? '✓' : '○'}</span>Consultation validée
+                <span className="jrn-pilot-line__check">{pilotConsultation ? '✓' : '○'}</span>Consultation
               </span>
-              {' · '}
               <span className={pilotDelivered ? undefined : 'jrn-pilot-line--muted'}>
                 <span className="jrn-pilot-line__check">{pilotDelivered ? '✓' : '○'}</span>Plan livré
               </span>
-            </p>
+            </div>
 
             {/* L2 — Phase thérapeutique */}
             <p className="jrn-pilot-line">
@@ -4812,10 +4810,13 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
                 : <span className="jrn-pilot-line--muted">aucune version de suivi</span>}
             </p>
 
-            {/* L4 — Prochaine action (réutilise l'objet nextAction P1-P7, sans bouton) */}
-            <p className="jrn-pilot-line">
-              Prochaine action : {nextAction.label}
-            </p>
+            {/* L4 — Prochaine action (V97.56.2 A : sous-bloc mis en valeur).
+                Réutilise l'objet nextAction P1-P7. Fond teinté selon le tone,
+                aucun bouton, aucun handler. */}
+            <div className={`jrn-pilot-next jrn-pilot-next--${nextAction.tone}`}>
+              <span className="jrn-pilot-next__label">Prochaine action</span>
+              <span className="jrn-pilot-next__value">{nextAction.label}</span>
+            </div>
           </div>
 
           {/* V97.17.1 — Cockpit Timeline en tete : frise temporelle (Vous etes ici)
