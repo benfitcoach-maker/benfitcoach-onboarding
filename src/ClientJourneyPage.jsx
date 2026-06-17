@@ -37,7 +37,7 @@ import ConsultationClinicalSummary from './components/ConsultationClinicalSummar
 import ClientPulseSummary from './components/ClientPulseSummary';
 import ClinicalAlertBanner from './components/ClinicalAlertBanner';
 import FeedbacksTrendChart from './components/FeedbacksTrendChart';
-import { transitionToNextPhase, getActivePhase, bakePendingProtocolPhases } from './services/protocolPhases';
+import { transitionToNextPhase, getActivePhase, getActivePhaseWeek, bakePendingProtocolPhases } from './services/protocolPhases';
 // V97.40 (roadmap 1.2) — propage email + client_id sur les appels app cliente.
 import { clientIdentityFields } from './services/clientIdentity';
 // V97.23 (V97.18 Phase E) — Auto-generation brouillon IA apres transition phase.
@@ -4595,6 +4595,19 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
     }
   }
 
+  // V97.56 — Carte "Pilotage" : projection LECTURE SEULE des vérités déjà en
+  // scope (form, journey_state, phases, versions, nextAction). Aucun fetch,
+  // aucune écriture, aucune mutation de machine d'état. Résume admin +
+  // thérapeutique + suivi + prochaine action en tête de l'étape Suivi. La
+  // timeline administrative complète reste la sidebar 8 étapes ; cette carte
+  // ne la duplique pas, elle synthétise l'état au stade Suivi.
+  const pilotForm = client?.form || {};
+  const pilotQuestionnaire = !!(pilotForm.objectif_primaire || pilotForm.dureeProbleme || pilotForm.ressentiDigestion);
+  const pilotConsultation = !!journey?.anamnesis_validated;
+  const pilotDelivered = !!journey?.delivered;
+  const pilotActivePhase = getActivePhase(activeConsult?.protocol_phases);
+  const pilotPhaseWeek = getActivePhaseWeek(activeConsult?.protocol_phases);
+
   // V97.13.21 — signaux temporels pour le hero (Axe 4 démarrage)
   const heroSignals = [];
   if (started) {
@@ -4751,6 +4764,55 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
 
       {started && (
         <>
+          {/* V97.56 — Carte Pilotage : projection lecture seule (admin + phase
+              + suivi + prochaine action). Aucun bouton, aucun handler, aucun
+              fetch : simple synthèse des données déjà en scope. */}
+          <div className="jrn-cockpit-card jrn-pilot-card">
+            <div className="jrn-cockpit-card__head">
+              <span className="jrn-cockpit-card__eyebrow">Pilotage — {prenom}</span>
+            </div>
+
+            {/* L1 — Administratif */}
+            <p className="jrn-pilot-line">
+              <span className={pilotQuestionnaire ? undefined : 'jrn-pilot-line--muted'}>
+                <span className="jrn-pilot-line__check">{pilotQuestionnaire ? '✓' : '○'}</span>Questionnaire reçu
+              </span>
+              {' · '}
+              <span className={pilotConsultation ? undefined : 'jrn-pilot-line--muted'}>
+                <span className="jrn-pilot-line__check">{pilotConsultation ? '✓' : '○'}</span>Consultation validée
+              </span>
+              {' · '}
+              <span className={pilotDelivered ? undefined : 'jrn-pilot-line--muted'}>
+                <span className="jrn-pilot-line__check">{pilotDelivered ? '✓' : '○'}</span>Plan livré
+              </span>
+            </p>
+
+            {/* L2 — Phase thérapeutique */}
+            <p className="jrn-pilot-line">
+              Phase active :{' '}
+              {pilotActivePhase ? (
+                <>{pilotActivePhase.client_name}{pilotPhaseWeek ? ` · semaine ${pilotPhaseWeek.weekNumber}` : ''}</>
+              ) : (
+                <span className="jrn-pilot-line--muted">non configurée</span>
+              )}
+            </p>
+
+            {/* L3 — Suivi */}
+            <p className="jrn-pilot-line">
+              {`Suivi : ${consultationsTotal > 0
+                ? `${consultationsUsed} / ${consultationsTotal} consultations`
+                : `${consultationsUsed} consultation${consultationsUsed > 1 ? 's' : ''}`} · `}
+              {versions.length > 0
+                ? `dernière version V${versions.length}`
+                : <span className="jrn-pilot-line--muted">aucune version de suivi</span>}
+            </p>
+
+            {/* L4 — Prochaine action (réutilise l'objet nextAction P1-P7, sans bouton) */}
+            <p className="jrn-pilot-line">
+              Prochaine action : {nextAction.label}
+            </p>
+          </div>
+
           {/* V97.17.1 — Cockpit Timeline en tete : frise temporelle (Vous etes ici)
               + parcours therapeutique 5 phases. Repond aux 3 questions du manifeste :
               ou j'en suis, qu'est-ce qui se passe, qu'est-ce qui vient ensuite.

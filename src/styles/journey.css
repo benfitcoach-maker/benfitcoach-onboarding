@@ -4729,6 +4729,33 @@
   margin-top: 4px;
 }
 
+/* ─── CARTE PILOTAGE (V97.56 — projection lecture seule, étape Suivi) ──────
+   Synthèse compacte admin + phase + suivi + prochaine action en tête de
+   l'étape Suivi. Lecture seule : pas de bouton, pas d'action. */
+.jrn-pilot-card {
+  margin-bottom: var(--jrn-4);
+}
+.jrn-pilot-line {
+  margin: 0 0 var(--jrn-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--jrn-text-soft);
+}
+.jrn-pilot-line:last-child {
+  margin-bottom: 0;
+}
+.jrn-pilot-line__check {
+  margin-right: var(--jrn-1);
+  font-weight: 700;
+  color: var(--jrn-accent);
+}
+.jrn-pilot-line--muted {
+  color: var(--jrn-text-faint);
+}
+.jrn-pilot-line--muted .jrn-pilot-line__check {
+  color: var(--jrn-text-faint);
+}
+
 /* ─── EMPTY ROW (V97.13.20 — densité progressive cockpit) ──────
    Quand 0 data dans une card, on remplace le verbiage "Aucun X dans la zone…"
    par une ligne minimale. Le cockpit devient dense progressivement avec la
