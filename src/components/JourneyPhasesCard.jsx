@@ -335,6 +335,18 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
   // cursorPct est calcule en haut du composant (avant early return) pour
   // respecter la regle React des hooks (cf V97.17.5.3).
 
+  // V97.43 (lot A — lisibilite temporelle) — Synthese LECTURE SEULE des faits
+  // deja calcules (phase active, semaine, temps ecoule, phases terminees,
+  // prochaine phase). Aucune ecriture, aucune nouvelle logique : on consolide
+  // ce qui est deja rendu plus bas (frise + hero) pour repondre d'un coup d'oeil
+  // a « ou en est la cliente ? ». Wording « Vue de travail Anissa » : distingue
+  // explicitement l'etat de travail de l'etat publie cote cliente.
+  const nextPhase =
+    activeIdx >= 0 && activeIdx < totalPhases - 1
+      ? protocolPhases.phases[activeIdx + 1]
+      : null;
+  const showSynthesis = !!activePhase || completedCount > 0;
+
   return (
     <div>
       {/* V97.17.5.2 — Banner auto-détecté (visible juste après auto-init) */}
@@ -441,6 +453,53 @@ export default function JourneyPhasesCard({ consultation, client, onSavePhases, 
           {activePhase.recommendations && (
             <PhaseRecommendationsBlock recommendations={activePhase.recommendations} />
           )}
+        </div>
+      )}
+
+      {/* V97.43 (lot A) — Synthese temporelle LECTURE SEULE.
+          Consolide phase active / semaine / temps ecoule / phases terminees /
+          prochaine phase a partir des faits deja calcules. Aucune ecriture. */}
+      {showSynthesis && (
+        <div style={synthesisStyle}>
+          <div style={synthesisEyebrowStyle}>Vue de travail Anissa</div>
+          <div style={synthesisRowStyle}>
+            {activePhase ? (
+              <span style={synthesisMainStyle}>
+                Phase {activePhase.order} active
+                {weekInfo
+                  ? ` · semaine ${weekInfo.weekNumber}${
+                      weekInfo.maxWeeks > 0 ? `/${weekInfo.maxWeeks}` : ""
+                    }`
+                  : ""}
+                {activePhase.started_at && (
+                  <span style={synthesisSinceStyle}>
+                    {" "}
+                    · depuis le {formatDate(activePhase.started_at)}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span style={synthesisMainStyle}>
+                {completedCount === totalPhases
+                  ? "Parcours terminé"
+                  : "Aucune phase active"}
+              </span>
+            )}
+          </div>
+          <div style={synthesisMetaRowStyle}>
+            <span>
+              {completedCount} / {totalPhases} phases terminées
+            </span>
+            {nextPhase && (
+              <span>
+                Prochaine : Phase {nextPhase.order} · {nextPhase.client_name}
+              </span>
+            )}
+          </div>
+          <div style={synthesisNoteStyle}>
+            Les modifications de phases deviennent visibles côté cliente après
+            publication du programme.
+          </div>
         </div>
       )}
 
@@ -1148,6 +1207,58 @@ const recoSupplementMetaStyle = {
   fontSize: 10.5,
   color: "var(--jrn-text-muted, #6b6f6b)",
   fontStyle: "italic",
+};
+
+// ─── V97.43 (lot A) — Synthese temporelle (lecture seule) ─────────────────
+
+const synthesisStyle = {
+  background: "rgba(26, 46, 31, 0.03)",
+  border: "1px solid rgba(26, 46, 31, 0.10)",
+  borderRadius: 8,
+  padding: "10px 12px",
+  marginBottom: 12,
+};
+
+const synthesisEyebrowStyle = {
+  fontSize: 9.5,
+  letterSpacing: ".12em",
+  fontWeight: 700,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  textTransform: "uppercase",
+};
+
+const synthesisRowStyle = {
+  marginTop: 5,
+};
+
+const synthesisMainStyle = {
+  fontSize: 13,
+  color: "#1A2E1F",
+  fontWeight: 600,
+};
+
+const synthesisSinceStyle = {
+  fontWeight: 400,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+};
+
+const synthesisMetaRowStyle = {
+  marginTop: 4,
+  display: "flex",
+  gap: 14,
+  flexWrap: "wrap",
+  fontSize: 11.5,
+  color: "var(--jrn-text-muted, #6b6f6b)",
+};
+
+const synthesisNoteStyle = {
+  marginTop: 8,
+  paddingTop: 7,
+  borderTop: "1px solid rgba(26, 46, 31, 0.07)",
+  fontSize: 10.5,
+  fontStyle: "italic",
+  color: "var(--jrn-text-muted, #6b6f6b)",
+  lineHeight: 1.4,
 };
 
 // ─── V97.17.3 — Timeline horizontale styles ───────────────────────────────
