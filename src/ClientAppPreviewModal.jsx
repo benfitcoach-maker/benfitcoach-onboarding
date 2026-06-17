@@ -38,6 +38,8 @@ import {
 } from './services/aiEnrichClientPlan';
 import EditorialReadinessBlock from './components/EditorialReadinessBlock';
 import PublishedJourneyBlock from './components/PublishedJourneyBlock';
+import RepublicationNoticeBlock from './components/RepublicationNoticeBlock';
+import { fetchClientsStatus } from './services/fetchClientsStatus';
 
 const TABS = [
   { id: 'json',       label: 'JSON complet' },
@@ -102,6 +104,28 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
 
   const cfgCheck = useMemo(() => checkPublishConfig(), []);
   const clientEmail = client?.form?.email || client?.email || null;
+
+  // V97.46 (Lot 3 A−) — "Conscience de ré-publication". Lecture seule des
+  // métadonnées clients-status déjà disponibles (cache 60s partagé avec les
+  // badges → souvent un cache hit). Sert uniquement à informer Anissa qu'un
+  // programme est déjà publié. Aucune écriture, aucun nouvel endpoint.
+  const [statusEntry, setStatusEntry] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const stagingClientId = client?.stagingClientId || null;
+    if (!clientEmail && !stagingClientId) return;
+    fetchClientsStatus([{ email: clientEmail, stagingClientId }])
+      .then((map) => {
+        if (!alive) return;
+        const entry =
+          (stagingClientId && map[`id:${stagingClientId}`]) ||
+          (clientEmail && map[clientEmail]) ||
+          null;
+        setStatusEntry(entry);
+      })
+      .catch(() => { /* silent : info best-effort, fail-closed côté describe */ });
+    return () => { alive = false; };
+  }, [clientEmail, client?.stagingClientId]);
 
   const handleCopy = async () => {
     try {
@@ -775,6 +799,12 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
 
           {plan && tab === 'diagnostic' && diag && <DiagnosticView diag={diag} />}
         </div>
+
+        {/* V97.46 (Lot 3 A−) — Conscience de ré-publication. Bandeau LECTURE
+            SEULE juste au-dessus du footer : informe qu'un programme est déjà
+            publié et que republier archivera l'ancienne version. Aucun diff,
+            aucun numéro de version, aucune action — n'affecte pas le footer. */}
+        <RepublicationNoticeBlock statusEntry={statusEntry} />
 
         {/* Footer publication */}
         <PublishFooter
