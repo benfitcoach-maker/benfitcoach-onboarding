@@ -36,6 +36,7 @@ import {
   EnrichConfigError,
   EnrichHttpError,
 } from './services/aiEnrichClientPlan';
+import EditorialReadinessBlock from './components/EditorialReadinessBlock';
 
 const TABS = [
   { id: 'json',       label: 'JSON complet' },
@@ -610,6 +611,15 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
             </button>
           </div>
         </header>
+
+        {/* V97.44 (Lot 1) — État éditorial du programme. Bloc LECTURE SEULE
+            juste sous le header : répond « est-ce prêt à envoyer ? ». Purement
+            informatif, ne bloque pas la publication (footer = seul garde-fou). */}
+        <EditorialReadinessBlock
+          plan={plan}
+          cfgOk={cfgCheck.ok}
+          hasEmail={!!clientEmail}
+        />
 
         {/* V97.13.28 — Onglets techniques cachés par défaut.
             Visibles uniquement en mode dev (tab !== 'sections') déclenché par le bouton 🔧 du header. */}
