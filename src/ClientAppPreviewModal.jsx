@@ -37,6 +37,7 @@ import {
   EnrichHttpError,
 } from './services/aiEnrichClientPlan';
 import EditorialReadinessBlock from './components/EditorialReadinessBlock';
+import PublishedJourneyBlock from './components/PublishedJourneyBlock';
 
 const TABS = [
   { id: 'json',       label: 'JSON complet' },
@@ -620,6 +621,12 @@ export default function ClientAppPreviewModal({ client, consultation, autoEnrich
           cfgOk={cfgCheck.ok}
           hasEmail={!!clientEmail}
         />
+
+        {/* V97.45 (Lot 2) — Parcours thérapeutique publié. Bloc LECTURE SEULE :
+            répond « qu'est-ce que la cliente va vivre ? ». Source UNIQUE =
+            plan.journey_phases (= payload réellement publié). Jamais
+            consultation.protocol_phases ni pending_protocol_phases. */}
+        <PublishedJourneyBlock journeyPhases={plan?.journey_phases} />
 
         {/* V97.13.28 — Onglets techniques cachés par défaut.
             Visibles uniquement en mode dev (tab !== 'sections') déclenché par le bouton 🔧 du header. */}
