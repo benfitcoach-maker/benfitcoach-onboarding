@@ -4602,9 +4602,14 @@ function StepFollowup({ client, journey, onChange, onExit, onReturnPlan, onSendP
   // timeline administrative complète reste la sidebar 8 étapes ; cette carte
   // ne la duplique pas, elle synthétise l'état au stade Suivi.
   const pilotForm = client?.form || {};
+  // Questionnaire : pas de step dédié dans la machine 8 étapes → on garde
+  // l'heuristique form (même source que le pre-Q dot sidebar / journeyResolver).
   const pilotQuestionnaire = !!(pilotForm.objectif_primaire || pilotForm.dureeProbleme || pilotForm.ressentiDigestion);
-  const pilotConsultation = !!journey?.anamnesis_validated;
-  const pilotDelivered = !!journey?.delivered;
+  // Consultation + Plan livré : on lit la MÊME source effective que la sidebar
+  // (getStepStatus, qui applique la règle POST_ANAMNESIS) plutôt que les flags
+  // bruts. Garantit zéro divergence entre la carte et la sidebar.
+  const pilotConsultation = getStepStatus(journey, 'anamnesis') === 'validated';
+  const pilotDelivered = getStepStatus(journey, 'delivery') === 'validated';
   const pilotActivePhase = getActivePhase(activeConsult?.protocol_phases);
   const pilotPhaseWeek = getActivePhaseWeek(activeConsult?.protocol_phases);
 
